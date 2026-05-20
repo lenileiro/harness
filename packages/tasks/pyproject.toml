@@ -1,12 +1,11 @@
 [project]
-name = "storage-sqlite"
+name = "tasks"
 version = "0.0.0"
-description = "SQLite-backed Session storage for Harness (via aiosqlite)."
+description = "Durable tasks + activity log for the Harness agent runtime."
 requires-python = ">=3.11"
 dependencies = [
     "core",
-    "tasks",
-    "aiosqlite>=0.20",
+    "pydantic>=2.7",
 ]
 
 [build-system]
@@ -18,4 +17,3 @@ packages = ["src/harness"]
 
 [tool.uv.sources]
 core = { workspace = true }
-tasks = { workspace = true }

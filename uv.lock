@@ -11,6 +11,7 @@ members = [
     "harness",
     "storage-memory",
     "storage-sqlite",
+    "tasks",
     "tools-fs",
     "tools-shell",
     "tools-web",
@@ -115,6 +116,7 @@ dependencies = [
     { name = "rich" },
     { name = "storage-memory" },
     { name = "storage-sqlite" },
+    { name = "tasks" },
     { name = "tools-fs" },
     { name = "tools-shell" },
     { name = "tools-web" },
@@ -129,6 +131,7 @@ requires-dist = [
     { name = "rich", specifier = ">=13.9" },
     { name = "storage-memory", editable = "packages/storage-memory" },
     { name = "storage-sqlite", editable = "packages/storage-sqlite" },
+    { name = "tasks", editable = "packages/tasks" },
     { name = "tools-fs", editable = "packages/tools-fs" },
     { name = "tools-shell", editable = "packages/tools-shell" },
     { name = "tools-web", editable = "packages/tools-web" },
@@ -313,6 +316,7 @@ dependencies = [
     { name = "core" },
     { name = "storage-memory" },
     { name = "storage-sqlite" },
+    { name = "tasks" },
     { name = "tools-fs" },
     { name = "tools-shell" },
     { name = "tools-web" },
@@ -336,6 +340,7 @@ requires-dist = [
     { name = "core", editable = "packages/core" },
     { name = "storage-memory", editable = "packages/storage-memory" },
     { name = "storage-sqlite", editable = "packages/storage-sqlite" },
+    { name = "tasks", editable = "packages/tasks" },
     { name = "tools-fs", editable = "packages/tools-fs" },
     { name = "tools-shell", editable = "packages/tools-shell" },
     { name = "tools-web", editable = "packages/tools-web" },
@@ -782,10 +787,14 @@ version = "0.0.0"
 source = { editable = "packages/storage-memory" }
 dependencies = [
     { name = "core" },
+    { name = "tasks" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "core", editable = "packages/core" }]
+requires-dist = [
+    { name = "core", editable = "packages/core" },
+    { name = "tasks", editable = "packages/tasks" },
+]
 
 [[package]]
 name = "storage-sqlite"
@@ -794,12 +803,14 @@ source = { editable = "packages/storage-sqlite" }
 dependencies = [
     { name = "aiosqlite" },
     { name = "core" },
+    { name = "tasks" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "aiosqlite", specifier = ">=0.20" },
     { name = "core", editable = "packages/core" },
+    { name = "tasks", editable = "packages/tasks" },
 ]
 
 [[package]]
@@ -809,6 +820,21 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/ef/52/9ba0f43b686e7f3ddfeaa78ac3af750292662284b3661e91ad5494f21dbc/structlog-25.5.0.tar.gz", hash = "sha256:098522a3bebed9153d4570c6d0288abf80a031dfdb2048d59a49e9dc2190fc98", size = 1460830, upload-time = "2025-10-27T08:28:23.028Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/a8/45/a132b9074aa18e799b891b91ad72133c98d8042c70f6240e4c5f9dabee2f/structlog-25.5.0-py3-none-any.whl", hash = "sha256:a8453e9b9e636ec59bd9e79bbd4a72f025981b3ba0f5837aebf48f02f37a7f9f", size = 72510, upload-time = "2025-10-27T08:28:21.535Z" },
+]
+
+[[package]]
+name = "tasks"
+version = "0.0.0"
+source = { editable = "packages/tasks" }
+dependencies = [
+    { name = "core" },
+    { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "core", editable = "packages/core" },
+    { name = "pydantic", specifier = ">=2.7" },
 ]
 
 [[package]]

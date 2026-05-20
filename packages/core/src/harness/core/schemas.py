@@ -138,6 +138,9 @@ class RunRequest(BaseModel):
     max_tokens: int | None = None
     max_steps: int = 25
     stream: bool = True
+    task_id: str | None = None
+    """Optional id of the parent Task. When set on a new session, the session
+    inherits this `task_id`."""
 
 
 # ---------------------------------------------------------------------------
@@ -163,6 +166,9 @@ class Session(BaseModel):
     updated_at: datetime = Field(default_factory=_utcnow)
     approval_overrides: dict[str, ApprovalDecision] = Field(default_factory=dict)
     metadata: dict[str, Any] = Field(default_factory=dict)
+    task_id: str | None = None
+    """Optional id of the parent Task (`harness.tasks.Task`). None for legacy
+    / standalone sessions; set when a session was created under `--task T-NNN`."""
 
     def touch(self) -> None:
         """Bump `updated_at` to now."""

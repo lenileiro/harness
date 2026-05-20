@@ -3,7 +3,7 @@ name = "storage-memory"
 version = "0.0.0"
 description = "In-memory Session storage for Harness."
 requires-python = ">=3.11"
-dependencies = ["core"]
+dependencies = ["core", "tasks"]
 
 [build-system]
 requires = ["hatchling"]
@@ -14,3 +14,4 @@ packages = ["src/harness"]
 
 [tool.uv.sources]
 core = { workspace = true }
+tasks = { workspace = true }

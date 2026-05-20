@@ -28,6 +28,8 @@ import asyncio
 from collections.abc import AsyncIterator
 from typing import Any
 
+from harness.core import activity as activity_kinds
+from harness.core.activity import ActivityEvent, ActivityStore
 from harness.core.adapter import Adapter
 from harness.core.errors import (
     CancelledError,
@@ -70,6 +72,7 @@ class Agent:
         approval_policy: ApprovalPolicy | None = None,
         approval_handler: ApprovalHandler | None = None,
         planner: Planner | None = None,
+        activity_store: ActivityStore | None = None,
         default_provider: str | None = None,
         default_model: str | None = None,
         default_cwd: str | None = None,
@@ -87,9 +90,33 @@ class Agent:
         self.approval_policy = approval_policy or ApprovalPolicy()
         self.approval_handler = approval_handler
         self.planner: Planner = planner or NoOpPlanner()
+        self.activity_store = activity_store
         self.default_provider = default_provider or failover.chain[0]
         self.default_model = default_model
         self.default_cwd = default_cwd
+
+    # ------------------------------------------------------------------ #
+    # Activity log emission                                               #
+    # ------------------------------------------------------------------ #
+
+    async def _emit(self, session: Session, kind: str, data: dict[str, Any] | None = None) -> None:
+        """Append an ActivityEvent if an activity_store is configured.
+
+        Swallows storage errors (logged, not raised) so a flaky ledger never
+        breaks the agent loop.
+        """
+        if self.activity_store is None:
+            return
+        try:
+            event = ActivityEvent(
+                task_id=session.task_id,
+                session_id=session.id,
+                kind=kind,
+                data=data or {},
+            )
+            await self.activity_store.append_activity(event)
+        except Exception as exc:
+            logger.warning("agent.activity.emit_failed", kind=kind, error=str(exc))
 
     # ------------------------------------------------------------------ #
     # Public API                                                          #
@@ -105,6 +132,11 @@ class Agent:
         session.status = "running"
         session.touch()
         await self.storage.save(session)
+        await self._emit(
+            session,
+            activity_kinds.AGENT_RUN_STARTED,
+            {"provider": session.provider, "model": session.model, "prompt": request.prompt},
+        )
 
         plan = await self.planner.plan(
             request.prompt,
@@ -120,6 +152,11 @@ class Agent:
             for step_idx, step in enumerate(plan.steps):
                 yield StepStarted(step=step_idx, description=step.description)
                 any_yielded = True
+                await self._emit(
+                    session,
+                    activity_kinds.STEP_STARTED,
+                    {"step": step_idx, "description": step.description},
+                )
 
                 async for event in self._step_with_failover(
                     request=request,
@@ -130,15 +167,18 @@ class Agent:
                     yield event
 
                 yield StepCompleted(step=step_idx)
+                await self._emit(session, activity_kinds.STEP_COMPLETED, {"step": step_idx})
         except asyncio.CancelledError:
             session.status = "cancelled"
             session.touch()
             await self.storage.save(session)
+            await self._emit(session, activity_kinds.AGENT_RUN_CANCELLED)
             raise
         except CancelledError:
             session.status = "cancelled"
             session.touch()
             await self.storage.save(session)
+            await self._emit(session, activity_kinds.AGENT_RUN_CANCELLED)
             raise
         except HarnessError as exc:
             kind = classify(exc)
@@ -146,12 +186,18 @@ class Agent:
             session.status = "failed"
             session.touch()
             await self.storage.save(session)
+            await self._emit(
+                session,
+                activity_kinds.AGENT_RUN_FAILED,
+                {"error": str(exc), "kind": kind},
+            )
             yield ErrorEvent(error=str(exc), kind=kind, recoverable=False)
             return
 
         session.status = "done"
         session.touch()
         await self.storage.save(session)
+        await self._emit(session, activity_kinds.AGENT_RUN_COMPLETED)
 
     async def resume(
         self,
@@ -200,6 +246,7 @@ class Agent:
             provider=provider,
             model=model,
             cwd=cwd,
+            task_id=request.task_id,
         )
         return session
 
@@ -317,52 +364,93 @@ class Agent:
     # ------------------------------------------------------------------ #
 
     async def _invoke_tool(self, call: ToolCall, session: Session) -> ToolResult:
+        await self._emit(
+            session,
+            activity_kinds.TOOL_CALL_DISPATCHED,
+            {"tool_call_id": call.id, "name": call.name, "arguments": call.arguments},
+        )
+
         if not self.tools.has(call.name):
-            return ToolResult(
+            result = ToolResult(
                 tool_call_id=call.id,
                 name=call.name,
                 content=f"unknown tool: {call.name!r}",
                 is_error=True,
             )
+            await self._emit_tool_completed(session, call, result)
+            return result
 
         tool = self.tools.get(call.name)
         decision = self.approval_policy.decide(tool, session_overrides=session.approval_overrides)
 
         if decision == "deny":
-            return ToolResult(
+            result = ToolResult(
                 tool_call_id=call.id,
                 name=call.name,
                 content="tool denied by policy",
                 is_error=True,
             )
+            await self._emit_tool_completed(session, call, result)
+            return result
+
         if decision == "prompt":
             if self.approval_handler is None:
-                return ToolResult(
+                result = ToolResult(
                     tool_call_id=call.id,
                     name=call.name,
                     content="approval required but no handler configured",
                     is_error=True,
                 )
+                await self._emit_tool_completed(session, call, result)
+                return result
+            await self._emit(
+                session,
+                activity_kinds.APPROVAL_REQUESTED,
+                {"tool_call_id": call.id, "name": call.name, "arguments": call.arguments},
+            )
             approved = await self.approval_handler(tool, call, session)
+            await self._emit(
+                session,
+                activity_kinds.APPROVAL_GRANTED if approved else activity_kinds.APPROVAL_DENIED,
+                {"tool_call_id": call.id, "name": call.name},
+            )
             if not approved:
-                return ToolResult(
+                result = ToolResult(
                     tool_call_id=call.id,
                     name=call.name,
                     content="user denied approval",
                     is_error=True,
                 )
+                await self._emit_tool_completed(session, call, result)
+                return result
 
         try:
             with span("agent.tool", tool=call.name, call_id=call.id):
-                return await tool(call)
+                result = await tool(call)
         except Exception as exc:
             logger.warning("agent.tool.error", tool=call.name, error=str(exc))
-            return ToolResult(
+            result = ToolResult(
                 tool_call_id=call.id,
                 name=call.name,
                 content=f"tool error: {exc!s}",
                 is_error=True,
             )
+        await self._emit_tool_completed(session, call, result)
+        return result
+
+    async def _emit_tool_completed(
+        self, session: Session, call: ToolCall, result: ToolResult
+    ) -> None:
+        await self._emit(
+            session,
+            activity_kinds.TOOL_CALL_COMPLETED,
+            {
+                "tool_call_id": call.id,
+                "name": call.name,
+                "is_error": result.is_error,
+                "content_preview": result.content[:200],
+            },
+        )
 
 
 __all__ = ["Agent"]

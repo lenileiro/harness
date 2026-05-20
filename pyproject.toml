@@ -6,6 +6,7 @@ requires-python = ">=3.11"
 # Root depends on every workspace member so `uv sync` installs them all.
 dependencies = [
     "core",
+    "tasks",
     "storage-memory",
     "storage-sqlite",
     "adapter-openrouter",
@@ -21,6 +22,7 @@ members = ["packages/*"]
 
 [tool.uv.sources]
 core = { workspace = true }
+tasks = { workspace = true }
 storage-memory = { workspace = true }
 storage-sqlite = { workspace = true }
 adapter-openrouter = { workspace = true }

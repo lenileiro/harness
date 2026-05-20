@@ -60,6 +60,14 @@ from harness.core import (
 )
 from harness.storage.memory import InMemoryStorage
 from harness.storage.sqlite import SQLiteStorage, default_db_path
+from harness.tasks import (
+    ActivityEvent,
+    ActivityStore,
+    Task,
+    TaskLink,
+    TaskStore,
+)
+from harness.tasks import activity as task_activity
 from harness.tools.fs import (
     EditFileTool,
     GlobTool,
@@ -89,6 +97,11 @@ app.add_typer(providers_app, name="providers")
 
 tools_app = typer.Typer(name="tools", help="Inspect the built-in tools.", no_args_is_help=True)
 app.add_typer(tools_app, name="tools")
+
+tasks_app = typer.Typer(
+    name="tasks", help="Create, list, and update durable tasks.", no_args_is_help=True
+)
+app.add_typer(tasks_app, name="tasks")
 
 console = Console()
 
@@ -141,8 +154,13 @@ def _build_agent(
     cwd: Path,
     config: HarnessConfig,
     yes: bool,
+    activity_store: ActivityStore | None = None,
 ) -> Agent:
-    """Build an Agent over a provider chain. `chain[0]` is the primary."""
+    """Build an Agent over a provider chain. `chain[0]` is the primary.
+
+    Pass `activity_store` (typically the same storage instance) to enable
+    activity-ledger emission.
+    """
     if not chain:
         raise typer.BadParameter("provider chain is empty")
 
@@ -172,9 +190,32 @@ def _build_agent(
         ),
         approval_policy=approval_policy,
         approval_handler=approval_handler,
+        activity_store=activity_store,
         default_model=model,
         default_cwd=str(cwd),
     )
+
+
+async def _resolve_task_attachment(
+    storage: object, task_ref: str | None, session_id: str | None
+) -> tuple[str | None, Task | None]:
+    """If `task_ref` is set, look it up and attach `session_id` to its session_ids.
+
+    Returns `(task.id, task)` so callers can pass `task_id` into RunRequest.
+    Raises `typer.Exit(1)` if the ref doesn't resolve.
+    """
+    if task_ref is None:
+        return None, None
+    store: TaskStore = storage  # type: ignore[assignment]
+    task = await store.get_task_by_ref(task_ref)
+    if task is None:
+        console.print(f"[red]Task not found:[/red] {task_ref}")
+        raise typer.Exit(1)
+    if session_id and session_id not in task.session_ids:
+        task.session_ids.append(session_id)
+        task.touch()
+        await store.update_task(task)
+    return task.id, task
 
 
 def _resolve_chain(
@@ -256,6 +297,10 @@ def run(
             "--session", help="Reuse / create a session with this id. Required for resume later."
         ),
     ] = None,
+    task_ref: Annotated[
+        str | None,
+        typer.Option("--task", help="Attach this session to an existing task ref (e.g. T-001)."),
+    ] = None,
     db: Annotated[
         Path | None,
         typer.Option("--db", help=f"SQLite session db path. Default: {default_db_path()}."),
@@ -296,6 +341,7 @@ def run(
                 cwd=working_dir,
                 max_steps=max_steps,
                 session_id=session_id,
+                task_ref=task_ref,
                 db=db,
                 in_memory=in_memory,
                 yes=yes,
@@ -316,6 +362,7 @@ async def _run_once(
     cwd: Path,
     max_steps: int,
     session_id: str | None,
+    task_ref: str | None,
     db: Path | None,
     in_memory: bool,
     yes: bool,
@@ -323,6 +370,10 @@ async def _run_once(
 ) -> None:
     storage = _build_storage(db=db, in_memory=in_memory)
     try:
+        # Resolve the optional task attachment first (validates ref exists and
+        # appends session_id to task.session_ids).
+        task_id, _task = await _resolve_task_attachment(storage, task_ref, session_id)
+
         agent = _build_agent(
             chain=chain,
             base_url=base_url,
@@ -331,6 +382,7 @@ async def _run_once(
             cwd=cwd,
             config=config,
             yes=yes,
+            activity_store=storage,  # type: ignore[arg-type]
         )
 
         request_kwargs: dict[str, object] = {
@@ -340,6 +392,8 @@ async def _run_once(
         }
         if session_id:
             request_kwargs["session_id"] = session_id
+        if task_id:
+            request_kwargs["task_id"] = task_id
         request = RunRequest(**request_kwargs)  # type: ignore[arg-type]
 
         try:
@@ -481,6 +535,7 @@ def sessions_resume(
                 cwd=working_dir,
                 config=cfg,
                 yes=yes,
+                activity_store=storage,  # type: ignore[arg-type]
             )
             try:
                 async for event in agent.resume(session_id, prompt=prompt, max_steps=max_steps):
@@ -632,6 +687,301 @@ def tools_list_cmd(
 
 
 # ---------------------------------------------------------------------------
+# tasks subcommands
+# ---------------------------------------------------------------------------
+
+
+async def _append_task_activity(
+    storage: ActivityStore, *, task_id: str, kind: str, data: dict
+) -> None:
+    """Append a task-domain activity event to the ledger."""
+    event = ActivityEvent(task_id=task_id, kind=kind, data=data)
+    await storage.append_activity(event)
+
+
+def _close_if_sqlite(storage: object) -> bool:
+    return isinstance(storage, SQLiteStorage)
+
+
+@tasks_app.command("new")
+def tasks_new_cmd(
+    title: Annotated[str, typer.Argument(help="Short title for the task.")],
+    description: Annotated[
+        str | None, typer.Option("--description", "-d", help="Longer description.")
+    ] = None,
+    priority: Annotated[
+        str | None,
+        typer.Option("--priority", help="low | medium | high"),
+    ] = None,
+    labels: Annotated[
+        str | None, typer.Option("--labels", help="Comma-separated label list.")
+    ] = None,
+    parent: Annotated[
+        str | None,
+        typer.Option("--parent", help="Parent task ref (e.g. T-001)."),
+    ] = None,
+    cwd: Annotated[Path | None, typer.Option("--cwd")] = None,
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+    in_memory: Annotated[bool, typer.Option("--in-memory")] = False,
+) -> None:
+    """Create a new task."""
+    working_dir = (cwd or Path.cwd()).resolve()
+    label_list: list[str] = [s.strip() for s in labels.split(",") if s.strip()] if labels else []
+
+    async def _go() -> Task:
+        storage = _build_storage(db=db, in_memory=in_memory)
+        try:
+            store: TaskStore = storage  # type: ignore[assignment]
+            parent_id: str | None = None
+            if parent:
+                parent_task = await store.get_task_by_ref(parent)
+                if parent_task is None:
+                    console.print(f"[red]Parent task not found:[/red] {parent}")
+                    raise typer.Exit(1)
+                parent_id = parent_task.id
+
+            draft = Task(
+                ref="",  # filled in by the store
+                title=title,
+                description=description,
+                priority=priority,  # type: ignore[arg-type]
+                labels=label_list,
+                parent_id=parent_id,
+                cwd=working_dir,
+            )
+            saved = await store.create_task(draft)
+            await _append_task_activity(
+                storage,  # type: ignore[arg-type]
+                task_id=saved.id,
+                kind=task_activity.TASK_CREATED,
+                data={"ref": saved.ref, "title": saved.title},
+            )
+            return saved
+        finally:
+            if _close_if_sqlite(storage):
+                await storage.close()  # type: ignore[union-attr]
+
+    task = asyncio.run(_go())
+    console.print(f"[green]Created[/green] {task.ref}  {task.title}")
+
+
+@tasks_app.command("list")
+def tasks_list_cmd(
+    status: Annotated[
+        str | None,
+        typer.Option("--status", help="Filter: backlog|todo|in_progress|waiting|done|cancelled."),
+    ] = None,
+    limit: Annotated[int, typer.Option("--limit", "-n")] = 25,
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+    in_memory: Annotated[bool, typer.Option("--in-memory")] = False,
+) -> None:
+    """List tasks, newest-updated first."""
+
+    async def _go() -> list[Task]:
+        storage = _build_storage(db=db, in_memory=in_memory)
+        try:
+            store: TaskStore = storage  # type: ignore[assignment]
+            return await store.list_tasks(limit=limit, status=status)  # type: ignore[arg-type]
+        finally:
+            if _close_if_sqlite(storage):
+                await storage.close()  # type: ignore[union-attr]
+
+    tasks = asyncio.run(_go())
+    if not tasks:
+        console.print("[dim]No tasks.[/dim]")
+        return
+
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("Ref")
+    table.add_column("Status")
+    table.add_column("Title")
+    table.add_column("Labels")
+    table.add_column("Updated")
+    for t in tasks:
+        table.add_row(
+            t.ref,
+            _task_status_style(t.status),
+            _truncate(t.title, 60),
+            ", ".join(t.labels) if t.labels else "—",
+            _ago(t.updated_at),
+        )
+    console.print(table)
+
+
+@tasks_app.command("show")
+def tasks_show_cmd(
+    ref: Annotated[str, typer.Argument(help="Task ref, e.g. T-001.")],
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+    in_memory: Annotated[bool, typer.Option("--in-memory")] = False,
+) -> None:
+    """Print a task's full details + activity log."""
+
+    async def _go() -> tuple[Task | None, list[ActivityEvent]]:
+        storage = _build_storage(db=db, in_memory=in_memory)
+        try:
+            store: TaskStore = storage  # type: ignore[assignment]
+            task = await store.get_task_by_ref(ref)
+            if task is None:
+                return None, []
+            activity_store: ActivityStore = storage  # type: ignore[assignment]
+            events = await activity_store.list_activity(task_id=task.id, limit=200)
+            return task, events
+        finally:
+            if _close_if_sqlite(storage):
+                await storage.close()  # type: ignore[union-attr]
+
+    task, events = asyncio.run(_go())
+    if task is None:
+        console.print(f"[red]Task not found:[/red] {ref}")
+        raise typer.Exit(1)
+    _render_task(task, events)
+
+
+@tasks_app.command("update")
+def tasks_update_cmd(
+    ref: Annotated[str, typer.Argument(help="Task ref.")],
+    status: Annotated[str | None, typer.Option("--status")] = None,
+    title: Annotated[str | None, typer.Option("--title")] = None,
+    description: Annotated[str | None, typer.Option("--description", "-d")] = None,
+    priority: Annotated[str | None, typer.Option("--priority")] = None,
+    labels: Annotated[
+        str | None,
+        typer.Option("--labels", help="Comma-separated label list (replaces existing)."),
+    ] = None,
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+    in_memory: Annotated[bool, typer.Option("--in-memory")] = False,
+) -> None:
+    """Update a task."""
+
+    async def _go() -> Task | None:
+        storage = _build_storage(db=db, in_memory=in_memory)
+        try:
+            store: TaskStore = storage  # type: ignore[assignment]
+            task = await store.get_task_by_ref(ref)
+            if task is None:
+                return None
+            old_status = task.status
+            if status is not None:
+                task.status = status  # type: ignore[assignment]
+            if title is not None:
+                task.title = title
+            if description is not None:
+                task.description = description
+            if priority is not None:
+                task.priority = priority  # type: ignore[assignment]
+            if labels is not None:
+                task.labels = [s.strip() for s in labels.split(",") if s.strip()]
+            task.touch()
+            saved = await store.update_task(task)
+            kind = (
+                task_activity.TASK_STATUS_CHANGED
+                if status is not None and status != old_status
+                else task_activity.TASK_UPDATED
+            )
+            data: dict[str, object] = {"ref": saved.ref}
+            if status is not None and status != old_status:
+                data["from"] = old_status
+                data["to"] = status
+            await _append_task_activity(storage, task_id=saved.id, kind=kind, data=data)  # type: ignore[arg-type]
+            return saved
+        finally:
+            if _close_if_sqlite(storage):
+                await storage.close()  # type: ignore[union-attr]
+
+    task = asyncio.run(_go())
+    if task is None:
+        console.print(f"[red]Task not found:[/red] {ref}")
+        raise typer.Exit(1)
+    console.print(f"[green]Updated[/green] {task.ref}")
+
+
+@tasks_app.command("link")
+def tasks_link_cmd(
+    ref: Annotated[str, typer.Argument(help="Task ref (source of the link).")],
+    target: Annotated[str, typer.Argument(help="Target task ref.")],
+    relation: Annotated[
+        str,
+        typer.Option(
+            "--relation",
+            "-r",
+            help="One of: blocks | depends_on | duplicates | fixes | tests | relates_to.",
+        ),
+    ] = "relates_to",
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+    in_memory: Annotated[bool, typer.Option("--in-memory")] = False,
+) -> None:
+    """Add a typed link from one task to another."""
+
+    async def _go() -> Task | None:
+        storage = _build_storage(db=db, in_memory=in_memory)
+        try:
+            store: TaskStore = storage  # type: ignore[assignment]
+            task = await store.get_task_by_ref(ref)
+            if task is None:
+                return None
+            target_task = await store.get_task_by_ref(target)
+            if target_task is None:
+                console.print(f"[red]Target task not found:[/red] {target}")
+                raise typer.Exit(1)
+            task.links.append(TaskLink(target_ref=target, relation=relation))  # type: ignore[arg-type]
+            task.touch()
+            saved = await store.update_task(task)
+            await _append_task_activity(
+                storage,  # type: ignore[arg-type]
+                task_id=saved.id,
+                kind=task_activity.TASK_LINKED,
+                data={"ref": saved.ref, "target_ref": target, "relation": relation},
+            )
+            return saved
+        finally:
+            if _close_if_sqlite(storage):
+                await storage.close()  # type: ignore[union-attr]
+
+    task = asyncio.run(_go())
+    if task is None:
+        console.print(f"[red]Task not found:[/red] {ref}")
+        raise typer.Exit(1)
+    console.print(f"[green]Linked[/green] {task.ref} --{relation}--> {target}")
+
+
+@tasks_app.command("rm")
+def tasks_rm_cmd(
+    ref: Annotated[str, typer.Argument(help="Task ref.")],
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+    in_memory: Annotated[bool, typer.Option("--in-memory")] = False,
+    yes: Annotated[bool, typer.Option("--yes", "-y", help="Skip confirmation.")] = False,
+) -> None:
+    """Delete a task."""
+    if not yes and not Confirm.ask(f"Delete task [bold]{ref}[/bold]?", default=False):
+        console.print("[yellow]Aborted.[/yellow]")
+        raise typer.Exit(1)
+
+    async def _go() -> bool:
+        storage = _build_storage(db=db, in_memory=in_memory)
+        try:
+            store: TaskStore = storage  # type: ignore[assignment]
+            task = await store.get_task_by_ref(ref)
+            if task is None:
+                return False
+            await store.delete_task(task.id)
+            await _append_task_activity(
+                storage,  # type: ignore[arg-type]
+                task_id=task.id,
+                kind=task_activity.TASK_DELETED,
+                data={"ref": ref},
+            )
+            return True
+        finally:
+            if _close_if_sqlite(storage):
+                await storage.close()  # type: ignore[union-attr]
+
+    if not asyncio.run(_go()):
+        console.print(f"[red]Task not found:[/red] {ref}")
+        raise typer.Exit(1)
+    console.print(f"[green]Deleted[/green] {ref}")
+
+
+# ---------------------------------------------------------------------------
 # chat
 # ---------------------------------------------------------------------------
 
@@ -655,6 +1005,10 @@ def chat(
     session_id: Annotated[
         str | None,
         typer.Option("--session", help="Resume an existing session, or create one with this id."),
+    ] = None,
+    task_ref: Annotated[
+        str | None,
+        typer.Option("--task", help="Attach this session to an existing task ref (e.g. T-001)."),
     ] = None,
     max_steps: Annotated[int, typer.Option("--max-steps")] = 25,
     failover: Annotated[
@@ -685,6 +1039,7 @@ def chat(
                 db=db,
                 in_memory=in_memory,
                 session_id=session_id,
+                task_ref=task_ref,
                 max_steps=max_steps,
                 yes=yes,
                 config=cfg,
@@ -704,6 +1059,7 @@ async def _chat_loop(
     db: Path | None,
     in_memory: bool,
     session_id: str | None,
+    task_ref: str | None,
     max_steps: int,
     yes: bool,
     config: HarnessConfig,
@@ -712,6 +1068,13 @@ async def _chat_loop(
 
     storage = _build_storage(db=db, in_memory=in_memory)
     try:
+        existing: Session | None = None
+        if session_id:
+            existing = await storage.get(session_id)
+        current_session_id = session_id or f"sess_{uuid4().hex[:12]}"
+
+        task_id, _task = await _resolve_task_attachment(storage, task_ref, current_session_id)
+
         agent = _build_agent(
             chain=chain,
             base_url=base_url,
@@ -720,12 +1083,9 @@ async def _chat_loop(
             cwd=cwd,
             config=config,
             yes=yes,
+            activity_store=storage,  # type: ignore[arg-type]
         )
 
-        existing: Session | None = None
-        if session_id:
-            existing = await storage.get(session_id)
-        current_session_id = session_id or f"sess_{uuid4().hex[:12]}"
         first_turn = existing is None
 
         chain_label = chain[0]
@@ -765,12 +1125,15 @@ async def _chat_loop(
 
             try:
                 if first_turn:
-                    request = RunRequest(
-                        prompt=user_input,
-                        session_id=current_session_id,
-                        model=model,
-                        max_steps=max_steps,
-                    )
+                    request_kwargs: dict[str, object] = {
+                        "prompt": user_input,
+                        "session_id": current_session_id,
+                        "model": model,
+                        "max_steps": max_steps,
+                    }
+                    if task_id:
+                        request_kwargs["task_id"] = task_id
+                    request = RunRequest(**request_kwargs)  # type: ignore[arg-type]
                     async for event in agent.run(request):
                         _render(event)
                     first_turn = False
@@ -920,6 +1283,78 @@ _STATUS_STYLES = {
 def _status_style(status: str) -> str:
     color = _STATUS_STYLES.get(status, "white")
     return f"[{color}]{status}[/{color}]"
+
+
+_TASK_STATUS_STYLES = {
+    "backlog": "white",
+    "todo": "cyan",
+    "in_progress": "blue",
+    "waiting": "yellow",
+    "done": "green",
+    "cancelled": "magenta",
+}
+
+
+def _task_status_style(status: str) -> str:
+    color = _TASK_STATUS_STYLES.get(status, "white")
+    return f"[{color}]{status}[/{color}]"
+
+
+def _render_task(task: Task, events: list[ActivityEvent]) -> None:
+    """Render a task header + body + activity timeline."""
+    header_lines = [
+        f"[bold]{task.ref}[/bold]  {_task_status_style(task.status)}  {task.title}",
+        f"[dim]created {_ago(task.created_at)}, updated {_ago(task.updated_at)}[/dim]",
+        f"[dim]cwd: {task.cwd}[/dim]",
+    ]
+    if task.priority:
+        header_lines.append(f"[dim]priority: {task.priority}[/dim]")
+    if task.labels:
+        header_lines.append(f"[dim]labels: {', '.join(task.labels)}[/dim]")
+    if task.parent_id:
+        header_lines.append(f"[dim]parent: {task.parent_id}[/dim]")
+    console.print(Panel("\n".join(header_lines), title="task", expand=False))
+
+    if task.description:
+        console.print(Panel(task.description, title="[cyan]description[/cyan]", expand=False))
+
+    if task.links:
+        link_lines = [f"{link.relation:<12} → {link.target_ref}" for link in task.links]
+        console.print(Panel("\n".join(link_lines), title="[blue]links[/blue]", expand=False))
+
+    if task.session_ids:
+        console.print(
+            Panel(
+                "\n".join(task.session_ids),
+                title=f"[magenta]sessions ({len(task.session_ids)})[/magenta]",
+                expand=False,
+            )
+        )
+
+    if events:
+        lines = [
+            f"[dim]{e.timestamp.isoformat(timespec='seconds')}[/dim]  "
+            f"[bold]{e.kind}[/bold]  {_compact_event_data(e.data)}"
+            for e in events
+        ]
+        console.print(
+            Panel(
+                "\n".join(lines),
+                title=f"[yellow]activity ({len(events)})[/yellow]",
+                expand=False,
+            )
+        )
+
+
+def _compact_event_data(data: dict) -> str:
+    if not data:
+        return ""
+    parts = []
+    for k, v in data.items():
+        if isinstance(v, str) and len(v) > 60:
+            v = v[:57] + "…"
+        parts.append(f"{k}={v}")
+    return " ".join(parts)
 
 
 def _ago(dt: datetime) -> str:

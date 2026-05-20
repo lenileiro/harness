@@ -5,6 +5,7 @@ description = "Typer + Rich CLI for the Harness agent runtime."
 requires-python = ">=3.11"
 dependencies = [
     "core",
+    "tasks",
     "storage-memory",
     "storage-sqlite",
     "adapter-ollama",
@@ -28,6 +29,7 @@ packages = ["src/harness"]
 
 [tool.uv.sources]
 core = { workspace = true }
+tasks = { workspace = true }
 storage-memory = { workspace = true }
 storage-sqlite = { workspace = true }
 adapter-ollama = { workspace = true }

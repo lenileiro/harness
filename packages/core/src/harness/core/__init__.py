@@ -1,5 +1,7 @@
 """Harness core: protocols, schemas, and runtime."""
 
+from harness.core import activity
+from harness.core.activity import ActivityEvent, ActivityStore
 from harness.core.adapter import Adapter
 from harness.core.errors import (
     ApprovalDeniedError,
@@ -52,6 +54,8 @@ from harness.core.tools import (
 __version__ = "0.0.0"
 
 __all__ = [
+    "ActivityEvent",
+    "ActivityStore",
     "Adapter",
     "Agent",
     "ApprovalDecision",
@@ -97,6 +101,7 @@ __all__ = [
     "ToolResultEvent",
     "Usage",
     "__version__",
+    "activity",
     "classify",
     "configure_logging",
     "get_logger",
