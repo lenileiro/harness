@@ -18,6 +18,7 @@ from harness.core import (
     Session,
     SessionStatus,
     ToolCall,
+    ToolResult,
 )
 
 # ---------------------------------------------------------------------------
@@ -93,9 +94,10 @@ class MockAdapter:
 class MockTool:
     """Tool whose behavior is driven by a `responder` callable.
 
-    The responder receives the tool's kwargs and returns either:
-      - a `str` (the tool's content), or
-      - an Exception instance (raised inside the tool)
+    The responder receives the tool's kwargs and returns one of:
+      - a `str`         → wrapped into a successful ToolResult
+      - a `ToolResult`  → returned as-is (override is_error etc.)
+      - an Exception    → raised inside the tool
     """
 
     def __init__(
@@ -104,7 +106,7 @@ class MockTool:
         name: str = "echo",
         description: str = "Echo back the input text.",
         approval: ApprovalDecision = "auto",
-        responder: Callable[..., str | BaseException] | None = None,
+        responder: Callable[..., str | ToolResult | BaseException] | None = None,
     ) -> None:
         self.name = name
         self.description = description
@@ -117,12 +119,14 @@ class MockTool:
         self.responder = responder or (lambda **kw: str(kw.get("text", "")))
         self.calls: list[dict[str, Any]] = []
 
-    async def __call__(self, **kwargs: Any) -> str:
-        self.calls.append(kwargs)
-        result = self.responder(**kwargs)
+    async def __call__(self, call: ToolCall) -> ToolResult:
+        self.calls.append(call.arguments)
+        result = self.responder(**call.arguments)
         if isinstance(result, BaseException):
             raise result
-        return result
+        if isinstance(result, ToolResult):
+            return result
+        return ToolResult(tool_call_id=call.id, name=self.name, content=result)
 
 
 # ---------------------------------------------------------------------------

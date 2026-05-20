@@ -12,7 +12,7 @@ from typing import Any, Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from harness.core.schemas import ApprovalDecision, ToolCall
+from harness.core.schemas import ApprovalDecision, ToolCall, ToolResult
 
 # ---------------------------------------------------------------------------
 # Tool
@@ -23,10 +23,13 @@ from harness.core.schemas import ApprovalDecision, ToolCall
 class Tool(Protocol):
     """Async callable the agent can invoke.
 
-    Tools return a `str` (the content the model will see). They raise to
-    signal errors — the runtime catches and wraps any exception in a
-    `ToolResult` with `is_error=True`. This keeps tool implementations free
-    of runtime concerns (they never construct ToolResults or see tool_call_ids).
+    Receives the full `ToolCall` (so the tool has access to `call.id`,
+    `call.name`, and `call.arguments`) and returns a `ToolResult`. This lets
+    tools construct rich results — set `is_error=True` for failures, or
+    customize the content shape — while keeping the wire format authoritative.
+
+    The runtime still catches exceptions raised inside `__call__` and wraps
+    them as `ToolResult(is_error=True)` so a tool crash never breaks the loop.
     """
 
     name: str
@@ -36,7 +39,7 @@ class Tool(Protocol):
     approval: ApprovalDecision
     """Default approval level. Overridable per-session or globally via ApprovalPolicy."""
 
-    async def __call__(self, **kwargs: Any) -> str: ...
+    async def __call__(self, call: ToolCall) -> ToolResult: ...
 
 
 # ---------------------------------------------------------------------------

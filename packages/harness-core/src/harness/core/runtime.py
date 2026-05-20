@@ -354,8 +354,7 @@ class Agent:
 
         try:
             with span("agent.tool", tool=call.name, call_id=call.id):
-                content = await tool(**call.arguments)
-            return ToolResult(tool_call_id=call.id, name=call.name, content=content)
+                return await tool(call)
         except Exception as exc:
             logger.warning("agent.tool.error", tool=call.name, error=str(exc))
             return ToolResult(
