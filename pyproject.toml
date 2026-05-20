@@ -1,0 +1,91 @@
+[project]
+name = "harness-workspace"
+version = "0.0.0"
+description = "Workspace root for the Harness agent runtime monorepo. Not published."
+requires-python = ">=3.11"
+# Root depends on every workspace member so `uv sync` installs them all.
+dependencies = [
+    "harness-core",
+    "harness-storage-memory",
+    "harness-storage-sqlite",
+    "harness-adapter-openrouter",
+    "harness-adapter-ollama",
+    "harness-tools-fs",
+    "harness-tools-shell",
+    "harness-tools-web",
+    "harness-cli",
+]
+
+[tool.uv.workspace]
+members = ["packages/*"]
+
+[tool.uv.sources]
+harness-core = { workspace = true }
+harness-storage-memory = { workspace = true }
+harness-storage-sqlite = { workspace = true }
+harness-adapter-openrouter = { workspace = true }
+harness-adapter-ollama = { workspace = true }
+harness-tools-fs = { workspace = true }
+harness-tools-shell = { workspace = true }
+harness-tools-web = { workspace = true }
+harness-cli = { workspace = true }
+
+[tool.uv]
+default-groups = ["dev"]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.7",
+    "pyright>=1.1.380",
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "pytest-cov>=5.0",
+    "pre-commit>=4.0",
+    # Workspace members are installed as editable in `uv sync` automatically.
+]
+
+# ---------------------------------------------------------------------------
+# Shared tool configuration (applies to every workspace member)
+# ---------------------------------------------------------------------------
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["packages/*/src", "packages/*/tests"]
+
+[tool.ruff.lint]
+select = [
+    "E", "F", "W",   # pycodestyle + pyflakes
+    "I",             # isort
+    "B",             # bugbear
+    "UP",            # pyupgrade
+    "ASYNC",         # async correctness
+    "SIM",           # simplify
+    "RUF",           # ruff-specific
+]
+ignore = [
+    "E501",  # line length handled by formatter
+]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**" = ["B011"]  # allow assert in tests
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.pyright]
+include = ["packages"]
+exclude = ["**/__pycache__", "**/.venv"]
+pythonVersion = "3.11"
+typeCheckingMode = "standard"
+reportMissingImports = "error"
+reportMissingTypeStubs = false
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["packages"]
+# importlib mode lets us have same-named test files across packages
+# (e.g. tests/test_smoke.py in each member) without module-name collisions.
+addopts = ["-ra", "--strict-markers", "--import-mode=importlib"]
+filterwarnings = ["error"]
