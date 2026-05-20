@@ -262,8 +262,10 @@ version = "0.0.0"
 source = { editable = "packages/harness-cli" }
 dependencies = [
     { name = "harness-adapter-ollama" },
+    { name = "harness-adapter-openrouter" },
     { name = "harness-core" },
     { name = "harness-storage-memory" },
+    { name = "harness-storage-sqlite" },
     { name = "harness-tools-fs" },
     { name = "rich" },
     { name = "typer" },
@@ -272,8 +274,10 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "harness-adapter-ollama", editable = "packages/harness-adapter-ollama" },
+    { name = "harness-adapter-openrouter", editable = "packages/harness-adapter-openrouter" },
     { name = "harness-core", editable = "packages/harness-core" },
     { name = "harness-storage-memory", editable = "packages/harness-storage-memory" },
+    { name = "harness-storage-sqlite", editable = "packages/harness-storage-sqlite" },
     { name = "harness-tools-fs", editable = "packages/harness-tools-fs" },
     { name = "rich", specifier = ">=13.9" },
     { name = "typer", specifier = ">=0.13" },

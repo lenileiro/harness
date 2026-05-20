@@ -7,7 +7,7 @@ import json
 import httpx
 import pytest
 
-from harness.adapters.ollama import OllamaAdapter, _merge_tool_call
+from harness.adapters.ollama import OllamaAdapter
 from harness.core import (
     Done,
     Event,
@@ -20,6 +20,7 @@ from harness.core import (
     ToolCall,
     ToolCallEvent,
 )
+from harness.core._openai import merge_tool_call_delta as _merge_tool_call
 
 
 def make_sse(*events: dict | str) -> bytes:

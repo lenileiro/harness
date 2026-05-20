@@ -31,34 +31,25 @@ from harness.core import (
 
 
 class FakeAdapter:
-    """Drop-in replacement for OllamaAdapter that replays a fixed event list."""
+    """Drop-in replacement for OllamaAdapter that replays a fixed event list.
+
+    Scripts pop from the class-level queue on every stream() call so a test
+    can drive multiple CLI invocations from a single pre-loaded list.
+    """
 
     name = "ollama"
-
-    # Class-level slot mutated by tests via the patch_adapter fixture.
     next_script: ClassVar[list[list[Event]]] = []
 
-    def __init__(
-        self, *args: Any, **kwargs: Any
-    ) -> None:  # accepts the same kwargs as OllamaAdapter
-        self._scripts = list(FakeAdapter.next_script)
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        pass
 
-    def stream(
-        self,
-        *,
-        model: str,
-        messages: list[Message],
-        tools: list[dict[str, Any]] | None = None,
-        temperature: float | None = None,
-        max_tokens: int | None = None,
-        **_kwargs: Any,
-    ) -> AsyncIterator[Event]:
+    def stream(self, **_kwargs: Any) -> AsyncIterator[Event]:
         return self._stream()
 
     async def _stream(self) -> AsyncIterator[Event]:
-        if not self._scripts:
-            raise RuntimeError("FakeAdapter has no script for this stream call")
-        for event in self._scripts.pop(0):
+        if not FakeAdapter.next_script:
+            raise RuntimeError("FakeAdapter has no scripts left for this stream call")
+        for event in FakeAdapter.next_script.pop(0):
             yield event
 
     async def capabilities(self) -> Capabilities:
@@ -98,7 +89,16 @@ class TestRunCommand:
         )
         runner = CliRunner()
         result = runner.invoke(
-            cli_main.app, ["run", "say hi", "--cwd", str(tmp_path), "--model", "test-model"]
+            cli_main.app,
+            [
+                "run",
+                "say hi",
+                "--cwd",
+                str(tmp_path),
+                "--model",
+                "test-model",
+                "--in-memory",
+            ],
         )
         assert result.exit_code == 0, result.stdout
         assert "hello world" in result.stdout
@@ -128,7 +128,8 @@ class TestRunCommand:
 
         runner = CliRunner()
         result = runner.invoke(
-            cli_main.app, ["run", "what is in note.txt?", "--cwd", str(tmp_path)]
+            cli_main.app,
+            ["run", "what is in note.txt?", "--cwd", str(tmp_path), "--in-memory"],
         )
         assert result.exit_code == 0, result.stdout
         # Tool name shows up in the rendered tool-call line.
@@ -136,16 +137,8 @@ class TestRunCommand:
         # Final answer streams to stdout.
         assert "the answer is 42" in result.stdout
 
-    def test_unknown_provider_exits_2(self, patch_adapter, tmp_path: Path) -> None:
-        runner = CliRunner()
-        result = runner.invoke(
-            cli_main.app,
-            ["run", "x", "--provider", "openrouter", "--cwd", str(tmp_path)],
-        )
-        assert result.exit_code == 2
-
     def test_missing_cwd_exits_2(self, tmp_path: Path) -> None:
         ghost = tmp_path / "does-not-exist"
         runner = CliRunner()
-        result = runner.invoke(cli_main.app, ["run", "x", "--cwd", str(ghost)])
+        result = runner.invoke(cli_main.app, ["run", "x", "--cwd", str(ghost), "--in-memory"])
         assert result.exit_code == 2
