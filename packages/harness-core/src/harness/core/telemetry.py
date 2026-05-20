@@ -40,6 +40,13 @@ def configure_logging(*, level: str | int = "INFO", json: bool = False) -> None:
         level=level,
     )
 
+    # Quiet noisy third-party loggers unless caller asked for DEBUG.
+    # httpx logs every request at INFO ("HTTP Request: POST ..."), which is
+    # noise for normal CLI runs but useful when --verbose.
+    if level > logging.DEBUG:
+        for noisy in ("httpx", "httpcore"):
+            logging.getLogger(noisy).setLevel(logging.WARNING)
+
     processors: list[Any] = [
         structlog.contextvars.merge_contextvars,
         structlog.processors.add_log_level,
