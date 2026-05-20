@@ -20,16 +20,20 @@ This is a [uv](https://docs.astral.sh/uv/) workspace with nine packages:
 
 ```
 packages/
-├── harness-core/                 # Protocols, schemas, runtime, ReAct loop
-├── harness-storage-memory/       # In-memory Session storage
-├── harness-storage-sqlite/       # SQLite (aiosqlite) Session storage
-├── harness-adapter-openrouter/   # OpenRouter HTTP/SSE adapter
-├── harness-adapter-ollama/       # Ollama HTTP/SSE adapter
-├── harness-tools-fs/             # read / write / edit / list / glob
-├── harness-tools-shell/          # subprocess exec
-├── harness-tools-web/            # http fetch
-└── harness-cli/                  # Typer + Rich CLI
+├── core/                  # Protocols, schemas, runtime, ReAct loop
+├── storage-memory/        # In-memory Session storage
+├── storage-sqlite/        # SQLite (aiosqlite) Session storage
+├── adapter-openrouter/    # OpenRouter HTTP/SSE adapter
+├── adapter-ollama/        # Ollama HTTP/SSE adapter
+├── tools-fs/              # read / write / edit / list / glob
+├── tools-shell/           # subprocess exec
+├── tools-web/             # http fetch
+└── cli/                   # Typer + Rich CLI (installs `harness` binary)
 ```
+
+All packages share the `harness.*` namespace at the import level (e.g.
+`from harness.core import Agent`). The directory and distribution names
+drop the `harness-` prefix to keep the workspace tidy.
 
 All packages live under the `harness.*` namespace (PEP 420 implicit namespace packages).
 

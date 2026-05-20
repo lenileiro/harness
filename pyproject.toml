@@ -1,34 +1,34 @@
 [project]
-name = "harness-workspace"
+name = "harness"
 version = "0.0.0"
 description = "Workspace root for the Harness agent runtime monorepo. Not published."
 requires-python = ">=3.11"
 # Root depends on every workspace member so `uv sync` installs them all.
 dependencies = [
-    "harness-core",
-    "harness-storage-memory",
-    "harness-storage-sqlite",
-    "harness-adapter-openrouter",
-    "harness-adapter-ollama",
-    "harness-tools-fs",
-    "harness-tools-shell",
-    "harness-tools-web",
-    "harness-cli",
+    "core",
+    "storage-memory",
+    "storage-sqlite",
+    "adapter-openrouter",
+    "adapter-ollama",
+    "tools-fs",
+    "tools-shell",
+    "tools-web",
+    "cli",
 ]
 
 [tool.uv.workspace]
 members = ["packages/*"]
 
 [tool.uv.sources]
-harness-core = { workspace = true }
-harness-storage-memory = { workspace = true }
-harness-storage-sqlite = { workspace = true }
-harness-adapter-openrouter = { workspace = true }
-harness-adapter-ollama = { workspace = true }
-harness-tools-fs = { workspace = true }
-harness-tools-shell = { workspace = true }
-harness-tools-web = { workspace = true }
-harness-cli = { workspace = true }
+core = { workspace = true }
+storage-memory = { workspace = true }
+storage-sqlite = { workspace = true }
+adapter-openrouter = { workspace = true }
+adapter-ollama = { workspace = true }
+tools-fs = { workspace = true }
+tools-shell = { workspace = true }
+tools-web = { workspace = true }
+cli = { workspace = true }
 
 [tool.uv]
 default-groups = ["dev"]
