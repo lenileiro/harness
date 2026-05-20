@@ -23,6 +23,7 @@ everything (handy for non-interactive use), or set approvals in config.
 from __future__ import annotations
 
 import asyncio
+import os
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Any
@@ -81,7 +82,17 @@ sessions_app = typer.Typer(
 )
 app.add_typer(sessions_app, name="sessions")
 
+providers_app = typer.Typer(
+    name="providers", help="Inspect available providers.", no_args_is_help=True
+)
+app.add_typer(providers_app, name="providers")
+
+tools_app = typer.Typer(name="tools", help="Inspect the built-in tools.", no_args_is_help=True)
+app.add_typer(tools_app, name="tools")
+
 console = Console()
+
+KNOWN_PROVIDERS: tuple[str, ...] = ("ollama", "openrouter")
 
 
 # ---------------------------------------------------------------------------
@@ -123,7 +134,7 @@ def _build_tools(cwd: Path) -> ToolRegistry:
 
 def _build_agent(
     *,
-    provider: str,
+    chain: list[str],
     base_url: str | None,
     model: str,
     storage: Storage,
@@ -131,26 +142,54 @@ def _build_agent(
     config: HarnessConfig,
     yes: bool,
 ) -> Agent:
-    adapter = _build_adapter(provider, base_url=base_url, config=config)
-    tools = _build_tools(cwd)
+    """Build an Agent over a provider chain. `chain[0]` is the primary."""
+    if not chain:
+        raise typer.BadParameter("provider chain is empty")
 
+    # --base-url applies to the primary provider only; others use their defaults.
+    adapters: dict[str, Adapter] = {}
+    for i, provider in enumerate(chain):
+        provider_base_url = base_url if i == 0 else None
+        adapters[provider] = _build_adapter(provider, base_url=provider_base_url, config=config)
+
+    tools = _build_tools(cwd)
     approval_policy = ApprovalPolicy(default="prompt", per_tool=dict(config.approval))
     approval_handler: ApprovalHandler = (
         AutoApprove() if yes else RichApprovalHandler(console=console)
     )
 
+    multi = len(chain) > 1
     return Agent(
-        adapters={provider: adapter},
+        adapters=adapters,
         tools=tools,
         storage=storage,
         failover=FailoverPolicy(
-            chain=[provider], max_attempts=1, backoff_base=0.0, backoff_jitter=0.0
+            chain=chain,
+            max_attempts=max(len(chain), 1),
+            backoff_base=0.5 if multi else 0.0,
+            backoff_max=10.0,
+            backoff_jitter=0.2 if multi else 0.0,
         ),
         approval_policy=approval_policy,
         approval_handler=approval_handler,
         default_model=model,
         default_cwd=str(cwd),
     )
+
+
+def _resolve_chain(
+    *,
+    failover_flag: str | None,
+    provider_flag: str | None,
+    config: HarnessConfig,
+) -> list[str]:
+    """Resolve the provider chain from --failover > --provider > config > 'ollama'."""
+    if failover_flag:
+        chain = [p.strip() for p in failover_flag.split(",") if p.strip()]
+        if not chain:
+            raise typer.BadParameter("--failover chain is empty")
+        return chain
+    return [provider_flag or config.default_provider or "ollama"]
 
 
 def _load_cli_config(config_path: Path | None) -> HarnessConfig:
@@ -204,6 +243,13 @@ def run(
     max_steps: Annotated[
         int, typer.Option("--max-steps", help="Maximum ReAct turns before giving up.")
     ] = 25,
+    failover: Annotated[
+        str | None,
+        typer.Option(
+            "--failover",
+            help="Comma-separated provider chain (e.g. 'ollama,openrouter'). Overrides --provider.",
+        ),
+    ] = None,
     session_id: Annotated[
         str | None,
         typer.Option(
@@ -232,7 +278,7 @@ def run(
     configure_logging(level="DEBUG" if verbose else "INFO")
 
     cfg = _load_cli_config(config_path)
-    effective_provider = provider or cfg.default_provider or "ollama"
+    chain = _resolve_chain(failover_flag=failover, provider_flag=provider, config=cfg)
     effective_model = model or cfg.default_model or "llama3.2"
 
     working_dir = (cwd or Path.cwd()).resolve()
@@ -245,7 +291,7 @@ def run(
             _run_once(
                 prompt=prompt,
                 model=effective_model,
-                provider=effective_provider,
+                chain=chain,
                 base_url=base_url,
                 cwd=working_dir,
                 max_steps=max_steps,
@@ -265,7 +311,7 @@ async def _run_once(
     *,
     prompt: str,
     model: str,
-    provider: str,
+    chain: list[str],
     base_url: str | None,
     cwd: Path,
     max_steps: int,
@@ -278,7 +324,7 @@ async def _run_once(
     storage = _build_storage(db=db, in_memory=in_memory)
     try:
         agent = _build_agent(
-            provider=provider,
+            chain=chain,
             base_url=base_url,
             model=model,
             storage=storage,
@@ -399,6 +445,13 @@ def sessions_resume(
     ] = None,
     base_url: Annotated[str | None, typer.Option("--base-url")] = None,
     max_steps: Annotated[int, typer.Option("--max-steps")] = 25,
+    failover: Annotated[
+        str | None,
+        typer.Option(
+            "--failover",
+            help="Comma-separated provider chain. Overrides the session's recorded provider.",
+        ),
+    ] = None,
     yes: Annotated[bool, typer.Option("--yes", "-y", help="Auto-approve all tool calls.")] = False,
     config_path: Annotated[Path | None, typer.Option("--config")] = None,
     verbose: Annotated[bool, typer.Option("--verbose", "-v")] = False,
@@ -417,8 +470,11 @@ def sessions_resume(
                 raise typer.Exit(1)
 
             working_dir = (cwd or session.cwd).resolve()
+            chain = _resolve_chain(
+                failover_flag=failover, provider_flag=session.provider, config=cfg
+            )
             agent = _build_agent(
-                provider=session.provider,
+                chain=chain,
                 base_url=base_url,
                 model=session.model,
                 storage=storage,
@@ -461,6 +517,321 @@ def sessions_rm(
 
     asyncio.run(_go())
     console.print(f"[green]Deleted[/green] {session_id}")
+
+
+# ---------------------------------------------------------------------------
+# providers subcommands
+# ---------------------------------------------------------------------------
+
+
+@providers_app.command("list")
+def providers_list_cmd(
+    config_path: Annotated[Path | None, typer.Option("--config")] = None,
+) -> None:
+    """List known providers and their configuration status."""
+    cfg = _load_cli_config(config_path)
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("Provider")
+    table.add_column("Status")
+    table.add_column("Notes")
+
+    settings = cfg.provider("ollama")
+    ollama_base = settings.get("base_url") or os.environ.get(
+        "OLLAMA_HOST", "http://localhost:11434"
+    )
+    table.add_row(
+        "ollama",
+        "[green]ready[/green]",
+        f"base_url: {ollama_base}",
+    )
+
+    has_or_key = bool(os.environ.get("OPENROUTER_API_KEY"))
+    or_settings = cfg.provider("openrouter")
+    or_status = "[green]ready[/green]" if has_or_key else "[red]missing OPENROUTER_API_KEY[/red]"
+    or_notes_parts = []
+    if has_or_key:
+        or_notes_parts.append("env: OPENROUTER_API_KEY set")
+    if "http_referer" in or_settings:
+        or_notes_parts.append(f"http_referer: {or_settings['http_referer']}")
+    if "x_title" in or_settings:
+        or_notes_parts.append(f"x_title: {or_settings['x_title']}")
+    table.add_row("openrouter", or_status, ", ".join(or_notes_parts) or "—")
+
+    console.print(table)
+
+
+@providers_app.command("capabilities")
+def providers_capabilities_cmd(
+    name: Annotated[str, typer.Argument(help="Provider name (ollama or openrouter).")],
+    config_path: Annotated[Path | None, typer.Option("--config")] = None,
+) -> None:
+    """Print a provider's reported Capabilities."""
+    cfg = _load_cli_config(config_path)
+    if name not in KNOWN_PROVIDERS:
+        console.print(f"[red]Unknown provider:[/red] {name}")
+        raise typer.Exit(2)
+
+    async def _go() -> None:
+        try:
+            adapter = _build_adapter(name, base_url=None, config=cfg)
+        except Exception as exc:
+            console.print(f"[red]Could not construct adapter:[/red] {exc}")
+            raise typer.Exit(2) from None
+        caps = await adapter.capabilities()
+        table = Table(show_header=False)
+        table.add_column("Field", style="bold")
+        table.add_column("Value")
+        table.add_row("streaming", str(caps.streaming))
+        table.add_row("tool_use", str(caps.tool_use))
+        table.add_row("structured_output", str(caps.structured_output))
+        table.add_row(
+            "max_context_tokens",
+            "—" if caps.max_context_tokens is None else str(caps.max_context_tokens),
+        )
+        table.add_row(
+            "models",
+            "—" if caps.models is None else ", ".join(caps.models),
+        )
+        console.print(table)
+
+    asyncio.run(_go())
+
+
+# ---------------------------------------------------------------------------
+# tools subcommands
+# ---------------------------------------------------------------------------
+
+
+@tools_app.command("list")
+def tools_list_cmd(
+    cwd: Annotated[
+        Path | None,
+        typer.Option("--cwd", help="Working directory used to construct fs/shell tools."),
+    ] = None,
+    config_path: Annotated[Path | None, typer.Option("--config")] = None,
+) -> None:
+    """List built-in tools with their effective approval levels."""
+    cfg = _load_cli_config(config_path)
+    working_dir = (cwd or Path.cwd()).resolve()
+    registry = _build_tools(working_dir)
+    policy = ApprovalPolicy(default="prompt", per_tool=dict(cfg.approval))
+
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("Tool")
+    table.add_column("Approval")
+    table.add_column("Description")
+    for tool in registry.all():
+        effective = policy.decide(tool)
+        color = {"auto": "green", "prompt": "yellow", "deny": "red"}.get(effective, "white")
+        table.add_row(
+            tool.name,
+            f"[{color}]{effective}[/{color}]",
+            _truncate(tool.description, 80),
+        )
+    console.print(table)
+
+
+# ---------------------------------------------------------------------------
+# chat
+# ---------------------------------------------------------------------------
+
+
+@app.command()
+def chat(
+    model: Annotated[
+        str | None,
+        typer.Option("--model", "-m", help="Model identifier (overrides config)."),
+    ] = None,
+    provider: Annotated[
+        str | None, typer.Option("--provider", "-p", help="Primary provider (overrides config).")
+    ] = None,
+    base_url: Annotated[str | None, typer.Option("--base-url")] = None,
+    cwd: Annotated[
+        Path | None,
+        typer.Option("--cwd", help="Working directory for filesystem tools."),
+    ] = None,
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+    in_memory: Annotated[bool, typer.Option("--in-memory")] = False,
+    session_id: Annotated[
+        str | None,
+        typer.Option("--session", help="Resume an existing session, or create one with this id."),
+    ] = None,
+    max_steps: Annotated[int, typer.Option("--max-steps")] = 25,
+    failover: Annotated[
+        str | None,
+        typer.Option("--failover", help="Comma-separated provider chain."),
+    ] = None,
+    yes: Annotated[bool, typer.Option("--yes", "-y", help="Auto-approve all tool calls.")] = False,
+    config_path: Annotated[Path | None, typer.Option("--config")] = None,
+    verbose: Annotated[bool, typer.Option("--verbose", "-v")] = False,
+) -> None:
+    """Interactive REPL: chat with the agent, drive tools, resume across turns."""
+    configure_logging(level="DEBUG" if verbose else "INFO")
+    cfg = _load_cli_config(config_path)
+    chain = _resolve_chain(failover_flag=failover, provider_flag=provider, config=cfg)
+    effective_model = model or cfg.default_model or "llama3.2"
+    working_dir = (cwd or Path.cwd()).resolve()
+    if not working_dir.exists() or not working_dir.is_dir():
+        console.print(f"[red]--cwd does not exist or is not a directory: {working_dir}[/red]")
+        raise typer.Exit(2)
+
+    try:
+        asyncio.run(
+            _chat_loop(
+                chain=chain,
+                base_url=base_url,
+                model=effective_model,
+                cwd=working_dir,
+                db=db,
+                in_memory=in_memory,
+                session_id=session_id,
+                max_steps=max_steps,
+                yes=yes,
+                config=cfg,
+            )
+        )
+    except KeyboardInterrupt:
+        console.print("\n[yellow]bye[/yellow]")
+        raise typer.Exit(130) from None
+
+
+async def _chat_loop(
+    *,
+    chain: list[str],
+    base_url: str | None,
+    model: str,
+    cwd: Path,
+    db: Path | None,
+    in_memory: bool,
+    session_id: str | None,
+    max_steps: int,
+    yes: bool,
+    config: HarnessConfig,
+) -> None:
+    from uuid import uuid4
+
+    storage = _build_storage(db=db, in_memory=in_memory)
+    try:
+        agent = _build_agent(
+            chain=chain,
+            base_url=base_url,
+            model=model,
+            storage=storage,
+            cwd=cwd,
+            config=config,
+            yes=yes,
+        )
+
+        existing: Session | None = None
+        if session_id:
+            existing = await storage.get(session_id)
+        current_session_id = session_id or f"sess_{uuid4().hex[:12]}"
+        first_turn = existing is None
+
+        chain_label = chain[0]
+        if len(chain) > 1:
+            chain_label += "  [dim](failover: " + ", ".join(chain[1:]) + ")[/dim]"
+        intro = (
+            f"[bold]Session:[/bold] {current_session_id}"
+            + (" [dim](resumed)[/dim]" if existing else "")
+            + f"\n[bold]Provider:[/bold] {chain_label}"
+            f"\n[bold]Model:[/bold] {model}"
+            f"\n[bold]Tools:[/bold] {', '.join(agent.tools.names())}"
+            f"\n[bold]CWD:[/bold] {cwd}\n\n"
+            f"[dim]Type /help for commands. /quit to exit.[/dim]"
+        )
+        console.print(Panel(intro, title="harness chat", expand=False))
+
+        while True:
+            try:
+                user_input = console.input("\n[bold cyan]> [/bold cyan]").strip()
+            except EOFError:
+                console.print("\n[yellow]bye[/yellow]")
+                return
+            except KeyboardInterrupt:
+                console.print("\n[yellow]bye[/yellow]")
+                return
+
+            if not user_input:
+                continue
+
+            if user_input.startswith("/"):
+                keep_going = await _handle_slash(
+                    user_input, agent=agent, session_id=current_session_id, storage=storage
+                )
+                if not keep_going:
+                    return
+                continue
+
+            try:
+                if first_turn:
+                    request = RunRequest(
+                        prompt=user_input,
+                        session_id=current_session_id,
+                        model=model,
+                        max_steps=max_steps,
+                    )
+                    async for event in agent.run(request):
+                        _render(event)
+                    first_turn = False
+                else:
+                    async for event in agent.resume(
+                        current_session_id, prompt=user_input, max_steps=max_steps
+                    ):
+                        _render(event)
+            except (KeyboardInterrupt, asyncio.CancelledError):
+                console.print("\n[yellow]cancelled[/yellow]")
+            except Exception as exc:
+                console.print(f"\n[red]Error:[/red] {exc!s}")
+    finally:
+        if isinstance(storage, SQLiteStorage):
+            await storage.close()
+
+
+_HELP_TEXT = (
+    "/help              show this help\n"
+    "/quit, /exit, /q   exit the chat\n"
+    "/tools             list registered tools and effective approval\n"
+    "/session           show current session id and turn count\n"
+)
+
+
+async def _handle_slash(line: str, *, agent: Agent, session_id: str, storage: Storage) -> bool:
+    """Dispatch a /command. Returns False to terminate the REPL."""
+    cmd = line.split(None, 1)[0].lower()
+
+    if cmd in {"/quit", "/exit", "/q"}:
+        console.print("[yellow]bye[/yellow]")
+        return False
+
+    if cmd == "/help":
+        console.print(Panel(_HELP_TEXT.rstrip(), title="commands", expand=False))
+        return True
+
+    if cmd == "/tools":
+        table = Table(show_header=True, header_style="bold")
+        table.add_column("Tool")
+        table.add_column("Approval")
+        for tool in agent.tools.all():
+            effective = agent.approval_policy.decide(tool)
+            color = {"auto": "green", "prompt": "yellow", "deny": "red"}.get(effective, "white")
+            table.add_row(tool.name, f"[{color}]{effective}[/{color}]")
+        console.print(table)
+        return True
+
+    if cmd == "/session":
+        session = await storage.get(session_id)
+        if session is None:
+            console.print(f"[dim]Session {session_id} (no turns yet)[/dim]")
+        else:
+            console.print(
+                f"[dim]Session {session_id}, status: {session.status}, "
+                f"{len(session.messages)} messages[/dim]"
+            )
+        return True
+
+    console.print(f"[red]Unknown command:[/red] {cmd}.  Try /help.")
+    return True
 
 
 # ---------------------------------------------------------------------------
