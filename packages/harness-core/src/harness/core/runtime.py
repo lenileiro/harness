@@ -343,7 +343,7 @@ class Agent:
                     content="approval required but no handler configured",
                     is_error=True,
                 )
-            approved = await self.approval_handler(tool, call)
+            approved = await self.approval_handler(tool, call, session)
             if not approved:
                 return ToolResult(
                     tool_call_id=call.id,

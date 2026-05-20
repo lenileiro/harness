@@ -10,6 +10,8 @@ dependencies = [
     "harness-adapter-ollama",
     "harness-adapter-openrouter",
     "harness-tools-fs",
+    "harness-tools-shell",
+    "harness-tools-web",
     "typer>=0.13",
     "rich>=13.9",
 ]
@@ -31,3 +33,5 @@ harness-storage-sqlite = { workspace = true }
 harness-adapter-ollama = { workspace = true }
 harness-adapter-openrouter = { workspace = true }
 harness-tools-fs = { workspace = true }
+harness-tools-shell = { workspace = true }
+harness-tools-web = { workspace = true }

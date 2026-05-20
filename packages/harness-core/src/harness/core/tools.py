@@ -12,7 +12,7 @@ from typing import Any, Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from harness.core.schemas import ApprovalDecision, ToolCall, ToolResult
+from harness.core.schemas import ApprovalDecision, Session, ToolCall, ToolResult
 
 # ---------------------------------------------------------------------------
 # Tool
@@ -128,26 +128,30 @@ class ApprovalHandler(Protocol):
     """Called by the runtime whenever a tool's effective approval is `prompt`.
 
     Implementations: CLI shows a Rich prompt; tests use auto-approve/deny mocks.
+    Receives the current `session` so handlers may persist "always" decisions
+    by mutating `session.approval_overrides` (the runtime saves the session
+    after each turn).
+
     Return value semantics:
       - True  → execute the tool
       - False → skip the tool; runtime synthesizes a tool_result with is_error=True
         and `content` = "user denied approval"
     """
 
-    async def __call__(self, tool: Tool, call: ToolCall) -> bool: ...
+    async def __call__(self, tool: Tool, call: ToolCall, session: Session) -> bool: ...
 
 
 class AutoApprove:
     """An ApprovalHandler that approves everything. Useful in tests and `--yes` mode."""
 
-    async def __call__(self, tool: Tool, call: ToolCall) -> bool:
+    async def __call__(self, tool: Tool, call: ToolCall, session: Session) -> bool:
         return True
 
 
 class AutoDeny:
     """An ApprovalHandler that denies everything. Useful as a safety stop."""
 
-    async def __call__(self, tool: Tool, call: ToolCall) -> bool:
+    async def __call__(self, tool: Tool, call: ToolCall, session: Session) -> bool:
         return False
 
 

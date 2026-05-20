@@ -1,15 +1,23 @@
 """Harness CLI entry point.
 
-Phase 3 surface:
-- `harness run "prompt"`         — one-shot prompt, persists via SQLite by default
+Phase 4 surface:
+- `harness run "prompt"`         — one-shot prompt with the full tool set
 - `harness sessions list`        — list saved sessions
 - `harness sessions show <id>`   — print full transcript
-- `harness sessions resume <id>` — continue an existing session with a new prompt
+- `harness sessions resume <id>` — continue an existing session
 - `harness sessions rm <id>`     — delete a session
 - `harness version`              — print the installed CLI version
 
-Providers (Phase 3): ollama, openrouter.
-Tools (Phase 3): read_file (from harness-tools-fs).
+Providers: ollama, openrouter.
+Tools: read_file, write_file, edit_file, list_dir, glob, shell, fetch_url.
+
+Config: `$XDG_CONFIG_HOME/harness/config.toml` (or ~/.config/harness/config.toml)
+provides defaults for provider, model, per-provider settings, and per-tool
+approval levels. CLI flags override the config.
+
+Tool approvals default to `prompt` for any tool that mutates state or makes
+network calls; the CLI shows a Rich prompt. Pass `--yes` to auto-approve
+everything (handy for non-interactive use), or set approvals in config.
 """
 
 from __future__ import annotations
@@ -27,9 +35,12 @@ from rich.table import Table
 
 from harness.adapters.ollama import OllamaAdapter
 from harness.adapters.openrouter import OpenRouterAdapter
+from harness.cli.approval import RichApprovalHandler
+from harness.cli.config import HarnessConfig, default_config_path, load_config
 from harness.core import (
     Adapter,
     Agent,
+    ApprovalHandler,
     ApprovalPolicy,
     AutoApprove,
     Done,
@@ -48,7 +59,15 @@ from harness.core import (
 )
 from harness.storage.memory import InMemoryStorage
 from harness.storage.sqlite import SQLiteStorage, default_db_path
-from harness.tools.fs import ReadFileTool
+from harness.tools.fs import (
+    EditFileTool,
+    GlobTool,
+    ListDirTool,
+    ReadFileTool,
+    WriteFileTool,
+)
+from harness.tools.shell import ShellTool
+from harness.tools.web import FetchUrlTool
 
 app = typer.Typer(
     name="harness",
@@ -76,12 +95,30 @@ def _build_storage(*, db: Path | None, in_memory: bool) -> Storage:
     return SQLiteStorage(path=db or default_db_path())
 
 
-def _build_adapter(provider: str, *, base_url: str | None) -> Adapter:
+def _build_adapter(provider: str, *, base_url: str | None, config: HarnessConfig) -> Adapter:
+    settings = config.provider(provider)
+    effective_base_url = base_url or settings.get("base_url")
     if provider == "ollama":
-        return OllamaAdapter(base_url=base_url) if base_url else OllamaAdapter()
+        return OllamaAdapter(base_url=effective_base_url) if effective_base_url else OllamaAdapter()
     if provider == "openrouter":
-        return OpenRouterAdapter(base_url=base_url) if base_url else OpenRouterAdapter()
+        return OpenRouterAdapter(
+            base_url=effective_base_url,
+            http_referer=settings.get("http_referer"),
+            x_title=settings.get("x_title"),
+        )
     raise typer.BadParameter(f"unknown provider: {provider!r}")
+
+
+def _build_tools(cwd: Path) -> ToolRegistry:
+    registry = ToolRegistry()
+    registry.register(ReadFileTool(cwd=cwd))
+    registry.register(WriteFileTool(cwd=cwd))
+    registry.register(EditFileTool(cwd=cwd))
+    registry.register(ListDirTool(cwd=cwd))
+    registry.register(GlobTool(cwd=cwd))
+    registry.register(ShellTool(cwd=cwd))
+    registry.register(FetchUrlTool())
+    return registry
 
 
 def _build_agent(
@@ -91,22 +128,37 @@ def _build_agent(
     model: str,
     storage: Storage,
     cwd: Path,
+    config: HarnessConfig,
+    yes: bool,
 ) -> Agent:
-    adapter = _build_adapter(provider, base_url=base_url)
-    registry = ToolRegistry()
-    registry.register(ReadFileTool(cwd=cwd))
+    adapter = _build_adapter(provider, base_url=base_url, config=config)
+    tools = _build_tools(cwd)
+
+    approval_policy = ApprovalPolicy(default="prompt", per_tool=dict(config.approval))
+    approval_handler: ApprovalHandler = (
+        AutoApprove() if yes else RichApprovalHandler(console=console)
+    )
+
     return Agent(
         adapters={provider: adapter},
-        tools=registry,
+        tools=tools,
         storage=storage,
         failover=FailoverPolicy(
             chain=[provider], max_attempts=1, backoff_base=0.0, backoff_jitter=0.0
         ),
-        approval_policy=ApprovalPolicy(default="auto"),
-        approval_handler=AutoApprove(),
+        approval_policy=approval_policy,
+        approval_handler=approval_handler,
         default_model=model,
         default_cwd=str(cwd),
     )
+
+
+def _load_cli_config(config_path: Path | None) -> HarnessConfig:
+    try:
+        return load_config(config_path)
+    except Exception as exc:
+        console.print(f"[red]Bad config:[/red] {exc}")
+        raise typer.Exit(2) from None
 
 
 # ---------------------------------------------------------------------------
@@ -131,11 +183,15 @@ def version() -> None:
 def run(
     prompt: Annotated[str, typer.Argument(help="The user prompt for the agent.")],
     model: Annotated[
-        str, typer.Option("--model", "-m", help="Model identifier to send to the provider.")
-    ] = "llama3.2",
+        str | None,
+        typer.Option("--model", "-m", help="Model identifier (overrides config)."),
+    ] = None,
     provider: Annotated[
-        str, typer.Option("--provider", "-p", help="Provider: 'ollama' or 'openrouter'.")
-    ] = "ollama",
+        str | None,
+        typer.Option(
+            "--provider", "-p", help="Provider: 'ollama' or 'openrouter' (overrides config)."
+        ),
+    ] = None,
     base_url: Annotated[
         str | None, typer.Option("--base-url", help="Override the provider's base URL.")
     ] = None,
@@ -161,12 +217,23 @@ def run(
     in_memory: Annotated[
         bool, typer.Option("--in-memory", help="Use in-memory storage (session lost on exit).")
     ] = False,
+    yes: Annotated[
+        bool, typer.Option("--yes", "-y", help="Auto-approve all tool calls (non-interactive).")
+    ] = False,
+    config_path: Annotated[
+        Path | None,
+        typer.Option("--config", help=f"Override config path (default: {default_config_path()})."),
+    ] = None,
     verbose: Annotated[
         bool, typer.Option("--verbose", "-v", help="Enable DEBUG logging to stderr.")
     ] = False,
 ) -> None:
     """Run a single prompt through the agent and stream the result to stdout."""
     configure_logging(level="DEBUG" if verbose else "INFO")
+
+    cfg = _load_cli_config(config_path)
+    effective_provider = provider or cfg.default_provider or "ollama"
+    effective_model = model or cfg.default_model or "llama3.2"
 
     working_dir = (cwd or Path.cwd()).resolve()
     if not working_dir.exists() or not working_dir.is_dir():
@@ -177,14 +244,16 @@ def run(
         asyncio.run(
             _run_once(
                 prompt=prompt,
-                model=model,
-                provider=provider,
+                model=effective_model,
+                provider=effective_provider,
                 base_url=base_url,
                 cwd=working_dir,
                 max_steps=max_steps,
                 session_id=session_id,
                 db=db,
                 in_memory=in_memory,
+                yes=yes,
+                config=cfg,
             )
         )
     except KeyboardInterrupt:
@@ -203,11 +272,19 @@ async def _run_once(
     session_id: str | None,
     db: Path | None,
     in_memory: bool,
+    yes: bool,
+    config: HarnessConfig,
 ) -> None:
     storage = _build_storage(db=db, in_memory=in_memory)
     try:
         agent = _build_agent(
-            provider=provider, base_url=base_url, model=model, storage=storage, cwd=cwd
+            provider=provider,
+            base_url=base_url,
+            model=model,
+            storage=storage,
+            cwd=cwd,
+            config=config,
+            yes=yes,
         )
 
         request_kwargs: dict[str, object] = {
@@ -322,10 +399,14 @@ def sessions_resume(
     ] = None,
     base_url: Annotated[str | None, typer.Option("--base-url")] = None,
     max_steps: Annotated[int, typer.Option("--max-steps")] = 25,
+    yes: Annotated[bool, typer.Option("--yes", "-y", help="Auto-approve all tool calls.")] = False,
+    config_path: Annotated[Path | None, typer.Option("--config")] = None,
     verbose: Annotated[bool, typer.Option("--verbose", "-v")] = False,
 ) -> None:
     """Continue a saved session, optionally with a new user prompt."""
     configure_logging(level="DEBUG" if verbose else "INFO")
+
+    cfg = _load_cli_config(config_path)
 
     async def _go() -> None:
         storage = _build_storage(db=db, in_memory=in_memory)
@@ -342,6 +423,8 @@ def sessions_resume(
                 model=session.model,
                 storage=storage,
                 cwd=working_dir,
+                config=cfg,
+                yes=yes,
             )
             try:
                 async for event in agent.resume(session_id, prompt=prompt, max_steps=max_steps):

@@ -88,14 +88,21 @@ class TestApprovalPolicyDecide:
 
 @pytest.mark.asyncio
 class TestApprovalHandlers:
+    def _session(self):  # type: ignore[no-untyped-def]
+        from pathlib import Path
+
+        from harness.core import Session
+
+        return Session(provider="x", model="y", cwd=Path.cwd())
+
     async def test_auto_approve_returns_true(self) -> None:
         handler = AutoApprove()
         tool = MockTool()
         call = ToolCall(id="c1", name="echo", arguments={})
-        assert await handler(tool, call) is True
+        assert await handler(tool, call, self._session()) is True
 
     async def test_auto_deny_returns_false(self) -> None:
         handler = AutoDeny()
         tool = MockTool()
         call = ToolCall(id="c1", name="echo", arguments={})
-        assert await handler(tool, call) is False
+        assert await handler(tool, call, self._session()) is False

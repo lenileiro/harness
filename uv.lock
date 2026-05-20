@@ -267,6 +267,8 @@ dependencies = [
     { name = "harness-storage-memory" },
     { name = "harness-storage-sqlite" },
     { name = "harness-tools-fs" },
+    { name = "harness-tools-shell" },
+    { name = "harness-tools-web" },
     { name = "rich" },
     { name = "typer" },
 ]
@@ -279,6 +281,8 @@ requires-dist = [
     { name = "harness-storage-memory", editable = "packages/harness-storage-memory" },
     { name = "harness-storage-sqlite", editable = "packages/harness-storage-sqlite" },
     { name = "harness-tools-fs", editable = "packages/harness-tools-fs" },
+    { name = "harness-tools-shell", editable = "packages/harness-tools-shell" },
+    { name = "harness-tools-web", editable = "packages/harness-tools-web" },
     { name = "rich", specifier = ">=13.9" },
     { name = "typer", specifier = ">=0.13" },
 ]
