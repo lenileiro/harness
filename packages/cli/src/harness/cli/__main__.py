@@ -1147,11 +1147,11 @@ def approvals_list_cmd(
         return
 
     table = Table(show_header=True, header_style="bold")
-    table.add_column("ID")
+    table.add_column("ID", no_wrap=True)
     table.add_column("Status")
-    table.add_column("Tool")
+    table.add_column("Tool", no_wrap=True)
     table.add_column("Args")
-    table.add_column("Session")
+    table.add_column("Session", no_wrap=True)
     table.add_column("Requested")
     for a in items:
         table.add_row(
