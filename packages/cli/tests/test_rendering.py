@@ -6,7 +6,7 @@ from io import StringIO
 
 from rich.console import Console
 
-from harness.cli.__main__ import Renderer
+from harness.cli.__main__ import Renderer, _preprocess_markdown
 from harness.core import (
     Done,
     ErrorEvent,
@@ -232,3 +232,48 @@ class TestVerification:
             )
         )
         assert "0.95" in buf.getvalue()
+
+
+# ---------------------------------------------------------------------------
+# Markdown preprocessing
+# ---------------------------------------------------------------------------
+
+
+class TestPreprocessMarkdown:
+    def test_rightarrow_converted(self) -> None:
+        result = _preprocess_markdown("Think $\\rightarrow$ Act")
+        assert "→" in result
+        assert "$" not in result
+
+    def test_multiple_arrows_in_sequence(self) -> None:
+        result = _preprocess_markdown(
+            "Think $\\rightarrow$ Tool Call $\\rightarrow$ Observe $\\rightarrow$ Repeat"
+        )
+        assert result.count("→") == 3
+        assert "$" not in result
+
+    def test_display_math_converted(self) -> None:
+        result = _preprocess_markdown("$$\\alpha + \\beta = \\gamma$$")
+        assert "α" in result  # noqa: RUF001
+        assert "β" in result
+        assert "γ" in result  # noqa: RUF001
+        assert "$" not in result
+
+    def test_plain_text_unchanged(self) -> None:
+        text = "Here is a code block:\n\n```python\nprint('hi')\n```"
+        assert _preprocess_markdown(text) == text
+
+    def test_think_block_collapsed(self) -> None:
+        result = _preprocess_markdown("<think>reasoning goes here</think>Answer")
+        assert "reasoning" in result
+        assert "<think>" not in result
+
+    def test_unknown_latex_command_stripped(self) -> None:
+        result = _preprocess_markdown("$\\unknowncmd{x}$")
+        assert "$" not in result
+        assert "\\unknown" not in result
+
+    def test_leq_geq_converted(self) -> None:
+        result = _preprocess_markdown("If $x \\leq y$ and $y \\geq z$")
+        assert "≤" in result
+        assert "≥" in result

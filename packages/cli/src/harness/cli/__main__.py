@@ -25,6 +25,7 @@ from __future__ import annotations
 import asyncio
 import difflib
 import os
+import re
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -1721,6 +1722,127 @@ async def _handle_slash(line: str, *, agent: Agent, session_id: str, storage: St
 
 
 # ---------------------------------------------------------------------------
+# Markdown preprocessing
+# ---------------------------------------------------------------------------
+
+_LATEX_SYMBOLS: dict[str, str] = {
+    r"\rightarrow": "→",
+    r"\leftarrow": "←",
+    r"\Rightarrow": "⇒",
+    r"\Leftarrow": "⇐",
+    r"\leftrightarrow": "↔",
+    r"\Leftrightarrow": "⟺",
+    r"\to": "→",
+    r"\gets": "←",
+    r"\implies": "⇒",
+    r"\iff": "⟺",
+    r"\times": "×",  # noqa: RUF001
+    r"\div": "÷",
+    r"\pm": "±",
+    r"\mp": "∓",
+    r"\infty": "∞",
+    r"\cdot": "·",
+    r"\ldots": "…",
+    r"\cdots": "⋯",
+    r"\leq": "≤",
+    r"\geq": "≥",
+    r"\neq": "≠",
+    r"\approx": "≈",
+    r"\equiv": "≡",
+    r"\sum": "∑",
+    r"\prod": "∏",
+    r"\int": "∫",
+    r"\partial": "∂",
+    r"\nabla": "∇",
+    r"\forall": "∀",
+    r"\exists": "∃",
+    r"\in": "∈",
+    r"\notin": "∉",
+    r"\subset": "⊂",
+    r"\supset": "⊃",
+    r"\cup": "∪",  # noqa: RUF001
+    r"\cap": "∩",
+    r"\emptyset": "∅",
+    r"\alpha": "α",  # noqa: RUF001
+    r"\beta": "β",
+    r"\gamma": "γ",  # noqa: RUF001
+    r"\delta": "δ",
+    r"\epsilon": "ε",
+    r"\theta": "θ",
+    r"\lambda": "λ",
+    r"\mu": "μ",
+    r"\nu": "ν",  # noqa: RUF001
+    r"\pi": "π",
+    r"\rho": "ρ",  # noqa: RUF001
+    r"\sigma": "σ",  # noqa: RUF001
+    r"\tau": "τ",
+    r"\phi": "φ",
+    r"\psi": "ψ",
+    r"\omega": "ω",
+    r"\Delta": "Δ",
+    r"\Gamma": "Γ",
+    r"\Lambda": "Λ",
+    r"\Omega": "Ω",
+    r"\Pi": "Π",
+    r"\Sigma": "Σ",
+    r"\Theta": "Θ",
+    r"\Phi": "Φ",
+    r"\Psi": "Ψ",
+    r"\sqrt": "√",
+    r"\degree": "°",
+    r"\langle": "⟨",
+    r"\rangle": "⟩",
+    r"\lfloor": "⌊",
+    r"\rfloor": "⌋",
+    r"\lceil": "⌈",
+    r"\rceil": "⌉",
+}
+
+# Sorted longest-first so e.g. \leftrightarrow matches before \left
+_LATEX_SORTED = sorted(_LATEX_SYMBOLS.items(), key=lambda kv: -len(kv[0]))
+
+
+def _expand_latex_span(inner: str) -> str:
+    """Convert a $...$ body to readable unicode text."""
+    result = inner
+    for cmd, sym in _LATEX_SORTED:
+        result = result.replace(cmd, sym)
+    # Drop remaining unknown commands and braces, keep spacing
+    result = re.sub(r"\\[a-zA-Z]+\*?", "", result)
+    result = result.replace("{", "").replace("}", "")
+    return result.strip()
+
+
+def _preprocess_markdown(text: str) -> str:
+    """Prepare LLM output for Rich Markdown rendering.
+
+    - Converts LaTeX math spans ($...$, $$...$$) to unicode
+    - Wraps <think>...</think> blocks in a collapsible dim quote
+    """
+    # Display math: $$...$$  (must come before inline $ to avoid partial match)
+    text = re.sub(
+        r"\$\$(.+?)\$\$",
+        lambda m: f"`{_expand_latex_span(m.group(1))}`",
+        text,
+        flags=re.DOTALL,
+    )
+    # Inline math: $...$  (not spanning newlines)
+    text = re.sub(
+        r"\$([^$\n]+?)\$",
+        lambda m: _expand_latex_span(m.group(1)),
+        text,
+    )
+    # <think>...</think> blocks from reasoning models — show dimmed
+    text = re.sub(
+        r"<think>(.*?)</think>",
+        lambda m: "> *thinking: " + m.group(1).strip().replace("\n", " ")[:200] + "…*\n",
+        text,
+        flags=re.DOTALL | re.IGNORECASE,
+    )
+    return text
+
+
+# ---------------------------------------------------------------------------
 # Rendering
 # ---------------------------------------------------------------------------
 
@@ -1746,9 +1868,10 @@ class Renderer:
         if isinstance(event, TextDelta):
             self._stop_spinner()
             self._text_buf += event.text
+            rendered = Markdown(_preprocess_markdown(self._text_buf))
             if self._live is None:
                 self._live = Live(
-                    Markdown(self._text_buf),
+                    rendered,
                     console=self._console,
                     refresh_per_second=12,
                     vertical_overflow="visible",
@@ -1756,7 +1879,7 @@ class Renderer:
                 self._live_kind = "text"
                 self._live.start()
             else:
-                self._live.update(Markdown(self._text_buf))
+                self._live.update(rendered)
         elif isinstance(event, ToolCallEvent):
             self._flush_text()
             self._console.print()
