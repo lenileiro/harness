@@ -53,6 +53,7 @@ from harness.core import (
     ApprovalPolicy,
     ApprovalStore,
     AutoApprove,
+    ConsequencePredictor,
     ContextBudget,
     Done,
     ErrorEvent,
@@ -62,7 +63,10 @@ from harness.core import (
     LLMPlanner,
     MemoryEntry,
     PendingApproval,
+    PredictionEvent,
+    PredictionMismatchEvent,
     Planner,
+    RepairOrchestrator,
     RuleVerifier,
     RunRequest,
     Session,
@@ -231,6 +235,8 @@ def _build_agent(
     memory_store: Any | None = None,
     planner: Planner | None = None,
     session_overrides: dict[str, ApprovalDecision] | None = None,
+    predictor: ConsequencePredictor | None = None,
+    repair: RepairOrchestrator | None = None,
 ) -> Agent:
     """Build an Agent over a provider chain. `chain[0]` is the primary.
 
@@ -286,6 +292,8 @@ def _build_agent(
         default_cwd=str(cwd),
         memory_store=memory_store,
         planner=planner,
+        predictor=predictor,
+        repair=repair,
     )
 
 
@@ -436,6 +444,13 @@ def run(
         Path | None,
         typer.Option("--config", help=f"Override config path (default: {default_config_path()})."),
     ] = None,
+    predict: Annotated[
+        bool,
+        typer.Option(
+            "--predict",
+            help="Enable ConsequencePredictor: commit a prediction before each tool executes.",
+        ),
+    ] = False,
     verbose: Annotated[
         bool, typer.Option("--verbose", "-v", help="Enable DEBUG logging to stderr.")
     ] = False,
@@ -470,6 +485,7 @@ def run(
                 verify=verify,
                 goal=goal,
                 max_context_tokens=max_context_tokens,
+                predict=predict,
                 config=cfg,
             )
         )
@@ -495,6 +511,7 @@ async def _run_once(
     verify: str | None,
     goal: bool = False,
     max_context_tokens: int | None,
+    predict: bool = False,
     config: HarnessConfig,
 ) -> None:
     storage = _build_storage(db=db, in_memory=in_memory, cwd=cwd)
@@ -526,6 +543,8 @@ async def _run_once(
             budget=budget,
             memory_store=storage,  # type: ignore[arg-type]
             planner=planner,
+            predictor=ConsequencePredictor() if predict else None,
+            repair=RepairOrchestrator() if predict else None,
         )
 
         request_kwargs: dict[str, object] = {
@@ -1885,6 +1904,19 @@ class Renderer:
             self._console.print()
             self._console.print(
                 f"{marker} [bold]verify[/bold] ({r.verifier_name})  {r.reason}{conf}"
+            )
+        elif isinstance(event, PredictionEvent):
+            p = event.prediction
+            scope = p.effect_scope or "unknown"
+            self._console.print(
+                f"[dim]  ⟳ predict scope={scope} confidence={p.confidence:.2f} "
+                f"expected={p.expected_status} reversibility={p.reversibility}[/dim]"
+            )
+        elif isinstance(event, PredictionMismatchEvent):
+            o = event.outcome
+            self._console.print(
+                f"[yellow]  ⚠ mismatch severity={o.severity} actual={o.actual_status} "
+                f"lesson={o.lesson}[/yellow]"
             )
         elif isinstance(event, Done):
             self._stop_spinner()
