@@ -121,9 +121,9 @@ def _summarize_tools(activity: list[ActivityEvent]) -> str:
     for e in completed:
         name = e.data.get("name", "?")
         ok = "ok" if not e.data.get("is_error") else "ERROR"
-        meta = e.data.get("metadata") or {}
-        meta_str = " ".join(f"{k}={v}" for k, v in meta.items())
-        lines.append(f"- {name} [{ok}] {meta_str}")
+        preview = (e.data.get("content_preview") or "").strip()
+        preview_str = f" output={preview!r}" if preview else ""
+        lines.append(f"- {name} [{ok}]{preview_str}")
     return "\n".join(lines)
 
 
