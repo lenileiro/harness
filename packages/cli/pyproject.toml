@@ -15,6 +15,7 @@ dependencies = [
     "tools-web",
     "typer>=0.13",
     "rich>=13.9",
+    "unicodeitplus>=0.3.1",
 ]
 
 [project.scripts]

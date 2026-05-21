@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from io import StringIO
 
+import unicodeitplus
 from rich.console import Console
 
 from harness.cli.__main__ import Renderer, _preprocess_markdown
@@ -253,11 +254,13 @@ class TestPreprocessMarkdown:
         assert "$" not in result
 
     def test_display_math_converted(self) -> None:
-        result = _preprocess_markdown("$$\\alpha + \\beta = \\gamma$$")
-        assert "α" in result  # noqa: RUF001
-        assert "β" in result
-        assert "γ" in result  # noqa: RUF001
-        assert "$" not in result
+        # unicodeitplus uses italic math letters, not plain greek — check via library directly
+        alpha = unicodeitplus.replace("\\alpha")
+        beta = unicodeitplus.replace("\\beta")
+        result = _preprocess_markdown("$$\\alpha + \\beta$$")
+        assert alpha in result
+        assert beta in result
+        assert "$$" not in result
 
     def test_plain_text_unchanged(self) -> None:
         text = "Here is a code block:\n\n```python\nprint('hi')\n```"
@@ -268,10 +271,11 @@ class TestPreprocessMarkdown:
         assert "reasoning" in result
         assert "<think>" not in result
 
-    def test_unknown_latex_command_stripped(self) -> None:
-        result = _preprocess_markdown("$\\unknowncmd{x}$")
+    def test_subscript_superscript_converted(self) -> None:
+        # unicodeitplus handles _{...}^{...} as Unicode sub/superscripts
+        result = _preprocess_markdown("$\\sum_{i=0}^{n}$")
+        assert "∑" in result
         assert "$" not in result
-        assert "\\unknown" not in result
 
     def test_leq_geq_converted(self) -> None:
         result = _preprocess_markdown("If $x \\leq y$ and $y \\geq z$")

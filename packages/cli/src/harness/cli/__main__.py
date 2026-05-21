@@ -32,6 +32,7 @@ from pathlib import Path
 from typing import Annotated, Any
 
 import typer
+import unicodeitplus as _unicodeit
 from rich.console import Console
 from rich.live import Live
 from rich.markdown import Markdown
@@ -1725,119 +1726,32 @@ async def _handle_slash(line: str, *, agent: Agent, session_id: str, storage: St
 # Markdown preprocessing
 # ---------------------------------------------------------------------------
 
-_LATEX_SYMBOLS: dict[str, str] = {
-    r"\rightarrow": "→",
-    r"\leftarrow": "←",
-    r"\Rightarrow": "⇒",
-    r"\Leftarrow": "⇐",
-    r"\leftrightarrow": "↔",
-    r"\Leftrightarrow": "⟺",
-    r"\to": "→",
-    r"\gets": "←",
-    r"\implies": "⇒",
-    r"\iff": "⟺",
-    r"\times": "×",  # noqa: RUF001
-    r"\div": "÷",
-    r"\pm": "±",
-    r"\mp": "∓",
-    r"\infty": "∞",
-    r"\cdot": "·",
-    r"\ldots": "…",
-    r"\cdots": "⋯",
-    r"\leq": "≤",
-    r"\geq": "≥",
-    r"\neq": "≠",
-    r"\approx": "≈",
-    r"\equiv": "≡",
-    r"\sum": "∑",
-    r"\prod": "∏",
-    r"\int": "∫",
-    r"\partial": "∂",
-    r"\nabla": "∇",
-    r"\forall": "∀",
-    r"\exists": "∃",
-    r"\in": "∈",
-    r"\notin": "∉",
-    r"\subset": "⊂",
-    r"\supset": "⊃",
-    r"\cup": "∪",  # noqa: RUF001
-    r"\cap": "∩",
-    r"\emptyset": "∅",
-    r"\alpha": "α",  # noqa: RUF001
-    r"\beta": "β",
-    r"\gamma": "γ",  # noqa: RUF001
-    r"\delta": "δ",
-    r"\epsilon": "ε",
-    r"\theta": "θ",
-    r"\lambda": "λ",
-    r"\mu": "μ",
-    r"\nu": "ν",  # noqa: RUF001
-    r"\pi": "π",
-    r"\rho": "ρ",  # noqa: RUF001
-    r"\sigma": "σ",  # noqa: RUF001
-    r"\tau": "τ",
-    r"\phi": "φ",
-    r"\psi": "ψ",
-    r"\omega": "ω",
-    r"\Delta": "Δ",
-    r"\Gamma": "Γ",
-    r"\Lambda": "Λ",
-    r"\Omega": "Ω",
-    r"\Pi": "Π",
-    r"\Sigma": "Σ",
-    r"\Theta": "Θ",
-    r"\Phi": "Φ",
-    r"\Psi": "Ψ",
-    r"\sqrt": "√",
-    r"\degree": "°",
-    r"\langle": "⟨",
-    r"\rangle": "⟩",
-    r"\lfloor": "⌊",
-    r"\rfloor": "⌋",
-    r"\lceil": "⌈",
-    r"\rceil": "⌉",
-}
-
-# Sorted longest-first so e.g. \leftrightarrow matches before \left
-_LATEX_SORTED = sorted(_LATEX_SYMBOLS.items(), key=lambda kv: -len(kv[0]))
+_DOLLAR = re.escape("$")
+_MATH_DISPLAY = re.compile(_DOLLAR * 2 + r"(.+?)" + _DOLLAR * 2, re.DOTALL)
+_MATH_INLINE = re.compile(_DOLLAR + r"([^\n]+?)" + _DOLLAR)
+_THINK_BLOCK = re.compile(r"<think>(.*?)</think>", re.DOTALL | re.IGNORECASE)
 
 
-def _expand_latex_span(inner: str) -> str:
-    """Convert a $...$ body to readable unicode text."""
-    result = inner
-    for cmd, sym in _LATEX_SORTED:
-        result = result.replace(cmd, sym)
-    # Drop remaining unknown commands and braces, keep spacing
-    result = re.sub(r"\\[a-zA-Z]+\*?", "", result)
-    result = result.replace("{", "").replace("}", "")
-    return result.strip()
+def _convert_math(inner: str) -> str:
+    """Convert the body of a $...$ or $$...$$ span via unicodeitplus."""
+    return _unicodeit.replace(inner)
 
 
 def _preprocess_markdown(text: str) -> str:
     """Prepare LLM output for Rich Markdown rendering.
 
-    - Converts LaTeX math spans ($...$, $$...$$) to unicode
-    - Wraps <think>...</think> blocks in a collapsible dim quote
+    - Converts LaTeX math spans ($...$, $$...$$) to Unicode via unicodeitplus
+      (2 566-symbol table, handles subscripts/superscripts as Unicode chars)
+    - Wraps <think>...</think> blocks in a dim blockquote
     """
-    # Display math: $$...$$  (must come before inline $ to avoid partial match)
-    text = re.sub(
-        r"\$\$(.+?)\$\$",
-        lambda m: f"`{_expand_latex_span(m.group(1))}`",
-        text,
-        flags=re.DOTALL,
-    )
-    # Inline math: $...$  (not spanning newlines)
-    text = re.sub(
-        r"\$([^$\n]+?)\$",
-        lambda m: _expand_latex_span(m.group(1)),
-        text,
-    )
-    # <think>...</think> blocks from reasoning models — show dimmed
-    text = re.sub(
-        r"<think>(.*?)</think>",
+    # Display math first ($$...$$) to avoid partial matches
+    text = _MATH_DISPLAY.sub(lambda m: f"`{_convert_math(m.group(1))}`", text)
+    # Inline math ($...$)
+    text = _MATH_INLINE.sub(lambda m: _convert_math(m.group(1)), text)
+    # <think>...</think> blocks from reasoning models
+    text = _THINK_BLOCK.sub(
         lambda m: "> *thinking: " + m.group(1).strip().replace("\n", " ")[:200] + "…*\n",
         text,
-        flags=re.DOTALL | re.IGNORECASE,
     )
     return text
 
