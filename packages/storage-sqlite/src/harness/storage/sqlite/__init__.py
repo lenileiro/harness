@@ -368,6 +368,46 @@ class SQLiteStorage(Storage, TaskStore, ActivityStore, ApprovalStore, MemoryStor
         await db.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
         await db.commit()
 
+    async def claim_task(
+        self,
+        *,
+        parent_id: str,
+        claimed_by: str,
+        worker_session_id: str | None = None,
+    ) -> Task | None:
+        db = await self._ensure()
+        claimed_id: str | None = None
+        async with db.execute("BEGIN IMMEDIATE"):
+            pass
+        try:
+            async with db.execute(
+                """SELECT id FROM tasks WHERE parent_id = ? AND status = 'todo'
+                   ORDER BY created_at ASC LIMIT 1""",
+                (parent_id,),
+            ) as cursor:
+                row = await cursor.fetchone()
+            if row is None:
+                await db.rollback()
+                return None
+            claimed_id = row[0]
+            now = datetime.now(UTC).isoformat()
+            # Read existing metadata to merge claim info
+            async with db.execute(
+                "SELECT metadata FROM tasks WHERE id = ?", (claimed_id,)
+            ) as cursor:
+                meta_row = await cursor.fetchone()
+            existing_meta = json.loads(meta_row[0]) if meta_row and meta_row[0] else {}
+            meta = {**existing_meta, "claimed_by": claimed_by, "worker_session_id": worker_session_id}
+            await db.execute(
+                "UPDATE tasks SET status = 'in_progress', metadata = ?, updated_at = ? WHERE id = ?",
+                (json.dumps(meta), now, claimed_id),
+            )
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            raise
+        return await self.get_task(claimed_id)
+
     # ------------------------------------------------------------------ #
     # ActivityStore                                                       #
     # ------------------------------------------------------------------ #

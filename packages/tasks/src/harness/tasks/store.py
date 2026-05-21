@@ -57,5 +57,20 @@ class TaskStore(Protocol):
         """Idempotent delete by id."""
         ...
 
+    async def claim_task(
+        self,
+        *,
+        parent_id: str,
+        claimed_by: str,
+        worker_session_id: str | None = None,
+    ) -> Task | None:
+        """Atomically claim the oldest todo task under parent_id.
+
+        Returns the claimed task (now in_progress) or None if no todo tasks exist.
+        Implementations must guarantee that concurrent calls each claim a distinct
+        task — no two callers may claim the same item.
+        """
+        ...
+
 
 __all__ = ["TaskStore"]

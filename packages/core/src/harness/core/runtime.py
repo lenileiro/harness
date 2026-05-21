@@ -121,6 +121,7 @@ class Agent:
         calibration: OutcomeCalibration | None = None,
         repair: RepairOrchestrator | None = None,
         evidence_contract: EvidenceContract | None = None,
+        system_prompt: str | None = None,
     ) -> None:
         if not adapters:
             raise ConfigurationError("at least one adapter is required")
@@ -159,6 +160,7 @@ class Agent:
         self._calibration = calibration
         self._repair = repair
         self._evidence_contract = evidence_contract
+        self.system_prompt = system_prompt
 
     # ------------------------------------------------------------------ #
     # Approval replay                                                     #
@@ -302,6 +304,8 @@ class Agent:
             if entries:
                 text = "\n".join(f"[{e.kind}] {e.text}" for e in entries)
                 memory_prefix = [Message(role="system", content=f"Remembered context:\n{text}")]
+        if self.system_prompt:
+            memory_prefix.append(Message(role="system", content=self.system_prompt))
 
         session.messages.append(Message(role="user", content=request.prompt))
         session.status = "running"

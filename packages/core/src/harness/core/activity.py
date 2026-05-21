@@ -117,6 +117,15 @@ CALIBRATION_UPDATED = "calibration.updated"
 REPAIR_DIRECTIVE_ISSUED = "repair.directive_issued"
 """Emitted when the RepairOrchestrator issues a directive after a tool call."""
 
+# Multi-agent orchestration
+ORCHESTRATOR_JOB_STARTED = "orchestrator.job_started"
+ORCHESTRATOR_JOB_COMPLETED = "orchestrator.job_completed"
+ORCHESTRATOR_PHASE_STARTED = "orchestrator.phase_started"
+ORCHESTRATOR_PHASE_COMPLETED = "orchestrator.phase_completed"
+WORK_ITEM_CREATED = "work_item.created"
+WORK_ITEM_CLAIMED = "work_item.claimed"
+WORK_ITEM_COMPLETED = "work_item.completed"
+
 
 __all__ = [
     "AGENT_RUN_CANCELLED",
@@ -131,6 +140,10 @@ __all__ = [
     "APPROVAL_REQUESTED",
     "CALIBRATION_UPDATED",
     "CONTEXT_PRUNED",
+    "ORCHESTRATOR_JOB_COMPLETED",
+    "ORCHESTRATOR_JOB_STARTED",
+    "ORCHESTRATOR_PHASE_COMPLETED",
+    "ORCHESTRATOR_PHASE_STARTED",
     "REPAIR_DIRECTIVE_ISSUED",
     "STEP_COMPLETED",
     "STEP_STARTED",
@@ -139,6 +152,9 @@ __all__ = [
     "TOOL_CALL_PREDICTED",
     "TOOL_CALL_PREDICTION_ERROR",
     "VERIFICATION_COMPLETED",
+    "WORK_ITEM_CLAIMED",
+    "WORK_ITEM_COMPLETED",
+    "WORK_ITEM_CREATED",
     "ActivityEvent",
     "ActivityStore",
 ]

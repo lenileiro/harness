@@ -48,20 +48,28 @@ from harness.cli.config import HarnessConfig, default_config_path, load_config
 from harness.core import (
     Adapter,
     Agent,
+    AgentDoneEvent,
+    AgentEventWrapper,
+    AgentRole,
+    AgentStartedEvent,
     ApprovalDecision,
     ApprovalHandler,
     ApprovalPolicy,
     ApprovalStore,
     AutoApprove,
+    CompleteWorkItemTool,
     ConsequencePredictor,
     ContextBudget,
+    CreateWorkItemTool,
     Done,
     ErrorEvent,
     FailoverPolicy,
     InboxApprovalHandler,
+    ListWorkItemsTool,
     LLMJudgeVerifier,
     LLMPlanner,
     MemoryEntry,
+    MultiAgentOrchestrator,
     PendingApproval,
     PredictionEvent,
     PredictionMismatchEvent,
@@ -80,6 +88,10 @@ from harness.core import (
     Verification,
     Verifier,
     VerifierRouter,
+    WorkItemClaimedEvent,
+    WorkItemCompletedEvent,
+    WorkItemCreatedEvent,
+    WorkQueue,
     configure_logging,
     fork_session,
 )
@@ -141,6 +153,13 @@ evidence_app = typer.Typer(
     no_args_is_help=True,
 )
 app.add_typer(evidence_app, name="evidence")
+
+lab_app = typer.Typer(
+    name="lab",
+    help="Multi-agent lab: planner → workers → reporter.",
+    no_args_is_help=True,
+)
+app.add_typer(lab_app, name="lab")
 
 memory_app = typer.Typer(
     name="memory",
@@ -2448,6 +2467,179 @@ def memory_rm(
                 await storage.close()
 
     asyncio.run(_go())
+
+
+# ---------------------------------------------------------------------------
+# lab subcommands — multi-agent orchestration
+# ---------------------------------------------------------------------------
+
+
+_ROLE_COLORS = {
+    "planner": "blue",
+    "reporter": "green",
+}
+
+
+def _role_color(role: str) -> str:
+    if role.startswith("worker"):
+        return "cyan"
+    return _ROLE_COLORS.get(role, "white")
+
+
+class LabRenderer:
+    """Renders OrchestratorEvent stream with role-color coding."""
+
+    def __init__(self, con: Console) -> None:
+        self._console = con
+        self._inner = Renderer(con)
+
+    def render(self, event: object) -> None:
+        if isinstance(event, AgentStartedEvent):
+            color = _role_color(event.role)
+            self._console.print(f"[{color}]▶ {event.role}[/{color}]")
+        elif isinstance(event, AgentDoneEvent):
+            color = _role_color(event.role)
+            self._console.print(
+                f"[{color}]✓ {event.role} done ({event.turn_count} turns)[/{color}]"
+            )
+        elif isinstance(event, WorkItemCreatedEvent):
+            self._console.print(
+                f"[dim]  + {event.task_ref} {event.title}[/dim]"
+            )
+        elif isinstance(event, WorkItemClaimedEvent):
+            self._console.print(
+                f"[cyan]  → claimed {event.task_ref}[/cyan]"
+            )
+        elif isinstance(event, WorkItemCompletedEvent):
+            self._console.print(
+                f"[cyan]  ✓ completed {event.task_ref}[/cyan]"
+            )
+        elif isinstance(event, AgentEventWrapper):
+            color = _role_color(event.role)
+            self._inner.render(event.event)
+
+
+@lab_app.command("run")
+def lab_run(
+    prompt: Annotated[str, typer.Argument(help="Top-level task prompt for the planner.")],
+    provider: Annotated[
+        str | None,
+        typer.Option("--provider", "-p", help="LLM provider (ollama, openrouter, …)."),
+    ] = None,
+    model: Annotated[
+        str | None,
+        typer.Option("--model", "-m", help="Model name."),
+    ] = None,
+    workers: Annotated[
+        int,
+        typer.Option("--workers", "-w", help="Number of parallel worker agents."),
+    ] = 2,
+    yes: Annotated[
+        bool,
+        typer.Option("--yes", "-y", help="Auto-approve all tool calls."),
+    ] = False,
+    cwd: Annotated[
+        Path | None,
+        typer.Option("--cwd", help="Working directory for agents (default: current)."),
+    ] = None,
+    config_path: Annotated[
+        Path | None,
+        typer.Option("--config", help="Path to harness config TOML."),
+    ] = None,
+) -> None:
+    """Run a multi-agent job: planner decomposes, workers execute in parallel, reporter synthesizes."""
+
+    async def _run() -> None:
+        cfg = _load_cli_config(config_path)
+        working_dir = (cwd or Path.cwd()).resolve()
+        resolved_provider = provider or cfg.default_provider or "ollama"
+        resolved_model = model or cfg.default_model or "llama3.2"
+
+        storage = InMemoryStorage()
+        renderer = LabRenderer(console)
+
+        def agent_factory(role: AgentRole) -> Agent:
+            job_id = role.job_id or "_job_"
+            item_id = role.item_id or "_item_"
+
+            # Role-specific tool registries — planner and reporter can't write files
+            tools = ToolRegistry()
+            tools.register(ReadFileTool(cwd=working_dir))
+            tools.register(ListDirTool(cwd=working_dir))
+            tools.register(GlobTool(cwd=working_dir))
+            tools.register(ListWorkItemsTool(storage, job_id))
+
+            if role.name == "planner":
+                tools.register(CreateWorkItemTool(storage, parent_id=job_id, cwd=working_dir))
+            elif role.name.startswith("worker"):
+                # Workers get the full tool set plus queue completion
+                tools.register(WriteFileTool(cwd=working_dir))
+                tools.register(EditFileTool(cwd=working_dir))
+                tools.register(ShellTool(cwd=working_dir))
+                tools.register(FetchUrlTool())
+                tools.register(CompleteWorkItemTool(storage, item_id))
+            # reporter gets read + list only (already registered above)
+
+            adapters = {
+                resolved_provider: _build_adapter(resolved_provider, base_url=None, config=cfg)
+            }
+            return Agent(
+                adapters=adapters,
+                tools=tools,
+                storage=storage,
+                failover=FailoverPolicy(chain=[resolved_provider]),
+                approval_policy=ApprovalPolicy(default="auto"),
+                approval_handler=AutoApprove(),
+                default_model=role.model or resolved_model,
+                default_cwd=str(working_dir),
+                system_prompt=role.system_prompt,
+                predictor=ConsequencePredictor(),
+                repair=RepairOrchestrator(),
+            )
+
+        planner_role = AgentRole(
+            name="planner",
+            system_prompt=(
+                "You are a Planner. Decompose the given task into concrete work items "
+                "using create_work_item. Each item should be independently executable. "
+                "Create between 2 and 5 items. Then stop — do not execute the items yourself."
+            ),
+        )
+        worker_role = AgentRole(
+            name="worker",
+            system_prompt=(
+                "You are a Worker. Complete the assigned work item using available tools. "
+                "When done, call complete_work_item with a brief summary of what you accomplished."
+            ),
+        )
+        reporter_role = AgentRole(
+            name="reporter",
+            system_prompt=(
+                "You are a Reporter. Synthesize the completed work items into a clear, "
+                "concise final report for the user."
+            ),
+        )
+
+        orchestrator = MultiAgentOrchestrator(
+            agent_factory=agent_factory,
+            store=storage,
+            planner_role=planner_role,
+            worker_role=worker_role,
+            reporter_role=reporter_role,
+            max_workers=workers,
+            job_cwd=working_dir,
+            provider=resolved_provider,
+            model=resolved_model,
+        )
+
+        console.print(f"[bold]harness lab run[/bold] — {workers} workers")
+        console.print(f"[dim]provider=[/dim]{resolved_provider}  [dim]model=[/dim]{resolved_model}")
+        console.print()
+
+        async for event in orchestrator.run(prompt):
+            renderer.render(event)
+
+    asyncio.run(_run())
 
 
 if __name__ == "__main__":

@@ -14,6 +14,7 @@ retaining references.
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime
 
 from harness.core import Session, SessionStatus
@@ -34,6 +35,7 @@ class InMemoryStorage(MemoryStore):
         self._activity_ids: set[str] = set()
         self._approvals: dict[str, PendingApproval] = {}
         self._memory: list[MemoryEntry] = []
+        self._claim_lock = asyncio.Lock()
 
     # ------------------------------------------------------------------ #
     # SessionStore (harness.core.Storage)                                 #
@@ -105,6 +107,33 @@ class InMemoryStorage(MemoryStore):
 
     async def delete_task(self, task_id: str) -> None:
         self._tasks.pop(task_id, None)
+
+    async def claim_task(
+        self,
+        *,
+        parent_id: str,
+        claimed_by: str,
+        worker_session_id: str | None = None,
+    ) -> Task | None:
+        async with self._claim_lock:
+            candidates = [
+                t for t in self._tasks.values()
+                if t.parent_id == parent_id and t.status == "todo"
+            ]
+            if not candidates:
+                return None
+            oldest = min(candidates, key=lambda t: t.created_at)
+            updated = oldest.model_copy(update={
+                "status": "in_progress",
+                "metadata": {
+                    **oldest.metadata,
+                    "claimed_by": claimed_by,
+                    "worker_session_id": worker_session_id,
+                },
+                "updated_at": datetime.now(UTC),
+            })
+            self._tasks[updated.id] = updated.model_copy(deep=True)
+            return updated.model_copy(deep=True)
 
     # ------------------------------------------------------------------ #
     # ActivityStore (harness.tasks.ActivityStore)                         #

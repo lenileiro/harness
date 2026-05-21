@@ -74,6 +74,23 @@ from harness.core.prediction import (
     compare_prediction,
 )
 from harness.core.repair import RepairDirective, RepairMode, RepairOrchestrator
+from harness.core.orchestrator import (
+    AgentDoneEvent,
+    AgentEventWrapper,
+    AgentRole,
+    AgentStartedEvent,
+    MultiAgentOrchestrator,
+    OrchestratorEvent,
+    WorkItemClaimedEvent,
+    WorkItemCompletedEvent,
+    WorkItemCreatedEvent,
+    WorkQueue,
+)
+from harness.core.tools_orchestration import (
+    CompleteWorkItemTool,
+    CreateWorkItemTool,
+    ListWorkItemsTool,
+)
 from harness.core.verification import (
     EvidenceContract,
     EvidenceContractResult,
@@ -153,10 +170,23 @@ __all__ = [
     "PredictionEvent",
     "PredictionMismatchEvent",
     "PredictionOutcome",
+    "AgentDoneEvent",
+    "AgentEventWrapper",
+    "AgentRole",
+    "AgentStartedEvent",
+    "CompleteWorkItemTool",
+    "CreateWorkItemTool",
+    "ListWorkItemsTool",
+    "MultiAgentOrchestrator",
+    "OrchestratorEvent",
     "RepairDirective",
     "RepairMode",
     "RepairOrchestrator",
     "ToolPrediction",
+    "WorkItemClaimedEvent",
+    "WorkItemCompletedEvent",
+    "WorkItemCreatedEvent",
+    "WorkQueue",
     "ToolResult",
     "ToolResultEvent",
     "Usage",
