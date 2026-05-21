@@ -2494,7 +2494,7 @@ class LabRenderer:
 
     def __init__(self, con: Console) -> None:
         self._console = con
-        self._inner = Renderer(con)
+        self._text_bufs: dict[str, str] = {}
 
     def render(self, event: object) -> None:
         if isinstance(event, AgentStartedEvent):
@@ -2502,6 +2502,10 @@ class LabRenderer:
             self._console.print(f"[{color}]▶ {event.role}[/{color}]")
         elif isinstance(event, AgentDoneEvent):
             color = _role_color(event.role)
+            # Flush any buffered text for this role
+            buf = self._text_bufs.pop(event.role, "").strip()
+            if buf:
+                self._console.print(f"  [{color}][{event.role}][/{color}] {buf}")
             self._console.print(
                 f"[{color}]✓ {event.role} done ({event.turn_count} turns)[/{color}]"
             )
@@ -2525,8 +2529,37 @@ class LabRenderer:
                 f" (attempt {event.attempt}) — re-queued[/yellow]"
             )
         elif isinstance(event, AgentEventWrapper):
-            color = _role_color(event.role)
-            self._inner.render(event.event)
+            self._render_wrapped(event.role, event.event)
+
+    def _render_wrapped(self, role: str, event: object) -> None:
+        color = _role_color(role)
+        prefix = f"  [{color}][{role}][/{color}]"
+        if isinstance(event, TextDelta):
+            self._text_bufs.setdefault(role, "")
+            self._text_bufs[role] += event.text
+        elif isinstance(event, Done):
+            buf = self._text_bufs.pop(role, "").strip()
+            if buf:
+                # Print each line with role prefix
+                for line in buf.splitlines():
+                    if line.strip():
+                        self._console.print(f"{prefix} {line}")
+            if event.usage:
+                u = event.usage
+                self._console.print(
+                    f"{prefix} [dim]tokens: {u.prompt_tokens:,}in / {u.completion_tokens:,}out[/dim]"
+                )
+        elif isinstance(event, ToolCallEvent):
+            self._console.print(
+                f"{prefix} [dim]→ [bold]{event.call.name}[/bold]"
+                f"({_args_preview(event.call.arguments)})[/dim]"
+            )
+        elif isinstance(event, ToolResultEvent):
+            marker = "[red]✗[/red]" if event.result.is_error else "[green]✓[/green]"
+            preview = _truncate(event.result.content, 120)
+            self._console.print(f"{prefix} [dim]{marker} {event.result.name}: {preview}[/dim]")
+        elif isinstance(event, ErrorEvent):
+            self._console.print(f"{prefix} [red]error ({event.kind}):[/red] {event.error}")
 
 
 @lab_app.command("run")
@@ -2560,6 +2593,18 @@ def lab_run(
         bool,
         typer.Option("--no-judge", help="Disable post-completion judge verification."),
     ] = False,
+    db: Annotated[
+        Path | None,
+        typer.Option(
+            "--db", help="SQLite database path for durable job storage (default: in-memory)."
+        ),
+    ] = None,
+    max_context_tokens: Annotated[
+        int | None,
+        typer.Option(
+            "--max-context-tokens", help="Token budget for worker context pruning per turn."
+        ),
+    ] = None,
 ) -> None:
     """Run a multi-agent job: planner decomposes, workers execute in parallel, reporter synthesizes."""
 
@@ -2569,7 +2614,15 @@ def lab_run(
         resolved_provider = provider or cfg.default_provider or "ollama"
         resolved_model = model or cfg.default_model or "llama3.2"
 
-        storage = InMemoryStorage()
+        if db is not None:
+            from harness.storage.sqlite import SQLiteStorage
+
+            storage: InMemoryStorage = SQLiteStorage(path=db)  # type: ignore[assignment]
+        else:
+            storage = InMemoryStorage()
+        worker_budget = (
+            ContextBudget(max_tokens=max_context_tokens) if max_context_tokens is not None else None
+        )
         renderer = LabRenderer(console)
 
         def agent_factory(role: AgentRole) -> Agent:
@@ -2609,11 +2662,15 @@ def lab_run(
                 failover=FailoverPolicy(chain=[resolved_provider]),
                 approval_policy=ApprovalPolicy(default="auto"),
                 approval_handler=AutoApprove(),
+                activity_store=storage,  # type: ignore[arg-type]
+                approval_store=storage,  # type: ignore[arg-type]
+                memory_store=storage,  # type: ignore[arg-type]
                 default_model=role.model or resolved_model,
                 default_cwd=str(working_dir),
                 system_prompt=role.system_prompt,
                 predictor=ConsequencePredictor(),
                 repair=RepairOrchestrator(),
+                budget=worker_budget if role.name.startswith("worker") else None,
             )
 
         planner_role = AgentRole(
@@ -2679,6 +2736,47 @@ def lab_run(
 
         async for event in orchestrator.run(prompt):
             renderer.render(event)
+
+    asyncio.run(_run())
+
+
+@lab_app.command("status")
+def lab_status(
+    job_id: Annotated[str, typer.Argument(help="Job ID to inspect.")],
+    db: Annotated[
+        Path,
+        typer.Option("--db", help="SQLite database path."),
+    ] = Path("harness.db"),
+) -> None:
+    """Show work item status for a job stored in a SQLite database."""
+
+    async def _run() -> None:
+        from harness.storage.sqlite import SQLiteStorage
+
+        storage = SQLiteStorage(path=db)
+        items = await storage.list_tasks(parent_id=job_id)
+        if not items:
+            console.print(f"[yellow]No work items found for job {job_id!r}[/yellow]")
+            return
+
+        status_colors = {
+            "todo": "white",
+            "in_progress": "cyan",
+            "done": "green",
+            "cancelled": "red",
+        }
+
+        console.print(f"[bold]Job {job_id}[/bold] — {len(items)} work items\n")
+        for item in sorted(items, key=lambda t: t.created_at):
+            color = status_colors.get(item.status, "white")
+            summary = item.metadata.get("result_summary", "")
+            summary_str = f"  [dim]{summary[:80]}[/dim]" if summary else ""
+            retries = item.metadata.get("_judge_retries", 0)
+            retry_str = f" [yellow](retried {retries}x)[/yellow]" if retries else ""
+            console.print(
+                f"  [{color}]{item.status:12}[/{color}] {item.ref or item.id[:8]}  {item.title}"
+                f"{retry_str}{summary_str}"
+            )
 
     asyncio.run(_run())
 
