@@ -217,6 +217,18 @@ class WriteFileTool:
             )
 
         was_new = not target.exists()
+
+        _DIFF_CAP = 8 * 1024
+        content_before: str | None = None
+        if not was_new:
+            try:
+                raw = await asyncio.to_thread(target.read_text, encoding="utf-8")
+                content_before = (
+                    raw if len(raw) <= _DIFF_CAP else raw[:_DIFF_CAP] + "\n…[truncated]"
+                )
+            except Exception:
+                pass
+
         try:
             await asyncio.to_thread(target.parent.mkdir, parents=True, exist_ok=True)
             await asyncio.to_thread(target.write_text, content, encoding="utf-8")
@@ -224,6 +236,9 @@ class WriteFileTool:
             return _error(call, self.name, f"could not write {path_arg}: {exc}")
 
         bytes_written = len(content.encode("utf-8"))
+        content_after = (
+            content if len(content) <= _DIFF_CAP else content[:_DIFF_CAP] + "\n…[truncated]"
+        )
         return ToolResult(
             tool_call_id=call.id,
             name=self.name,
@@ -232,6 +247,8 @@ class WriteFileTool:
                 "path": path_arg,
                 "bytes_written": bytes_written,
                 "created": was_new,
+                "content_before": content_before,
+                "content_after": content_after,
             },
         )
 
@@ -311,6 +328,7 @@ class EditFileTool:
         except OSError as exc:
             return _error(call, self.name, f"could not write {path_arg}: {exc}")
 
+        _DIFF_CAP = 8 * 1024
         return ToolResult(
             tool_call_id=call.id,
             name=self.name,
@@ -320,6 +338,12 @@ class EditFileTool:
                 "occurrences_replaced": 1,
                 "bytes_before": len(original.encode("utf-8")),
                 "bytes_after": len(updated.encode("utf-8")),
+                "content_before": original
+                if len(original) <= _DIFF_CAP
+                else original[:_DIFF_CAP] + "\n…[truncated]",
+                "content_after": updated
+                if len(updated) <= _DIFF_CAP
+                else updated[:_DIFF_CAP] + "\n…[truncated]",
             },
         )
 

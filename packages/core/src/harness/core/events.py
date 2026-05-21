@@ -48,6 +48,7 @@ class StepStarted(_EventBase):
     type: Literal["step_started"] = "step_started"
     step: int
     description: str | None = None
+    total_steps: int = 0  # 0 means unknown / single-step plan
 
 
 class StepCompleted(_EventBase):

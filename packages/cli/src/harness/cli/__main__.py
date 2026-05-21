@@ -23,15 +23,19 @@ everything (handy for non-interactive use), or set approvals in config.
 from __future__ import annotations
 
 import asyncio
+import difflib
 import os
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Any
 
 import typer
 from rich.console import Console
+from rich.live import Live
 from rich.panel import Panel
 from rich.prompt import Confirm
+from rich.spinner import Spinner
 from rich.table import Table
 
 from harness.adapters.ollama import OllamaAdapter
@@ -41,6 +45,7 @@ from harness.cli.config import HarnessConfig, default_config_path, load_config
 from harness.core import (
     Adapter,
     Agent,
+    ApprovalDecision,
     ApprovalHandler,
     ApprovalPolicy,
     ApprovalStore,
@@ -222,6 +227,7 @@ def _build_agent(
     budget: ContextBudget | None = None,
     memory_store: Any | None = None,
     planner: Planner | None = None,
+    session_overrides: dict[str, ApprovalDecision] | None = None,
 ) -> Agent:
     """Build an Agent over a provider chain. `chain[0]` is the primary.
 
@@ -253,7 +259,7 @@ def _build_agent(
         assert approval_store is not None  # checked above
         approval_handler = InboxApprovalHandler(approval_store=approval_store)
     else:
-        approval_handler = RichApprovalHandler(console=console)
+        approval_handler = RichApprovalHandler(console=console, session_overrides=session_overrides)
 
     multi = len(chain) > 1
     return Agent(
@@ -798,6 +804,26 @@ def sessions_fork(
     except KeyboardInterrupt:
         console.print("\n[yellow]Cancelled by user.[/yellow]")
         raise typer.Exit(130) from None
+
+
+@sessions_app.command("diff")
+def sessions_diff_cmd(
+    session_id: Annotated[str, typer.Argument(help="Session id to diff.")],
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+    in_memory: Annotated[bool, typer.Option("--in-memory")] = False,
+) -> None:
+    """Show file changes made during a session."""
+
+    async def _go() -> None:
+        storage = _build_storage(db=db, in_memory=in_memory)
+        try:
+            activity = await storage.list_activity(session_id=session_id)  # type: ignore[attr-defined]
+            _render_session_diff(activity, console)
+        finally:
+            if isinstance(storage, SQLiteStorage):
+                await storage.close()
+
+    asyncio.run(_go())
 
 
 # ---------------------------------------------------------------------------
@@ -1641,6 +1667,8 @@ _HELP_TEXT = (
     "/quit, /exit, /q   exit the chat\n"
     "/tools             list registered tools and effective approval\n"
     "/session           show current session id and turn count\n"
+    "/diff              show file changes made this session\n"
+    "/clear             clear the terminal\n"
 )
 
 
@@ -1678,6 +1706,15 @@ async def _handle_slash(line: str, *, agent: Agent, session_id: str, storage: St
             )
         return True
 
+    if cmd == "/diff":
+        activity = await storage.list_activity(session_id=session_id)  # type: ignore[attr-defined]
+        _render_session_diff(activity, console)
+        return True
+
+    if cmd == "/clear":
+        console.clear()
+        return True
+
     console.print(f"[red]Unknown command:[/red] {cmd}.  Try /help.")
     return True
 
@@ -1687,32 +1724,138 @@ async def _handle_slash(line: str, *, agent: Agent, session_id: str, storage: St
 # ---------------------------------------------------------------------------
 
 
-def _render(event: Any) -> None:
-    if isinstance(event, TextDelta):
-        console.out(event.text, end="", style=None, highlight=False)
-    elif isinstance(event, ToolCallEvent):
-        console.print()
-        console.print(
-            f"[blue]→[/blue] [bold]{event.call.name}[/bold]({_args_preview(event.call.arguments)})",
-            style="dim",
+class Renderer:
+    """Stateful event renderer with live spinner support."""
+
+    def __init__(self, con: Console) -> None:
+        self._console = con
+        self._live: Live | None = None
+        self._pending_name: str = ""
+        self._pending_start: float = 0.0
+
+    def render(self, event: Any) -> None:
+        if isinstance(event, TextDelta):
+            if self._live is not None:
+                self._stop_spinner()
+            self._console.out(event.text, end="", style=None, highlight=False)
+        elif isinstance(event, ToolCallEvent):
+            if self._live is not None:
+                self._stop_spinner()
+            self._console.print()
+            self._console.print(
+                f"[blue]→[/blue] [bold]{event.call.name}[/bold]({_args_preview(event.call.arguments)})",
+                style="dim",
+            )
+            self._start_spinner(event.call.name)
+        elif isinstance(event, ToolResultEvent):
+            elapsed = time.monotonic() - self._pending_start if self._pending_start else 0.0
+            self._stop_spinner()
+            marker = "[red]✗[/red]" if event.result.is_error else "[green]✓[/green]"
+            full_len = len(event.result.content)
+            preview = _truncate(event.result.content, 200)
+            suffix = f"  [dim]… {full_len:,} bytes[/dim]" if full_len > 200 else ""
+            self._console.print(
+                f"{marker} {event.result.name}: {preview}{suffix}  [dim]({elapsed:.1f}s)[/dim]",
+                style="dim",
+            )
+        elif isinstance(event, StepStarted):
+            if event.total_steps > 1:
+                label = f"Step {event.step + 1}/{event.total_steps}"
+                if event.description:
+                    label += f": {event.description}"
+                self._console.print(f"\n[bold blue]●[/bold blue] {label}")
+        elif isinstance(event, StepCompleted):
+            pass
+        elif isinstance(event, ErrorEvent):
+            self._stop_spinner()
+            self._console.print()
+            self._console.print(f"[red]Error ({event.kind}):[/red] {event.error}")
+        elif isinstance(event, Verification):
+            r = event.result
+            marker = "[green]✓[/green]" if r.can_finish else "[red]✗[/red]"
+            conf = (
+                f"  [dim](confidence {r.confidence:.2f})[/dim]" if r.confidence is not None else ""
+            )
+            self._console.print()
+            self._console.print(
+                f"{marker} [bold]verify[/bold] ({r.verifier_name})  {r.reason}{conf}"
+            )
+        elif isinstance(event, Done):
+            self._stop_spinner()
+            self._console.print()
+            if event.usage:
+                u = event.usage
+                self._console.print(
+                    f"[dim]tokens: {u.prompt_tokens:,} in / {u.completion_tokens:,} out[/dim]"
+                )
+
+    def _start_spinner(self, name: str) -> None:
+        self._pending_name = name
+        self._pending_start = time.monotonic()
+        self._live = Live(
+            Spinner("dots", text=f"[dim]{name}[/dim]"),
+            console=self._console,
+            refresh_per_second=10,
+            transient=True,
         )
-    elif isinstance(event, ToolResultEvent):
-        marker = "[red]✗[/red]" if event.result.is_error else "[green]✓[/green]"
-        preview = _truncate(event.result.content, 200)
-        console.print(f"{marker} {event.result.name}: {preview}", style="dim")
-    elif isinstance(event, ErrorEvent):
-        console.print()
-        console.print(f"[red]Error ({event.kind}):[/red] {event.error}")
-    elif isinstance(event, Verification):
-        r = event.result
-        marker = "[green]✓[/green]" if r.can_finish else "[red]✗[/red]"
-        conf = f"  [dim](confidence {r.confidence:.2f})[/dim]" if r.confidence is not None else ""
-        console.print()
-        console.print(f"{marker} [bold]verify[/bold] [{r.verifier_name}]  {r.reason}{conf}")
-    elif isinstance(event, Done):
-        console.print()
-    elif isinstance(event, StepStarted | StepCompleted):
-        pass
+        self._live.start()
+
+    def _stop_spinner(self) -> None:
+        if self._live is not None:
+            self._live.stop()
+            self._live = None
+        self._pending_start = 0.0
+
+
+_renderer = Renderer(console)
+
+
+def _render(event: Any) -> None:
+    _renderer.render(event)
+
+
+def _render_session_diff(activity: list[ActivityEvent], con: Console) -> None:
+    file_events = [
+        e
+        for e in activity
+        if e.kind == "tool_call.completed"
+        and e.data.get("name") in ("write_file", "edit_file")
+        and not e.data.get("is_error")
+    ]
+    shell_events = [
+        e
+        for e in activity
+        if e.kind == "tool_call.completed"
+        and e.data.get("name") == "shell"
+        and not e.data.get("is_error")
+    ]
+
+    if not file_events and not shell_events:
+        con.print("[dim]No file changes in this session.[/dim]")
+        return
+
+    for e in file_events:
+        meta = e.data.get("metadata") or {}
+        path = meta.get("path", "?")
+        before = (meta.get("content_before") or "").splitlines(keepends=True)
+        after = (meta.get("content_after") or "").splitlines(keepends=True)
+        diff = list(difflib.unified_diff(before, after, fromfile=f"a/{path}", tofile=f"b/{path}"))
+        con.rule(f"[bold]{e.data.get('name')}  {path}[/bold]")
+        if diff:
+            for line in diff:
+                style = (
+                    "green" if line.startswith("+") else "red" if line.startswith("-") else "dim"
+                )
+                con.print(line.rstrip(), style=style, highlight=False)
+        else:
+            con.print("[dim](no diff — content not captured)[/dim]")
+
+    if shell_events:
+        con.rule("[bold]shell[/bold]")
+        for e in shell_events:
+            meta = e.data.get("metadata") or {}
+            cmd = (e.data.get("arguments") or {}).get("command", "?")
+            con.print(f"  [dim]{cmd}[/dim]  exit_code={meta.get('exit_code', '?')}")
 
 
 def _render_session(session: Session) -> None:

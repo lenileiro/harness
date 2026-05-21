@@ -310,7 +310,9 @@ class Agent:
         any_yielded = False
         try:
             for step_idx, step in enumerate(plan.steps):
-                yield StepStarted(step=step_idx, description=step.description)
+                yield StepStarted(
+                    step=step_idx, description=step.description, total_steps=len(plan.steps)
+                )
                 any_yielded = True
                 await self._emit(
                     session,
