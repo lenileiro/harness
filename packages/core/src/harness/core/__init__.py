@@ -49,6 +49,7 @@ from harness.core.tools import (
     AutoDeny,
     Tool,
     ToolRegistry,
+    tool_matches_phase,
 )
 
 __version__ = "0.0.0"
@@ -106,4 +107,5 @@ __all__ = [
     "configure_logging",
     "get_logger",
     "span",
+    "tool_matches_phase",
 ]

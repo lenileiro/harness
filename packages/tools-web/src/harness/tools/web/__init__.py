@@ -69,6 +69,8 @@ class FetchUrlTool:
         "and non-2xx responses."
     )
     approval: ApprovalDecision = "prompt"
+    # GET is observational from harness' perspective — safe across phases.
+    phases: tuple[str, ...] = ("*",)
 
     def __init__(
         self,

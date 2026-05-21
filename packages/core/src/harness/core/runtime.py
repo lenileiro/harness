@@ -50,7 +50,12 @@ from harness.core.planner import NoOpPlanner, PlanContext, Planner
 from harness.core.schemas import Message, RunRequest, Session, ToolCall, ToolResult
 from harness.core.storage import Storage
 from harness.core.telemetry import get_logger, span
-from harness.core.tools import ApprovalHandler, ApprovalPolicy, ToolRegistry
+from harness.core.tools import (
+    ApprovalHandler,
+    ApprovalPolicy,
+    ToolRegistry,
+    tool_matches_phase,
+)
 
 logger = get_logger("harness.runtime")
 
@@ -73,6 +78,7 @@ class Agent:
         approval_handler: ApprovalHandler | None = None,
         planner: Planner | None = None,
         activity_store: ActivityStore | None = None,
+        current_phase: str | None = None,
         default_provider: str | None = None,
         default_model: str | None = None,
         default_cwd: str | None = None,
@@ -91,6 +97,10 @@ class Agent:
         self.approval_handler = approval_handler
         self.planner: Planner = planner or NoOpPlanner()
         self.activity_store = activity_store
+        self.current_phase = current_phase
+        """When set, only tools whose `phases` allow it are sent to the model
+        and dispatched. When None, every registered tool is available
+        (backward compatible)."""
         self.default_provider = default_provider or failover.chain[0]
         self.default_model = default_model
         self.default_cwd = default_cwd
@@ -323,7 +333,7 @@ class Agent:
             stream = adapter.stream(
                 model=request.model or session.model,
                 messages=session.messages,
-                tools=self.tools.openai_schemas() or None,
+                tools=self.tools.openai_schemas(phase=self.current_phase) or None,
                 temperature=request.temperature,
                 max_tokens=request.max_tokens,
             )
@@ -381,6 +391,20 @@ class Agent:
             return result
 
         tool = self.tools.get(call.name)
+
+        # Defence in depth: filter both the schemas sent to the model AND
+        # what we dispatch. If a model hallucinates an out-of-phase call,
+        # refuse rather than execute.
+        if not tool_matches_phase(tool, self.current_phase):
+            result = ToolResult(
+                tool_call_id=call.id,
+                name=call.name,
+                content=(f"tool {call.name!r} is not available in phase {self.current_phase!r}"),
+                is_error=True,
+            )
+            await self._emit_tool_completed(session, call, result)
+            return result
+
         decision = self.approval_policy.decide(tool, session_overrides=session.approval_overrides)
 
         if decision == "deny":

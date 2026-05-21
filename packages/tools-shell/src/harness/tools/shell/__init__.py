@@ -61,6 +61,8 @@ class ShellTool:
         "commands should be avoided."
     )
     approval: ApprovalDecision = "prompt"
+    # Mutating side effects — restricted to the `act` phase.
+    phases: tuple[str, ...] = ("act",)
 
     def __init__(
         self,

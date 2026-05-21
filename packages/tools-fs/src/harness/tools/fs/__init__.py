@@ -113,6 +113,9 @@ class ReadFileTool:
         "relative to the session's working directory and must remain inside it."
     )
     approval: ApprovalDecision = "auto"
+    # Read-only — safe in any phase, including any new ones a future planner
+    # might define.
+    phases: tuple[str, ...] = ("*",)
 
     def __init__(self, *, cwd: Path | str, max_bytes: int = 1024 * 1024) -> None:
         self.cwd = Path(cwd).resolve()
@@ -173,6 +176,9 @@ class WriteFileTool:
         "to cwd and must remain inside it. Parent directories are auto-created."
     )
     approval: ApprovalDecision = "prompt"
+    # Mutates state — restricted to the `act` phase. Callers who want it
+    # available elsewhere should construct an Agent with no `current_phase`.
+    phases: tuple[str, ...] = ("act",)
 
     def __init__(self, *, cwd: Path | str, max_bytes: int = 1024 * 1024) -> None:
         self.cwd = Path(cwd).resolve()
@@ -234,6 +240,7 @@ class EditFileTool:
         "passing a longer `old` snippet."
     )
     approval: ApprovalDecision = "prompt"
+    phases: tuple[str, ...] = ("act",)
 
     def __init__(self, *, cwd: Path | str, max_bytes: int = 1024 * 1024) -> None:
         self.cwd = Path(cwd).resolve()
@@ -309,6 +316,7 @@ class ListDirTool:
         "suffixed with '/'. Path is relative to cwd; defaults to cwd itself."
     )
     approval: ApprovalDecision = "auto"
+    phases: tuple[str, ...] = ("*",)
 
     def __init__(self, *, cwd: Path | str) -> None:
         self.cwd = Path(cwd).resolve()
@@ -363,6 +371,7 @@ class GlobTool:
         "Returns paths relative to cwd, one per line, sorted."
     )
     approval: ApprovalDecision = "auto"
+    phases: tuple[str, ...] = ("*",)
 
     def __init__(self, *, cwd: Path | str, max_results: int = 500) -> None:
         self.cwd = Path(cwd).resolve()

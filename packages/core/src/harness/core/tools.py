@@ -4,6 +4,17 @@ A Tool is any async callable with a name, description, JSON Schema, and a
 default approval level. The runtime resolves approval through ApprovalPolicy
 (which may override the tool's default) and delegates to an ApprovalHandler
 when "prompt" is the decision.
+
+## Phase scoping
+
+Tools may declare which agent phases they're available in via the optional
+`phases: tuple[str, ...]` attribute. Common values: `"research"`, `"act"`,
+`"verify"`, `"repair"`. The wildcard `"*"` means "any phase including no
+phase set". When the Agent's `current_phase` is `None`, all tools are
+available (backward compatible).
+
+The attribute is optional — tools that don't declare it default to
+`("*",)` via the registry's `getattr` fallback.
 """
 
 from __future__ import annotations
@@ -13,6 +24,27 @@ from typing import Any, Protocol, runtime_checkable
 from pydantic import BaseModel, ConfigDict, Field
 
 from harness.core.schemas import ApprovalDecision, Session, ToolCall, ToolResult
+
+WILDCARD_PHASE = "*"
+_DEFAULT_PHASES: tuple[str, ...] = (WILDCARD_PHASE,)
+
+
+def _tool_phases(tool: Tool) -> tuple[str, ...]:
+    """Return the tool's declared phases, defaulting to `("*",)`."""
+    return tuple(getattr(tool, "phases", _DEFAULT_PHASES))
+
+
+def tool_matches_phase(tool: Tool, phase: str | None) -> bool:
+    """True if the tool is available in the given phase.
+
+    `phase=None` (no phase set) → all tools available (backward compat).
+    Otherwise the tool's `phases` must contain `phase` or the wildcard `"*"`.
+    """
+    if phase is None:
+        return True
+    phases = _tool_phases(tool)
+    return WILDCARD_PHASE in phases or phase in phases
+
 
 # ---------------------------------------------------------------------------
 # Tool
@@ -30,6 +62,10 @@ class Tool(Protocol):
 
     The runtime still catches exceptions raised inside `__call__` and wraps
     them as `ToolResult(is_error=True)` so a tool crash never breaks the loop.
+
+    The optional `phases` attribute scopes tool visibility to specific agent
+    phases (`"research"`, `"act"`, `"verify"`, ...). The wildcard `"*"` means
+    "any phase". The registry treats tools without the attribute as `("*",)`.
     """
 
     name: str
@@ -38,6 +74,10 @@ class Tool(Protocol):
     """JSON Schema for the tool's parameter object (an `object` schema)."""
     approval: ApprovalDecision
     """Default approval level. Overridable per-session or globally via ApprovalPolicy."""
+
+    # Note: `phases` is intentionally not listed as a required attribute here
+    # so existing Tool implementations don't break. Access through
+    # `tool_matches_phase` / `_tool_phases` which apply the `("*",)` default.
 
     async def __call__(self, call: ToolCall) -> ToolResult: ...
 
@@ -73,8 +113,17 @@ class ToolRegistry:
     def all(self) -> list[Tool]:
         return list(self._tools.values())
 
-    def openai_schemas(self) -> list[dict[str, Any]]:
-        """Render every registered tool in OpenAI's `tools` request format."""
+    def for_phase(self, phase: str | None) -> list[Tool]:
+        """Tools available in the given phase. `None` returns everything."""
+        return [t for t in self._tools.values() if tool_matches_phase(t, phase)]
+
+    def openai_schemas(self, phase: str | None = None) -> list[dict[str, Any]]:
+        """Render tools in OpenAI's `tools` request format.
+
+        When `phase` is set, only tools whose `phases` allow that phase are
+        included. `phase=None` keeps the legacy behavior of returning every
+        registered tool.
+        """
         return [
             {
                 "type": "function",
@@ -84,7 +133,7 @@ class ToolRegistry:
                     "parameters": t.parameters_schema,
                 },
             }
-            for t in self._tools.values()
+            for t in self.for_phase(phase)
         ]
 
 
@@ -156,10 +205,12 @@ class AutoDeny:
 
 
 __all__ = [
+    "WILDCARD_PHASE",
     "ApprovalHandler",
     "ApprovalPolicy",
     "AutoApprove",
     "AutoDeny",
     "Tool",
     "ToolRegistry",
+    "tool_matches_phase",
 ]
