@@ -144,7 +144,7 @@ class TestLLMJudgeVerifier:
             "judge",
             scripts=[_judge_response("I think yes but I'm not sure")],
         )
-        verifier = LLMJudgeVerifier(adapter=adapter, model="m")
+        verifier = LLMJudgeVerifier(adapter=adapter, model="m", max_retries=1)
         result = await verifier.verify(session=_session(), activity=[])
         assert result.can_finish is False
         assert "non-JSON" in result.reason

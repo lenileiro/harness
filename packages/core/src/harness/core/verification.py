@@ -21,6 +21,7 @@ Verifier in this module has a real implementation behind it.
 
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import Protocol, runtime_checkable
 
@@ -152,9 +153,10 @@ class LLMJudgeVerifier:
 
     name = "llm"
 
-    def __init__(self, *, adapter: Adapter, model: str) -> None:
+    def __init__(self, *, adapter: Adapter, model: str, max_retries: int = 3) -> None:
         self.adapter = adapter
         self.model = model
+        self.max_retries = max_retries
 
     async def verify(
         self, *, session: Session, activity: list[ActivityEvent]
@@ -173,48 +175,49 @@ class LLMJudgeVerifier:
             Message(role="user", content=prompt),
         ]
 
-        accumulated: list[str] = []
-        final_content: str | None = None
-        try:
-            async for event in self.adapter.stream(model=self.model, messages=messages):
-                if isinstance(event, TextDelta):
-                    accumulated.append(event.text)
-                elif isinstance(event, Done):
-                    if event.final_message and event.final_message.content:
-                        final_content = event.final_message.content
-                    else:
-                        final_content = "".join(accumulated)
-                    break
-        except Exception as exc:  # judge call failed → can't finish
+        last_reason = "judge failed after retries"
+        for attempt in range(self.max_retries):
+            if attempt > 0:
+                await asyncio.sleep(2**attempt)  # 2s, 4s
+
+            accumulated: list[str] = []
+            final_content: str | None = None
+            try:
+                async for event in self.adapter.stream(model=self.model, messages=messages):
+                    if isinstance(event, TextDelta):
+                        accumulated.append(event.text)
+                    elif isinstance(event, Done):
+                        if event.final_message and event.final_message.content:
+                            final_content = event.final_message.content
+                        else:
+                            final_content = "".join(accumulated)
+                        break
+            except Exception as exc:
+                last_reason = f"judge call failed (attempt {attempt + 1}): {exc!s}"
+                continue
+
+            if final_content is None:
+                last_reason = f"judge stream ended without a final message (attempt {attempt + 1})"
+                continue
+
+            parsed = _parse_judge_response(final_content)
+            if parsed is None:
+                preview = final_content.strip()[:200]
+                last_reason = f"judge returned non-JSON (attempt {attempt + 1}): {preview!r}"
+                continue
+
+            can_finish, reason, confidence = parsed
             return VerificationResult(
-                can_finish=False,
-                reason=f"judge call failed: {exc!s}",
-                confidence=0.0,
+                can_finish=can_finish,
+                reason=reason,
+                confidence=confidence,
                 verifier_name=self.name,
             )
 
-        if final_content is None:
-            return VerificationResult(
-                can_finish=False,
-                reason="judge stream ended without a final message",
-                confidence=0.0,
-                verifier_name=self.name,
-            )
-
-        parsed = _parse_judge_response(final_content)
-        if parsed is None:
-            preview = final_content.strip()[:200]
-            return VerificationResult(
-                can_finish=False,
-                reason=f"judge returned non-JSON: {preview!r}",
-                confidence=0.0,
-                verifier_name=self.name,
-            )
-        can_finish, reason, confidence = parsed
         return VerificationResult(
-            can_finish=can_finish,
-            reason=reason,
-            confidence=confidence,
+            can_finish=False,
+            reason=last_reason,
+            confidence=0.0,
             verifier_name=self.name,
         )
 
