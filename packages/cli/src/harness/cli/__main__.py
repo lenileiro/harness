@@ -49,7 +49,9 @@ from harness.core import (
     ErrorEvent,
     FailoverPolicy,
     InboxApprovalHandler,
+    LLMJudgeVerifier,
     PendingApproval,
+    RuleVerifier,
     RunRequest,
     Session,
     StepCompleted,
@@ -59,6 +61,8 @@ from harness.core import (
     ToolCallEvent,
     ToolRegistry,
     ToolResultEvent,
+    Verification,
+    Verifier,
     configure_logging,
 )
 from harness.storage.memory import InMemoryStorage
@@ -162,6 +166,23 @@ def _build_tools(cwd: Path) -> ToolRegistry:
     return registry
 
 
+def _build_verifier(
+    verify: str | None, *, chain: list[str], model: str, config: HarnessConfig
+) -> Verifier | None:
+    """Resolve `--verify rule|llm|none` to a Verifier instance (or None)."""
+    if not verify or verify == "none":
+        return None
+    if verify == "rule":
+        return RuleVerifier()
+    if verify == "llm":
+        # Use the same provider as the worker (chain[0]). Judge model defaults
+        # to the worker's model unless the user passed `--verify-model` in a
+        # future enhancement.
+        adapter = _build_adapter(chain[0], base_url=None, config=config)
+        return LLMJudgeVerifier(adapter=adapter, model=model)
+    raise typer.BadParameter(f"unknown --verify value: {verify!r} (use rule|llm|none)")
+
+
 def _build_agent(
     *,
     chain: list[str],
@@ -174,6 +195,7 @@ def _build_agent(
     inbox: bool = False,
     activity_store: ActivityStore | None = None,
     approval_store: ApprovalStore | None = None,
+    verifier: Verifier | None = None,
 ) -> Agent:
     """Build an Agent over a provider chain. `chain[0]` is the primary.
 
@@ -223,6 +245,7 @@ def _build_agent(
         approval_handler=approval_handler,
         activity_store=activity_store,
         approval_store=approval_store,
+        verifier=verifier,
         default_model=model,
         default_cwd=str(cwd),
     )
@@ -350,6 +373,13 @@ def run(
             help="Queue prompt-approval tool calls in the durable inbox instead of asking.",
         ),
     ] = False,
+    verify: Annotated[
+        str | None,
+        typer.Option(
+            "--verify",
+            help="Post-run verifier: rule (built-in heuristic) | llm (extra adapter call) | none.",
+        ),
+    ] = None,
     config_path: Annotated[
         Path | None,
         typer.Option("--config", help=f"Override config path (default: {default_config_path()})."),
@@ -385,6 +415,7 @@ def run(
                 in_memory=in_memory,
                 yes=yes,
                 inbox=inbox,
+                verify=verify,
                 config=cfg,
             )
         )
@@ -407,6 +438,7 @@ async def _run_once(
     in_memory: bool,
     yes: bool,
     inbox: bool,
+    verify: str | None,
     config: HarnessConfig,
 ) -> None:
     storage = _build_storage(db=db, in_memory=in_memory)
@@ -415,6 +447,7 @@ async def _run_once(
         # appends session_id to task.session_ids).
         task_id, _task = await _resolve_task_attachment(storage, task_ref, session_id)
 
+        verifier = _build_verifier(verify, chain=chain, model=model, config=config)
         agent = _build_agent(
             chain=chain,
             base_url=base_url,
@@ -426,6 +459,7 @@ async def _run_once(
             inbox=inbox,
             activity_store=storage,  # type: ignore[arg-type]
             approval_store=storage,  # type: ignore[arg-type]
+            verifier=verifier,
         )
 
         request_kwargs: dict[str, object] = {
@@ -553,6 +587,10 @@ def sessions_resume(
     inbox: Annotated[
         bool, typer.Option("--inbox", help="Queue prompt-approval tool calls to the inbox.")
     ] = False,
+    verify: Annotated[
+        str | None,
+        typer.Option("--verify", help="Post-run verifier: rule | llm | none."),
+    ] = None,
     config_path: Annotated[Path | None, typer.Option("--config")] = None,
     verbose: Annotated[bool, typer.Option("--verbose", "-v")] = False,
 ) -> None:
@@ -573,6 +611,7 @@ def sessions_resume(
             chain = _resolve_chain(
                 failover_flag=failover, provider_flag=session.provider, config=cfg
             )
+            verifier = _build_verifier(verify, chain=chain, model=session.model, config=cfg)
             agent = _build_agent(
                 chain=chain,
                 base_url=base_url,
@@ -584,6 +623,7 @@ def sessions_resume(
                 inbox=inbox,
                 activity_store=storage,  # type: ignore[arg-type]
                 approval_store=storage,  # type: ignore[arg-type]
+                verifier=verifier,
             )
             try:
                 async for event in agent.resume(session_id, prompt=prompt, max_steps=max_steps):
@@ -1300,6 +1340,10 @@ def chat(
     inbox: Annotated[
         bool, typer.Option("--inbox", help="Queue prompt-approval tool calls to the inbox.")
     ] = False,
+    verify: Annotated[
+        str | None,
+        typer.Option("--verify", help="Post-run verifier: rule | llm | none."),
+    ] = None,
     config_path: Annotated[Path | None, typer.Option("--config")] = None,
     verbose: Annotated[bool, typer.Option("--verbose", "-v")] = False,
 ) -> None:
@@ -1327,6 +1371,7 @@ def chat(
                 max_steps=max_steps,
                 yes=yes,
                 inbox=inbox,
+                verify=verify,
                 config=cfg,
             )
         )
@@ -1348,6 +1393,7 @@ async def _chat_loop(
     max_steps: int,
     yes: bool,
     inbox: bool,
+    verify: str | None,
     config: HarnessConfig,
 ) -> None:
     from uuid import uuid4
@@ -1361,6 +1407,7 @@ async def _chat_loop(
 
         task_id, _task = await _resolve_task_attachment(storage, task_ref, current_session_id)
 
+        verifier = _build_verifier(verify, chain=chain, model=model, config=config)
         agent = _build_agent(
             chain=chain,
             base_url=base_url,
@@ -1372,6 +1419,7 @@ async def _chat_loop(
             inbox=inbox,
             activity_store=storage,  # type: ignore[arg-type]
             approval_store=storage,  # type: ignore[arg-type]
+            verifier=verifier,
         )
 
         first_turn = existing is None
@@ -1506,6 +1554,12 @@ def _render(event: Any) -> None:
     elif isinstance(event, ErrorEvent):
         console.print()
         console.print(f"[red]Error ({event.kind}):[/red] {event.error}")
+    elif isinstance(event, Verification):
+        r = event.result
+        marker = "[green]✓[/green]" if r.can_finish else "[red]✗[/red]"
+        conf = f"  [dim](confidence {r.confidence:.2f})[/dim]" if r.confidence is not None else ""
+        console.print()
+        console.print(f"{marker} [bold]verify[/bold] [{r.verifier_name}]  {r.reason}{conf}")
     elif isinstance(event, Done):
         console.print()
     elif isinstance(event, StepStarted | StepCompleted):

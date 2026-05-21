@@ -93,6 +93,10 @@ APPROVAL_QUEUED = "approval.queued"
 APPROVAL_REPLAYED = "approval.replayed"
 """Emitted when the runtime re-dispatches a previously-granted, queued call."""
 
+# Verification
+VERIFICATION_COMPLETED = "verification.completed"
+"""Emitted after the configured Verifier produces a VerificationResult."""
+
 
 __all__ = [
     "AGENT_RUN_CANCELLED",
@@ -108,6 +112,7 @@ __all__ = [
     "STEP_STARTED",
     "TOOL_CALL_COMPLETED",
     "TOOL_CALL_DISPATCHED",
+    "VERIFICATION_COMPLETED",
     "ActivityEvent",
     "ActivityStore",
 ]

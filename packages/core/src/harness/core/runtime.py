@@ -46,6 +46,7 @@ from harness.core.events import (
     StepCompleted,
     StepStarted,
     ToolResultEvent,
+    Verification,
 )
 from harness.core.failover import FailoverPolicy, classify
 from harness.core.planner import NoOpPlanner, PlanContext, Planner
@@ -58,6 +59,7 @@ from harness.core.tools import (
     ToolRegistry,
     tool_matches_phase,
 )
+from harness.core.verification import Verifier
 
 logger = get_logger("harness.runtime")
 
@@ -99,6 +101,7 @@ class Agent:
         planner: Planner | None = None,
         activity_store: ActivityStore | None = None,
         approval_store: ApprovalStore | None = None,
+        verifier: Verifier | None = None,
         current_phase: str | None = None,
         default_provider: str | None = None,
         default_model: str | None = None,
@@ -121,6 +124,10 @@ class Agent:
         self.approval_store = approval_store
         """When set, the runtime checks for granted approvals at the top of
         every run and re-dispatches them — see `_replay_granted_approvals`."""
+        self.verifier = verifier
+        """When set, the runtime calls verifier.verify(...) after the terminal
+        Done event and yields a Verification(result=...) event. The verdict is
+        also recorded as a `verification.completed` activity entry."""
         self.current_phase = current_phase
         """When set, only tools whose `phases` allow it are sent to the model
         and dispatched. When None, every registered tool is available
@@ -330,10 +337,53 @@ class Agent:
             yield ErrorEvent(error=str(exc), kind=kind, recoverable=False)
             return
 
+        # Run the optional verifier before marking the session done. The
+        # verifier may decide can_finish=False, but the session is still
+        # closed for this turn — the verdict is advisory in v1, with the
+        # consumer choosing what to do (resume, escalate, ignore).
+        if self.verifier is not None:
+            async for ev in self._run_verification(session):
+                yield ev
+
         session.status = "done"
         session.touch()
         await self.storage.save(session)
         await self._emit(session, activity_kinds.AGENT_RUN_COMPLETED)
+
+    async def _run_verification(self, session: Session) -> AsyncIterator[Event]:
+        """Call the configured verifier, emit Verification event + activity."""
+        assert self.verifier is not None  # guarded by caller
+        activity_events: list[ActivityEvent] = []
+        if self.activity_store is not None:
+            activity_events = await self.activity_store.list_activity(
+                session_id=session.id, limit=500
+            )
+        try:
+            result = await self.verifier.verify(session=session, activity=activity_events)
+        except Exception as exc:
+            logger.warning("agent.verifier.error", verifier=self.verifier.name, error=str(exc))
+            # Don't swallow silently — synthesize a failure verdict the same
+            # shape consumers expect.
+            from harness.core.schemas import VerificationResult as _VR
+
+            result = _VR(
+                can_finish=False,
+                reason=f"verifier {self.verifier.name!r} raised: {exc!s}",
+                confidence=0.0,
+                verifier_name=self.verifier.name,
+            )
+        await self._emit(
+            session,
+            activity_kinds.VERIFICATION_COMPLETED,
+            {
+                "verifier_name": result.verifier_name,
+                "can_finish": result.can_finish,
+                "reason": result.reason,
+                "confidence": result.confidence,
+                "evidence_event_ids": list(result.evidence_event_ids),
+            },
+        )
+        yield Verification(result=result)
 
     async def resume(
         self,

@@ -181,6 +181,33 @@ class Session(BaseModel):
         self.updated_at = _utcnow()
 
 
+# ---------------------------------------------------------------------------
+# Verification result
+# ---------------------------------------------------------------------------
+
+
+class VerificationResult(BaseModel):
+    """A verifier's verdict on whether the run can finish.
+
+    Schema only — the `Verifier` Protocol + implementations live in
+    `harness.core.verification`. We keep the schema here so the
+    `Verification` event in `events.py` can reference it without a
+    circular import.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(default_factory=lambda: _new_id("ver"))
+    can_finish: bool
+    reason: str
+    confidence: float | None = None
+    """0.0 to 1.0 if the verifier reports a confidence; None otherwise."""
+    evidence_event_ids: list[str] = Field(default_factory=list)
+    """Activity event ids the verifier relied on (e.g. failing tool calls)."""
+    verifier_name: str
+    verified_at: datetime = Field(default_factory=_utcnow)
+
+
 __all__ = [
     "ApprovalDecision",
     "Capabilities",
@@ -192,4 +219,5 @@ __all__ = [
     "ToolCall",
     "ToolResult",
     "Usage",
+    "VerificationResult",
 ]

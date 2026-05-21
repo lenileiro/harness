@@ -14,7 +14,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from harness.core.schemas import Message, ToolCall, ToolResult, Usage
+from harness.core.schemas import Message, ToolCall, ToolResult, Usage, VerificationResult
 
 
 class _EventBase(BaseModel):
@@ -81,8 +81,26 @@ class ErrorEvent(_EventBase):
     recoverable: bool = False
 
 
+class Verification(_EventBase):
+    """Post-run verdict from the configured `Verifier`.
+
+    Emitted by the agent (after `Done`) when a verifier is configured.
+    Consumers can use this to gate "actually done" vs "needs review".
+    """
+
+    type: Literal["verification"] = "verification"
+    result: VerificationResult
+
+
 Event = Annotated[
-    TextDelta | ToolCallEvent | ToolResultEvent | StepStarted | StepCompleted | Done | ErrorEvent,
+    TextDelta
+    | ToolCallEvent
+    | ToolResultEvent
+    | StepStarted
+    | StepCompleted
+    | Done
+    | ErrorEvent
+    | Verification,
     Field(discriminator="type"),
 ]
 
@@ -96,4 +114,5 @@ __all__ = [
     "TextDelta",
     "ToolCallEvent",
     "ToolResultEvent",
+    "Verification",
 ]

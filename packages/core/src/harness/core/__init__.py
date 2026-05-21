@@ -30,6 +30,7 @@ from harness.core.events import (
     TextDelta,
     ToolCallEvent,
     ToolResultEvent,
+    Verification,
 )
 from harness.core.failover import ErrorKind, FailoverPolicy, classify
 from harness.core.planner import NoOpPlanner, Plan, PlanContext, Planner, PlanStep
@@ -45,6 +46,7 @@ from harness.core.schemas import (
     ToolCall,
     ToolResult,
     Usage,
+    VerificationResult,
 )
 from harness.core.storage import Storage
 from harness.core.telemetry import configure_logging, get_logger, span
@@ -58,6 +60,7 @@ from harness.core.tools import (
     ToolRegistry,
     tool_matches_phase,
 )
+from harness.core.verification import LLMJudgeVerifier, RuleVerifier, Verifier
 
 __version__ = "0.0.0"
 
@@ -86,6 +89,7 @@ __all__ = [
     "HarnessError",
     "InboxApprovalHandler",
     "InternalError",
+    "LLMJudgeVerifier",
     "Message",
     "ModelUnavailableError",
     "NetworkError",
@@ -97,6 +101,7 @@ __all__ = [
     "Planner",
     "RateLimitError",
     "Role",
+    "RuleVerifier",
     "RunRequest",
     "Session",
     "SessionStatus",
@@ -113,6 +118,9 @@ __all__ = [
     "ToolResult",
     "ToolResultEvent",
     "Usage",
+    "Verification",
+    "VerificationResult",
+    "Verifier",
     "__version__",
     "activity",
     "classify",

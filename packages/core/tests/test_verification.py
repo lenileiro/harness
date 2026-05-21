@@ -1,0 +1,286 @@
+"""Tests for RuleVerifier, LLMJudgeVerifier, and Agent verifier wiring."""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import pytest
+
+from harness.core import (
+    ActivityEvent,
+    ActivityStore,
+    Agent,
+    AutoApprove,
+    FailoverPolicy,
+    LLMJudgeVerifier,
+    Message,
+    RuleVerifier,
+    RunRequest,
+    Session,
+    ToolRegistry,
+    Verification,
+    VerificationResult,
+)
+from harness.core import activity as activity_kinds
+
+from .conftest import MockAdapter, MockStorage, text_turn, tool_call_turn
+
+
+def _activity(*, kind: str, **data: object) -> ActivityEvent:
+    return ActivityEvent(session_id="s1", kind=kind, data=dict(data))
+
+
+def _session(*, messages: list[Message] | None = None) -> Session:
+    return Session(
+        id="s1",
+        provider="mock",
+        model="m",
+        cwd=Path.cwd(),
+        messages=messages or [Message(role="user", content="hello")],
+    )
+
+
+# ---------------------------------------------------------------------------
+# RuleVerifier
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+class TestRuleVerifier:
+    async def test_empty_activity_can_finish(self) -> None:
+        result = await RuleVerifier().verify(session=_session(), activity=[])
+        assert result.can_finish is True
+        assert "no tools dispatched" in result.reason
+        assert result.verifier_name == "rule"
+
+    async def test_all_tools_succeeded(self) -> None:
+        activity = [
+            _activity(kind="tool_call.completed", name="read_file", is_error=False),
+            _activity(kind="tool_call.completed", name="list_dir", is_error=False),
+            _activity(kind="agent_run.started"),  # ignored
+        ]
+        result = await RuleVerifier().verify(session=_session(), activity=activity)
+        assert result.can_finish is True
+        assert "2 tool calls" in result.reason
+        assert result.evidence_event_ids == []
+
+    async def test_one_tool_failed_blocks_finish(self) -> None:
+        ok = _activity(kind="tool_call.completed", name="read_file", is_error=False)
+        bad = _activity(kind="tool_call.completed", name="shell", is_error=True)
+        result = await RuleVerifier().verify(session=_session(), activity=[ok, bad])
+        assert result.can_finish is False
+        assert "shell" in result.reason
+        assert result.evidence_event_ids == [bad.id]
+
+    async def test_multiple_failing_tools_dedup_names(self) -> None:
+        activity = [
+            _activity(kind="tool_call.completed", name="shell", is_error=True),
+            _activity(kind="tool_call.completed", name="shell", is_error=True),
+            _activity(kind="tool_call.completed", name="write_file", is_error=True),
+        ]
+        result = await RuleVerifier().verify(session=_session(), activity=activity)
+        assert result.can_finish is False
+        # Names dedup'd and sorted.
+        assert "shell" in result.reason
+        assert "write_file" in result.reason
+        assert len(result.evidence_event_ids) == 3
+
+
+# ---------------------------------------------------------------------------
+# LLMJudgeVerifier
+# ---------------------------------------------------------------------------
+
+
+def _judge_response(payload: dict | str) -> list:
+    """Helper: an adapter script that emits exactly one text message + Done."""
+    from harness.core import Done, TextDelta
+
+    body = payload if isinstance(payload, str) else json.dumps(payload)
+    return [
+        TextDelta(text=body),
+        Done(final_message=Message(role="assistant", content=body)),
+    ]
+
+
+@pytest.mark.asyncio
+class TestLLMJudgeVerifier:
+    async def test_can_finish_true(self) -> None:
+        adapter = MockAdapter(
+            "judge",
+            scripts=[
+                _judge_response({"can_finish": True, "reason": "answer matches", "confidence": 0.9})
+            ],
+        )
+        verifier = LLMJudgeVerifier(adapter=adapter, model="judge-m")
+        result = await verifier.verify(
+            session=_session(
+                messages=[
+                    Message(role="user", content="ping"),
+                    Message(role="assistant", content="pong"),
+                ]
+            ),
+            activity=[],
+        )
+        assert result.can_finish is True
+        assert result.reason == "answer matches"
+        assert result.confidence == pytest.approx(0.9)
+        assert result.verifier_name == "llm"
+
+    async def test_can_finish_false(self) -> None:
+        adapter = MockAdapter(
+            "judge",
+            scripts=[
+                _judge_response({"can_finish": False, "reason": "off-topic", "confidence": 0.7})
+            ],
+        )
+        verifier = LLMJudgeVerifier(adapter=adapter, model="m")
+        result = await verifier.verify(session=_session(), activity=[])
+        assert result.can_finish is False
+        assert result.confidence == pytest.approx(0.7)
+
+    async def test_non_json_response_falls_back(self) -> None:
+        adapter = MockAdapter(
+            "judge",
+            scripts=[_judge_response("I think yes but I'm not sure")],
+        )
+        verifier = LLMJudgeVerifier(adapter=adapter, model="m")
+        result = await verifier.verify(session=_session(), activity=[])
+        assert result.can_finish is False
+        assert "non-JSON" in result.reason
+        assert result.confidence == 0.0
+
+    async def test_json_fenced_response_parses(self) -> None:
+        body = "```json\n" + json.dumps({"can_finish": True, "reason": "ok"}) + "\n```"
+        adapter = MockAdapter("judge", scripts=[_judge_response(body)])
+        verifier = LLMJudgeVerifier(adapter=adapter, model="m")
+        result = await verifier.verify(session=_session(), activity=[])
+        assert result.can_finish is True
+        assert result.reason == "ok"
+
+    async def test_adapter_failure_returns_can_finish_false(self) -> None:
+        from harness.core import NetworkError
+
+        adapter = MockAdapter("judge", error=NetworkError("judge offline"))
+        verifier = LLMJudgeVerifier(adapter=adapter, model="m")
+        result = await verifier.verify(session=_session(), activity=[])
+        assert result.can_finish is False
+        assert "judge call failed" in result.reason
+        assert result.confidence == 0.0
+
+
+# ---------------------------------------------------------------------------
+# Agent verifier wiring
+# ---------------------------------------------------------------------------
+
+
+class _Sink(ActivityStore):
+    def __init__(self) -> None:
+        self.events: list[ActivityEvent] = []
+
+    async def append_activity(self, event: ActivityEvent) -> None:
+        self.events.append(event)
+
+    async def list_activity(
+        self,
+        *,
+        task_id: str | None = None,
+        session_id: str | None = None,
+        kinds: tuple[str, ...] | None = None,
+        limit: int = 200,
+    ) -> list[ActivityEvent]:
+        items = list(self.events)
+        if session_id is not None:
+            items = [e for e in items if e.session_id == session_id]
+        return items[:limit]
+
+
+def _agent(*, adapter: MockAdapter, verifier, sink: ActivityStore) -> Agent:
+    return Agent(
+        adapters={"mock": adapter},  # type: ignore[arg-type]
+        tools=ToolRegistry(),
+        storage=MockStorage(),
+        failover=FailoverPolicy(chain=["mock"], max_attempts=1),
+        approval_handler=AutoApprove(),
+        activity_store=sink,
+        verifier=verifier,
+        default_model="m",
+    )
+
+
+@pytest.mark.asyncio
+class TestAgentWiring:
+    async def test_emits_verification_event_after_done(self) -> None:
+        adapter = MockAdapter("mock", scripts=[text_turn("answer")])
+        sink = _Sink()
+        agent = _agent(adapter=adapter, verifier=RuleVerifier(), sink=sink)
+
+        events: list = []
+        async for e in agent.run(RunRequest(prompt="hi", session_id="s1", model="m")):
+            events.append(e)
+
+        # Verification event appears in the stream.
+        verifications = [e for e in events if isinstance(e, Verification)]
+        assert len(verifications) == 1
+        assert verifications[0].result.verifier_name == "rule"
+        assert verifications[0].result.can_finish is True
+
+        # Activity ledger has verification.completed too.
+        kinds = [e.kind for e in sink.events]
+        assert activity_kinds.VERIFICATION_COMPLETED in kinds
+
+    async def test_no_verifier_means_no_verification_event(self) -> None:
+        adapter = MockAdapter("mock", scripts=[text_turn("answer")])
+        sink = _Sink()
+        agent = _agent(adapter=adapter, verifier=None, sink=sink)
+
+        events: list = []
+        async for e in agent.run(RunRequest(prompt="hi", session_id="s1", model="m")):
+            events.append(e)
+
+        assert not [e for e in events if isinstance(e, Verification)]
+        assert activity_kinds.VERIFICATION_COMPLETED not in [e.kind for e in sink.events]
+
+    async def test_verifier_receives_real_activity(self) -> None:
+        """RuleVerifier should see the tool_call.completed events from the run."""
+
+        # The adapter scripts a single tool call that fails (unknown tool).
+        adapter = MockAdapter(
+            "mock",
+            scripts=[
+                tool_call_turn(call_id="c1", name="ghost", arguments={}),
+                text_turn("done"),
+            ],
+        )
+        sink = _Sink()
+        agent = _agent(adapter=adapter, verifier=RuleVerifier(), sink=sink)
+
+        events: list = []
+        async for e in agent.run(RunRequest(prompt="hi", session_id="s1", model="m")):
+            events.append(e)
+
+        verdict = next(e for e in events if isinstance(e, Verification)).result
+        assert verdict.can_finish is False
+        assert "ghost" in verdict.reason
+
+    async def test_verifier_exception_yields_failure_result(self) -> None:
+        """A verifier that raises should not crash the run."""
+
+        class _Broken:
+            name = "broken"
+
+            async def verify(self, *, session, activity):  # type: ignore[no-untyped-def]
+                raise RuntimeError("boom")
+
+        adapter = MockAdapter("mock", scripts=[text_turn("answer")])
+        sink = _Sink()
+        agent = _agent(adapter=adapter, verifier=_Broken(), sink=sink)
+
+        events: list = []
+        async for e in agent.run(RunRequest(prompt="hi", session_id="s1", model="m")):
+            events.append(e)
+
+        verdict = next(e for e in events if isinstance(e, Verification)).result
+        assert verdict.can_finish is False
+        assert "raised" in verdict.reason
+        assert isinstance(verdict, VerificationResult)
