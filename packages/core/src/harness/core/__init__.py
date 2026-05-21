@@ -9,6 +9,7 @@ from harness.core.approval import (
     ApprovalStore,
     PendingApproval,
 )
+from harness.core.budget import ContextBudget, count_tokens, prune
 from harness.core.errors import (
     ApprovalDeniedError,
     CancelledError,
@@ -81,6 +82,7 @@ __all__ = [
     "CancelledError",
     "Capabilities",
     "ConfigurationError",
+    "ContextBudget",
     "Done",
     "ErrorEvent",
     "ErrorKind",
@@ -125,7 +127,9 @@ __all__ = [
     "activity",
     "classify",
     "configure_logging",
+    "count_tokens",
     "get_logger",
+    "prune",
     "span",
     "tool_matches_phase",
 ]

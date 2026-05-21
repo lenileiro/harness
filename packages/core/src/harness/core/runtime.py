@@ -33,6 +33,7 @@ from harness.core import activity as activity_kinds
 from harness.core.activity import ActivityEvent, ActivityStore
 from harness.core.adapter import Adapter
 from harness.core.approval import ApprovalOutcome, ApprovalStore
+from harness.core.budget import ContextBudget, count_tokens, prune
 from harness.core.errors import (
     CancelledError,
     ConfigurationError,
@@ -102,6 +103,7 @@ class Agent:
         activity_store: ActivityStore | None = None,
         approval_store: ApprovalStore | None = None,
         verifier: Verifier | None = None,
+        budget: ContextBudget | None = None,
         current_phase: str | None = None,
         default_provider: str | None = None,
         default_model: str | None = None,
@@ -128,6 +130,10 @@ class Agent:
         """When set, the runtime calls verifier.verify(...) after the terminal
         Done event and yields a Verification(result=...) event. The verdict is
         also recorded as a `verification.completed` activity entry."""
+        self.budget = budget
+        """When set, the runtime prunes session.messages with a token-aware
+        sliding window before each adapter call. The full session history is
+        never mutated — only the view passed to the adapter shrinks."""
         self.current_phase = current_phase
         """When set, only tools whose `phases` allow it are sent to the model
         and dispatched. When None, every registered tool is available
@@ -506,9 +512,10 @@ class Agent:
             final: Message | None = None
             usage = None
 
+            messages_for_turn = await self._apply_budget(session, request)
             stream = adapter.stream(
                 model=request.model or session.model,
-                messages=session.messages,
+                messages=messages_for_turn,
                 tools=self.tools.openai_schemas(phase=self.current_phase) or None,
                 temperature=request.temperature,
                 max_tokens=request.max_tokens,
@@ -650,6 +657,38 @@ class Agent:
         duration_ms = int((time.perf_counter() - started) * 1000)
         await self._emit_tool_completed(session, call, result, duration_ms=duration_ms)
         return result
+
+    async def _apply_budget(self, session: Session, request: RunRequest) -> list[Message]:
+        """Return the message list to actually send the adapter.
+
+        When `self.budget` is set, runs the pruner. Emits a `context.pruned`
+        activity event when the pruned message list is shorter than the
+        full transcript (so the user can see when truncation kicked in).
+
+        Returns `session.messages` unchanged if no budget is configured —
+        full backward compatibility.
+        """
+        if self.budget is None:
+            return session.messages
+        model = request.model or session.model
+        before = len(session.messages)
+        before_tokens = count_tokens(session.messages, model)
+        pruned = prune(session.messages, budget=self.budget, model=model)
+        if len(pruned) < before:
+            after_tokens = count_tokens(pruned, model)
+            await self._emit(
+                session,
+                activity_kinds.CONTEXT_PRUNED,
+                {
+                    "model": model,
+                    "max_tokens": self.budget.max_tokens,
+                    "messages_before": before,
+                    "messages_after": len(pruned),
+                    "tokens_before": before_tokens,
+                    "tokens_after": after_tokens,
+                },
+            )
+        return pruned
 
     async def _emit_tool_completed(
         self,

@@ -45,6 +45,7 @@ from harness.core import (
     ApprovalPolicy,
     ApprovalStore,
     AutoApprove,
+    ContextBudget,
     Done,
     ErrorEvent,
     FailoverPolicy,
@@ -196,6 +197,7 @@ def _build_agent(
     activity_store: ActivityStore | None = None,
     approval_store: ApprovalStore | None = None,
     verifier: Verifier | None = None,
+    budget: ContextBudget | None = None,
 ) -> Agent:
     """Build an Agent over a provider chain. `chain[0]` is the primary.
 
@@ -246,6 +248,7 @@ def _build_agent(
         activity_store=activity_store,
         approval_store=approval_store,
         verifier=verifier,
+        budget=budget,
         default_model=model,
         default_cwd=str(cwd),
     )
@@ -380,6 +383,13 @@ def run(
             help="Post-run verifier: rule (built-in heuristic) | llm (extra adapter call) | none.",
         ),
     ] = None,
+    max_context_tokens: Annotated[
+        int | None,
+        typer.Option(
+            "--max-context-tokens",
+            help="Prune session history before each adapter call to fit this token budget.",
+        ),
+    ] = None,
     config_path: Annotated[
         Path | None,
         typer.Option("--config", help=f"Override config path (default: {default_config_path()})."),
@@ -416,6 +426,7 @@ def run(
                 yes=yes,
                 inbox=inbox,
                 verify=verify,
+                max_context_tokens=max_context_tokens,
                 config=cfg,
             )
         )
@@ -439,6 +450,7 @@ async def _run_once(
     yes: bool,
     inbox: bool,
     verify: str | None,
+    max_context_tokens: int | None,
     config: HarnessConfig,
 ) -> None:
     storage = _build_storage(db=db, in_memory=in_memory)
@@ -448,6 +460,9 @@ async def _run_once(
         task_id, _task = await _resolve_task_attachment(storage, task_ref, session_id)
 
         verifier = _build_verifier(verify, chain=chain, model=model, config=config)
+        budget = (
+            ContextBudget(max_tokens=max_context_tokens) if max_context_tokens is not None else None
+        )
         agent = _build_agent(
             chain=chain,
             base_url=base_url,
@@ -460,6 +475,7 @@ async def _run_once(
             activity_store=storage,  # type: ignore[arg-type]
             approval_store=storage,  # type: ignore[arg-type]
             verifier=verifier,
+            budget=budget,
         )
 
         request_kwargs: dict[str, object] = {
@@ -591,6 +607,13 @@ def sessions_resume(
         str | None,
         typer.Option("--verify", help="Post-run verifier: rule | llm | none."),
     ] = None,
+    max_context_tokens: Annotated[
+        int | None,
+        typer.Option(
+            "--max-context-tokens",
+            help="Prune session history before each adapter call to fit this token budget.",
+        ),
+    ] = None,
     config_path: Annotated[Path | None, typer.Option("--config")] = None,
     verbose: Annotated[bool, typer.Option("--verbose", "-v")] = False,
 ) -> None:
@@ -612,6 +635,11 @@ def sessions_resume(
                 failover_flag=failover, provider_flag=session.provider, config=cfg
             )
             verifier = _build_verifier(verify, chain=chain, model=session.model, config=cfg)
+            budget = (
+                ContextBudget(max_tokens=max_context_tokens)
+                if max_context_tokens is not None
+                else None
+            )
             agent = _build_agent(
                 chain=chain,
                 base_url=base_url,
@@ -624,6 +652,7 @@ def sessions_resume(
                 activity_store=storage,  # type: ignore[arg-type]
                 approval_store=storage,  # type: ignore[arg-type]
                 verifier=verifier,
+                budget=budget,
             )
             try:
                 async for event in agent.resume(session_id, prompt=prompt, max_steps=max_steps):
@@ -1344,6 +1373,10 @@ def chat(
         str | None,
         typer.Option("--verify", help="Post-run verifier: rule | llm | none."),
     ] = None,
+    max_context_tokens: Annotated[
+        int | None,
+        typer.Option("--max-context-tokens", help="Token budget for pruning per turn."),
+    ] = None,
     config_path: Annotated[Path | None, typer.Option("--config")] = None,
     verbose: Annotated[bool, typer.Option("--verbose", "-v")] = False,
 ) -> None:
@@ -1372,6 +1405,7 @@ def chat(
                 yes=yes,
                 inbox=inbox,
                 verify=verify,
+                max_context_tokens=max_context_tokens,
                 config=cfg,
             )
         )
@@ -1394,6 +1428,7 @@ async def _chat_loop(
     yes: bool,
     inbox: bool,
     verify: str | None,
+    max_context_tokens: int | None,
     config: HarnessConfig,
 ) -> None:
     from uuid import uuid4
@@ -1408,6 +1443,9 @@ async def _chat_loop(
         task_id, _task = await _resolve_task_attachment(storage, task_ref, current_session_id)
 
         verifier = _build_verifier(verify, chain=chain, model=model, config=config)
+        budget = (
+            ContextBudget(max_tokens=max_context_tokens) if max_context_tokens is not None else None
+        )
         agent = _build_agent(
             chain=chain,
             base_url=base_url,
@@ -1420,6 +1458,7 @@ async def _chat_loop(
             activity_store=storage,  # type: ignore[arg-type]
             approval_store=storage,  # type: ignore[arg-type]
             verifier=verifier,
+            budget=budget,
         )
 
         first_turn = existing is None

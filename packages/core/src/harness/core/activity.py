@@ -97,6 +97,10 @@ APPROVAL_REPLAYED = "approval.replayed"
 VERIFICATION_COMPLETED = "verification.completed"
 """Emitted after the configured Verifier produces a VerificationResult."""
 
+# Context budget
+CONTEXT_PRUNED = "context.pruned"
+"""Emitted when the budget governor dropped messages before an adapter turn."""
+
 
 __all__ = [
     "AGENT_RUN_CANCELLED",
@@ -108,6 +112,7 @@ __all__ = [
     "APPROVAL_QUEUED",
     "APPROVAL_REPLAYED",
     "APPROVAL_REQUESTED",
+    "CONTEXT_PRUNED",
     "STEP_COMPLETED",
     "STEP_STARTED",
     "TOOL_CALL_COMPLETED",
