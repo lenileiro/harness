@@ -19,7 +19,7 @@ import uuid
 from collections.abc import AsyncIterator, Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, Protocol
 
 from pydantic import BaseModel
 
@@ -29,7 +29,15 @@ from harness.tasks.schemas import Task, TaskStatus
 from harness.tasks.store import TaskStore
 
 if TYPE_CHECKING:
+    from harness.core.activity import ActivityEvent
     from harness.core.runtime import Agent
+    from harness.core.verification import WorkItemJudge
+
+
+class _ActivityStore(Protocol):
+    """Minimal duck-type for fetching activity events by session."""
+
+    async def list_activity(self, *, session_id: str, limit: int) -> list[ActivityEvent]: ...
 
 
 # ---------------------------------------------------------------------------
@@ -91,6 +99,28 @@ class WorkItemCompletedEvent(BaseModel):
     summary: str = ""
 
 
+class WorkItemVerifiedEvent(BaseModel):
+    type: Literal["work_item_verified"] = "work_item_verified"
+    task_id: str
+    task_ref: str
+    confidence: float | None = None
+
+
+class WorkItemRejectedEvent(BaseModel):
+    type: Literal["work_item_rejected"] = "work_item_rejected"
+    task_id: str
+    task_ref: str
+    reason: str
+    attempt: int
+
+
+class WorkItemOrphanedEvent(BaseModel):
+    type: Literal["work_item_orphaned"] = "work_item_orphaned"
+    task_id: str
+    task_ref: str
+    attempt: int
+
+
 class AgentEventWrapper(BaseModel):
     type: Literal["agent_event"] = "agent_event"
     role: str
@@ -103,6 +133,9 @@ OrchestratorEvent = (
     | WorkItemCreatedEvent
     | WorkItemClaimedEvent
     | WorkItemCompletedEvent
+    | WorkItemVerifiedEvent
+    | WorkItemRejectedEvent
+    | WorkItemOrphanedEvent
     | AgentEventWrapper
 )
 
@@ -193,6 +226,9 @@ class MultiAgentOrchestrator:
         job_cwd: Path = Path("."),
         provider: str,
         model: str,
+        work_item_judge: WorkItemJudge | None = None,
+        max_judge_retries: int = 2,
+        activity_store: _ActivityStore | None = None,
     ) -> None:
         self._factory = agent_factory
         self._store = store
@@ -204,6 +240,9 @@ class MultiAgentOrchestrator:
         self._job_cwd = job_cwd
         self._provider = provider
         self._model = model
+        self._work_item_judge = work_item_judge
+        self._max_judge_retries = max_judge_retries
+        self._activity_store = activity_store
 
     async def run(
         self,
@@ -297,6 +336,10 @@ class MultiAgentOrchestrator:
                     await output_queue.put(AgentEventWrapper(role=worker_name, event=event))
                 await output_queue.put(AgentDoneEvent(role=worker_name, session_id=session_id))
 
+                # Post-run check: inspect task status and run judge / handle orphan
+                async for post_event in self._post_run_check(task, session_id):
+                    await output_queue.put(post_event)
+
         worker_tasks = [asyncio.create_task(worker(i)) for i in range(self._max_workers)]
 
         async def _set_done() -> None:
@@ -311,6 +354,117 @@ class MultiAgentOrchestrator:
                 yield event
             except TimeoutError:
                 continue
+
+    async def _post_run_check(
+        self, task: Task, session_id: str
+    ) -> AsyncIterator[OrchestratorEvent]:
+        """Inspect task status after a worker agent exits and take corrective action.
+
+        - done   → run the isolated judge (if configured); on rejection, reset to todo
+        - in_progress → worker hit max_steps without calling complete_work_item; reset to todo
+        """
+        current = await self._store.get_task(task.id)
+        if current is None:
+            return
+
+        if current.status == "done":
+            async for event in self._run_item_judge(current, session_id):
+                yield event
+
+        elif current.status == "in_progress":
+            # Worker exited without completing — reset for retry
+            orphan_count = current.metadata.get("_orphan_count", 0)
+            attempt = orphan_count + 1
+            yield WorkItemOrphanedEvent(task_id=current.id, task_ref=current.ref, attempt=attempt)
+            if attempt >= self._max_judge_retries:
+                # Give up — mark cancelled so it doesn't block workers forever
+                abandoned = current.model_copy(
+                    update={
+                        "status": "cancelled",
+                        "metadata": {**current.metadata, "_orphan_count": attempt},
+                        "updated_at": datetime.now(UTC),
+                    }
+                )
+                await self._store.update_task(abandoned)
+            else:
+                feedback = (
+                    f"\n\n[RETRY {attempt}]: Previous attempt hit the step limit without"
+                    " completing. Focus on calling complete_work_item before running out of steps."
+                )
+                reset = current.model_copy(
+                    update={
+                        "status": "todo",
+                        "description": (task.description or "") + feedback,
+                        "metadata": {**current.metadata, "_orphan_count": attempt},
+                        "updated_at": datetime.now(UTC),
+                    }
+                )
+                await self._store.update_task(reset)
+
+    async def _run_item_judge(
+        self, task: Task, session_id: str
+    ) -> AsyncIterator[OrchestratorEvent]:
+        """Run the isolated judge on a self-reported completion.
+
+        On pass: emit WorkItemVerifiedEvent.
+        On fail: reset task to todo with judge feedback; emit WorkItemRejectedEvent.
+        Once retries are exhausted, leave the task as done (accept with warning).
+        """
+        if self._work_item_judge is None:
+            return
+
+        summary = task.metadata.get("result_summary", "")
+        retry_count = task.metadata.get("_judge_retries", 0)
+
+        activity: list[ActivityEvent] = []
+        if self._activity_store is not None:
+            activity = await self._activity_store.list_activity(session_id=session_id, limit=200)
+
+        result = await self._work_item_judge.judge(
+            task_title=task.title,
+            task_description=task.description,
+            result_summary=summary,
+            activity=activity,
+        )
+
+        if result.can_finish:
+            yield WorkItemVerifiedEvent(
+                task_id=task.id,
+                task_ref=task.ref,
+                confidence=result.confidence,
+            )
+            return
+
+        attempt = retry_count + 1
+        yield WorkItemRejectedEvent(
+            task_id=task.id,
+            task_ref=task.ref,
+            reason=result.reason,
+            attempt=attempt,
+        )
+
+        if attempt >= self._max_judge_retries:
+            # Exhausted retries — accept the completion as-is
+            return
+
+        # Reset to todo with judge feedback injected into description
+        feedback = (
+            f"\n\n[REVIEWER FEEDBACK (attempt {attempt})]: {result.reason}"
+            " Revise your approach and try again."
+        )
+        reset = task.model_copy(
+            update={
+                "status": "todo",
+                "description": (task.description or "") + feedback,
+                "metadata": {
+                    **task.metadata,
+                    "_judge_retries": attempt,
+                    "result_summary": None,
+                },
+                "updated_at": datetime.now(UTC),
+            }
+        )
+        await self._store.update_task(reset)
 
     async def _run_reporter(self, queue: WorkQueue) -> AsyncIterator[OrchestratorEvent]:
         items = await queue.list()
@@ -351,5 +505,8 @@ __all__ = [
     "WorkItemClaimedEvent",
     "WorkItemCompletedEvent",
     "WorkItemCreatedEvent",
+    "WorkItemOrphanedEvent",
+    "WorkItemRejectedEvent",
+    "WorkItemVerifiedEvent",
     "WorkQueue",
 ]

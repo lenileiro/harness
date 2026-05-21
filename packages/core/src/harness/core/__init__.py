@@ -10,6 +10,7 @@ from harness.core.approval import (
     PendingApproval,
 )
 from harness.core.budget import ContextBudget, count_tokens, prune
+from harness.core.calibration import CalibrationRecord, OutcomeCalibration
 from harness.core.errors import (
     ApprovalDeniedError,
     CancelledError,
@@ -38,7 +39,29 @@ from harness.core.events import (
 )
 from harness.core.failover import ErrorKind, FailoverPolicy, classify
 from harness.core.memory import MemoryEntry, MemoryKind, MemoryStore
+from harness.core.orchestrator import (
+    AgentDoneEvent,
+    AgentEventWrapper,
+    AgentRole,
+    AgentStartedEvent,
+    MultiAgentOrchestrator,
+    OrchestratorEvent,
+    WorkItemClaimedEvent,
+    WorkItemCompletedEvent,
+    WorkItemCreatedEvent,
+    WorkItemOrphanedEvent,
+    WorkItemRejectedEvent,
+    WorkItemVerifiedEvent,
+    WorkQueue,
+)
 from harness.core.planner import LLMPlanner, NoOpPlanner, Plan, PlanContext, Planner, PlanStep
+from harness.core.prediction import (
+    ConsequencePredictor,
+    PredictionOutcome,
+    ToolPrediction,
+    compare_prediction,
+)
+from harness.core.repair import RepairDirective, RepairMode, RepairOrchestrator
 from harness.core.runtime import Agent, fork_session
 from harness.core.schemas import (
     ApprovalDecision,
@@ -66,26 +89,6 @@ from harness.core.tools import (
     ToolRegistry,
     tool_matches_phase,
 )
-from harness.core.calibration import CalibrationRecord, OutcomeCalibration
-from harness.core.prediction import (
-    ConsequencePredictor,
-    PredictionOutcome,
-    ToolPrediction,
-    compare_prediction,
-)
-from harness.core.repair import RepairDirective, RepairMode, RepairOrchestrator
-from harness.core.orchestrator import (
-    AgentDoneEvent,
-    AgentEventWrapper,
-    AgentRole,
-    AgentStartedEvent,
-    MultiAgentOrchestrator,
-    OrchestratorEvent,
-    WorkItemClaimedEvent,
-    WorkItemCompletedEvent,
-    WorkItemCreatedEvent,
-    WorkQueue,
-)
 from harness.core.tools_orchestration import (
     CompleteWorkItemTool,
     CreateWorkItemTool,
@@ -99,6 +102,7 @@ from harness.core.verification import (
     VerificationGateway,
     Verifier,
     VerifierRouter,
+    WorkItemJudge,
     evaluate_evidence,
 )
 
@@ -186,6 +190,10 @@ __all__ = [
     "WorkItemClaimedEvent",
     "WorkItemCompletedEvent",
     "WorkItemCreatedEvent",
+    "WorkItemJudge",
+    "WorkItemOrphanedEvent",
+    "WorkItemRejectedEvent",
+    "WorkItemVerifiedEvent",
     "WorkQueue",
     "ToolResult",
     "ToolResultEvent",

@@ -91,6 +91,10 @@ from harness.core import (
     WorkItemClaimedEvent,
     WorkItemCompletedEvent,
     WorkItemCreatedEvent,
+    WorkItemJudge,
+    WorkItemOrphanedEvent,
+    WorkItemRejectedEvent,
+    WorkItemVerifiedEvent,
     configure_logging,
     fork_session,
 )
@@ -2507,6 +2511,19 @@ class LabRenderer:
             self._console.print(f"[cyan]  → claimed {event.task_ref}[/cyan]")
         elif isinstance(event, WorkItemCompletedEvent):
             self._console.print(f"[cyan]  ✓ completed {event.task_ref}[/cyan]")
+        elif isinstance(event, WorkItemVerifiedEvent):
+            conf_str = f" ({event.confidence:.0%})" if event.confidence is not None else ""
+            self._console.print(f"[green]  ✓ {event.task_ref} verified{conf_str}[/green]")
+        elif isinstance(event, WorkItemRejectedEvent):
+            self._console.print(
+                f"[yellow]  ✗ {event.task_ref} rejected"
+                f" (attempt {event.attempt}): {event.reason}[/yellow]"
+            )
+        elif isinstance(event, WorkItemOrphanedEvent):
+            self._console.print(
+                f"[yellow]  ~ {event.task_ref} orphaned"
+                f" (attempt {event.attempt}) — re-queued[/yellow]"
+            )
         elif isinstance(event, AgentEventWrapper):
             color = _role_color(event.role)
             self._inner.render(event.event)
@@ -2539,6 +2556,10 @@ def lab_run(
         Path | None,
         typer.Option("--config", help="Path to harness config TOML."),
     ] = None,
+    no_judge: Annotated[
+        bool,
+        typer.Option("--no-judge", help="Disable post-completion judge verification."),
+    ] = False,
 ) -> None:
     """Run a multi-agent job: planner decomposes, workers execute in parallel, reporter synthesizes."""
 
@@ -2629,6 +2650,14 @@ def lab_run(
             ),
         )
 
+        judge_adapter = _build_adapter(resolved_provider, base_url=None, config=cfg)
+        work_item_judge: WorkItemJudge | None = None
+        if not no_judge:
+            work_item_judge = WorkItemJudge(
+                adapter=judge_adapter,
+                model=resolved_model,
+            )
+
         orchestrator = MultiAgentOrchestrator(
             agent_factory=agent_factory,
             store=storage,
@@ -2640,6 +2669,8 @@ def lab_run(
             job_cwd=working_dir,
             provider=resolved_provider,
             model=resolved_model,
+            work_item_judge=work_item_judge,
+            activity_store=storage,
         )
 
         console.print(f"[bold]harness lab run[/bold] — {workers} workers")

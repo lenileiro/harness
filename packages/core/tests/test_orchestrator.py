@@ -211,15 +211,32 @@ class TestOrchestratorEvents:
 
 
 def _make_simple_agent_factory(store: InMemoryStorage) -> Callable[[AgentRole], Any]:
-    """Return an agent_factory that produces a stub agent yielding a Done event."""
+    """Return an agent_factory that produces a stub agent yielding a Done event.
+
+    For worker roles, also marks the claimed task as done so orphan-reset does
+    not re-queue the item indefinitely during tests.
+    """
 
     class StubAgent:
+        def __init__(self, item_id: str | None) -> None:
+            self._item_id = item_id
+
         async def run(self, request):
+            if self._item_id:
+                task = await store.get_task(self._item_id)
+                if task and task.status == "in_progress":
+                    updated = task.model_copy(
+                        update={
+                            "status": "done",
+                            "metadata": {**task.metadata, "result_summary": "stub done"},
+                        }
+                    )
+                    await store.update_task(updated)
             yield TextDelta(text="thinking...")
             yield Done(final_message=None, usage=None)
 
     def factory(role: AgentRole) -> StubAgent:
-        return StubAgent()
+        return StubAgent(item_id=role.item_id)
 
     return factory
 

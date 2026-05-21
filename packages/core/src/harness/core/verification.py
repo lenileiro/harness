@@ -345,6 +345,126 @@ class VerifierRouter:
         )
 
 
+_WORK_ITEM_JUDGE_PROMPT = (
+    "You are a strict quality reviewer checking whether an AI worker completed a "
+    "specific assigned task.\n\n"
+    "You will be given the original task specification, a list of tools the worker "
+    "invoked, and the worker's completion summary. Your job: decide if the worker "
+    "actually did the work.\n\n"
+    "Reply ONLY with valid JSON on a single line, no markdown:\n"
+    '{"can_finish": true|false, "reason": "<one sentence>", "confidence": 0.0..1.0}\n\n'
+    "can_finish=false if:\n"
+    "- Summary is empty, vague ('done', 'completed it'), or never references the task\n"
+    "- No tools were called (only complete_work_item) — worker did nothing\n"
+    "- Worker describes doing something unrelated to the assigned task\n"
+    "- The claimed outcome contradicts the evidence in the tool calls\n"
+    "can_finish=true if:\n"
+    "- Summary clearly describes completing this specific task with concrete details\n"
+    "- Tool evidence shows work was actually done (files written, commands run, etc.)\n"
+    "Do not add any prose outside the JSON."
+)
+
+
+class WorkItemJudge:
+    """Isolated LLM judge for work-item completion verification.
+
+    Called by the orchestrator after a worker finishes a task, with a
+    fresh context that contains only the task spec and completion evidence.
+    The judge has never seen the worker's conversation and cannot be
+    influenced by it.
+
+    Reuses the same adapter as the worker but in a single-turn call — no
+    session state, no tool loop. Pass a stronger model as `model` for
+    higher-quality judgments.
+    """
+
+    name = "work_item_judge"
+
+    def __init__(self, *, adapter: Adapter, model: str, max_retries: int = 2) -> None:
+        self.adapter = adapter
+        self.model = model
+        self.max_retries = max_retries
+
+    async def judge(
+        self,
+        *,
+        task_title: str,
+        task_description: str | None,
+        result_summary: str,
+        activity: list[ActivityEvent],
+    ) -> VerificationResult:
+        """Single LLM call to verify a work item was genuinely completed.
+
+        Args:
+            task_title: Original task title (the spec the worker was given).
+            task_description: Optional longer description from the task.
+            result_summary: What the worker claims to have accomplished.
+            activity: Activity events from the worker's session (tool calls etc.).
+
+        Returns:
+            VerificationResult with can_finish=True if the judge accepts the
+            completion, or can_finish=False with a reason if it rejects.
+        """
+        tools_summary = _summarize_tools(activity)
+        desc_section = f"TASK DESCRIPTION:\n{task_description}\n\n" if task_description else ""
+        prompt = (
+            f"TASK TITLE: {task_title}\n\n"
+            f"{desc_section}"
+            f"TOOLS CALLED BY WORKER:\n{tools_summary}\n\n"
+            f"WORKER COMPLETION SUMMARY:\n{result_summary or '(empty)'}\n"
+        )
+        messages = [
+            Message(role="system", content=_WORK_ITEM_JUDGE_PROMPT),
+            Message(role="user", content=prompt),
+        ]
+
+        last_reason = "judge failed after retries"
+        for attempt in range(self.max_retries):
+            if attempt > 0:
+                await asyncio.sleep(2**attempt)
+
+            accumulated: list[str] = []
+            final_content: str | None = None
+            try:
+                async for event in self.adapter.stream(model=self.model, messages=messages):
+                    if isinstance(event, TextDelta):
+                        accumulated.append(event.text)
+                    elif isinstance(event, Done):
+                        if event.final_message and event.final_message.content:
+                            final_content = event.final_message.content
+                        else:
+                            final_content = "".join(accumulated)
+                        break
+            except Exception as exc:
+                last_reason = f"judge call failed (attempt {attempt + 1}): {exc!s}"
+                continue
+
+            if final_content is None:
+                last_reason = f"judge stream ended without content (attempt {attempt + 1})"
+                continue
+
+            parsed = _parse_judge_response(final_content)
+            if parsed is None:
+                preview = final_content.strip()[:200]
+                last_reason = f"judge returned non-JSON (attempt {attempt + 1}): {preview!r}"
+                continue
+
+            can_finish, reason, confidence = parsed
+            return VerificationResult(
+                can_finish=can_finish,
+                reason=reason,
+                confidence=confidence,
+                verifier_name=self.name,
+            )
+
+        return VerificationResult(
+            can_finish=False,
+            reason=last_reason,
+            confidence=0.0,
+            verifier_name=self.name,
+        )
+
+
 def _parse_judge_response(text: str) -> tuple[bool, str, float | None] | None:
     """Return (can_finish, reason, confidence) or None on parse failure.
 
@@ -381,11 +501,11 @@ def _parse_judge_response(text: str) -> tuple[bool, str, float | None] | None:
 # ---------------------------------------------------------------------------
 
 EvidenceCheckKind = Literal[
-    "command_evidence",    # shell/subprocess ran (exit_code in activity metadata)
-    "changed_file",        # write_file or edit_file completed without error
-    "acceptance_criterion", # any tool result with metadata.acceptance=True
-    "no_prediction_errors", # zero medium+ severity prediction mismatches
-    "tool_succeeded",      # named tool (specified in check_data["tool"]) succeeded
+    "command_evidence",  # shell/subprocess ran (exit_code in activity metadata)
+    "changed_file",  # write_file or edit_file completed without error
+    "acceptance_criterion",  # any tool result with metadata.acceptance=True
+    "no_prediction_errors",  # zero medium+ severity prediction mismatches
+    "tool_succeeded",  # named tool (specified in check_data["tool"]) succeeded
 ]
 
 
@@ -422,10 +542,7 @@ def evaluate_evidence(
     found: list[str] = []
     missing: list[str] = []
 
-    completed = [
-        e for e in activity
-        if e.kind == "tool_call.completed"
-    ]
+    completed = [e for e in activity if e.kind == "tool_call.completed"]
 
     for check in contract.required_checks:
         if check == "command_evidence":
@@ -437,8 +554,7 @@ def evaluate_evidence(
 
         elif check == "changed_file":
             ok = any(
-                e.data.get("name") in ("write_file", "edit_file")
-                and not e.data.get("is_error")
+                e.data.get("name") in ("write_file", "edit_file") and not e.data.get("is_error")
                 for e in completed
             )
 
@@ -460,8 +576,7 @@ def evaluate_evidence(
         elif check == "tool_succeeded":
             target_tool = contract.check_data.get("tool", "")
             ok = any(
-                e.data.get("name") == target_tool and not e.data.get("is_error")
-                for e in completed
+                e.data.get("name") == target_tool and not e.data.get("is_error") for e in completed
             )
 
         else:
@@ -506,7 +621,8 @@ class VerificationGateway:
     ) -> VerificationResult:
         # Gate 1: unresolved prediction mismatches
         mismatches = [
-            e for e in activity
+            e
+            for e in activity
             if e.kind == "tool_call.prediction_error"
             and e.data.get("severity") in _PREDICTION_ERROR_SEVERITIES
             and not e.data.get("matched")
@@ -552,5 +668,6 @@ __all__ = [
     "VerificationResult",
     "Verifier",
     "VerifierRouter",
+    "WorkItemJudge",
     "evaluate_evidence",
 ]
