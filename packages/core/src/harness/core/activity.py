@@ -88,6 +88,10 @@ TOOL_CALL_COMPLETED = "tool_call.completed"
 APPROVAL_REQUESTED = "approval.requested"
 APPROVAL_GRANTED = "approval.granted"
 APPROVAL_DENIED = "approval.denied"
+APPROVAL_QUEUED = "approval.queued"
+"""Emitted when an inbox handler defers a tool call for later review."""
+APPROVAL_REPLAYED = "approval.replayed"
+"""Emitted when the runtime re-dispatches a previously-granted, queued call."""
 
 
 __all__ = [
@@ -97,6 +101,8 @@ __all__ = [
     "AGENT_RUN_STARTED",
     "APPROVAL_DENIED",
     "APPROVAL_GRANTED",
+    "APPROVAL_QUEUED",
+    "APPROVAL_REPLAYED",
     "APPROVAL_REQUESTED",
     "STEP_COMPLETED",
     "STEP_STARTED",

@@ -23,6 +23,7 @@ from typing import Any, Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from harness.core.approval import ApprovalOutcome, ApprovalStore, PendingApproval
 from harness.core.schemas import ApprovalDecision, Session, ToolCall, ToolResult
 
 WILDCARD_PHASE = "*"
@@ -176,18 +177,25 @@ class ApprovalPolicy(BaseModel):
 class ApprovalHandler(Protocol):
     """Called by the runtime whenever a tool's effective approval is `prompt`.
 
-    Implementations: CLI shows a Rich prompt; tests use auto-approve/deny mocks.
+    Implementations: CLI shows a Rich prompt; tests use auto-approve/deny mocks;
+    `InboxApprovalHandler` queues for later human review.
+
     Receives the current `session` so handlers may persist "always" decisions
     by mutating `session.approval_overrides` (the runtime saves the session
     after each turn).
 
     Return value semantics:
-      - True  → execute the tool
-      - False → skip the tool; runtime synthesizes a tool_result with is_error=True
-        and `content` = "user denied approval"
+      - `True` / `"approved"`  → execute the tool
+      - `False` / `"denied"`   → synth `ToolResult(content="user denied approval", is_error=True)`
+      - `"queued"`             → synth `ToolResult(content="queued for approval", is_error=True)`
+
+    Returning `"queued"` is meant for the inbox flow (`InboxApprovalHandler`).
+    The handler is expected to have already persisted a `PendingApproval` row.
     """
 
-    async def __call__(self, tool: Tool, call: ToolCall, session: Session) -> bool: ...
+    async def __call__(
+        self, tool: Tool, call: ToolCall, session: Session
+    ) -> bool | ApprovalOutcome: ...
 
 
 class AutoApprove:
@@ -204,12 +212,42 @@ class AutoDeny:
         return False
 
 
+class InboxApprovalHandler:
+    """Queue tool calls for asynchronous human review.
+
+    Writes a `PendingApproval` to the configured store and returns
+    `"queued"`. The runtime then surfaces `ToolResult(is_error=True,
+    content="queued for approval ...")` to the agent so the session can
+    continue cleanly. When the user later resolves the approval (via
+    `harness approvals grant`), the next `agent.resume()` re-dispatches
+    the original tool call and overwrites the queued result in history.
+
+    Pass the same storage that satisfies `ApprovalStore` (in practice the
+    main `Storage` instance) at construction.
+    """
+
+    def __init__(self, *, approval_store: ApprovalStore) -> None:
+        self.approval_store = approval_store
+
+    async def __call__(self, tool: Tool, call: ToolCall, session: Session) -> ApprovalOutcome:
+        approval = PendingApproval(
+            task_id=session.task_id,
+            session_id=session.id,
+            tool_call_id=call.id,
+            tool_name=tool.name,
+            arguments=call.arguments,
+        )
+        await self.approval_store.create_approval(approval)
+        return "queued"
+
+
 __all__ = [
     "WILDCARD_PHASE",
     "ApprovalHandler",
     "ApprovalPolicy",
     "AutoApprove",
     "AutoDeny",
+    "InboxApprovalHandler",
     "Tool",
     "ToolRegistry",
     "tool_matches_phase",

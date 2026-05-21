@@ -1,28 +1,29 @@
 """In-memory Storage implementation for Harness.
 
-Implements three Protocols:
+Implements four Protocols:
 
 - `harness.core.Storage`         — sessions
 - `harness.tasks.TaskStore`      — tasks
 - `harness.tasks.ActivityStore`  — append-only activity log
+- `harness.tasks.ApprovalStore`  — pending tool-call approvals
 
-Sessions, tasks, and the activity ledger live in process memory only.
+Sessions, tasks, activity, and approvals all live in process memory.
 All mutations defensively deep-copy so callers cannot mutate the store by
 retaining references.
 """
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 from harness.core import Session, SessionStatus
-from harness.tasks import ActivityEvent, Task, TaskStatus
+from harness.tasks import ActivityEvent, ApprovalStatus, PendingApproval, Task, TaskStatus
 
 __version__ = "0.0.0"
 
 
 class InMemoryStorage:
-    """In-memory backend covering sessions, tasks, and activity."""
+    """In-memory backend covering sessions, tasks, activity, and approvals."""
 
     def __init__(self) -> None:
         self._sessions: dict[str, Session] = {}
@@ -30,6 +31,7 @@ class InMemoryStorage:
         self._task_ref_counter: int = 0
         self._activity: list[ActivityEvent] = []
         self._activity_ids: set[str] = set()
+        self._approvals: dict[str, PendingApproval] = {}
 
     # ------------------------------------------------------------------ #
     # SessionStore (harness.core.Storage)                                 #
@@ -130,6 +132,67 @@ class InMemoryStorage:
             items = [e for e in items if e.kind in kinds_set]
         items.sort(key=lambda e: e.timestamp)
         return [e.model_copy(deep=True) for e in items[:limit]]
+
+    # ------------------------------------------------------------------ #
+    # ApprovalStore                                                       #
+    # ------------------------------------------------------------------ #
+
+    async def create_approval(self, approval: PendingApproval) -> PendingApproval:
+        self._approvals[approval.id] = approval.model_copy(deep=True)
+        return approval.model_copy(deep=True)
+
+    async def get_approval(self, approval_id: str) -> PendingApproval | None:
+        stored = self._approvals.get(approval_id)
+        return stored.model_copy(deep=True) if stored else None
+
+    async def list_approvals(
+        self,
+        *,
+        session_id: str | None = None,
+        task_id: str | None = None,
+        status: ApprovalStatus | None = None,
+        limit: int = 100,
+    ) -> list[PendingApproval]:
+        items = list(self._approvals.values())
+        if session_id is not None:
+            items = [a for a in items if a.session_id == session_id]
+        if task_id is not None:
+            items = [a for a in items if a.task_id == task_id]
+        if status is not None:
+            items = [a for a in items if a.status == status]
+        items.sort(key=lambda a: a.requested_at, reverse=True)
+        return [a.model_copy(deep=True) for a in items[:limit]]
+
+    async def resolve_approval(
+        self,
+        approval_id: str,
+        *,
+        status: ApprovalStatus,
+        resolved_by: str | None = None,
+    ) -> PendingApproval | None:
+        stored = self._approvals.get(approval_id)
+        if stored is None:
+            return None
+        stored.status = status
+        stored.resolved_at = datetime.now(UTC)
+        stored.resolved_by = resolved_by
+        return stored.model_copy(deep=True)
+
+    async def mark_replayed(self, approval_id: str) -> None:
+        stored = self._approvals.get(approval_id)
+        if stored is None:
+            return
+        if stored.replayed_at is None:
+            stored.replayed_at = datetime.now(UTC)
+
+    async def list_unreplayed_granted(self, *, session_id: str) -> list[PendingApproval]:
+        items = [
+            a
+            for a in self._approvals.values()
+            if a.session_id == session_id and a.status == "granted" and a.replayed_at is None
+        ]
+        items.sort(key=lambda a: a.requested_at)
+        return [a.model_copy(deep=True) for a in items]
 
 
 __all__ = ["InMemoryStorage", "__version__"]

@@ -3,6 +3,12 @@
 from harness.core import activity
 from harness.core.activity import ActivityEvent, ActivityStore
 from harness.core.adapter import Adapter
+from harness.core.approval import (
+    ApprovalOutcome,
+    ApprovalStatus,
+    ApprovalStore,
+    PendingApproval,
+)
 from harness.core.errors import (
     ApprovalDeniedError,
     CancelledError,
@@ -47,6 +53,7 @@ from harness.core.tools import (
     ApprovalPolicy,
     AutoApprove,
     AutoDeny,
+    InboxApprovalHandler,
     Tool,
     ToolRegistry,
     tool_matches_phase,
@@ -62,7 +69,10 @@ __all__ = [
     "ApprovalDecision",
     "ApprovalDeniedError",
     "ApprovalHandler",
+    "ApprovalOutcome",
     "ApprovalPolicy",
+    "ApprovalStatus",
+    "ApprovalStore",
     "AutoApprove",
     "AutoDeny",
     "CancelledError",
@@ -74,11 +84,13 @@ __all__ = [
     "Event",
     "FailoverPolicy",
     "HarnessError",
+    "InboxApprovalHandler",
     "InternalError",
     "Message",
     "ModelUnavailableError",
     "NetworkError",
     "NoOpPlanner",
+    "PendingApproval",
     "Plan",
     "PlanContext",
     "PlanStep",

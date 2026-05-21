@@ -21,7 +21,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 import aiosqlite
@@ -30,6 +30,9 @@ from harness.core import Message, Session, SessionStatus, Storage
 from harness.tasks import (
     ActivityEvent,
     ActivityStore,
+    ApprovalStatus,
+    ApprovalStore,
+    PendingApproval,
     Task,
     TaskLink,
     TaskStatus,
@@ -88,6 +91,23 @@ CREATE TABLE IF NOT EXISTS task_activity (
 CREATE INDEX IF NOT EXISTS idx_activity_task_ts    ON task_activity(task_id, timestamp);
 CREATE INDEX IF NOT EXISTS idx_activity_session_ts ON task_activity(session_id, timestamp);
 CREATE INDEX IF NOT EXISTS idx_activity_kind       ON task_activity(kind);
+
+CREATE TABLE IF NOT EXISTS approvals (
+    id           TEXT PRIMARY KEY,
+    task_id      TEXT,
+    session_id   TEXT NOT NULL,
+    tool_call_id TEXT NOT NULL,
+    tool_name    TEXT NOT NULL,
+    arguments    TEXT NOT NULL,        -- JSON
+    status       TEXT NOT NULL,
+    requested_at TEXT NOT NULL,
+    resolved_at  TEXT,
+    resolved_by  TEXT,
+    replayed_at  TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_approvals_session  ON approvals(session_id, status);
+CREATE INDEX IF NOT EXISTS idx_approvals_task     ON approvals(task_id);
+CREATE INDEX IF NOT EXISTS idx_approvals_status   ON approvals(status);
 """
 
 # Migration: older databases may not have task_id on sessions; add it.
@@ -101,8 +121,8 @@ def default_db_path() -> Path:
     return state_home / "harness" / "sessions.db"
 
 
-class SQLiteStorage(Storage, TaskStore, ActivityStore):
-    """SQLite backend covering sessions, tasks, and activity.
+class SQLiteStorage(Storage, TaskStore, ActivityStore, ApprovalStore):
+    """SQLite backend covering sessions, tasks, activity, and approvals.
 
     Args:
         path: SQLite database file path. Defaults to `default_db_path()`.
@@ -385,6 +405,114 @@ class SQLiteStorage(Storage, TaskStore, ActivityStore):
             rows = await cursor.fetchall()
         return [_row_to_activity(r) for r in rows]
 
+    # ------------------------------------------------------------------ #
+    # ApprovalStore                                                       #
+    # ------------------------------------------------------------------ #
+
+    async def create_approval(self, approval: PendingApproval) -> PendingApproval:
+        db = await self._ensure()
+        await db.execute(
+            """
+            INSERT INTO approvals
+              (id, task_id, session_id, tool_call_id, tool_name, arguments,
+               status, requested_at, resolved_at, resolved_by, replayed_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                approval.id,
+                approval.task_id,
+                approval.session_id,
+                approval.tool_call_id,
+                approval.tool_name,
+                json.dumps(approval.arguments),
+                approval.status,
+                approval.requested_at.isoformat(),
+                approval.resolved_at.isoformat() if approval.resolved_at else None,
+                approval.resolved_by,
+                approval.replayed_at.isoformat() if approval.replayed_at else None,
+            ),
+        )
+        await db.commit()
+        return approval
+
+    async def get_approval(self, approval_id: str) -> PendingApproval | None:
+        db = await self._ensure()
+        async with db.execute("SELECT * FROM approvals WHERE id = ?", (approval_id,)) as cursor:
+            row = await cursor.fetchone()
+        return _row_to_approval(row) if row else None
+
+    async def list_approvals(
+        self,
+        *,
+        session_id: str | None = None,
+        task_id: str | None = None,
+        status: ApprovalStatus | None = None,
+        limit: int = 100,
+    ) -> list[PendingApproval]:
+        db = await self._ensure()
+        sql = "SELECT * FROM approvals"
+        clauses: list[str] = []
+        params: list[object] = []
+        if session_id is not None:
+            clauses.append("session_id = ?")
+            params.append(session_id)
+        if task_id is not None:
+            clauses.append("task_id = ?")
+            params.append(task_id)
+        if status is not None:
+            clauses.append("status = ?")
+            params.append(status)
+        if clauses:
+            sql += " WHERE " + " AND ".join(clauses)
+        sql += " ORDER BY requested_at DESC LIMIT ?"
+        params.append(limit)
+        async with db.execute(sql, params) as cursor:
+            rows = await cursor.fetchall()
+        return [_row_to_approval(r) for r in rows]
+
+    async def resolve_approval(
+        self,
+        approval_id: str,
+        *,
+        status: ApprovalStatus,
+        resolved_by: str | None = None,
+    ) -> PendingApproval | None:
+        db = await self._ensure()
+        resolved_at = datetime.now(UTC).isoformat()
+        async with db.execute(
+            """
+            UPDATE approvals SET status = ?, resolved_at = ?, resolved_by = ?
+            WHERE id = ?
+            """,
+            (status, resolved_at, resolved_by, approval_id),
+        ) as cursor:
+            if cursor.rowcount == 0:
+                return None
+        await db.commit()
+        return await self.get_approval(approval_id)
+
+    async def mark_replayed(self, approval_id: str) -> None:
+        db = await self._ensure()
+        replayed_at = datetime.now(UTC).isoformat()
+        await db.execute(
+            "UPDATE approvals SET replayed_at = ? WHERE id = ? AND replayed_at IS NULL",
+            (replayed_at, approval_id),
+        )
+        await db.commit()
+
+    async def list_unreplayed_granted(self, *, session_id: str) -> list[PendingApproval]:
+        db = await self._ensure()
+        async with db.execute(
+            """
+            SELECT * FROM approvals
+            WHERE session_id = ? AND status = 'granted' AND replayed_at IS NULL
+            ORDER BY requested_at ASC
+            """,
+            (session_id,),
+        ) as cursor:
+            rows = await cursor.fetchall()
+        return [_row_to_approval(r) for r in rows]
+
 
 def _row_to_session(row: aiosqlite.Row) -> Session:
     keys = set(row.keys())
@@ -430,6 +558,22 @@ def _row_to_activity(row: aiosqlite.Row) -> ActivityEvent:
         timestamp=datetime.fromisoformat(row["timestamp"]),
         kind=row["kind"],
         data=json.loads(row["data"]),
+    )
+
+
+def _row_to_approval(row: aiosqlite.Row) -> PendingApproval:
+    return PendingApproval(
+        id=row["id"],
+        task_id=row["task_id"],
+        session_id=row["session_id"],
+        tool_call_id=row["tool_call_id"],
+        tool_name=row["tool_name"],
+        arguments=json.loads(row["arguments"]),
+        status=row["status"],
+        requested_at=datetime.fromisoformat(row["requested_at"]),
+        resolved_at=datetime.fromisoformat(row["resolved_at"]) if row["resolved_at"] else None,
+        resolved_by=row["resolved_by"],
+        replayed_at=datetime.fromisoformat(row["replayed_at"]) if row["replayed_at"] else None,
     )
 
 

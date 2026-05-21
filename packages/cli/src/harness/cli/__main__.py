@@ -43,10 +43,13 @@ from harness.core import (
     Agent,
     ApprovalHandler,
     ApprovalPolicy,
+    ApprovalStore,
     AutoApprove,
     Done,
     ErrorEvent,
     FailoverPolicy,
+    InboxApprovalHandler,
+    PendingApproval,
     RunRequest,
     Session,
     StepCompleted,
@@ -103,6 +106,13 @@ tasks_app = typer.Typer(
 )
 app.add_typer(tasks_app, name="tasks")
 
+approvals_app = typer.Typer(
+    name="approvals",
+    help="Inspect and resolve tool-call approvals queued via --inbox.",
+    no_args_is_help=True,
+)
+app.add_typer(approvals_app, name="approvals")
+
 console = Console()
 
 KNOWN_PROVIDERS: tuple[str, ...] = ("ollama", "openrouter")
@@ -154,15 +164,23 @@ def _build_agent(
     cwd: Path,
     config: HarnessConfig,
     yes: bool,
+    inbox: bool = False,
     activity_store: ActivityStore | None = None,
+    approval_store: ApprovalStore | None = None,
 ) -> Agent:
     """Build an Agent over a provider chain. `chain[0]` is the primary.
 
-    Pass `activity_store` (typically the same storage instance) to enable
-    activity-ledger emission.
+    Pass `activity_store` / `approval_store` (typically the same storage
+    instance) to enable activity-ledger emission and approval-replay on
+    resume.
+
+    Handler precedence: `--yes` (AutoApprove) > `--inbox` (InboxApprovalHandler)
+    > default (RichApprovalHandler).
     """
     if not chain:
         raise typer.BadParameter("provider chain is empty")
+    if inbox and approval_store is None:
+        raise typer.BadParameter("--inbox requires an approval_store (passed by _build_agent)")
 
     # --base-url applies to the primary provider only; others use their defaults.
     adapters: dict[str, Adapter] = {}
@@ -172,9 +190,15 @@ def _build_agent(
 
     tools = _build_tools(cwd)
     approval_policy = ApprovalPolicy(default="prompt", per_tool=dict(config.approval))
-    approval_handler: ApprovalHandler = (
-        AutoApprove() if yes else RichApprovalHandler(console=console)
-    )
+
+    approval_handler: ApprovalHandler
+    if yes:
+        approval_handler = AutoApprove()
+    elif inbox:
+        assert approval_store is not None  # checked above
+        approval_handler = InboxApprovalHandler(approval_store=approval_store)
+    else:
+        approval_handler = RichApprovalHandler(console=console)
 
     multi = len(chain) > 1
     return Agent(
@@ -191,6 +215,7 @@ def _build_agent(
         approval_policy=approval_policy,
         approval_handler=approval_handler,
         activity_store=activity_store,
+        approval_store=approval_store,
         default_model=model,
         default_cwd=str(cwd),
     )
@@ -311,6 +336,13 @@ def run(
     yes: Annotated[
         bool, typer.Option("--yes", "-y", help="Auto-approve all tool calls (non-interactive).")
     ] = False,
+    inbox: Annotated[
+        bool,
+        typer.Option(
+            "--inbox",
+            help="Queue prompt-approval tool calls in the durable inbox instead of asking.",
+        ),
+    ] = False,
     config_path: Annotated[
         Path | None,
         typer.Option("--config", help=f"Override config path (default: {default_config_path()})."),
@@ -345,6 +377,7 @@ def run(
                 db=db,
                 in_memory=in_memory,
                 yes=yes,
+                inbox=inbox,
                 config=cfg,
             )
         )
@@ -366,6 +399,7 @@ async def _run_once(
     db: Path | None,
     in_memory: bool,
     yes: bool,
+    inbox: bool,
     config: HarnessConfig,
 ) -> None:
     storage = _build_storage(db=db, in_memory=in_memory)
@@ -382,7 +416,9 @@ async def _run_once(
             cwd=cwd,
             config=config,
             yes=yes,
+            inbox=inbox,
             activity_store=storage,  # type: ignore[arg-type]
+            approval_store=storage,  # type: ignore[arg-type]
         )
 
         request_kwargs: dict[str, object] = {
@@ -507,6 +543,9 @@ def sessions_resume(
         ),
     ] = None,
     yes: Annotated[bool, typer.Option("--yes", "-y", help="Auto-approve all tool calls.")] = False,
+    inbox: Annotated[
+        bool, typer.Option("--inbox", help="Queue prompt-approval tool calls to the inbox.")
+    ] = False,
     config_path: Annotated[Path | None, typer.Option("--config")] = None,
     verbose: Annotated[bool, typer.Option("--verbose", "-v")] = False,
 ) -> None:
@@ -535,7 +574,9 @@ def sessions_resume(
                 cwd=working_dir,
                 config=cfg,
                 yes=yes,
+                inbox=inbox,
                 activity_store=storage,  # type: ignore[arg-type]
+                approval_store=storage,  # type: ignore[arg-type]
             )
             try:
                 async for event in agent.resume(session_id, prompt=prompt, max_steps=max_steps):
@@ -982,6 +1023,149 @@ def tasks_rm_cmd(
 
 
 # ---------------------------------------------------------------------------
+# approvals subcommands
+# ---------------------------------------------------------------------------
+
+
+@approvals_app.command("list")
+def approvals_list_cmd(
+    pending_only: Annotated[
+        bool, typer.Option("--pending", help="Only list pending approvals.")
+    ] = False,
+    task: Annotated[
+        str | None, typer.Option("--task", help="Filter by task ref (e.g. T-001).")
+    ] = None,
+    session_id: Annotated[
+        str | None, typer.Option("--session", help="Filter by session id.")
+    ] = None,
+    limit: Annotated[int, typer.Option("--limit", "-n")] = 50,
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+    in_memory: Annotated[bool, typer.Option("--in-memory")] = False,
+) -> None:
+    """List queued tool-call approvals, newest-requested first."""
+
+    async def _go() -> list[PendingApproval]:
+        storage = _build_storage(db=db, in_memory=in_memory)
+        try:
+            store: ApprovalStore = storage  # type: ignore[assignment]
+            task_id: str | None = None
+            if task:
+                task_obj = await storage.get_task_by_ref(task)  # type: ignore[union-attr]
+                if task_obj is None:
+                    console.print(f"[red]Task not found:[/red] {task}")
+                    raise typer.Exit(1)
+                task_id = task_obj.id
+            return await store.list_approvals(
+                session_id=session_id,
+                task_id=task_id,
+                status="pending" if pending_only else None,
+                limit=limit,
+            )
+        finally:
+            if _close_if_sqlite(storage):
+                await storage.close()  # type: ignore[union-attr]
+
+    items = asyncio.run(_go())
+    if not items:
+        console.print("[dim]No approvals.[/dim]")
+        return
+
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("ID")
+    table.add_column("Status")
+    table.add_column("Tool")
+    table.add_column("Args")
+    table.add_column("Session")
+    table.add_column("Requested")
+    for a in items:
+        table.add_row(
+            a.id,
+            _approval_status_style(a.status),
+            a.tool_name,
+            _truncate(repr(a.arguments), 40),
+            a.session_id,
+            _ago(a.requested_at),
+        )
+    console.print(table)
+
+
+@approvals_app.command("show")
+def approvals_show_cmd(
+    approval_id: Annotated[str, typer.Argument(help="Approval id (appr_...).")],
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+    in_memory: Annotated[bool, typer.Option("--in-memory")] = False,
+) -> None:
+    """Print full details for one approval."""
+
+    async def _go() -> PendingApproval | None:
+        storage = _build_storage(db=db, in_memory=in_memory)
+        try:
+            store: ApprovalStore = storage  # type: ignore[assignment]
+            return await store.get_approval(approval_id)
+        finally:
+            if _close_if_sqlite(storage):
+                await storage.close()  # type: ignore[union-attr]
+
+    approval = asyncio.run(_go())
+    if approval is None:
+        console.print(f"[red]Approval not found:[/red] {approval_id}")
+        raise typer.Exit(1)
+    _render_approval(approval)
+
+
+@approvals_app.command("grant")
+def approvals_grant_cmd(
+    approval_id: Annotated[str, typer.Argument(help="Approval id (appr_...).")],
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+    in_memory: Annotated[bool, typer.Option("--in-memory")] = False,
+) -> None:
+    """Mark an approval as granted. Replay happens on the next `sessions resume`."""
+
+    async def _go() -> PendingApproval | None:
+        storage = _build_storage(db=db, in_memory=in_memory)
+        try:
+            store: ApprovalStore = storage  # type: ignore[assignment]
+            return await store.resolve_approval(approval_id, status="granted", resolved_by="cli")
+        finally:
+            if _close_if_sqlite(storage):
+                await storage.close()  # type: ignore[union-attr]
+
+    updated = asyncio.run(_go())
+    if updated is None:
+        console.print(f"[red]Approval not found:[/red] {approval_id}")
+        raise typer.Exit(1)
+    console.print(
+        f"[green]Granted[/green] {updated.id}  "
+        f"[dim]({updated.tool_name})[/dim]  — "
+        f"resume the session to dispatch."
+    )
+
+
+@approvals_app.command("deny")
+def approvals_deny_cmd(
+    approval_id: Annotated[str, typer.Argument(help="Approval id (appr_...).")],
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+    in_memory: Annotated[bool, typer.Option("--in-memory")] = False,
+) -> None:
+    """Mark an approval as denied. No replay; the queued result stays in transcript."""
+
+    async def _go() -> PendingApproval | None:
+        storage = _build_storage(db=db, in_memory=in_memory)
+        try:
+            store: ApprovalStore = storage  # type: ignore[assignment]
+            return await store.resolve_approval(approval_id, status="denied", resolved_by="cli")
+        finally:
+            if _close_if_sqlite(storage):
+                await storage.close()  # type: ignore[union-attr]
+
+    updated = asyncio.run(_go())
+    if updated is None:
+        console.print(f"[red]Approval not found:[/red] {approval_id}")
+        raise typer.Exit(1)
+    console.print(f"[yellow]Denied[/yellow] {updated.id}  [dim]({updated.tool_name})[/dim]")
+
+
+# ---------------------------------------------------------------------------
 # chat
 # ---------------------------------------------------------------------------
 
@@ -1016,6 +1200,9 @@ def chat(
         typer.Option("--failover", help="Comma-separated provider chain."),
     ] = None,
     yes: Annotated[bool, typer.Option("--yes", "-y", help="Auto-approve all tool calls.")] = False,
+    inbox: Annotated[
+        bool, typer.Option("--inbox", help="Queue prompt-approval tool calls to the inbox.")
+    ] = False,
     config_path: Annotated[Path | None, typer.Option("--config")] = None,
     verbose: Annotated[bool, typer.Option("--verbose", "-v")] = False,
 ) -> None:
@@ -1042,6 +1229,7 @@ def chat(
                 task_ref=task_ref,
                 max_steps=max_steps,
                 yes=yes,
+                inbox=inbox,
                 config=cfg,
             )
         )
@@ -1062,6 +1250,7 @@ async def _chat_loop(
     task_ref: str | None,
     max_steps: int,
     yes: bool,
+    inbox: bool,
     config: HarnessConfig,
 ) -> None:
     from uuid import uuid4
@@ -1083,7 +1272,9 @@ async def _chat_loop(
             cwd=cwd,
             config=config,
             yes=yes,
+            inbox=inbox,
             activity_store=storage,  # type: ignore[arg-type]
+            approval_store=storage,  # type: ignore[arg-type]
         )
 
         first_turn = existing is None
@@ -1283,6 +1474,48 @@ _STATUS_STYLES = {
 def _status_style(status: str) -> str:
     color = _STATUS_STYLES.get(status, "white")
     return f"[{color}]{status}[/{color}]"
+
+
+_APPROVAL_STATUS_STYLES = {
+    "pending": "yellow",
+    "granted": "green",
+    "denied": "red",
+}
+
+
+def _approval_status_style(status: str) -> str:
+    color = _APPROVAL_STATUS_STYLES.get(status, "white")
+    return f"[{color}]{status}[/{color}]"
+
+
+def _render_approval(approval: PendingApproval) -> None:
+    lines = [
+        f"[bold]{approval.id}[/bold]  {_approval_status_style(approval.status)}  "
+        f"{approval.tool_name}",
+        f"[dim]session: {approval.session_id}[/dim]",
+    ]
+    if approval.task_id:
+        lines.append(f"[dim]task: {approval.task_id}[/dim]")
+    lines.append(f"[dim]tool_call_id: {approval.tool_call_id}[/dim]")
+    lines.append(f"[dim]requested {_ago(approval.requested_at)}[/dim]")
+    if approval.resolved_at:
+        lines.append(
+            f"[dim]resolved {_ago(approval.resolved_at)} by {approval.resolved_by or '—'}[/dim]"
+        )
+    if approval.replayed_at:
+        lines.append(f"[dim]replayed {_ago(approval.replayed_at)}[/dim]")
+    console.print(Panel("\n".join(lines), title="approval", expand=False))
+
+    if approval.arguments:
+        import json as _json
+
+        console.print(
+            Panel(
+                _json.dumps(approval.arguments, indent=2),
+                title="[blue]arguments[/blue]",
+                expand=False,
+            )
+        )
 
 
 _TASK_STATUS_STYLES = {

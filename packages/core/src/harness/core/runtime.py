@@ -31,6 +31,7 @@ from typing import Any
 from harness.core import activity as activity_kinds
 from harness.core.activity import ActivityEvent, ActivityStore
 from harness.core.adapter import Adapter
+from harness.core.approval import ApprovalOutcome, ApprovalStore
 from harness.core.errors import (
     CancelledError,
     ConfigurationError,
@@ -60,6 +61,24 @@ from harness.core.tools import (
 logger = get_logger("harness.runtime")
 
 
+def _normalize_outcome(raw: bool | ApprovalOutcome) -> ApprovalOutcome:
+    """Coerce legacy `bool` return values into the open `ApprovalOutcome` set."""
+    if isinstance(raw, bool):
+        return "approved" if raw else "denied"
+    if raw in ("approved", "denied", "queued"):
+        return raw  # type: ignore[return-value]
+    # Unknown string — treat as denied, the safe fallback.
+    logger.warning("agent.approval.unknown_outcome", outcome=raw)
+    return "denied"
+
+
+_OUTCOME_TO_ACTIVITY = {
+    "approved": activity_kinds.APPROVAL_GRANTED,
+    "denied": activity_kinds.APPROVAL_DENIED,
+    "queued": activity_kinds.APPROVAL_QUEUED,
+}
+
+
 class Agent:
     """The Harness ReAct runtime.
 
@@ -78,6 +97,7 @@ class Agent:
         approval_handler: ApprovalHandler | None = None,
         planner: Planner | None = None,
         activity_store: ActivityStore | None = None,
+        approval_store: ApprovalStore | None = None,
         current_phase: str | None = None,
         default_provider: str | None = None,
         default_model: str | None = None,
@@ -97,6 +117,9 @@ class Agent:
         self.approval_handler = approval_handler
         self.planner: Planner = planner or NoOpPlanner()
         self.activity_store = activity_store
+        self.approval_store = approval_store
+        """When set, the runtime checks for granted approvals at the top of
+        every run and re-dispatches them — see `_replay_granted_approvals`."""
         self.current_phase = current_phase
         """When set, only tools whose `phases` allow it are sent to the model
         and dispatched. When None, every registered tool is available
@@ -104,6 +127,102 @@ class Agent:
         self.default_provider = default_provider or failover.chain[0]
         self.default_model = default_model
         self.default_cwd = default_cwd
+
+    # ------------------------------------------------------------------ #
+    # Approval replay                                                     #
+    # ------------------------------------------------------------------ #
+
+    async def _replay_granted_approvals(self, session: Session) -> None:
+        """Re-dispatch queued tool calls the user has granted out-of-band.
+
+        For each granted-but-unreplayed PendingApproval on this session, we:
+
+          1. Find the corresponding `role=tool` message in `session.messages`
+             (matched by `tool_call_id`).
+          2. Invoke the tool with the original arguments.
+          3. Overwrite that message's content with the real result (and
+             update `is_error` semantics in the queued placeholder).
+          4. Mark the approval as replayed.
+
+        Errors are best-effort: a missing tool or message logs a warning and
+        leaves the queued placeholder unchanged. The user can then re-deny
+        or recreate the call.
+        """
+        if self.approval_store is None:
+            return
+        granted = await self.approval_store.list_unreplayed_granted(session_id=session.id)
+        if not granted:
+            return
+
+        for approval in granted:
+            # Locate the tool message in transcript.
+            tool_msg = next(
+                (
+                    m
+                    for m in session.messages
+                    if m.role == "tool" and m.tool_call_id == approval.tool_call_id
+                ),
+                None,
+            )
+            if tool_msg is None:
+                logger.warning(
+                    "agent.approval.replay.no_tool_message",
+                    approval=approval.id,
+                    tool_call_id=approval.tool_call_id,
+                )
+                await self.approval_store.mark_replayed(approval.id)
+                continue
+
+            if not self.tools.has(approval.tool_name):
+                logger.warning(
+                    "agent.approval.replay.unknown_tool",
+                    approval=approval.id,
+                    tool=approval.tool_name,
+                )
+                tool_msg.content = f"replay failed: unknown tool {approval.tool_name!r}"
+                await self.approval_store.mark_replayed(approval.id)
+                continue
+
+            tool = self.tools.get(approval.tool_name)
+            call = ToolCall(
+                id=approval.tool_call_id,
+                name=approval.tool_name,
+                arguments=approval.arguments,
+            )
+            try:
+                with span("agent.tool.replay", tool=tool.name, call_id=call.id):
+                    result = await tool(call)
+            except Exception as exc:
+                logger.warning(
+                    "agent.approval.replay.tool_error",
+                    approval=approval.id,
+                    error=str(exc),
+                )
+                result = ToolResult(
+                    tool_call_id=call.id,
+                    name=call.name,
+                    content=f"tool error during replay: {exc!s}",
+                    is_error=True,
+                )
+
+            # Overwrite the queued placeholder in transcript.
+            tool_msg.content = result.content
+            await self.approval_store.mark_replayed(approval.id)
+            await self._emit(
+                session,
+                activity_kinds.APPROVAL_REPLAYED,
+                {
+                    "approval_id": approval.id,
+                    "tool_call_id": approval.tool_call_id,
+                    "name": approval.tool_name,
+                    "is_error": result.is_error,
+                },
+            )
+
+        # Persist the mutated transcript so subsequent loads see the real
+        # results, not the queued placeholders.
+        session.touch()
+        await self.storage.save(session)
 
     # ------------------------------------------------------------------ #
     # Activity log emission                                               #
@@ -138,6 +257,12 @@ class Agent:
 
     async def _run(self, request: RunRequest) -> AsyncIterator[Event]:
         session = await self._get_or_create_session(request)
+
+        # Before appending the new user turn, replay any approvals the user
+        # has granted out-of-band. This mutates the queued-for-approval tool
+        # results in-place so the model sees real outcomes when it resumes.
+        await self._replay_granted_approvals(session)
+
         session.messages.append(Message(role="user", content=request.prompt))
         session.status = "running"
         session.touch()
@@ -432,13 +557,14 @@ class Agent:
                 activity_kinds.APPROVAL_REQUESTED,
                 {"tool_call_id": call.id, "name": call.name, "arguments": call.arguments},
             )
-            approved = await self.approval_handler(tool, call, session)
+            raw_outcome = await self.approval_handler(tool, call, session)
+            outcome = _normalize_outcome(raw_outcome)
             await self._emit(
                 session,
-                activity_kinds.APPROVAL_GRANTED if approved else activity_kinds.APPROVAL_DENIED,
+                _OUTCOME_TO_ACTIVITY[outcome],
                 {"tool_call_id": call.id, "name": call.name},
             )
-            if not approved:
+            if outcome == "denied":
                 result = ToolResult(
                     tool_call_id=call.id,
                     name=call.name,
@@ -447,6 +573,16 @@ class Agent:
                 )
                 await self._emit_tool_completed(session, call, result)
                 return result
+            if outcome == "queued":
+                result = ToolResult(
+                    tool_call_id=call.id,
+                    name=call.name,
+                    content=("queued for approval — review with `harness approvals list`"),
+                    is_error=True,
+                )
+                await self._emit_tool_completed(session, call, result)
+                return result
+            # outcome == "approved" — fall through to execute
 
         try:
             with span("agent.tool", tool=call.name, call_id=call.id):
