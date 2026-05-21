@@ -34,6 +34,7 @@ from harness.core.activity import ActivityEvent, ActivityStore
 from harness.core.adapter import Adapter
 from harness.core.approval import ApprovalOutcome, ApprovalStore
 from harness.core.budget import ContextBudget, count_tokens, prune
+from harness.core.calibration import OutcomeCalibration
 from harness.core.errors import (
     CancelledError,
     ConfigurationError,
@@ -56,6 +57,8 @@ from harness.core.events import (
 from harness.core.failover import FailoverPolicy, classify
 from harness.core.memory import MemoryStore
 from harness.core.planner import NoOpPlanner, PlanContext, Planner
+from harness.core.prediction import ConsequencePredictor, ToolPrediction, compare_prediction
+from harness.core.repair import RepairOrchestrator
 from harness.core.schemas import Message, RunRequest, Session, ToolCall, ToolResult
 from harness.core.storage import Storage
 from harness.core.telemetry import get_logger, span
@@ -65,9 +68,6 @@ from harness.core.tools import (
     ToolRegistry,
     tool_matches_phase,
 )
-from harness.core.calibration import OutcomeCalibration
-from harness.core.prediction import ConsequencePredictor, ToolPrediction, compare_prediction
-from harness.core.repair import RepairOrchestrator
 from harness.core.verification import EvidenceContract, VerificationGateway, Verifier
 
 logger = get_logger("harness.runtime")
@@ -739,7 +739,7 @@ class Agent:
             await self._emit(
                 session,
                 activity_kinds.TOOL_CALL_PREDICTED,
-                prediction.model_dump(),
+                prediction.model_dump(mode="json"),
             )
             extra_events.append(PredictionEvent(prediction=prediction))
 
@@ -765,7 +765,7 @@ class Agent:
             await self._emit(
                 session,
                 activity_kinds.TOOL_CALL_PREDICTION_ERROR,
-                pred_outcome.model_dump(),
+                pred_outcome.model_dump(mode="json"),
             )
             if not pred_outcome.matched:
                 extra_events.append(PredictionMismatchEvent(outcome=pred_outcome))
@@ -781,7 +781,7 @@ class Agent:
                 await self._emit(
                     session,
                     activity_kinds.CALIBRATION_UPDATED,
-                    cal_record.model_dump(),
+                    cal_record.model_dump(mode="json"),
                 )
 
         # Phase 6 — RepairOrchestrator: track failure streaks, emit directive.
@@ -795,7 +795,7 @@ class Agent:
             await self._emit(
                 session,
                 activity_kinds.REPAIR_DIRECTIVE_ISSUED,
-                directive.model_dump(),
+                directive.model_dump(mode="json"),
             )
 
         return result, extra_events
