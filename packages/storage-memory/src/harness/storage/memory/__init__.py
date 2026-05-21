@@ -17,13 +17,14 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 from harness.core import Session, SessionStatus
+from harness.core.memory import MemoryEntry, MemoryKind, MemoryStore
 from harness.tasks import ActivityEvent, ApprovalStatus, PendingApproval, Task, TaskStatus
 
 __version__ = "0.0.0"
 
 
-class InMemoryStorage:
-    """In-memory backend covering sessions, tasks, activity, and approvals."""
+class InMemoryStorage(MemoryStore):
+    """In-memory backend covering sessions, tasks, activity, approvals, and memory."""
 
     def __init__(self) -> None:
         self._sessions: dict[str, Session] = {}
@@ -32,6 +33,7 @@ class InMemoryStorage:
         self._activity: list[ActivityEvent] = []
         self._activity_ids: set[str] = set()
         self._approvals: dict[str, PendingApproval] = {}
+        self._memory: list[MemoryEntry] = []
 
     # ------------------------------------------------------------------ #
     # SessionStore (harness.core.Storage)                                 #
@@ -193,6 +195,33 @@ class InMemoryStorage:
         ]
         items.sort(key=lambda a: a.requested_at)
         return [a.model_copy(deep=True) for a in items]
+
+    # ------------------------------------------------------------------ #
+    # MemoryStore                                                         #
+    # ------------------------------------------------------------------ #
+
+    async def save_memory(self, entry: MemoryEntry) -> MemoryEntry:
+        self._memory = [e for e in self._memory if e.id != entry.id]
+        self._memory.append(entry.model_copy(deep=True))
+        return entry.model_copy(deep=True)
+
+    async def list_memory(
+        self, *, kind: MemoryKind | None = None, limit: int = 50
+    ) -> list[MemoryEntry]:
+        items = list(self._memory)
+        if kind is not None:
+            items = [e for e in items if e.kind == kind]
+        items.sort(key=lambda e: e.created_at, reverse=True)
+        return [e.model_copy(deep=True) for e in items[:limit]]
+
+    async def search_memory(self, query: str, *, limit: int = 20) -> list[MemoryEntry]:
+        q = query.lower()
+        items = [e for e in self._memory if q in e.text.lower()]
+        items.sort(key=lambda e: e.created_at, reverse=True)
+        return [e.model_copy(deep=True) for e in items[:limit]]
+
+    async def delete_memory(self, entry_id: str) -> None:
+        self._memory = [e for e in self._memory if e.id != entry_id]
 
 
 __all__ = ["InMemoryStorage", "__version__"]

@@ -51,7 +51,10 @@ from harness.core import (
     FailoverPolicy,
     InboxApprovalHandler,
     LLMJudgeVerifier,
+    LLMPlanner,
+    MemoryEntry,
     PendingApproval,
+    Planner,
     RuleVerifier,
     RunRequest,
     Session,
@@ -64,7 +67,9 @@ from harness.core import (
     ToolResultEvent,
     Verification,
     Verifier,
+    VerifierRouter,
     configure_logging,
+    fork_session,
 )
 from harness.storage.memory import InMemoryStorage
 from harness.storage.sqlite import SQLiteStorage, default_db_path
@@ -125,6 +130,13 @@ evidence_app = typer.Typer(
 )
 app.add_typer(evidence_app, name="evidence")
 
+memory_app = typer.Typer(
+    name="memory",
+    help="Manage persistent workspace memories injected into every agent run.",
+    no_args_is_help=True,
+)
+app.add_typer(memory_app, name="memory")
+
 console = Console()
 
 KNOWN_PROVIDERS: tuple[str, ...] = ("ollama", "openrouter")
@@ -135,10 +147,17 @@ KNOWN_PROVIDERS: tuple[str, ...] = ("ollama", "openrouter")
 # ---------------------------------------------------------------------------
 
 
-def _build_storage(*, db: Path | None, in_memory: bool) -> Storage:
+def _workspace_db(cwd: Path) -> Path | None:
+    """Return `.harness/harness.db` in cwd if it exists, else None."""
+    candidate = cwd / ".harness" / "harness.db"
+    return candidate if candidate.exists() else None
+
+
+def _build_storage(*, db: Path | None, in_memory: bool, cwd: Path | None = None) -> Storage:
     if in_memory:
         return InMemoryStorage()
-    return SQLiteStorage(path=db or default_db_path())
+    resolved = db or (cwd and _workspace_db(cwd)) or default_db_path()
+    return SQLiteStorage(path=resolved)
 
 
 def _build_adapter(provider: str, *, base_url: str | None, config: HarnessConfig) -> Adapter:
@@ -170,18 +189,21 @@ def _build_tools(cwd: Path) -> ToolRegistry:
 def _build_verifier(
     verify: str | None, *, chain: list[str], model: str, config: HarnessConfig
 ) -> Verifier | None:
-    """Resolve `--verify rule|llm|none` to a Verifier instance (or None)."""
+    """Resolve `--verify rule|llm|auto|none` to a Verifier instance (or None)."""
     if not verify or verify == "none":
         return None
     if verify == "rule":
         return RuleVerifier()
     if verify == "llm":
-        # Use the same provider as the worker (chain[0]). Judge model defaults
-        # to the worker's model unless the user passed `--verify-model` in a
-        # future enhancement.
         adapter = _build_adapter(chain[0], base_url=None, config=config)
         return LLMJudgeVerifier(adapter=adapter, model=model)
-    raise typer.BadParameter(f"unknown --verify value: {verify!r} (use rule|llm|none)")
+    if verify == "auto":
+        adapter = _build_adapter(chain[0], base_url=None, config=config)
+        return VerifierRouter(
+            rule=RuleVerifier(),
+            llm=LLMJudgeVerifier(adapter=adapter, model=model),
+        )
+    raise typer.BadParameter(f"unknown --verify value: {verify!r} (use rule|llm|auto|none)")
 
 
 def _build_agent(
@@ -198,6 +220,8 @@ def _build_agent(
     approval_store: ApprovalStore | None = None,
     verifier: Verifier | None = None,
     budget: ContextBudget | None = None,
+    memory_store: Any | None = None,
+    planner: Planner | None = None,
 ) -> Agent:
     """Build an Agent over a provider chain. `chain[0]` is the primary.
 
@@ -251,6 +275,8 @@ def _build_agent(
         budget=budget,
         default_model=model,
         default_cwd=str(cwd),
+        memory_store=memory_store,
+        planner=planner,
     )
 
 
@@ -380,9 +406,16 @@ def run(
         str | None,
         typer.Option(
             "--verify",
-            help="Post-run verifier: rule (built-in heuristic) | llm (extra adapter call) | none.",
+            help="Post-run verifier: rule (built-in heuristic) | llm (extra adapter call) | auto | none.",
         ),
     ] = None,
+    goal: Annotated[
+        bool,
+        typer.Option(
+            "--goal",
+            help="Use LLMPlanner to generate a multi-step plan before running.",
+        ),
+    ] = False,
     max_context_tokens: Annotated[
         int | None,
         typer.Option(
@@ -426,6 +459,7 @@ def run(
                 yes=yes,
                 inbox=inbox,
                 verify=verify,
+                goal=goal,
                 max_context_tokens=max_context_tokens,
                 config=cfg,
             )
@@ -450,10 +484,11 @@ async def _run_once(
     yes: bool,
     inbox: bool,
     verify: str | None,
+    goal: bool = False,
     max_context_tokens: int | None,
     config: HarnessConfig,
 ) -> None:
-    storage = _build_storage(db=db, in_memory=in_memory)
+    storage = _build_storage(db=db, in_memory=in_memory, cwd=cwd)
     try:
         # Resolve the optional task attachment first (validates ref exists and
         # appends session_id to task.session_ids).
@@ -463,6 +498,10 @@ async def _run_once(
         budget = (
             ContextBudget(max_tokens=max_context_tokens) if max_context_tokens is not None else None
         )
+        planner: Planner | None = None
+        if goal:
+            adapter = _build_adapter(chain[0], base_url=base_url, config=config)
+            planner = LLMPlanner(adapter=adapter, model=model)
         agent = _build_agent(
             chain=chain,
             base_url=base_url,
@@ -476,6 +515,8 @@ async def _run_once(
             approval_store=storage,  # type: ignore[arg-type]
             verifier=verifier,
             budget=budget,
+            memory_store=storage,  # type: ignore[arg-type]
+            planner=planner,
         )
 
         request_kwargs: dict[str, object] = {
@@ -623,7 +664,8 @@ def sessions_resume(
     cfg = _load_cli_config(config_path)
 
     async def _go() -> None:
-        storage = _build_storage(db=db, in_memory=in_memory)
+        working_dir_hint = cwd.resolve() if cwd else None
+        storage = _build_storage(db=db, in_memory=in_memory, cwd=working_dir_hint)
         try:
             session = await storage.get(session_id)
             if session is None:
@@ -653,6 +695,7 @@ def sessions_resume(
                 approval_store=storage,  # type: ignore[arg-type]
                 verifier=verifier,
                 budget=budget,
+                memory_store=storage,  # type: ignore[arg-type]
             )
             try:
                 async for event in agent.resume(session_id, prompt=prompt, max_steps=max_steps):
@@ -689,6 +732,72 @@ def sessions_rm(
 
     asyncio.run(_go())
     console.print(f"[green]Deleted[/green] {session_id}")
+
+
+@sessions_app.command("fork")
+def sessions_fork(
+    session_id: Annotated[str, typer.Argument(help="Session id to fork from.")],
+    prompt: Annotated[
+        str | None,
+        typer.Argument(help="Optional prompt to run immediately in the new fork."),
+    ] = None,
+    new_id: Annotated[
+        str | None,
+        typer.Option("--session", help="Explicit id for the new session."),
+    ] = None,
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+    in_memory: Annotated[bool, typer.Option("--in-memory")] = False,
+    yes: Annotated[
+        bool, typer.Option("--yes", "-y", help="Auto-approve tool calls if prompt is given.")
+    ] = False,
+    config_path: Annotated[Path | None, typer.Option("--config")] = None,
+    verbose: Annotated[bool, typer.Option("--verbose", "-v")] = False,
+) -> None:
+    """Branch a new session from an existing session's message history."""
+    configure_logging(level="DEBUG" if verbose else "INFO")
+    cfg = _load_cli_config(config_path)
+
+    async def _go() -> None:
+        from harness.core.errors import ConfigurationError as _CE
+
+        storage = _build_storage(db=db, in_memory=in_memory)
+        try:
+            try:
+                forked = await fork_session(storage, session_id, new_session_id=new_id)
+            except _CE as exc:
+                console.print(f"[red]Error:[/red] {exc}")
+                raise typer.Exit(1) from None
+            console.print(f"[green]Forked[/green] {session_id} → {forked.id}")
+            if not prompt:
+                console.print(
+                    f'[dim]Resume with:[/dim] harness sessions resume {forked.id} "<prompt>"'
+                )
+                return
+            # Run immediately with the given prompt.
+            chain = [forked.provider]
+            agent = _build_agent(
+                chain=chain,
+                base_url=None,
+                model=forked.model,
+                storage=storage,
+                cwd=forked.cwd,
+                config=cfg,
+                yes=yes,
+                activity_store=storage,  # type: ignore[arg-type]
+                approval_store=storage,  # type: ignore[arg-type]
+                memory_store=storage,  # type: ignore[arg-type]
+            )
+            async for event in agent.resume(forked.id, prompt=prompt):
+                _render(event)
+        finally:
+            if isinstance(storage, SQLiteStorage):
+                await storage.close()
+
+    try:
+        asyncio.run(_go())
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Cancelled by user.[/yellow]")
+        raise typer.Exit(130) from None
 
 
 # ---------------------------------------------------------------------------
@@ -1433,7 +1542,7 @@ async def _chat_loop(
 ) -> None:
     from uuid import uuid4
 
-    storage = _build_storage(db=db, in_memory=in_memory)
+    storage = _build_storage(db=db, in_memory=in_memory, cwd=cwd)
     try:
         existing: Session | None = None
         if session_id:
@@ -1459,6 +1568,7 @@ async def _chat_loop(
             approval_store=storage,  # type: ignore[arg-type]
             verifier=verifier,
             budget=budget,
+            memory_store=storage,  # type: ignore[arg-type]
         )
 
         first_turn = existing is None
@@ -1806,6 +1916,246 @@ def _truncate(s: str, limit: int) -> str:
     if len(s) <= limit:
         return s
     return s[: limit - 1] + "…"
+
+
+# ---------------------------------------------------------------------------
+# goal command
+# ---------------------------------------------------------------------------
+
+
+@app.command()
+def goal(
+    prompt: Annotated[str, typer.Argument(help="The goal for the agent to accomplish.")],
+    model: Annotated[str | None, typer.Option("--model", "-m")] = None,
+    provider: Annotated[str | None, typer.Option("--provider", "-p")] = None,
+    base_url: Annotated[str | None, typer.Option("--base-url")] = None,
+    cwd: Annotated[Path | None, typer.Option("--cwd")] = None,
+    max_steps: Annotated[int, typer.Option("--max-steps")] = 25,
+    db: Annotated[
+        Path | None,
+        typer.Option("--db", help=f"SQLite session db path. Default: {default_db_path()}."),
+    ] = None,
+    in_memory: Annotated[bool, typer.Option("--in-memory")] = False,
+    yes: Annotated[bool, typer.Option("--yes", "-y")] = False,
+    config_path: Annotated[Path | None, typer.Option("--config")] = None,
+    verbose: Annotated[bool, typer.Option("--verbose", "-v")] = False,
+) -> None:
+    """Run a multi-step goal: the LLM plans first, then executes each step."""
+    configure_logging(level="DEBUG" if verbose else "INFO")
+
+    cfg = _load_cli_config(config_path)
+    chain = _resolve_chain(failover_flag=None, provider_flag=provider, config=cfg)
+    effective_model = model or cfg.default_model or "llama3.2"
+
+    working_dir = (cwd or Path.cwd()).resolve()
+    if not working_dir.exists() or not working_dir.is_dir():
+        console.print(f"[red]--cwd does not exist or is not a directory: {working_dir}[/red]")
+        raise typer.Exit(2)
+
+    try:
+        asyncio.run(
+            _run_once(
+                prompt=prompt,
+                model=effective_model,
+                chain=chain,
+                base_url=base_url,
+                cwd=working_dir,
+                max_steps=max_steps,
+                session_id=None,
+                task_ref=None,
+                db=db,
+                in_memory=in_memory,
+                yes=yes,
+                inbox=False,
+                verify=None,
+                goal=True,
+                max_context_tokens=None,
+                config=cfg,
+            )
+        )
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Cancelled by user.[/yellow]")
+        raise typer.Exit(130) from None
+
+
+# ---------------------------------------------------------------------------
+# init command
+# ---------------------------------------------------------------------------
+
+
+@app.command()
+def init(
+    cwd: Annotated[
+        Path | None,
+        typer.Option("--cwd", help="Directory to initialise (default: current directory)."),
+    ] = None,
+) -> None:
+    """Initialise a workspace-local Harness database in .harness/harness.db."""
+    working_dir = (cwd or Path.cwd()).resolve()
+    harness_dir = working_dir / ".harness"
+    db_path = harness_dir / "harness.db"
+
+    if db_path.exists():
+        console.print(f"[dim]Already initialised at [/dim]{db_path}[dim] — nothing to do.[/dim]")
+        return
+
+    harness_dir.mkdir(parents=True, exist_ok=True)
+    # Touch the db so SQLiteStorage picks it up next time.
+    db_path.touch()
+    console.print(
+        f"[green]Initialized[/green] harness workspace at {harness_dir}"
+        "\n[dim]Future commands run from this directory will use .harness/harness.db[/dim]"
+    )
+
+    gitignore = working_dir / ".gitignore"
+    if gitignore.exists():
+        content = gitignore.read_text()
+        if ".harness/" not in content:
+            console.print(
+                "\n[dim]Tip: add [/dim].harness/[dim] to .gitignore to keep the db local.[/dim]"
+            )
+
+
+# ---------------------------------------------------------------------------
+# memory subcommands
+# ---------------------------------------------------------------------------
+
+
+@memory_app.command("save")
+def memory_save(
+    text: Annotated[str, typer.Argument(help="Memory text to store.")],
+    kind: Annotated[
+        str,
+        typer.Option(
+            "--kind",
+            "-k",
+            help="user_preference | user_fact | project_fact | project_context",
+        ),
+    ] = "project_fact",
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+    in_memory: Annotated[bool, typer.Option("--in-memory")] = False,
+) -> None:
+    """Save a new memory entry."""
+    _VALID_KINDS = {"user_preference", "user_fact", "project_fact", "project_context"}
+    if kind not in _VALID_KINDS:
+        console.print(
+            f"[red]Invalid --kind:[/red] {kind!r}. Choose from: {', '.join(sorted(_VALID_KINDS))}"
+        )
+        raise typer.Exit(1)
+
+    async def _go() -> None:
+        storage = _build_storage(db=db, in_memory=in_memory)
+        try:
+            entry = MemoryEntry(kind=kind, text=text)  # type: ignore[arg-type]
+            saved = await storage.save_memory(entry)  # type: ignore[attr-defined]
+            console.print(f"[green]Saved[/green] {saved.id}  ({saved.kind})  {saved.text}")
+        finally:
+            if isinstance(storage, SQLiteStorage):
+                await storage.close()
+
+    asyncio.run(_go())
+
+
+@memory_app.command("list")
+def memory_list(
+    kind: Annotated[
+        str | None,
+        typer.Option("--kind", "-k", help="Filter by kind."),
+    ] = None,
+    limit: Annotated[int, typer.Option("--limit", "-n")] = 50,
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+    in_memory: Annotated[bool, typer.Option("--in-memory")] = False,
+) -> None:
+    """List stored memory entries."""
+    _VALID_KINDS = {"user_preference", "user_fact", "project_fact", "project_context"}
+    if kind is not None and kind not in _VALID_KINDS:
+        console.print(f"[red]Invalid --kind:[/red] {kind!r}")
+        raise typer.Exit(1)
+
+    async def _go() -> None:
+        storage = _build_storage(db=db, in_memory=in_memory)
+        try:
+            entries = await storage.list_memory(  # type: ignore[attr-defined]
+                kind=kind,
+                limit=limit,  # type: ignore[arg-type]
+            )
+            if not entries:
+                console.print("[dim]No memories stored.[/dim]")
+                return
+            table = Table(title="Memories", show_header=True)
+            table.add_column("ID", no_wrap=True)
+            table.add_column("Kind")
+            table.add_column("Text")
+            table.add_column("Created")
+            for e in entries:
+                table.add_row(e.id, e.kind, e.text, _ago(e.created_at))
+            console.print(table)
+        finally:
+            if isinstance(storage, SQLiteStorage):
+                await storage.close()
+
+    asyncio.run(_go())
+
+
+@memory_app.command("search")
+def memory_search(
+    query: Annotated[str, typer.Argument(help="Search query (substring match).")],
+    limit: Annotated[int, typer.Option("--limit", "-n")] = 20,
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+    in_memory: Annotated[bool, typer.Option("--in-memory")] = False,
+) -> None:
+    """Search memory entries by text."""
+
+    async def _go() -> None:
+        storage = _build_storage(db=db, in_memory=in_memory)
+        try:
+            entries = await storage.search_memory(query, limit=limit)  # type: ignore[attr-defined]
+            if not entries:
+                console.print("[dim]No matches.[/dim]")
+                return
+            table = Table(title=f"Memory search: {query!r}", show_header=True)
+            table.add_column("ID", no_wrap=True)
+            table.add_column("Kind")
+            table.add_column("Text")
+            table.add_column("Created")
+            for e in entries:
+                table.add_row(e.id, e.kind, e.text, _ago(e.created_at))
+            console.print(table)
+        finally:
+            if isinstance(storage, SQLiteStorage):
+                await storage.close()
+
+    asyncio.run(_go())
+
+
+@memory_app.command("rm")
+def memory_rm(
+    entry_id: Annotated[str, typer.Argument(help="Memory entry ID to delete.")],
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+    in_memory: Annotated[bool, typer.Option("--in-memory")] = False,
+    yes: Annotated[bool, typer.Option("--yes", "-y", help="Skip confirmation.")] = False,
+) -> None:
+    """Delete a memory entry by ID."""
+
+    async def _go() -> None:
+        storage = _build_storage(db=db, in_memory=in_memory)
+        try:
+            existing = await storage.list_memory(limit=1000)  # type: ignore[attr-defined]
+            match = next((e for e in existing if e.id == entry_id), None)
+            if match is None:
+                console.print(f"[red]Memory not found:[/red] {entry_id}")
+                raise typer.Exit(1)
+            if not yes:
+                confirmed = Confirm.ask(f"Delete memory {entry_id!r}?")
+                if not confirmed:
+                    raise typer.Abort()
+            await storage.delete_memory(entry_id)  # type: ignore[attr-defined]
+            console.print(f"[green]Deleted[/green] {entry_id}")
+        finally:
+            if isinstance(storage, SQLiteStorage):
+                await storage.close()
+
+    asyncio.run(_go())
 
 
 if __name__ == "__main__":

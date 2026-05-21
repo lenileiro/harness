@@ -50,6 +50,7 @@ from harness.core.events import (
     Verification,
 )
 from harness.core.failover import FailoverPolicy, classify
+from harness.core.memory import MemoryStore
 from harness.core.planner import NoOpPlanner, PlanContext, Planner
 from harness.core.schemas import Message, RunRequest, Session, ToolCall, ToolResult
 from harness.core.storage import Storage
@@ -108,6 +109,7 @@ class Agent:
         default_provider: str | None = None,
         default_model: str | None = None,
         default_cwd: str | None = None,
+        memory_store: MemoryStore | None = None,
     ) -> None:
         if not adapters:
             raise ConfigurationError("at least one adapter is required")
@@ -134,6 +136,7 @@ class Agent:
         """When set, the runtime prunes session.messages with a token-aware
         sliding window before each adapter call. The full session history is
         never mutated — only the view passed to the adapter shrinks."""
+        self.memory_store = memory_store
         self.current_phase = current_phase
         """When set, only tools whose `phases` allow it are sent to the model
         and dispatched. When None, every registered tool is available
@@ -277,6 +280,14 @@ class Agent:
         # results in-place so the model sees real outcomes when it resumes.
         await self._replay_granted_approvals(session)
 
+        # Load memories once per run so they're injected into every adapter turn.
+        memory_prefix: list[Message] = []
+        if self.memory_store is not None:
+            entries = await self.memory_store.list_memory(limit=20)
+            if entries:
+                text = "\n".join(f"[{e.kind}] {e.text}" for e in entries)
+                memory_prefix = [Message(role="system", content=f"Remembered context:\n{text}")]
+
         session.messages.append(Message(role="user", content=request.prompt))
         session.status = "running"
         session.touch()
@@ -311,6 +322,7 @@ class Agent:
                     request=request,
                     session=session,
                     initial_yield_flag=any_yielded,
+                    memory_prefix=memory_prefix,
                 ):
                     any_yielded = True
                     yield event
@@ -452,6 +464,7 @@ class Agent:
         request: RunRequest,
         session: Session,
         initial_yield_flag: bool,
+        memory_prefix: list[Message] | None = None,
     ):
         """Run one plan step with bounded failover.
 
@@ -469,7 +482,9 @@ class Agent:
                 with span(
                     "agent.step", provider=provider_name, attempt=attempt, session=session.id
                 ):
-                    async for event in self._react_with(adapter, request, session):
+                    async for event in self._react_with(
+                        adapter, request, session, memory_prefix=memory_prefix
+                    ):
                         yielded_any = True
                         yield event
                 return
@@ -507,12 +522,15 @@ class Agent:
         adapter: Adapter,
         request: RunRequest,
         session: Session,
+        memory_prefix: list[Message] | None = None,
     ):
         for _turn in range(request.max_steps):
             final: Message | None = None
             usage = None
 
             messages_for_turn = await self._apply_budget(session, request)
+            if memory_prefix:
+                messages_for_turn = memory_prefix + messages_for_turn
             stream = adapter.stream(
                 model=request.model or session.model,
                 messages=messages_for_turn,
@@ -723,4 +741,37 @@ class Agent:
         )
 
 
-__all__ = ["Agent"]
+async def fork_session(
+    storage: Storage,
+    parent_id: str,
+    *,
+    new_session_id: str | None = None,
+) -> Session:
+    """Branch from a parent session's message history into a new session.
+
+    The fork copies messages and approval_overrides from the parent. Activity
+    ledger, approval inbox, and task session_ids list are NOT copied — the fork
+    starts its own audit trail.
+    """
+    from harness.core.schemas import _new_id  # avoid circular at module level
+
+    parent = await storage.get(parent_id)
+    if parent is None:
+        raise ConfigurationError(f"session {parent_id!r} not found")
+
+    forked = Session(
+        id=new_session_id or _new_id("sess"),
+        provider=parent.provider,
+        model=parent.model,
+        cwd=parent.cwd,
+        task_id=parent.task_id,
+        forked_from=parent.id,
+        status="pending",
+        messages=[m.model_copy(deep=True) for m in parent.messages],
+        approval_overrides=dict(parent.approval_overrides),
+    )
+    await storage.save(forked)
+    return forked
+
+
+__all__ = ["Agent", "fork_session"]

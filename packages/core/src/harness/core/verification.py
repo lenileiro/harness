@@ -219,6 +219,50 @@ class LLMJudgeVerifier:
         )
 
 
+# ---------------------------------------------------------------------------
+# VerifierRouter
+# ---------------------------------------------------------------------------
+
+
+class VerifierRouter:
+    """Routes to RuleVerifier or LLMJudgeVerifier based on observed tool activity.
+
+    Read-only runs (no mutating tool calls) → fast rule verifier.
+    Runs that wrote files or executed shell → LLM judge.
+    """
+
+    name = "router"
+
+    _MUTATING_TOOLS: frozenset[str] = frozenset({"write_file", "edit_file", "shell"})
+
+    def __init__(self, *, rule: RuleVerifier, llm: LLMJudgeVerifier) -> None:
+        self._rule = rule
+        self._llm = llm
+
+    async def verify(
+        self, *, session: Session, activity: list[ActivityEvent]
+    ) -> VerificationResult:
+        completed = [e for e in activity if e.kind == "tool_call.completed"]
+        used_tools = {e.data.get("name") for e in completed}
+        if used_tools & self._MUTATING_TOOLS:
+            result = await self._llm.verify(session=session, activity=activity)
+            return VerificationResult(
+                can_finish=result.can_finish,
+                reason=result.reason,
+                confidence=result.confidence,
+                evidence_event_ids=result.evidence_event_ids,
+                verifier_name=self.name,
+            )
+        result = await self._rule.verify(session=session, activity=activity)
+        return VerificationResult(
+            can_finish=result.can_finish,
+            reason=result.reason,
+            confidence=result.confidence,
+            evidence_event_ids=result.evidence_event_ids,
+            verifier_name=self.name,
+        )
+
+
 def _parse_judge_response(text: str) -> tuple[bool, str, float | None] | None:
     """Return (can_finish, reason, confidence) or None on parse failure.
 
@@ -255,4 +299,5 @@ __all__ = [
     "RuleVerifier",
     "VerificationResult",
     "Verifier",
+    "VerifierRouter",
 ]

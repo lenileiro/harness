@@ -27,6 +27,7 @@ from pathlib import Path
 import aiosqlite
 
 from harness.core import Message, Session, SessionStatus, Storage
+from harness.core.memory import MemoryEntry, MemoryKind, MemoryStore
 from harness.tasks import (
     ActivityEvent,
     ActivityStore,
@@ -108,10 +109,24 @@ CREATE TABLE IF NOT EXISTS approvals (
 CREATE INDEX IF NOT EXISTS idx_approvals_session  ON approvals(session_id, status);
 CREATE INDEX IF NOT EXISTS idx_approvals_task     ON approvals(task_id);
 CREATE INDEX IF NOT EXISTS idx_approvals_status   ON approvals(status);
+
+CREATE TABLE IF NOT EXISTS memory (
+    id         TEXT PRIMARY KEY,
+    kind       TEXT NOT NULL,
+    text       TEXT NOT NULL,
+    session_id TEXT,
+    task_id    TEXT,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_memory_kind       ON memory(kind);
+CREATE INDEX IF NOT EXISTS idx_memory_created_at ON memory(created_at DESC);
 """
 
-# Migration: older databases may not have task_id on sessions; add it.
-_MIGRATIONS = ("ALTER TABLE sessions ADD COLUMN task_id TEXT",)
+# Migration: older databases may not have these columns; add them idempotently.
+_MIGRATIONS = (
+    "ALTER TABLE sessions ADD COLUMN task_id TEXT",
+    "ALTER TABLE sessions ADD COLUMN forked_from TEXT",
+)
 
 
 def default_db_path() -> Path:
@@ -121,7 +136,7 @@ def default_db_path() -> Path:
     return state_home / "harness" / "sessions.db"
 
 
-class SQLiteStorage(Storage, TaskStore, ActivityStore, ApprovalStore):
+class SQLiteStorage(Storage, TaskStore, ActivityStore, ApprovalStore, MemoryStore):
     """SQLite backend covering sessions, tasks, activity, and approvals.
 
     Args:
@@ -179,8 +194,8 @@ class SQLiteStorage(Storage, TaskStore, ActivityStore, ApprovalStore):
             """
             INSERT OR REPLACE INTO sessions
               (id, provider, model, cwd, status, created_at, updated_at,
-               messages, approval_overrides, metadata, task_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               messages, approval_overrides, metadata, task_id, forked_from)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 session.id,
@@ -194,6 +209,7 @@ class SQLiteStorage(Storage, TaskStore, ActivityStore, ApprovalStore):
                 json.dumps(session.approval_overrides),
                 json.dumps(session.metadata),
                 session.task_id,
+                session.forked_from,
             ),
         )
         await db.commit()
@@ -513,6 +529,58 @@ class SQLiteStorage(Storage, TaskStore, ActivityStore, ApprovalStore):
             rows = await cursor.fetchall()
         return [_row_to_approval(r) for r in rows]
 
+    # ------------------------------------------------------------------ #
+    # MemoryStore                                                         #
+    # ------------------------------------------------------------------ #
+
+    async def save_memory(self, entry: MemoryEntry) -> MemoryEntry:
+        db = await self._ensure()
+        await db.execute(
+            """
+            INSERT OR REPLACE INTO memory (id, kind, text, session_id, task_id, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                entry.id,
+                entry.kind,
+                entry.text,
+                entry.session_id,
+                entry.task_id,
+                entry.created_at.isoformat(),
+            ),
+        )
+        await db.commit()
+        return entry
+
+    async def list_memory(
+        self, *, kind: MemoryKind | None = None, limit: int = 50
+    ) -> list[MemoryEntry]:
+        db = await self._ensure()
+        sql = "SELECT * FROM memory"
+        params: list[object] = []
+        if kind is not None:
+            sql += " WHERE kind = ?"
+            params.append(kind)
+        sql += " ORDER BY created_at DESC LIMIT ?"
+        params.append(limit)
+        async with db.execute(sql, params) as cursor:
+            rows = await cursor.fetchall()
+        return [_row_to_memory(r) for r in rows]
+
+    async def search_memory(self, query: str, *, limit: int = 20) -> list[MemoryEntry]:
+        db = await self._ensure()
+        async with db.execute(
+            "SELECT * FROM memory WHERE text LIKE ? ORDER BY created_at DESC LIMIT ?",
+            (f"%{query}%", limit),
+        ) as cursor:
+            rows = await cursor.fetchall()
+        return [_row_to_memory(r) for r in rows]
+
+    async def delete_memory(self, entry_id: str) -> None:
+        db = await self._ensure()
+        await db.execute("DELETE FROM memory WHERE id = ?", (entry_id,))
+        await db.commit()
+
 
 def _row_to_session(row: aiosqlite.Row) -> Session:
     keys = set(row.keys())
@@ -528,6 +596,7 @@ def _row_to_session(row: aiosqlite.Row) -> Session:
         approval_overrides=json.loads(row["approval_overrides"]),
         metadata=json.loads(row["metadata"]),
         task_id=row["task_id"] if "task_id" in keys else None,
+        forked_from=row["forked_from"] if "forked_from" in keys else None,
     )
 
 
@@ -574,6 +643,17 @@ def _row_to_approval(row: aiosqlite.Row) -> PendingApproval:
         resolved_at=datetime.fromisoformat(row["resolved_at"]) if row["resolved_at"] else None,
         resolved_by=row["resolved_by"],
         replayed_at=datetime.fromisoformat(row["replayed_at"]) if row["replayed_at"] else None,
+    )
+
+
+def _row_to_memory(row: aiosqlite.Row) -> MemoryEntry:
+    return MemoryEntry(
+        id=row["id"],
+        kind=row["kind"],
+        text=row["text"],
+        session_id=row["session_id"],
+        task_id=row["task_id"],
+        created_at=datetime.fromisoformat(row["created_at"]),
     )
 
 

@@ -69,25 +69,42 @@ class TestTaskLifecycle:
         db = str(tmp_path / "test.db")
 
         # ── 1. Create parent task with all optional fields ─────────────────
-        r = _run([
-            "tasks", "new", "Implement feature X",
-            "--db", db,
-            "--cwd", str(tmp_path),
-            "--description", "End-to-end integration work",
-            "--priority", "high",
-            "--labels", "phase-6,integration",
-        ])
+        r = _run(
+            [
+                "tasks",
+                "new",
+                "Implement feature X",
+                "--db",
+                db,
+                "--cwd",
+                str(tmp_path),
+                "--description",
+                "End-to-end integration work",
+                "--priority",
+                "high",
+                "--labels",
+                "phase-6,integration",
+            ]
+        )
         assert r.exit_code == 0, r.stdout
         assert "Created T-001" in r.stdout
 
         # ── 2. Create child task under parent ──────────────────────────────
-        r = _run([
-            "tasks", "new", "Write tests for feature X",
-            "--db", db,
-            "--cwd", str(tmp_path),
-            "--parent", "T-001",
-            "--labels", "testing",
-        ])
+        r = _run(
+            [
+                "tasks",
+                "new",
+                "Write tests for feature X",
+                "--db",
+                db,
+                "--cwd",
+                str(tmp_path),
+                "--parent",
+                "T-001",
+                "--labels",
+                "testing",
+            ]
+        )
         assert r.exit_code == 0, r.stdout
         assert "Created T-002" in r.stdout
 
@@ -97,14 +114,21 @@ class TestTaskLifecycle:
 
         # ── 4. Attach an agent run to T-001 ────────────────────────────────
         patch_adapter([_text_turn("starting the work")])
-        r = _run([
-            "run", "begin implementation",
-            "--db", db,
-            "--cwd", str(tmp_path),
-            "--task", "T-001",
-            "--session", "sess-feature-x",
-            "--yes",
-        ])
+        r = _run(
+            [
+                "run",
+                "begin implementation",
+                "--db",
+                db,
+                "--cwd",
+                str(tmp_path),
+                "--task",
+                "T-001",
+                "--session",
+                "sess-feature-x",
+                "--yes",
+            ]
+        )
         assert r.exit_code == 0, r.stdout
 
         # ── 5. Transition T-001 through statuses ───────────────────────────
@@ -114,13 +138,21 @@ class TestTaskLifecycle:
             assert "Updated T-001" in r.stdout
 
         # ── 6. Update title, priority, and labels ──────────────────────────
-        r = _run([
-            "tasks", "update", "T-001",
-            "--db", db,
-            "--title", "Implement feature X (revised)",
-            "--priority", "medium",
-            "--labels", "phase-6,integration,shipped",
-        ])
+        r = _run(
+            [
+                "tasks",
+                "update",
+                "T-001",
+                "--db",
+                db,
+                "--title",
+                "Implement feature X (revised)",
+                "--priority",
+                "medium",
+                "--labels",
+                "phase-6,integration,shipped",
+            ]
+        )
         assert r.exit_code == 0, r.stdout
 
         # ── 7. show T-001: verify all fields and activity events ───────────
@@ -134,7 +166,7 @@ class TestTaskLifecycle:
             "medium",
             "phase-6",
             "shipped",
-            "sess-feature-x",   # attached session visible
+            "sess-feature-x",  # attached session visible
             "task.created",
             "task.status_changed",
             "task.updated",

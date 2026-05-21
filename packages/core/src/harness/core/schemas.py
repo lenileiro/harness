@@ -175,6 +175,8 @@ class Session(BaseModel):
     task_id: str | None = None
     """Optional id of the parent Task (`harness.tasks.Task`). None for legacy
     / standalone sessions; set when a session was created under `--task T-NNN`."""
+    forked_from: str | None = None
+    """Parent session id when this session was created via `harness sessions fork`."""
 
     def touch(self) -> None:
         """Bump `updated_at` to now."""

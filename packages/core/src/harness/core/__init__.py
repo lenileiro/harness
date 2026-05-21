@@ -34,8 +34,9 @@ from harness.core.events import (
     Verification,
 )
 from harness.core.failover import ErrorKind, FailoverPolicy, classify
-from harness.core.planner import NoOpPlanner, Plan, PlanContext, Planner, PlanStep
-from harness.core.runtime import Agent
+from harness.core.memory import MemoryEntry, MemoryKind, MemoryStore
+from harness.core.planner import LLMPlanner, NoOpPlanner, Plan, PlanContext, Planner, PlanStep
+from harness.core.runtime import Agent, fork_session
 from harness.core.schemas import (
     ApprovalDecision,
     Capabilities,
@@ -61,7 +62,7 @@ from harness.core.tools import (
     ToolRegistry,
     tool_matches_phase,
 )
-from harness.core.verification import LLMJudgeVerifier, RuleVerifier, Verifier
+from harness.core.verification import LLMJudgeVerifier, RuleVerifier, Verifier, VerifierRouter
 
 __version__ = "0.0.0"
 
@@ -92,6 +93,10 @@ __all__ = [
     "InboxApprovalHandler",
     "InternalError",
     "LLMJudgeVerifier",
+    "LLMPlanner",
+    "MemoryEntry",
+    "MemoryKind",
+    "MemoryStore",
     "Message",
     "ModelUnavailableError",
     "NetworkError",
@@ -123,11 +128,13 @@ __all__ = [
     "Verification",
     "VerificationResult",
     "Verifier",
+    "VerifierRouter",
     "__version__",
     "activity",
     "classify",
     "configure_logging",
     "count_tokens",
+    "fork_session",
     "get_logger",
     "prune",
     "span",

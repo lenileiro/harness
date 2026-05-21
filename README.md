@@ -2,7 +2,7 @@
 
 > Python runtime/orchestration harness for LLM agents over **OpenRouter** and **Ollama**, with a ReAct tool-use loop, pluggable storage, per-tool approval, and policy-driven provider failover.
 
-**Status:** scaffolding phase. Nothing is runnable yet. See [`~/.claude/todo.md`](../../.claude/todo.md) for the build plan.
+**Status:** functional. Install with `uv sync`, then run `harness --help`.
 
 ## What it is
 
