@@ -274,6 +274,10 @@ class MultiAgentOrchestrator:
         async for event in self._run_reporter(queue):
             yield event
 
+        # Mark the root job task done
+        done_root = root.model_copy(update={"status": "done", "updated_at": datetime.now(UTC)})
+        await self._store.update_task(done_root)
+
     async def _run_planner(self, prompt: str, queue: WorkQueue) -> AsyncIterator[OrchestratorEvent]:
         session_id = f"planner_{uuid.uuid4().hex[:8]}"
         role = self._planner_role.model_copy(update={"job_id": queue._parent_id})
