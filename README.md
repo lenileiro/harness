@@ -43,13 +43,21 @@ All packages share the `harness.*` namespace at the import level (e.g. `from har
 ## Installation
 
 ```bash
+# 1. Install workspace dependencies
 uv sync
+
+# 2. Install the harness binary globally (accessible without activating the venv)
+uv tool install --editable packages/cli
+
+# Confirm it works
+harness version
 ```
 
-That installs the `harness` binary. Confirm with:
+Or if you prefer not to install globally, prefix every command with `uv run`:
 
 ```bash
-harness version
+uv run harness version
+uv run harness --help
 ```
 
 ---
