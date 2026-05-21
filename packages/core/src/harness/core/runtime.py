@@ -25,6 +25,7 @@ injected dependencies.
 from __future__ import annotations
 
 import asyncio
+import time
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -584,6 +585,7 @@ class Agent:
                 return result
             # outcome == "approved" — fall through to execute
 
+        started = time.perf_counter()
         try:
             with span("agent.tool", tool=call.name, call_id=call.id):
                 result = await tool(call)
@@ -595,12 +597,27 @@ class Agent:
                 content=f"tool error: {exc!s}",
                 is_error=True,
             )
-        await self._emit_tool_completed(session, call, result)
+        duration_ms = int((time.perf_counter() - started) * 1000)
+        await self._emit_tool_completed(session, call, result, duration_ms=duration_ms)
         return result
 
     async def _emit_tool_completed(
-        self, session: Session, call: ToolCall, result: ToolResult
+        self,
+        session: Session,
+        call: ToolCall,
+        result: ToolResult,
+        *,
+        duration_ms: int | None = None,
     ) -> None:
+        """Emit the evidence record for a tool call.
+
+        `tool_call.completed` data shape (the evidence ledger entry):
+
+          tool_call_id, name, is_error, content_preview, content_size,
+          arguments, duration_ms (None when the call short-circuited before
+          execution — e.g. denied / queued / out-of-phase), metadata (the
+          tool's own structured fields).
+        """
         await self._emit(
             session,
             activity_kinds.TOOL_CALL_COMPLETED,
@@ -609,6 +626,10 @@ class Agent:
                 "name": call.name,
                 "is_error": result.is_error,
                 "content_preview": result.content[:200],
+                "content_size": len(result.content),
+                "arguments": call.arguments,
+                "duration_ms": duration_ms,
+                "metadata": result.metadata or {},
             },
         )
 

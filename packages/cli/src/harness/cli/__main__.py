@@ -113,6 +113,13 @@ approvals_app = typer.Typer(
 )
 app.add_typer(approvals_app, name="approvals")
 
+evidence_app = typer.Typer(
+    name="evidence",
+    help="Inspect the tool-call evidence ledger.",
+    no_args_is_help=True,
+)
+app.add_typer(evidence_app, name="evidence")
+
 console = Console()
 
 KNOWN_PROVIDERS: tuple[str, ...] = ("ollama", "openrouter")
@@ -1163,6 +1170,96 @@ def approvals_deny_cmd(
         console.print(f"[red]Approval not found:[/red] {approval_id}")
         raise typer.Exit(1)
     console.print(f"[yellow]Denied[/yellow] {updated.id}  [dim]({updated.tool_name})[/dim]")
+
+
+# ---------------------------------------------------------------------------
+# evidence subcommands
+# ---------------------------------------------------------------------------
+
+
+@evidence_app.command("list")
+def evidence_list_cmd(
+    task: Annotated[
+        str | None, typer.Option("--task", help="Filter by task ref (e.g. T-001).")
+    ] = None,
+    session_id: Annotated[
+        str | None, typer.Option("--session", help="Filter by session id.")
+    ] = None,
+    tool_name: Annotated[
+        str | None, typer.Option("--tool", help="Filter by tool name (e.g. shell).")
+    ] = None,
+    errors_only: Annotated[
+        bool, typer.Option("--errors-only", help="Show only entries with is_error=True.")
+    ] = False,
+    limit: Annotated[int, typer.Option("--limit", "-n")] = 50,
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+    in_memory: Annotated[bool, typer.Option("--in-memory")] = False,
+) -> None:
+    """List the tool-call evidence ledger.
+
+    Each row is a `tool_call.completed` activity event — the runtime emits
+    one per dispatched tool call, carrying timing, exit codes, sizes, and
+    tool-specific metadata.
+    """
+
+    async def _go() -> list[ActivityEvent]:
+        storage = _build_storage(db=db, in_memory=in_memory)
+        try:
+            task_id: str | None = None
+            if task:
+                task_obj = await storage.get_task_by_ref(task)  # type: ignore[union-attr]
+                if task_obj is None:
+                    console.print(f"[red]Task not found:[/red] {task}")
+                    raise typer.Exit(1)
+                task_id = task_obj.id
+            store: ActivityStore = storage  # type: ignore[assignment]
+            events = await store.list_activity(
+                task_id=task_id,
+                session_id=session_id,
+                kinds=("tool_call.completed",),
+                limit=limit,
+            )
+        finally:
+            if _close_if_sqlite(storage):
+                await storage.close()  # type: ignore[union-attr]
+
+        if tool_name is not None:
+            events = [e for e in events if e.data.get("name") == tool_name]
+        if errors_only:
+            events = [e for e in events if e.data.get("is_error") is True]
+        return events
+
+    items = asyncio.run(_go())
+    if not items:
+        console.print("[dim]No evidence.[/dim]")
+        return
+
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("When")
+    table.add_column("Tool")
+    table.add_column("Args")
+    table.add_column("Status")
+    table.add_column("ms", justify="right")
+    table.add_column("Evidence")
+    for e in items:
+        is_error = bool(e.data.get("is_error"))
+        status = "[red]error[/red]" if is_error else "[green]ok[/green]"
+        duration = e.data.get("duration_ms")
+        duration_str = "—" if duration is None else str(duration)
+        meta = e.data.get("metadata") or {}
+        meta_str = _truncate(
+            " ".join(f"{k}={v}" for k, v in meta.items()) or "—",
+            60,
+        )
+        table.add_row(
+            _ago(e.timestamp),
+            str(e.data.get("name", "?")),
+            _truncate(repr(e.data.get("arguments", {})), 30),
+            status,
+            duration_str,
+            meta_str,
+        )
+    console.print(table)
 
 
 # ---------------------------------------------------------------------------

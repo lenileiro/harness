@@ -50,6 +50,11 @@ class ToolResult(BaseModel):
 
     `content` is always a string — tools serialize their result themselves
     (JSON, text, whatever the model can read).
+
+    `metadata` carries structured evidence for the activity ledger — e.g.
+    `{"exit_code": 0, "duration_ms": 42}` for a shell call, `{"bytes": 1024}`
+    for a file read. The model never sees `metadata`; only the runtime does,
+    and only to attach it to the emitted `tool_call.completed` event.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -58,6 +63,7 @@ class ToolResult(BaseModel):
     name: str
     content: str
     is_error: bool = False
+    metadata: dict[str, Any] | None = None
 
 
 # ---------------------------------------------------------------------------

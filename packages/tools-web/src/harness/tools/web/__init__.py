@@ -154,6 +154,12 @@ class FetchUrlTool:
             tool_call_id=call.id,
             name=self.name,
             content=f"status: {response.status_code}\ncontent-type: {content_type}\n\n{text}",
+            metadata={
+                "url": url,
+                "status_code": response.status_code,
+                "content_type": content_type,
+                "bytes": len(body),
+            },
         )
 
 

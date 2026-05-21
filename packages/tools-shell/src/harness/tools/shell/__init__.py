@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import time
 from pathlib import Path
 from typing import Any
 
@@ -96,6 +97,7 @@ class ShellTool:
         timeout = max(0.1, min(timeout, self.max_timeout))
 
         proc: asyncio.subprocess.Process | None = None
+        started = time.perf_counter()
         try:
             proc = await asyncio.create_subprocess_shell(
                 command,
@@ -116,6 +118,11 @@ class ShellTool:
                     name=self.name,
                     content=f"command timed out after {timeout}s and was killed",
                     is_error=True,
+                    metadata={
+                        "duration_ms": int((time.perf_counter() - started) * 1000),
+                        "timed_out": True,
+                        "timeout_s": timeout,
+                    },
                 )
         except FileNotFoundError as exc:
             return ToolResult(
@@ -132,8 +139,11 @@ class ShellTool:
                 is_error=True,
             )
 
-        stdout_text, stdout_trunc = _truncate(stdout_b or b"", self.max_output_bytes)
-        stderr_text, stderr_trunc = _truncate(stderr_b or b"", self.max_output_bytes)
+        duration_ms = int((time.perf_counter() - started) * 1000)
+        stdout_raw = stdout_b or b""
+        stderr_raw = stderr_b or b""
+        stdout_text, stdout_trunc = _truncate(stdout_raw, self.max_output_bytes)
+        stderr_text, stderr_trunc = _truncate(stderr_raw, self.max_output_bytes)
 
         parts: list[str] = [f"exit_code: {proc.returncode}"]
         if stdout_text:
@@ -154,6 +164,15 @@ class ShellTool:
             name=self.name,
             content="\n\n".join(parts),
             is_error=proc.returncode != 0,
+            metadata={
+                "exit_code": proc.returncode,
+                "stdout_bytes": len(stdout_raw),
+                "stderr_bytes": len(stderr_raw),
+                "stdout_truncated": stdout_trunc,
+                "stderr_truncated": stderr_trunc,
+                "duration_ms": duration_ms,
+                "timed_out": False,
+            },
         )
 
 

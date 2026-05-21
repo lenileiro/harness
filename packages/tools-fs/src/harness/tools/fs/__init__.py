@@ -155,7 +155,16 @@ class ReadFileTool:
         except OSError as exc:
             return _error(call, self.name, f"could not read {path_arg}: {exc}")
 
-        return ToolResult(tool_call_id=call.id, name=self.name, content=content)
+        return ToolResult(
+            tool_call_id=call.id,
+            name=self.name,
+            content=content,
+            metadata={
+                "path": path_arg,
+                "bytes": size,
+                "encoding": "utf-8",
+            },
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -207,16 +216,23 @@ class WriteFileTool:
                 f"path {path_arg!r} resolves outside the session working directory",
             )
 
+        was_new = not target.exists()
         try:
             await asyncio.to_thread(target.parent.mkdir, parents=True, exist_ok=True)
             await asyncio.to_thread(target.write_text, content, encoding="utf-8")
         except OSError as exc:
             return _error(call, self.name, f"could not write {path_arg}: {exc}")
 
+        bytes_written = len(content.encode("utf-8"))
         return ToolResult(
             tool_call_id=call.id,
             name=self.name,
-            content=f"wrote {len(content.encode('utf-8'))} bytes to {path_arg}",
+            content=f"wrote {bytes_written} bytes to {path_arg}",
+            metadata={
+                "path": path_arg,
+                "bytes_written": bytes_written,
+                "created": was_new,
+            },
         )
 
 
@@ -299,6 +315,12 @@ class EditFileTool:
             tool_call_id=call.id,
             name=self.name,
             content=f"replaced 1 occurrence in {path_arg}",
+            metadata={
+                "path": path_arg,
+                "occurrences_replaced": 1,
+                "bytes_before": len(original.encode("utf-8")),
+                "bytes_after": len(updated.encode("utf-8")),
+            },
         )
 
 
@@ -349,6 +371,10 @@ class ListDirTool:
             tool_call_id=call.id,
             name=self.name,
             content="\n".join(lines) if lines else "(empty)",
+            metadata={
+                "path": path_arg,
+                "entries": len(entries),
+            },
         )
 
 
@@ -409,13 +435,24 @@ class GlobTool:
             return _error(call, self.name, f"glob failed: {exc}")
 
         if not matches:
-            return ToolResult(tool_call_id=call.id, name=self.name, content="(no matches)")
+            return ToolResult(
+                tool_call_id=call.id,
+                name=self.name,
+                content="(no matches)",
+                metadata={"pattern": pattern, "matches": 0, "capped": False},
+            )
 
-        suffix = f"\n… ({self.max_results} max reached)" if len(matches) >= self.max_results else ""
+        capped = len(matches) >= self.max_results
+        suffix = f"\n… ({self.max_results} max reached)" if capped else ""
         return ToolResult(
             tool_call_id=call.id,
             name=self.name,
             content="\n".join(matches) + suffix,
+            metadata={
+                "pattern": pattern,
+                "matches": len(matches),
+                "capped": capped,
+            },
         )
 
 
