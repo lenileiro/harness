@@ -1730,6 +1730,51 @@ _DOLLAR = re.escape("$")
 _MATH_DISPLAY = re.compile(_DOLLAR * 2 + r"(.+?)" + _DOLLAR * 2, re.DOTALL)
 _MATH_INLINE = re.compile(_DOLLAR + r"([^\n]+?)" + _DOLLAR)
 _THINK_BLOCK = re.compile(r"<think>(.*?)</think>", re.DOTALL | re.IGNORECASE)
+_MERMAID_FENCE = re.compile(r"```mermaid\n(.*?)\n```", re.DOTALL)
+
+_mermaid_render_cache: dict[str, str] = {}
+
+
+def _render_mermaid(source: str) -> str:
+    """Convert mermaid source to an ASCII-art fenced block.
+
+    Tries `mermaid_ascii.mermaid_to_ascii` (optional pip dep), then the
+    `mermaid-ascii -i -` subprocess, then falls back to a plain code block
+    so the diagram is still visible even without the optional dependency.
+    """
+    if source in _mermaid_render_cache:
+        return _mermaid_render_cache[source]
+
+    ascii_art: str | None = None
+    try:
+        from mermaid_ascii import mermaid_to_ascii  # optional
+
+        result = mermaid_to_ascii(source)
+        if result and result.strip():
+            ascii_art = result.strip()
+    except ImportError:
+        import shutil
+        import subprocess
+
+        if shutil.which("mermaid-ascii"):
+            try:
+                proc = subprocess.run(
+                    ["mermaid-ascii", "-i", "-"],
+                    input=source,
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                )
+                if proc.returncode == 0 and proc.stdout.strip():
+                    ascii_art = proc.stdout.strip()
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+    rendered = f"```\n{ascii_art}\n```" if ascii_art else f"```\n{source}\n```"
+    _mermaid_render_cache[source] = rendered
+    return rendered
 
 
 def _convert_math(inner: str) -> str:
@@ -1740,10 +1785,13 @@ def _convert_math(inner: str) -> str:
 def _preprocess_markdown(text: str) -> str:
     """Prepare LLM output for Rich Markdown rendering.
 
+    - Renders ```mermaid fences to ASCII art via mermaid_ascii (optional dep)
     - Converts LaTeX math spans ($...$, $$...$$) to Unicode via unicodeitplus
       (2 566-symbol table, handles subscripts/superscripts as Unicode chars)
     - Wraps <think>...</think> blocks in a dim blockquote
     """
+    # Mermaid diagrams — intercept complete fences before Markdown sees them
+    text = _MERMAID_FENCE.sub(lambda m: _render_mermaid(m.group(1)), text)
     # Display math first ($$...$$) to avoid partial matches
     text = _MATH_DISPLAY.sub(lambda m: f"`{_convert_math(m.group(1))}`", text)
     # Inline math ($...$)

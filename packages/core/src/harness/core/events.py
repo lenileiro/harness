@@ -14,6 +14,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from harness.core.prediction import PredictionOutcome, ToolPrediction
 from harness.core.schemas import Message, ToolCall, ToolResult, Usage, VerificationResult
 
 
@@ -93,6 +94,28 @@ class Verification(_EventBase):
     result: VerificationResult
 
 
+class PredictionEvent(_EventBase):
+    """Pre-execution prediction committed by ConsequencePredictor.
+
+    Emitted before a tool executes (after approval, before the actual call).
+    Consumers can use this to audit what the runtime expected vs. what happened.
+    """
+
+    type: Literal["prediction"] = "prediction"
+    prediction: ToolPrediction
+
+
+class PredictionMismatchEvent(_EventBase):
+    """Post-execution outcome where prediction did not match reality.
+
+    Only emitted when `outcome.matched` is False. The `outcome.severity` field
+    indicates how serious the mismatch is for this effect_scope.
+    """
+
+    type: Literal["prediction_mismatch"] = "prediction_mismatch"
+    outcome: PredictionOutcome
+
+
 Event = Annotated[
     TextDelta
     | ToolCallEvent
@@ -101,7 +124,9 @@ Event = Annotated[
     | StepCompleted
     | Done
     | ErrorEvent
-    | Verification,
+    | Verification
+    | PredictionEvent
+    | PredictionMismatchEvent,
     Field(discriminator="type"),
 ]
 
@@ -110,6 +135,8 @@ __all__ = [
     "Done",
     "ErrorEvent",
     "Event",
+    "PredictionEvent",
+    "PredictionMismatchEvent",
     "StepCompleted",
     "StepStarted",
     "TextDelta",

@@ -24,7 +24,7 @@ from typing import Any, Protocol, runtime_checkable
 from pydantic import BaseModel, ConfigDict, Field
 
 from harness.core.approval import ApprovalOutcome, ApprovalStore, PendingApproval
-from harness.core.schemas import ApprovalDecision, Session, ToolCall, ToolResult
+from harness.core.schemas import ApprovalDecision, EffectScope, Session, ToolCall, ToolResult
 
 WILDCARD_PHASE = "*"
 _DEFAULT_PHASES: tuple[str, ...] = (WILDCARD_PHASE,)
@@ -76,9 +76,10 @@ class Tool(Protocol):
     approval: ApprovalDecision
     """Default approval level. Overridable per-session or globally via ApprovalPolicy."""
 
-    # Note: `phases` is intentionally not listed as a required attribute here
-    # so existing Tool implementations don't break. Access through
-    # `tool_matches_phase` / `_tool_phases` which apply the `("*",)` default.
+    # Note: `phases` and `effect_scope` are intentionally not listed as
+    # required attributes here so existing Tool implementations don't break.
+    # Access `phases` through `tool_matches_phase` / `_tool_phases`.
+    # Access `effect_scope` via `getattr(tool, "effect_scope", None)`.
 
     async def __call__(self, call: ToolCall) -> ToolResult: ...
 
@@ -170,6 +171,12 @@ class ApprovalPolicy(BaseModel):
             return session_overrides[tool.name]
         if tool.name in self.per_tool:
             return self.per_tool[tool.name]
+        # Derive approval from effect_scope when the tool doesn't override it.
+        scope: EffectScope | None = getattr(tool, "effect_scope", None)
+        if scope in ("workspace_durable", "external_side_effect"):
+            return "prompt"
+        if scope == "read_only":
+            return "auto"
         return tool.approval or self.default
 
 
@@ -247,6 +254,7 @@ __all__ = [
     "ApprovalPolicy",
     "AutoApprove",
     "AutoDeny",
+    "EffectScope",
     "InboxApprovalHandler",
     "Tool",
     "ToolRegistry",

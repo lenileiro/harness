@@ -18,6 +18,7 @@ from harness.core import (
     FailoverPolicy,
     NetworkError,
     RunRequest,
+    StallError,
     StepCompleted,
     StepStarted,
     TextDelta,
@@ -383,3 +384,45 @@ class TestResume:
         assert roles == ["user", "assistant", "user", "assistant"]
         assert stored.messages[0].content == "hello"
         assert stored.messages[2].content == "more"
+
+
+# ---------------------------------------------------------------------------
+# Stall detection
+# ---------------------------------------------------------------------------
+
+
+def _stall_script(total_chars: int) -> list[Event]:
+    """Build a script that emits total_chars of TextDelta with no Done."""
+    chunk = "x" * 500  # 500 chars per delta
+    events: list[Event] = []
+    emitted = 0
+    while emitted < total_chars:
+        events.append(TextDelta(text=chunk))
+        emitted += len(chunk)
+    # No Done event — the runtime should abort before reaching end anyway.
+    return events
+
+
+@pytest.mark.asyncio
+class TestStallDetection:
+    async def test_stall_yields_error_event(self, tmp_path: Path) -> None:
+        from harness.core.runtime import Agent as _Agent
+
+        limit = _Agent._STALL_CHAR_LIMIT
+        adapter = MockAdapter("mock", scripts=[_stall_script(limit + 1000)])
+        agent, _ = make_agent(adapters={"mock": adapter}, default_cwd=str(tmp_path))
+
+        events = await collect(agent.run(RunRequest(prompt="deep dive on the code")))
+
+        error_events = [e for e in events if isinstance(e, ErrorEvent)]
+        assert error_events, "expected an ErrorEvent when stall is detected"
+        assert error_events[0].kind == "stall"
+        assert "stall" in error_events[0].error.lower()
+
+    async def test_normal_response_under_limit_succeeds(self, tmp_path: Path) -> None:
+        adapter = MockAdapter("mock", scripts=[text_turn("short answer")])
+        agent, _ = make_agent(adapters={"mock": adapter}, default_cwd=str(tmp_path))
+
+        events = await collect(agent.run(RunRequest(prompt="hi")))
+        error_events = [e for e in events if isinstance(e, ErrorEvent)]
+        assert not error_events

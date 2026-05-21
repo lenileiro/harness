@@ -16,6 +16,15 @@ from pydantic import BaseModel, ConfigDict, Field
 Role = Literal["system", "user", "assistant", "tool"]
 ApprovalDecision = Literal["auto", "prompt", "deny"]
 SessionStatus = Literal["pending", "running", "paused", "done", "failed", "cancelled"]
+EffectScope = Literal[
+    "read_only",            # read_file, list_dir — never approval-required
+    "session_ephemeral",    # in-process scratch state, disappears with session
+    "task_durable",         # writes to harness task/session storage
+    "agent_orchestration",  # spawns child agents
+    "workspace_durable",    # write_file, edit_file, shell — mutates workspace
+    "external_side_effect", # HTTP calls, external APIs — irreversible
+    "routed",               # goes through an action router
+]
 
 
 def _utcnow() -> datetime:
@@ -213,6 +222,7 @@ class VerificationResult(BaseModel):
 __all__ = [
     "ApprovalDecision",
     "Capabilities",
+    "EffectScope",
     "Message",
     "Role",
     "RunRequest",

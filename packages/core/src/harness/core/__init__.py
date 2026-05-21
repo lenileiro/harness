@@ -19,6 +19,7 @@ from harness.core.errors import (
     ModelUnavailableError,
     NetworkError,
     RateLimitError,
+    StallError,
     TimeoutError,
     ToolError,
 )
@@ -26,6 +27,8 @@ from harness.core.events import (
     Done,
     ErrorEvent,
     Event,
+    PredictionEvent,
+    PredictionMismatchEvent,
     StepCompleted,
     StepStarted,
     TextDelta,
@@ -40,6 +43,7 @@ from harness.core.runtime import Agent, fork_session
 from harness.core.schemas import (
     ApprovalDecision,
     Capabilities,
+    EffectScope,
     Message,
     Role,
     RunRequest,
@@ -62,7 +66,24 @@ from harness.core.tools import (
     ToolRegistry,
     tool_matches_phase,
 )
-from harness.core.verification import LLMJudgeVerifier, RuleVerifier, Verifier, VerifierRouter
+from harness.core.calibration import CalibrationRecord, OutcomeCalibration
+from harness.core.prediction import (
+    ConsequencePredictor,
+    PredictionOutcome,
+    ToolPrediction,
+    compare_prediction,
+)
+from harness.core.repair import RepairDirective, RepairMode, RepairOrchestrator
+from harness.core.verification import (
+    EvidenceContract,
+    EvidenceContractResult,
+    LLMJudgeVerifier,
+    RuleVerifier,
+    VerificationGateway,
+    Verifier,
+    VerifierRouter,
+    evaluate_evidence,
+)
 
 __version__ = "0.0.0"
 
@@ -85,6 +106,7 @@ __all__ = [
     "ConfigurationError",
     "ContextBudget",
     "Done",
+    "EffectScope",
     "ErrorEvent",
     "ErrorKind",
     "Event",
@@ -108,6 +130,7 @@ __all__ = [
     "Planner",
     "RateLimitError",
     "Role",
+    "StallError",
     "RuleVerifier",
     "RunRequest",
     "Session",
@@ -122,18 +145,33 @@ __all__ = [
     "ToolCallEvent",
     "ToolError",
     "ToolRegistry",
+    "CalibrationRecord",
+    "ConsequencePredictor",
+    "EvidenceContract",
+    "EvidenceContractResult",
+    "OutcomeCalibration",
+    "PredictionEvent",
+    "PredictionMismatchEvent",
+    "PredictionOutcome",
+    "RepairDirective",
+    "RepairMode",
+    "RepairOrchestrator",
+    "ToolPrediction",
     "ToolResult",
     "ToolResultEvent",
     "Usage",
     "Verification",
+    "VerificationGateway",
     "VerificationResult",
     "Verifier",
     "VerifierRouter",
     "__version__",
     "activity",
     "classify",
+    "compare_prediction",
     "configure_logging",
     "count_tokens",
+    "evaluate_evidence",
     "fork_session",
     "get_logger",
     "prune",

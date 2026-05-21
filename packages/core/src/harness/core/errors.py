@@ -60,6 +60,14 @@ class CancelledError(HarnessError):
     """The session or run was cancelled."""
 
 
+class StallError(HarnessError):
+    """The model produced excessively long output without completing a turn.
+
+    Indicates a generation loop where the model repeats itself endlessly.
+    Not retryable — retrying the same model will reproduce the same behavior.
+    """
+
+
 __all__ = [
     "ApprovalDeniedError",
     "CancelledError",
@@ -69,6 +77,7 @@ __all__ = [
     "ModelUnavailableError",
     "NetworkError",
     "RateLimitError",
+    "StallError",
     "TimeoutError",
     "ToolError",
 ]

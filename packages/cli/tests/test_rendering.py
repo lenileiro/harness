@@ -7,7 +7,7 @@ from io import StringIO
 import unicodeitplus
 from rich.console import Console
 
-from harness.cli.__main__ import Renderer, _preprocess_markdown
+from harness.cli.__main__ import Renderer, _preprocess_markdown, _render_mermaid
 from harness.core import (
     Done,
     ErrorEvent,
@@ -281,3 +281,58 @@ class TestPreprocessMarkdown:
         result = _preprocess_markdown("If $x \\leq y$ and $y \\geq z$")
         assert "≤" in result
         assert "≥" in result
+
+    def test_mermaid_fence_replaced_when_complete(self) -> None:
+        src = "graph LR\n    A --> B"
+        text = f"```mermaid\n{src}\n```"
+        result = _preprocess_markdown(text)
+        # Fenced block replaced — the raw ```mermaid marker should be gone
+        assert "```mermaid" not in result
+        # Result contains a plain code block wrapping either ascii art or the source
+        assert "```" in result
+
+    def test_mermaid_fence_not_replaced_when_incomplete(self) -> None:
+        # Opening fence without closing — should not be touched
+        text = "```mermaid\ngraph LR\n    A --> B"
+        result = _preprocess_markdown(text)
+        assert "```mermaid" in result
+
+    def test_mermaid_non_fence_code_block_unchanged(self) -> None:
+        text = "```python\nprint('hi')\n```"
+        assert _preprocess_markdown(text) == text
+
+
+# ---------------------------------------------------------------------------
+# Mermaid rendering
+# ---------------------------------------------------------------------------
+
+
+class TestRenderMermaid:
+    def test_fallback_when_not_installed(self) -> None:
+        import sys
+        from unittest.mock import patch
+
+        src = "graph LR\n    FALLBACK_A --> FALLBACK_B"
+        with patch.dict(sys.modules, {"mermaid_ascii": None}):
+            result = _render_mermaid(src)
+        # Should fall back to a plain code block containing the source
+        assert "FALLBACK_A" in result
+        assert "```" in result
+
+    def test_renders_ascii_when_available(self) -> None:
+        import sys
+        from unittest.mock import MagicMock, patch
+
+        fake_module = MagicMock()
+        fake_module.mermaid_to_ascii.return_value = "+--ASCII--+"
+        src = "graph LR\n    ASCII_A --> ASCII_B"
+        with patch.dict(sys.modules, {"mermaid_ascii": fake_module}):
+            result = _render_mermaid(src)
+        assert "+--ASCII--+" in result
+        assert "```" in result
+
+    def test_cache_reuses_result(self) -> None:
+        src = "graph LR\n    CACHE_X --> CACHE_Y"
+        first = _render_mermaid(src)
+        second = _render_mermaid(src)
+        assert first is second  # same object from cache

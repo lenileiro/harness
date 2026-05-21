@@ -77,6 +77,8 @@ AGENT_RUN_STARTED = "agent_run.started"
 AGENT_RUN_COMPLETED = "agent_run.completed"
 AGENT_RUN_FAILED = "agent_run.failed"
 AGENT_RUN_CANCELLED = "agent_run.cancelled"
+AGENT_RUN_STALLED = "agent_run.stalled"
+"""Emitted when the runtime aborts a turn because output exceeded the stall limit."""
 STEP_STARTED = "step.started"
 STEP_COMPLETED = "step.completed"
 
@@ -101,22 +103,41 @@ VERIFICATION_COMPLETED = "verification.completed"
 CONTEXT_PRUNED = "context.pruned"
 """Emitted when the budget governor dropped messages before an adapter turn."""
 
+# Prediction (pre-execution commitment)
+TOOL_CALL_PREDICTED = "tool_call.predicted"
+"""Emitted before tool execution with the deterministic prediction."""
+TOOL_CALL_PREDICTION_ERROR = "tool_call.prediction_error"
+"""Emitted after execution with the prediction vs. actual comparison."""
+
+# Calibration
+CALIBRATION_UPDATED = "calibration.updated"
+"""Emitted after each prediction outcome adjusts the confidence score."""
+
+# Repair
+REPAIR_DIRECTIVE_ISSUED = "repair.directive_issued"
+"""Emitted when the RepairOrchestrator issues a directive after a tool call."""
+
 
 __all__ = [
     "AGENT_RUN_CANCELLED",
     "AGENT_RUN_COMPLETED",
     "AGENT_RUN_FAILED",
+    "AGENT_RUN_STALLED",
     "AGENT_RUN_STARTED",
     "APPROVAL_DENIED",
     "APPROVAL_GRANTED",
     "APPROVAL_QUEUED",
     "APPROVAL_REPLAYED",
     "APPROVAL_REQUESTED",
+    "CALIBRATION_UPDATED",
     "CONTEXT_PRUNED",
+    "REPAIR_DIRECTIVE_ISSUED",
     "STEP_COMPLETED",
     "STEP_STARTED",
     "TOOL_CALL_COMPLETED",
     "TOOL_CALL_DISPATCHED",
+    "TOOL_CALL_PREDICTED",
+    "TOOL_CALL_PREDICTION_ERROR",
     "VERIFICATION_COMPLETED",
     "ActivityEvent",
     "ActivityStore",

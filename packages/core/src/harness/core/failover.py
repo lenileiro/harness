@@ -21,6 +21,7 @@ from harness.core.errors import (
     ModelUnavailableError,
     NetworkError,
     RateLimitError,
+    StallError,
     TimeoutError,
 )
 
@@ -33,6 +34,7 @@ ErrorKind = Literal[
     "configuration",
     "approval_denied",
     "cancelled",
+    "stall",
     "unknown",
 ]
 
@@ -59,6 +61,8 @@ def classify(exc: BaseException) -> ErrorKind:
         return "approval_denied"
     if isinstance(exc, CancelledError):
         return "cancelled"
+    if isinstance(exc, StallError):
+        return "stall"
     if isinstance(exc, HarnessError):
         return "unknown"
     return "unknown"

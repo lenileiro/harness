@@ -12,17 +12,20 @@ from harness.core import (
     ActivityStore,
     Agent,
     AutoApprove,
+    ErrorEvent,
     FailoverPolicy,
     LLMJudgeVerifier,
     Message,
     RuleVerifier,
     RunRequest,
     Session,
+    StallError,
     ToolRegistry,
     Verification,
     VerificationResult,
 )
 from harness.core import activity as activity_kinds
+from harness.core.verification import _is_repetitive
 
 from .conftest import MockAdapter, MockStorage, text_turn, tool_call_turn
 
@@ -85,6 +88,94 @@ class TestRuleVerifier:
         assert "shell" in result.reason
         assert "write_file" in result.reason
         assert len(result.evidence_event_ids) == 3
+
+    async def test_repetitive_output_fails(self) -> None:
+        repeated = "I do not know the answer to that question. " * 20
+        session = _session(
+            messages=[
+                Message(role="user", content="hello"),
+                Message(role="assistant", content=repeated),
+            ]
+        )
+        result = await RuleVerifier().verify(session=session, activity=[])
+        assert result.can_finish is False
+        assert "loop" in result.reason.lower() or "repetit" in result.reason.lower()
+
+    async def test_verbal_refusal_with_no_tools_fails(self) -> None:
+        session = _session(
+            messages=[
+                Message(role="user", content="deep dive on the code"),
+                Message(
+                    role="assistant",
+                    content=(
+                        "I do not have direct access to the entire source code repository, "
+                        "only the information I have been given."
+                    ),
+                ),
+            ]
+        )
+        result = await RuleVerifier().verify(session=session, activity=[])
+        assert result.can_finish is False
+        assert "verbal refusal" in result.reason.lower() or "claimed" in result.reason.lower()
+
+    async def test_verbal_refusal_phrase_with_tools_used_passes_through(self) -> None:
+        # If tools were used alongside a refusal phrase, fall through to normal rules.
+        session = _session(
+            messages=[
+                Message(role="user", content="deep dive on the code"),
+                Message(
+                    role="assistant",
+                    content="I cannot access the file directly but I used read_file.",
+                ),
+            ]
+        )
+        activity = [_activity(kind="tool_call.completed", name="read_file", is_error=False)]
+        result = await RuleVerifier().verify(session=session, activity=activity)
+        # Falls through to rule 5: all tools succeeded → can_finish=True
+        assert result.can_finish is True
+
+    async def test_short_clean_no_tools_passes(self) -> None:
+        # Simple text answer with no refusal patterns and no tools → passes with low confidence
+        session = _session(
+            messages=[
+                Message(role="user", content="What is 2+2?"),
+                Message(role="assistant", content="4"),
+            ]
+        )
+        result = await RuleVerifier().verify(session=session, activity=[])
+        assert result.can_finish is True
+        assert result.confidence is not None and result.confidence <= 0.5
+
+
+# ---------------------------------------------------------------------------
+# _is_repetitive helper
+# ---------------------------------------------------------------------------
+
+
+class TestIsRepetitive:
+    def test_highly_repetitive_text(self) -> None:
+        block = "I do not have direct access to the source code. " * 20
+        assert _is_repetitive(block) is True
+
+    def test_unique_text(self) -> None:
+        text = " ".join(str(i) for i in range(500))
+        assert _is_repetitive(text) is False
+
+    def test_short_text_not_flagged(self) -> None:
+        # Below the window*threshold threshold
+        assert _is_repetitive("hello world") is False
+
+    def test_threshold_exactly_met(self) -> None:
+        # A 200-char block repeated exactly 4 times → window=40 sees 20+ hits → True
+        block = "x" * 200
+        assert _is_repetitive(block * 4) is True
+
+    def test_threshold_just_below(self) -> None:
+        # "a"*40 repeated exactly 4 times (non-overlapping count = 4 < threshold 5)
+        # followed by unique suffix so total length exceeds window*threshold guard
+        block = "a" * 40
+        unique_suffix = " ".join(str(i) for i in range(30))  # "0 1 2 ... 29" — no repeats
+        assert _is_repetitive(block * 4 + unique_suffix) is False
 
 
 # ---------------------------------------------------------------------------

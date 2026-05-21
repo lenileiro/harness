@@ -39,13 +39,17 @@ from harness.core.errors import (
     ConfigurationError,
     HarnessError,
     InternalError,
+    StallError,
 )
 from harness.core.events import (
     Done,
     ErrorEvent,
     Event,
+    PredictionEvent,
+    PredictionMismatchEvent,
     StepCompleted,
     StepStarted,
+    TextDelta,
     ToolResultEvent,
     Verification,
 )
@@ -61,7 +65,10 @@ from harness.core.tools import (
     ToolRegistry,
     tool_matches_phase,
 )
-from harness.core.verification import Verifier
+from harness.core.calibration import OutcomeCalibration
+from harness.core.prediction import ConsequencePredictor, ToolPrediction, compare_prediction
+from harness.core.repair import RepairOrchestrator
+from harness.core.verification import EvidenceContract, VerificationGateway, Verifier
 
 logger = get_logger("harness.runtime")
 
@@ -110,6 +117,10 @@ class Agent:
         default_model: str | None = None,
         default_cwd: str | None = None,
         memory_store: MemoryStore | None = None,
+        predictor: ConsequencePredictor | None = None,
+        calibration: OutcomeCalibration | None = None,
+        repair: RepairOrchestrator | None = None,
+        evidence_contract: EvidenceContract | None = None,
     ) -> None:
         if not adapters:
             raise ConfigurationError("at least one adapter is required")
@@ -144,6 +155,10 @@ class Agent:
         self.default_provider = default_provider or failover.chain[0]
         self.default_model = default_model
         self.default_cwd = default_cwd
+        self._predictor = predictor
+        self._calibration = calibration
+        self._repair = repair
+        self._evidence_contract = evidence_contract
 
     # ------------------------------------------------------------------ #
     # Approval replay                                                     #
@@ -378,19 +393,23 @@ class Agent:
             activity_events = await self.activity_store.list_activity(
                 session_id=session.id, limit=500
             )
+        # Phase 4 — wrap verifier in VerificationGateway when evidence_contract is set.
+        verifier = self.verifier
+        if self._evidence_contract is not None:
+            verifier = VerificationGateway(verifier, self._evidence_contract)
         try:
-            result = await self.verifier.verify(session=session, activity=activity_events)
+            result = await verifier.verify(session=session, activity=activity_events)
         except Exception as exc:
-            logger.warning("agent.verifier.error", verifier=self.verifier.name, error=str(exc))
+            logger.warning("agent.verifier.error", verifier=verifier.name, error=str(exc))
             # Don't swallow silently — synthesize a failure verdict the same
             # shape consumers expect.
             from harness.core.schemas import VerificationResult as _VR
 
             result = _VR(
                 can_finish=False,
-                reason=f"verifier {self.verifier.name!r} raised: {exc!s}",
+                reason=f"verifier {verifier.name!r} raised: {exc!s}",
                 confidence=0.0,
-                verifier_name=self.verifier.name,
+                verifier_name=verifier.name,
             )
         await self._emit(
             session,
@@ -519,6 +538,11 @@ class Agent:
     # ReAct loop (one step, single adapter)                               #
     # ------------------------------------------------------------------ #
 
+    # Per-turn character limit. Models should not output more than ~12 500
+    # tokens (~50 000 chars) in a single response. Exceeding this is almost
+    # always a generation loop. Not configurable — the runtime enforces it.
+    _STALL_CHAR_LIMIT: int = 50_000
+
     async def _react_with(
         self,
         adapter: Adapter,
@@ -529,6 +553,7 @@ class Agent:
         for _turn in range(request.max_steps):
             final: Message | None = None
             usage = None
+            char_count = 0
 
             messages_for_turn = await self._apply_budget(session, request)
             if memory_prefix:
@@ -545,6 +570,19 @@ class Agent:
                     final = event.final_message
                     usage = event.usage
                     break
+                if isinstance(event, TextDelta):
+                    char_count += len(event.text)
+                    if char_count > self._STALL_CHAR_LIMIT:
+                        await self._emit(
+                            session,
+                            activity_kinds.AGENT_RUN_STALLED,
+                            {"chars_before_abort": char_count},
+                        )
+                        raise StallError(
+                            f"model stall: output exceeded {self._STALL_CHAR_LIMIT:,} chars "
+                            "in a single turn — possible generation loop. "
+                            "Try a smaller/different model."
+                        )
                 yield event
 
             if final is None:
@@ -558,7 +596,9 @@ class Agent:
                 return
 
             for tool_call in final.tool_calls:
-                result = await self._invoke_tool(tool_call, session)
+                result, extra_events = await self._invoke_tool(tool_call, session)
+                for ev in extra_events:
+                    yield ev
                 session.messages.append(
                     Message(
                         role="tool",
@@ -576,7 +616,16 @@ class Agent:
     # Tool dispatch                                                       #
     # ------------------------------------------------------------------ #
 
-    async def _invoke_tool(self, call: ToolCall, session: Session) -> ToolResult:
+    async def _invoke_tool(
+        self, call: ToolCall, session: Session
+    ) -> tuple[ToolResult, list[Event]]:
+        """Dispatch a tool call through the full gate pipeline.
+
+        Returns (result, extra_events) where extra_events contains any
+        PredictionEvent / PredictionMismatchEvent to yield before ToolResultEvent.
+        """
+        extra_events: list[Event] = []
+
         await self._emit(
             session,
             activity_kinds.TOOL_CALL_DISPATCHED,
@@ -591,13 +640,11 @@ class Agent:
                 is_error=True,
             )
             await self._emit_tool_completed(session, call, result)
-            return result
+            return result, extra_events
 
         tool = self.tools.get(call.name)
 
-        # Defence in depth: filter both the schemas sent to the model AND
-        # what we dispatch. If a model hallucinates an out-of-phase call,
-        # refuse rather than execute.
+        # Phase filter: defence-in-depth — refuse out-of-phase calls.
         if not tool_matches_phase(tool, self.current_phase):
             result = ToolResult(
                 tool_call_id=call.id,
@@ -606,7 +653,23 @@ class Agent:
                 is_error=True,
             )
             await self._emit_tool_completed(session, call, result)
-            return result
+            return result, extra_events
+
+        # Phase 3 — Verifier isolation: block mutating tools in verify phase.
+        if self.current_phase == "verify":
+            scope = getattr(tool, "effect_scope", None)
+            if scope not in (None, "read_only", "session_ephemeral"):
+                result = ToolResult(
+                    tool_call_id=call.id,
+                    name=call.name,
+                    content=(
+                        f"verifier isolation: tool {call.name!r} (scope={scope!r}) "
+                        "is blocked in verify phase — verifiers are read-only"
+                    ),
+                    is_error=True,
+                )
+                await self._emit_tool_completed(session, call, result)
+                return result, extra_events
 
         decision = self.approval_policy.decide(tool, session_overrides=session.approval_overrides)
 
@@ -618,7 +681,7 @@ class Agent:
                 is_error=True,
             )
             await self._emit_tool_completed(session, call, result)
-            return result
+            return result, extra_events
 
         if decision == "prompt":
             if self.approval_handler is None:
@@ -629,7 +692,7 @@ class Agent:
                     is_error=True,
                 )
                 await self._emit_tool_completed(session, call, result)
-                return result
+                return result, extra_events
             await self._emit(
                 session,
                 activity_kinds.APPROVAL_REQUESTED,
@@ -650,7 +713,7 @@ class Agent:
                     is_error=True,
                 )
                 await self._emit_tool_completed(session, call, result)
-                return result
+                return result, extra_events
             if outcome == "queued":
                 result = ToolResult(
                     tool_call_id=call.id,
@@ -659,8 +722,22 @@ class Agent:
                     is_error=True,
                 )
                 await self._emit_tool_completed(session, call, result)
-                return result
+                return result, extra_events
             # outcome == "approved" — fall through to execute
+
+        # Phase 2 — ConsequencePredictor: commit to prediction before execution.
+        prediction: ToolPrediction | None = None
+        if self._predictor is not None:
+            effect_scope = getattr(tool, "effect_scope", None)
+            prediction = self._predictor.predict(
+                tool_name=call.name, call=call, effect_scope=effect_scope
+            )
+            await self._emit(
+                session,
+                activity_kinds.TOOL_CALL_PREDICTED,
+                prediction.model_dump(),
+            )
+            extra_events.append(PredictionEvent(prediction=prediction))
 
         started = time.perf_counter()
         try:
@@ -676,7 +753,48 @@ class Agent:
             )
         duration_ms = int((time.perf_counter() - started) * 1000)
         await self._emit_tool_completed(session, call, result, duration_ms=duration_ms)
-        return result
+
+        # Phase 2 — PredictionError: compare prediction vs actual.
+        pred_outcome = None
+        if prediction is not None:
+            pred_outcome = compare_prediction(prediction, result)
+            await self._emit(
+                session,
+                activity_kinds.TOOL_CALL_PREDICTION_ERROR,
+                pred_outcome.model_dump(),
+            )
+            if not pred_outcome.matched:
+                extra_events.append(PredictionMismatchEvent(outcome=pred_outcome))
+
+            # Phase 5 — OutcomeCalibration: adjust confidence based on outcome.
+            if self._calibration is not None:
+                cal_record = self._calibration.record(
+                    tool_name=call.name,
+                    effect_scope=prediction.effect_scope,
+                    base_confidence=prediction.confidence,
+                    outcome=pred_outcome,
+                )
+                await self._emit(
+                    session,
+                    activity_kinds.CALIBRATION_UPDATED,
+                    cal_record.model_dump(),
+                )
+
+        # Phase 6 — RepairOrchestrator: track failure streaks, emit directive.
+        if self._repair is not None:
+            directive = self._repair.assess(
+                tool_name=call.name,
+                effect_scope=getattr(tool, "effect_scope", None),
+                result=result,
+                outcome=pred_outcome,
+            )
+            await self._emit(
+                session,
+                activity_kinds.REPAIR_DIRECTIVE_ISSUED,
+                directive.model_dump(),
+            )
+
+        return result, extra_events
 
     async def _apply_budget(self, session: Session, request: RunRequest) -> list[Message]:
         """Return the message list to actually send the adapter.

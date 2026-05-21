@@ -62,6 +62,7 @@ class ShellTool:
         "commands should be avoided."
     )
     approval: ApprovalDecision = "prompt"
+    effect_scope = "workspace_durable"
     # Mutating side effects — restricted to the `act` phase.
     phases: tuple[str, ...] = ("act",)
 
