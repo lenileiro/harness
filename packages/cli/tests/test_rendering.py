@@ -45,14 +45,25 @@ def _make_result(
 
 
 class TestRendererBasics:
-    def test_text_delta_written_inline(self) -> None:
+    def test_text_delta_rendered_as_markdown_on_flush(self) -> None:
         con, buf = _console()
         r = Renderer(con)
         r.render(TextDelta(text="hello "))
         r.render(TextDelta(text="world"))
+        # Text is buffered; flush by sending Done
+        r.render(Done())
         output = buf.getvalue()
-        assert "hello " in output
+        assert "hello" in output
         assert "world" in output
+
+    def test_text_delta_markdown_code_block_rendered(self) -> None:
+        con, buf = _console()
+        r = Renderer(con)
+        r.render(TextDelta(text="```python\nprint('hi')\n```"))
+        r.render(Done())
+        output = buf.getvalue()
+        # Rich renders the code block — raw backticks should not appear
+        assert "print" in output
 
     def test_tool_call_prints_arrow_and_name(self) -> None:
         con, buf = _console()

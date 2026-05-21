@@ -33,6 +33,7 @@ from typing import Annotated, Any
 import typer
 from rich.console import Console
 from rich.live import Live
+from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.prompt import Confirm
 from rich.spinner import Spinner
@@ -1725,22 +1726,39 @@ async def _handle_slash(line: str, *, agent: Agent, session_id: str, storage: St
 
 
 class Renderer:
-    """Stateful event renderer with live spinner support."""
+    """Stateful event renderer.
+
+    Text deltas are buffered and rendered as Markdown in a live context so
+    the response updates in real-time while still applying syntax highlighting
+    and other rich formatting. Spinners run between ToolCallEvent and
+    ToolResultEvent; only one Live context is active at a time.
+    """
 
     def __init__(self, con: Console) -> None:
         self._console = con
         self._live: Live | None = None
+        self._live_kind: str = ""  # "spinner" | "text"
         self._pending_name: str = ""
         self._pending_start: float = 0.0
+        self._text_buf: str = ""
 
     def render(self, event: Any) -> None:
         if isinstance(event, TextDelta):
-            if self._live is not None:
-                self._stop_spinner()
-            self._console.out(event.text, end="", style=None, highlight=False)
+            self._stop_spinner()
+            self._text_buf += event.text
+            if self._live is None:
+                self._live = Live(
+                    Markdown(self._text_buf),
+                    console=self._console,
+                    refresh_per_second=12,
+                    vertical_overflow="visible",
+                )
+                self._live_kind = "text"
+                self._live.start()
+            else:
+                self._live.update(Markdown(self._text_buf))
         elif isinstance(event, ToolCallEvent):
-            if self._live is not None:
-                self._stop_spinner()
+            self._flush_text()
             self._console.print()
             self._console.print(
                 f"[blue]→[/blue] [bold]{event.call.name}[/bold]({_args_preview(event.call.arguments)})",
@@ -1759,6 +1777,7 @@ class Renderer:
                 style="dim",
             )
         elif isinstance(event, StepStarted):
+            self._flush_text()
             if event.total_steps > 1:
                 label = f"Step {event.step + 1}/{event.total_steps}"
                 if event.description:
@@ -1768,9 +1787,11 @@ class Renderer:
             pass
         elif isinstance(event, ErrorEvent):
             self._stop_spinner()
+            self._flush_text()
             self._console.print()
             self._console.print(f"[red]Error ({event.kind}):[/red] {event.error}")
         elif isinstance(event, Verification):
+            self._flush_text()
             r = event.result
             marker = "[green]✓[/green]" if r.can_finish else "[red]✗[/red]"
             conf = (
@@ -1782,12 +1803,21 @@ class Renderer:
             )
         elif isinstance(event, Done):
             self._stop_spinner()
+            self._flush_text()
             self._console.print()
             if event.usage:
                 u = event.usage
                 self._console.print(
                     f"[dim]tokens: {u.prompt_tokens:,} in / {u.completion_tokens:,} out[/dim]"
                 )
+
+    def _flush_text(self) -> None:
+        """Stop the text Live context (leaving rendered markdown on screen) and reset buffer."""
+        if self._live is not None and self._live_kind == "text":
+            self._live.stop()
+            self._live = None
+            self._live_kind = ""
+        self._text_buf = ""
 
     def _start_spinner(self, name: str) -> None:
         self._pending_name = name
@@ -1798,12 +1828,14 @@ class Renderer:
             refresh_per_second=10,
             transient=True,
         )
+        self._live_kind = "spinner"
         self._live.start()
 
     def _stop_spinner(self) -> None:
-        if self._live is not None:
+        if self._live is not None and self._live_kind == "spinner":
             self._live.stop()
             self._live = None
+            self._live_kind = ""
         self._pending_start = 0.0
 
 
