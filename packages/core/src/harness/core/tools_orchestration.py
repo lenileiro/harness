@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from harness.core.schemas import EffectScope, ToolCall, ToolResult
+from harness.core.schemas import ApprovalDecision, EffectScope, ToolCall, ToolResult
 from harness.tasks.schemas import Task
 from harness.tasks.store import TaskStore
 
@@ -60,6 +60,7 @@ class CreateWorkItemTool:
         "Provide 'title' (required) and optional 'description'."
     )
     effect_scope: EffectScope = "task_durable"
+    approval: ApprovalDecision = "auto"
     phases: tuple[str, ...] = ("*",)
 
     def __init__(self, store: TaskStore, parent_id: str, cwd: Path) -> None:
@@ -68,18 +69,16 @@ class CreateWorkItemTool:
         self._cwd = cwd
         self.parameters_schema: dict[str, Any] = _CREATE_SCHEMA
 
-    @property
-    def approval(self) -> str:
-        return "auto"
-
     async def __call__(self, call: ToolCall) -> ToolResult:
         args: dict[str, Any] = call.arguments if isinstance(call.arguments, dict) else {}
         title = args.get("title", "").strip()
         description = args.get("description")
         if not title:
             return ToolResult(
-                tool_call_id=call.id, name=self.name,
-                content="'title' is required", is_error=True,
+                tool_call_id=call.id,
+                name=self.name,
+                content="'title' is required",
+                is_error=True,
             )
         task = Task(
             ref="",
@@ -93,7 +92,8 @@ class CreateWorkItemTool:
         )
         created = await self._store.create_task(task)
         return ToolResult(
-            tool_call_id=call.id, name=self.name,
+            tool_call_id=call.id,
+            name=self.name,
             content=f"created work item {created.ref}: {created.title}",
         )
 
@@ -103,10 +103,10 @@ class CompleteWorkItemTool:
 
     name = "complete_work_item"
     description = (
-        "Mark this work item as done. "
-        "Provide 'summary' describing what was accomplished."
+        "Mark this work item as done. " "Provide 'summary' describing what was accomplished."
     )
     effect_scope: EffectScope = "task_durable"
+    approval: ApprovalDecision = "auto"
     phases: tuple[str, ...] = ("*",)
 
     def __init__(self, store: TaskStore, item_id: str) -> None:
@@ -114,27 +114,28 @@ class CompleteWorkItemTool:
         self._item_id = item_id
         self.parameters_schema: dict[str, Any] = _COMPLETE_SCHEMA
 
-    @property
-    def approval(self) -> str:
-        return "auto"
-
     async def __call__(self, call: ToolCall) -> ToolResult:
         task = await self._store.get_task(self._item_id)
         if task is None:
             return ToolResult(
-                tool_call_id=call.id, name=self.name,
-                content=f"work item {self._item_id!r} not found", is_error=True,
+                tool_call_id=call.id,
+                name=self.name,
+                content=f"work item {self._item_id!r} not found",
+                is_error=True,
             )
         args: dict[str, Any] = call.arguments if isinstance(call.arguments, dict) else {}
         summary = args.get("summary", "")
-        updated = task.model_copy(update={
-            "status": "done",
-            "metadata": {**task.metadata, "result_summary": summary},
-            "updated_at": datetime.now(UTC),
-        })
+        updated = task.model_copy(
+            update={
+                "status": "done",
+                "metadata": {**task.metadata, "result_summary": summary},
+                "updated_at": datetime.now(UTC),
+            }
+        )
         await self._store.update_task(updated)
         return ToolResult(
-            tool_call_id=call.id, name=self.name,
+            tool_call_id=call.id,
+            name=self.name,
             content=f"marked {task.ref} as done",
         )
 
@@ -148,6 +149,7 @@ class ListWorkItemsTool:
         "Optionally filter by 'status' (todo, in_progress, done)."
     )
     effect_scope: EffectScope = "read_only"
+    approval: ApprovalDecision = "auto"
     phases: tuple[str, ...] = ("*",)
 
     def __init__(self, store: TaskStore, parent_id: str) -> None:
@@ -155,22 +157,20 @@ class ListWorkItemsTool:
         self._parent_id = parent_id
         self.parameters_schema: dict[str, Any] = _LIST_SCHEMA
 
-    @property
-    def approval(self) -> str:
-        return "auto"
-
     async def __call__(self, call: ToolCall) -> ToolResult:
         args: dict[str, Any] = call.arguments if isinstance(call.arguments, dict) else {}
         status = args.get("status")
         items = await self._store.list_tasks(parent_id=self._parent_id, status=status)
         if not items:
             return ToolResult(
-                tool_call_id=call.id, name=self.name,
+                tool_call_id=call.id,
+                name=self.name,
                 content="no work items found",
             )
         lines = [f"{t.ref} [{t.status}] {t.title}" for t in items]
         return ToolResult(
-            tool_call_id=call.id, name=self.name,
+            tool_call_id=call.id,
+            name=self.name,
             content="\n".join(lines),
         )
 

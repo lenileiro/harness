@@ -16,15 +16,16 @@ from __future__ import annotations
 
 import asyncio
 import uuid
+from collections.abc import AsyncIterator, Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, AsyncIterator, Callable, Literal
+from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel
 
 from harness.core.events import Event
 from harness.core.schemas import RunRequest
-from harness.tasks.schemas import Task
+from harness.tasks.schemas import Task, TaskStatus
 from harness.tasks.store import TaskStore
 
 if TYPE_CHECKING:
@@ -142,14 +143,16 @@ class WorkQueue:
         task = await self._store.get_task(task_id)
         if task is None:
             raise KeyError(f"task {task_id!r} not found")
-        updated = task.model_copy(update={
-            "status": "done",
-            "metadata": {**task.metadata, "result_summary": summary},
-            "updated_at": datetime.now(UTC),
-        })
+        updated = task.model_copy(
+            update={
+                "status": "done",
+                "metadata": {**task.metadata, "result_summary": summary},
+                "updated_at": datetime.now(UTC),
+            }
+        )
         return await self._store.update_task(updated)
 
-    async def list(self, *, status: str | None = None) -> list[Task]:
+    async def list(self, *, status: TaskStatus | None = None) -> list[Task]:
         return await self._store.list_tasks(parent_id=self._parent_id, status=status)
 
     async def is_drained(self) -> bool:
@@ -186,6 +189,7 @@ class MultiAgentOrchestrator:
         worker_role: AgentRole,
         reporter_role: AgentRole,
         max_workers: int = 2,
+        max_worker_steps: int = 10,
         job_cwd: Path = Path("."),
         provider: str,
         model: str,
@@ -196,6 +200,7 @@ class MultiAgentOrchestrator:
         self._worker_role = worker_role
         self._reporter_role = reporter_role
         self._max_workers = max_workers
+        self._max_worker_steps = max_worker_steps
         self._job_cwd = job_cwd
         self._provider = provider
         self._model = model
@@ -230,9 +235,7 @@ class MultiAgentOrchestrator:
         async for event in self._run_reporter(queue):
             yield event
 
-    async def _run_planner(
-        self, prompt: str, queue: WorkQueue
-    ) -> AsyncIterator[OrchestratorEvent]:
+    async def _run_planner(self, prompt: str, queue: WorkQueue) -> AsyncIterator[OrchestratorEvent]:
         session_id = f"planner_{uuid.uuid4().hex[:8]}"
         role = self._planner_role.model_copy(update={"job_id": queue._parent_id})
         agent = self._factory(role)
@@ -255,21 +258,25 @@ class MultiAgentOrchestrator:
 
         async def worker(idx: int) -> None:
             worker_name = f"worker-{idx}"
-            session_id = f"w{idx}_{uuid.uuid4().hex[:6]}"
             while True:
+                session_id = f"w{idx}_{uuid.uuid4().hex[:6]}"
                 task = await queue.claim(claimed_by=worker_name, worker_session_id=session_id)
                 if task is None:
                     break
-                await output_queue.put(WorkItemClaimedEvent(
-                    task_id=task.id,
-                    task_ref=task.ref,
-                    worker_session_id=session_id,
-                ))
-                role = self._worker_role.model_copy(update={
-                    "name": worker_name,
-                    "job_id": queue._parent_id,
-                    "item_id": task.id,
-                })
+                await output_queue.put(
+                    WorkItemClaimedEvent(
+                        task_id=task.id,
+                        task_ref=task.ref,
+                        worker_session_id=session_id,
+                    )
+                )
+                role = self._worker_role.model_copy(
+                    update={
+                        "name": worker_name,
+                        "job_id": queue._parent_id,
+                        "item_id": task.id,
+                    }
+                )
                 agent = self._factory(role)
                 item_prompt = (
                     f"Complete this work item.\n\n"
@@ -283,6 +290,7 @@ class MultiAgentOrchestrator:
                     session_id=session_id,
                     provider=self._provider,
                     model=role.model or self._model,
+                    max_steps=self._max_worker_steps,
                 )
                 await output_queue.put(AgentStartedEvent(role=worker_name, session_id=session_id))
                 async for event in agent.run(request):
@@ -295,13 +303,13 @@ class MultiAgentOrchestrator:
             await asyncio.gather(*worker_tasks, return_exceptions=True)
             done_event.set()
 
-        asyncio.create_task(_set_done())
+        _drain_task = asyncio.create_task(_set_done())  # noqa: RUF006
 
         while not done_event.is_set() or not output_queue.empty():
             try:
                 event = await asyncio.wait_for(output_queue.get(), timeout=0.05)
                 yield event
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 continue
 
     async def _run_reporter(self, queue: WorkQueue) -> AsyncIterator[OrchestratorEvent]:

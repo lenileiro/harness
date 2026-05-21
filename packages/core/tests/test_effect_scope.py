@@ -2,22 +2,22 @@
 
 from __future__ import annotations
 
-import pytest
-
-from harness.core import ApprovalPolicy, AutoApprove, EffectScope
-from harness.core.schemas import ToolCall, ToolResult
+from harness.core import EffectScope
+from harness.core.schemas import ApprovalDecision, ToolCall, ToolResult
 from harness.core.tools import ApprovalPolicy
 
 
 class _ScopedTool:
     """Minimal Tool implementation with configurable scope and approval."""
 
-    def __init__(self, name: str, *, effect_scope: str | None, approval: str = "auto") -> None:
+    def __init__(
+        self, name: str, *, effect_scope: str | None, approval: ApprovalDecision = "auto"
+    ) -> None:
         self.name = name
         self.description = "test"
         self.parameters_schema: dict = {"type": "object", "properties": {}, "required": []}
         self.effect_scope = effect_scope
-        self.approval = approval  # type: ignore[assignment]
+        self.approval: ApprovalDecision = approval
 
     async def __call__(self, call: ToolCall) -> ToolResult:
         return ToolResult(tool_call_id=call.id, name=self.name, content="ok")
@@ -65,6 +65,7 @@ class TestEffectScopeApprovalPolicy:
 
     def test_effect_scope_literal_values(self) -> None:
         from typing import get_args
+
         scopes = get_args(EffectScope)
         assert "read_only" in scopes
         assert "workspace_durable" in scopes

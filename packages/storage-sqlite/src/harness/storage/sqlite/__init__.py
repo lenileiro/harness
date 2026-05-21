@@ -397,7 +397,11 @@ class SQLiteStorage(Storage, TaskStore, ActivityStore, ApprovalStore, MemoryStor
             ) as cursor:
                 meta_row = await cursor.fetchone()
             existing_meta = json.loads(meta_row[0]) if meta_row and meta_row[0] else {}
-            meta = {**existing_meta, "claimed_by": claimed_by, "worker_session_id": worker_session_id}
+            meta = {
+                **existing_meta,
+                "claimed_by": claimed_by,
+                "worker_session_id": worker_session_id,
+            }
             await db.execute(
                 "UPDATE tasks SET status = 'in_progress', metadata = ?, updated_at = ? WHERE id = ?",
                 (json.dumps(meta), now, claimed_id),
@@ -406,6 +410,7 @@ class SQLiteStorage(Storage, TaskStore, ActivityStore, ApprovalStore, MemoryStor
         except Exception:
             await db.rollback()
             raise
+        assert claimed_id is not None
         return await self.get_task(claimed_id)
 
     # ------------------------------------------------------------------ #

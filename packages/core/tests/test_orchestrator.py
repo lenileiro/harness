@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import uuid
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -17,11 +19,9 @@ from harness.core.orchestrator import (
     MultiAgentOrchestrator,
     OrchestratorEvent,
     WorkItemClaimedEvent,
-    WorkItemCompletedEvent,
     WorkQueue,
 )
 from harness.storage.memory import InMemoryStorage
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -210,7 +210,7 @@ class TestOrchestratorEvents:
 # ---------------------------------------------------------------------------
 
 
-def _make_simple_agent_factory(store: InMemoryStorage) -> object:
+def _make_simple_agent_factory(store: InMemoryStorage) -> Callable[[AgentRole], Any]:
     """Return an agent_factory that produces a stub agent yielding a Done event."""
 
     class StubAgent:

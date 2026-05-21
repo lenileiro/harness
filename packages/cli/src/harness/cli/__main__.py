@@ -71,9 +71,9 @@ from harness.core import (
     MemoryEntry,
     MultiAgentOrchestrator,
     PendingApproval,
+    Planner,
     PredictionEvent,
     PredictionMismatchEvent,
-    Planner,
     RepairOrchestrator,
     RuleVerifier,
     RunRequest,
@@ -91,7 +91,6 @@ from harness.core import (
     WorkItemClaimedEvent,
     WorkItemCompletedEvent,
     WorkItemCreatedEvent,
-    WorkQueue,
     configure_logging,
     fork_session,
 )
@@ -1785,7 +1784,7 @@ def _render_mermaid(source: str) -> str:
 
     ascii_art: str | None = None
     try:
-        from mermaid_ascii import mermaid_to_ascii  # optional
+        from mermaid_ascii import mermaid_to_ascii  # type: ignore[import-untyped]  # optional
 
         result = mermaid_to_ascii(source)
         if result and result.strip():
@@ -2503,17 +2502,11 @@ class LabRenderer:
                 f"[{color}]✓ {event.role} done ({event.turn_count} turns)[/{color}]"
             )
         elif isinstance(event, WorkItemCreatedEvent):
-            self._console.print(
-                f"[dim]  + {event.task_ref} {event.title}[/dim]"
-            )
+            self._console.print(f"[dim]  + {event.task_ref} {event.title}[/dim]")
         elif isinstance(event, WorkItemClaimedEvent):
-            self._console.print(
-                f"[cyan]  → claimed {event.task_ref}[/cyan]"
-            )
+            self._console.print(f"[cyan]  → claimed {event.task_ref}[/cyan]")
         elif isinstance(event, WorkItemCompletedEvent):
-            self._console.print(
-                f"[cyan]  ✓ completed {event.task_ref}[/cyan]"
-            )
+            self._console.print(f"[cyan]  ✓ completed {event.task_ref}[/cyan]")
         elif isinstance(event, AgentEventWrapper):
             color = _role_color(event.role)
             self._inner.render(event.event)
@@ -2562,23 +2555,28 @@ def lab_run(
             job_id = role.job_id or "_job_"
             item_id = role.item_id or "_item_"
 
-            # Role-specific tool registries — planner and reporter can't write files
             tools = ToolRegistry()
-            tools.register(ReadFileTool(cwd=working_dir))
-            tools.register(ListDirTool(cwd=working_dir))
-            tools.register(GlobTool(cwd=working_dir))
-            tools.register(ListWorkItemsTool(storage, job_id))
 
             if role.name == "planner":
+                # Planner only sees queue tools — no filesystem access to prevent drift
                 tools.register(CreateWorkItemTool(storage, parent_id=job_id, cwd=working_dir))
+                tools.register(ListWorkItemsTool(storage, job_id))
             elif role.name.startswith("worker"):
-                # Workers get the full tool set plus queue completion
+                tools.register(ReadFileTool(cwd=working_dir))
+                tools.register(ListDirTool(cwd=working_dir))
+                tools.register(GlobTool(cwd=working_dir))
                 tools.register(WriteFileTool(cwd=working_dir))
                 tools.register(EditFileTool(cwd=working_dir))
                 tools.register(ShellTool(cwd=working_dir))
                 tools.register(FetchUrlTool())
+                tools.register(ListWorkItemsTool(storage, job_id))
                 tools.register(CompleteWorkItemTool(storage, item_id))
-            # reporter gets read + list only (already registered above)
+            else:
+                # reporter: read-only + queue listing
+                tools.register(ReadFileTool(cwd=working_dir))
+                tools.register(ListDirTool(cwd=working_dir))
+                tools.register(GlobTool(cwd=working_dir))
+                tools.register(ListWorkItemsTool(storage, job_id))
 
             adapters = {
                 resolved_provider: _build_adapter(resolved_provider, base_url=None, config=cfg)
@@ -2600,16 +2598,27 @@ def lab_run(
         planner_role = AgentRole(
             name="planner",
             system_prompt=(
-                "You are a Planner. Decompose the given task into concrete work items "
-                "using create_work_item. Each item should be independently executable. "
-                "Create between 2 and 5 items. Then stop — do not execute the items yourself."
+                "You are a Planner. Your ONLY job is to decompose the user's task into "
+                "work items using create_work_item. Nothing else.\n\n"
+                "Rules:\n"
+                "1. Read the task description carefully. Decompose it literally — do not "
+                "reinterpret or invent a different task.\n"
+                "2. Do NOT read files, run commands, or do any work yourself.\n"
+                "3. Create 2-5 work items. Each item must be a direct sub-task of what "
+                "the user actually asked for.\n"
+                "4. Once you have called create_work_item for each sub-task, stop immediately."
             ),
         )
         worker_role = AgentRole(
             name="worker",
             system_prompt=(
-                "You are a Worker. Complete the assigned work item using available tools. "
-                "When done, call complete_work_item with a brief summary of what you accomplished."
+                "You are a Worker. You have exactly ONE job: complete the assigned work item.\n\n"
+                "Steps:\n"
+                "1. Read the work item title and description carefully.\n"
+                "2. Use tools to accomplish it — no more, no less.\n"
+                "3. As soon as the item is done, call complete_work_item with a one-sentence summary.\n\n"
+                "Do NOT explore unrelated files. Do NOT create new tasks. Do NOT loop. "
+                "Call complete_work_item before you run out of steps."
             ),
         )
         reporter_role = AgentRole(
@@ -2627,6 +2636,7 @@ def lab_run(
             worker_role=worker_role,
             reporter_role=reporter_role,
             max_workers=workers,
+            max_worker_steps=8,
             job_cwd=working_dir,
             provider=resolved_provider,
             model=resolved_model,

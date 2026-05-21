@@ -189,7 +189,9 @@ def compare_prediction(prediction: ToolPrediction, result: ToolResult) -> Predic
     """Compare a pre-execution prediction against the actual ToolResult."""
     actual_status = "error" if result.is_error else "ok"
     matched = _status_matched(prediction.expected_status, actual_status)
-    severity: PredictionSeverity = "none" if matched else _mismatch_severity(prediction.effect_scope)
+    severity: PredictionSeverity = (
+        "none" if matched else _mismatch_severity(prediction.effect_scope)
+    )
     lesson = "prediction_matched" if matched else _lesson(prediction.effect_scope, actual_status)
     return PredictionOutcome(
         prediction_id=prediction.prediction_id,
@@ -202,7 +204,6 @@ def compare_prediction(prediction: ToolPrediction, result: ToolResult) -> Predic
 
 
 __all__ = [
-    "ComparePredictor",
     "ConsequencePredictor",
     "ExpectedStatus",
     "PredictionOutcome",
