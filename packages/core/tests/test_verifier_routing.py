@@ -56,10 +56,26 @@ class AlwaysFailLLMAdapter:
 
 
 @pytest.mark.asyncio
-async def test_no_tools_routes_to_rule() -> None:
+async def test_no_tools_routes_to_llm_judge() -> None:
+    # No tools dispatched → router must use the LLM judge, not rule.
+    # The model may have verbally claimed to do work without calling any tool.
     router = VerifierRouter(
         rule=RuleVerifier(),
         llm=LLMJudgeVerifier(adapter=AlwaysFailLLMAdapter(), model="m"),  # type: ignore[arg-type]
+    )
+    session = _make_session()
+    result = await router.verify(session=session, activity=[])
+    # AlwaysFailLLMAdapter returns can_finish=False → proves judge was called, not rule
+    assert result.can_finish is False
+    assert result.verifier_name == "router"
+
+
+@pytest.mark.asyncio
+async def test_no_tools_llm_judge_can_pass() -> None:
+    # When the LLM judge says it's fine (e.g. a factual Q&A with no tools needed), trust it
+    router = VerifierRouter(
+        rule=RuleVerifier(),
+        llm=LLMJudgeVerifier(adapter=AlwaysPassLLMAdapter(), model="m"),  # type: ignore[arg-type]
     )
     session = _make_session()
     result = await router.verify(session=session, activity=[])

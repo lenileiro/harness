@@ -244,16 +244,14 @@ class VerifierRouter:
     ) -> VerificationResult:
         completed = [e for e in activity if e.kind == "tool_call.completed"]
         used_tools = {e.data.get("name") for e in completed}
-        if used_tools & self._MUTATING_TOOLS:
-            result = await self._llm.verify(session=session, activity=activity)
-            return VerificationResult(
-                can_finish=result.can_finish,
-                reason=result.reason,
-                confidence=result.confidence,
-                evidence_event_ids=result.evidence_event_ids,
-                verifier_name=self.name,
-            )
-        result = await self._rule.verify(session=session, activity=activity)
+
+        # No tools at all → LLM judge. Rule has nothing to check and the model
+        # may have verbally claimed to do work it never actually performed.
+        # Only read-only tools → rule is sufficient (fast, no LLM cost).
+        # Any mutating tool → LLM judge (verify the outcome was correct).
+        use_llm = not completed or bool(used_tools & self._MUTATING_TOOLS)
+        verifier = self._llm if use_llm else self._rule
+        result = await verifier.verify(session=session, activity=activity)
         return VerificationResult(
             can_finish=result.can_finish,
             reason=result.reason,
