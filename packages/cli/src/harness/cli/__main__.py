@@ -2605,6 +2605,22 @@ def lab_run(
             "--max-context-tokens", help="Token budget for worker context pruning per turn."
         ),
     ] = None,
+    max_steps: Annotated[
+        int,
+        typer.Option("--max-steps", help="Max tool-call steps per worker per work item."),
+    ] = 20,
+    planner_model: Annotated[
+        str | None,
+        typer.Option("--planner-model", help="Model for the planner (overrides --model)."),
+    ] = None,
+    worker_model: Annotated[
+        str | None,
+        typer.Option("--worker-model", help="Model for workers (overrides --model)."),
+    ] = None,
+    reporter_model: Annotated[
+        str | None,
+        typer.Option("--reporter-model", help="Model for the reporter (overrides --model)."),
+    ] = None,
 ) -> None:
     """Run a multi-agent job: planner decomposes, workers execute in parallel, reporter synthesizes."""
 
@@ -2673,34 +2689,44 @@ def lab_run(
                 budget=worker_budget if role.name.startswith("worker") else None,
             )
 
+        resolved_planner_model = planner_model or resolved_model
+        resolved_worker_model = worker_model or resolved_model
+        resolved_reporter_model = reporter_model or resolved_model
+
         planner_role = AgentRole(
             name="planner",
+            model=resolved_planner_model,
             system_prompt=(
                 "You are a Planner. Your ONLY job is to decompose the user's task into "
-                "work items using create_work_item. Nothing else.\n\n"
+                "independent work items using create_work_item.\n\n"
                 "Rules:\n"
-                "1. Read the task description carefully. Decompose it literally — do not "
-                "reinterpret or invent a different task.\n"
-                "2. Do NOT read files, run commands, or do any work yourself.\n"
-                "3. Create 2-5 work items. Each item must be a direct sub-task of what "
-                "the user actually asked for.\n"
+                "1. Read the task carefully. Each work item must be completable on its own "
+                "without depending on the output of another work item.\n"
+                "2. Use as few work items as possible — prefer 1-3 self-contained items over "
+                "4+ sequential steps. If the task can be done in one item, use one.\n"
+                "3. Do NOT read files, run commands, or do any work yourself.\n"
                 "4. Once you have called create_work_item for each sub-task, stop immediately."
             ),
         )
         worker_role = AgentRole(
             name="worker",
+            model=resolved_worker_model,
+            max_steps=max_steps,
             system_prompt=(
-                "You are a Worker. You have exactly ONE job: complete the assigned work item.\n\n"
-                "Steps:\n"
-                "1. Read the work item title and description carefully.\n"
-                "2. Use tools to accomplish it — no more, no less.\n"
-                "3. As soon as the item is done, call complete_work_item with a one-sentence summary.\n\n"
-                "Do NOT explore unrelated files. Do NOT create new tasks. Do NOT loop. "
-                "Call complete_work_item before you run out of steps."
+                "You are a Worker. Complete the assigned work item using tools.\n\n"
+                "1. Read the work item title and description.\n"
+                "2. Use the minimum tools needed to complete it.\n"
+                "3. Call complete_work_item(summary=...) as soon as the work is done. "
+                "The summary must describe what you actually did (file names, commands run, "
+                "results computed) — not just 'task completed'.\n\n"
+                "CRITICAL: Call complete_work_item as a tool call, not as plain text. "
+                "Do NOT write 'complete_work_item(...)' in your response — call it as a tool. "
+                "Do not loop or re-read files unnecessarily. Stay focused."
             ),
         )
         reporter_role = AgentRole(
             name="reporter",
+            model=resolved_reporter_model,
             system_prompt=(
                 "You are a Reporter. Synthesize the completed work items into a clear, "
                 "concise final report for the user."
@@ -2712,7 +2738,7 @@ def lab_run(
         if not no_judge:
             work_item_judge = WorkItemJudge(
                 adapter=judge_adapter,
-                model=resolved_model,
+                model=resolved_planner_model,
             )
 
         orchestrator = MultiAgentOrchestrator(
@@ -2722,7 +2748,7 @@ def lab_run(
             worker_role=worker_role,
             reporter_role=reporter_role,
             max_workers=workers,
-            max_worker_steps=8,
+            max_worker_steps=max_steps,
             job_cwd=working_dir,
             provider=resolved_provider,
             model=resolved_model,
@@ -2730,8 +2756,18 @@ def lab_run(
             activity_store=storage,
         )
 
-        console.print(f"[bold]harness lab run[/bold] — {workers} workers")
-        console.print(f"[dim]provider=[/dim]{resolved_provider}  [dim]model=[/dim]{resolved_model}")
+        console.print(f"[bold]harness lab run[/bold] — {workers} workers  max-steps={max_steps}")
+        if resolved_planner_model == resolved_worker_model == resolved_reporter_model:
+            console.print(
+                f"[dim]provider=[/dim]{resolved_provider}  [dim]model=[/dim]{resolved_model}"
+            )
+        else:
+            console.print(
+                f"[dim]provider=[/dim]{resolved_provider}  "
+                f"[dim]planner=[/dim]{resolved_planner_model}  "
+                f"[dim]worker=[/dim]{resolved_worker_model}  "
+                f"[dim]reporter=[/dim]{resolved_reporter_model}"
+            )
         console.print()
 
         async for event in orchestrator.run(prompt):
@@ -2777,6 +2813,216 @@ def lab_status(
                 f"  [{color}]{item.status:12}[/{color}] {item.ref or item.id[:8]}  {item.title}"
                 f"{retry_str}{summary_str}"
             )
+
+    asyncio.run(_run())
+
+
+@lab_app.command("list")
+def lab_list(
+    db: Annotated[
+        Path,
+        typer.Option("--db", help="SQLite database path."),
+    ] = Path("harness.db"),
+) -> None:
+    """List all jobs in a SQLite database."""
+
+    async def _run() -> None:
+        from harness.storage.sqlite import SQLiteStorage
+
+        storage = SQLiteStorage(path=db)
+        # Root tasks have no parent_id
+        all_tasks = await storage.list_tasks(parent_id=None)
+        jobs = [t for t in all_tasks if t.parent_id is None]
+        if not jobs:
+            console.print("[yellow]No jobs found.[/yellow]")
+            return
+
+        status_colors = {
+            "todo": "white",
+            "in_progress": "cyan",
+            "done": "green",
+            "cancelled": "red",
+        }
+
+        for job in sorted(jobs, key=lambda t: t.created_at, reverse=True):
+            color = status_colors.get(job.status, "white")
+            items = await storage.list_tasks(parent_id=job.id)
+            done_count = sum(1 for t in items if t.status == "done")
+            total_count = len(items)
+            ts = job.created_at.strftime("%Y-%m-%d %H:%M")
+            console.print(
+                f"[{color}]{job.status:12}[/{color}]  {job.id[:16]}  "
+                f"[dim]{ts}[/dim]  {done_count}/{total_count} items  {job.title[:60]}"
+            )
+
+    asyncio.run(_run())
+
+
+@lab_app.command("resume")
+def lab_resume(
+    job_id: Annotated[str, typer.Argument(help="Job ID to resume.")],
+    provider: Annotated[
+        str | None,
+        typer.Option("--provider", "-p", help="LLM provider."),
+    ] = None,
+    model: Annotated[
+        str | None,
+        typer.Option("--model", "-m", help="Model name."),
+    ] = None,
+    workers: Annotated[
+        int,
+        typer.Option("--workers", "-w", help="Number of parallel worker agents."),
+    ] = 2,
+    db: Annotated[
+        Path,
+        typer.Option("--db", help="SQLite database path."),
+    ] = Path("harness.db"),
+    config_path: Annotated[
+        Path | None,
+        typer.Option("--config", help="Path to harness config TOML."),
+    ] = None,
+    no_judge: Annotated[
+        bool,
+        typer.Option("--no-judge", help="Disable post-completion judge verification."),
+    ] = False,
+    max_steps: Annotated[
+        int,
+        typer.Option("--max-steps", help="Max tool-call steps per worker per work item."),
+    ] = 20,
+    planner_model: Annotated[
+        str | None,
+        typer.Option("--planner-model", help="Model for the judge (overrides --model)."),
+    ] = None,
+    worker_model: Annotated[
+        str | None,
+        typer.Option("--worker-model", help="Model for workers (overrides --model)."),
+    ] = None,
+) -> None:
+    """Resume an interrupted job from a SQLite database, skipping already-done work items."""
+
+    async def _run() -> None:
+        from harness.storage.sqlite import SQLiteStorage
+
+        cfg = _load_cli_config(config_path)
+        resolved_provider = provider or cfg.default_provider or "ollama"
+        resolved_model = model or cfg.default_model or "llama3.2"
+        resolved_worker_model = worker_model or resolved_model
+        resolved_planner_model = planner_model or resolved_model
+
+        storage = SQLiteStorage(path=db)
+        renderer = LabRenderer(console)
+
+        # Look up the job to get its cwd
+        root = await storage.get_task(job_id)
+        if root is None:
+            console.print(f"[red]Job {job_id!r} not found in {db}[/red]")
+            raise typer.Exit(1)
+
+        working_dir = root.cwd
+
+        worker_budget: ContextBudget | None = None
+
+        def agent_factory(role: AgentRole) -> Agent:
+            job = role.job_id or "_job_"
+            item = role.item_id or "_item_"
+            tools = ToolRegistry()
+
+            if role.name.startswith("worker"):
+                tools.register(ReadFileTool(cwd=working_dir))
+                tools.register(ListDirTool(cwd=working_dir))
+                tools.register(GlobTool(cwd=working_dir))
+                tools.register(WriteFileTool(cwd=working_dir))
+                tools.register(EditFileTool(cwd=working_dir))
+                tools.register(ShellTool(cwd=working_dir))
+                tools.register(FetchUrlTool())
+                tools.register(ListWorkItemsTool(storage, job))
+                tools.register(CompleteWorkItemTool(storage, item))
+            else:
+                tools.register(ReadFileTool(cwd=working_dir))
+                tools.register(ListDirTool(cwd=working_dir))
+                tools.register(GlobTool(cwd=working_dir))
+                tools.register(ListWorkItemsTool(storage, job))
+
+            adapters = {
+                resolved_provider: _build_adapter(resolved_provider, base_url=None, config=cfg)
+            }
+            return Agent(
+                adapters=adapters,
+                tools=tools,
+                storage=storage,
+                failover=FailoverPolicy(chain=[resolved_provider]),
+                approval_policy=ApprovalPolicy(default="auto"),
+                approval_handler=AutoApprove(),
+                activity_store=storage,  # type: ignore[arg-type]
+                approval_store=storage,  # type: ignore[arg-type]
+                memory_store=storage,  # type: ignore[arg-type]
+                default_model=role.model or resolved_model,
+                default_cwd=str(working_dir),
+                system_prompt=role.system_prompt,
+                predictor=ConsequencePredictor(),
+                repair=RepairOrchestrator(),
+                budget=worker_budget if role.name.startswith("worker") else None,
+            )
+
+        worker_role = AgentRole(
+            name="worker",
+            model=resolved_worker_model,
+            max_steps=max_steps,
+            system_prompt=(
+                "You are a Worker. Complete the assigned work item using tools.\n\n"
+                "1. Read the work item title and description.\n"
+                "2. Use the minimum tools needed to complete it.\n"
+                "3. Call complete_work_item(summary=...) as soon as the work is done. "
+                "The summary must describe what you actually did.\n\n"
+                "CRITICAL: Call complete_work_item as a tool call, not as plain text."
+            ),
+        )
+        reporter_role = AgentRole(
+            name="reporter",
+            model=resolved_model,
+            system_prompt=(
+                "You are a Reporter. Synthesize the completed work items into a clear, "
+                "concise final report for the user."
+            ),
+        )
+        planner_role = AgentRole(
+            name="planner",
+            model=resolved_planner_model,
+            system_prompt="",
+        )
+
+        judge_adapter = _build_adapter(resolved_provider, base_url=None, config=cfg)
+        work_item_judge: WorkItemJudge | None = None
+        if not no_judge:
+            work_item_judge = WorkItemJudge(
+                adapter=judge_adapter,
+                model=resolved_planner_model,
+            )
+
+        orchestrator = MultiAgentOrchestrator(
+            agent_factory=agent_factory,
+            store=storage,
+            planner_role=planner_role,
+            worker_role=worker_role,
+            reporter_role=reporter_role,
+            max_workers=workers,
+            max_worker_steps=max_steps,
+            job_cwd=working_dir,
+            provider=resolved_provider,
+            model=resolved_model,
+            work_item_judge=work_item_judge,
+            activity_store=storage,
+        )
+
+        console.print(f"[bold]harness lab resume[/bold] {job_id[:16]}  — {workers} workers")
+        console.print(
+            f"[dim]provider=[/dim]{resolved_provider}  "
+            f"[dim]worker-model=[/dim]{resolved_worker_model}"
+        )
+        console.print()
+
+        async for event in orchestrator.resume(job_id):
+            renderer.render(event)
 
     asyncio.run(_run())
 

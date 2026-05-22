@@ -55,6 +55,7 @@ class AgentRole(BaseModel):
     max_instances: int = 1
     current_phase: str | None = None
     model: str | None = None
+    max_steps: int | None = None
     # Injected by orchestrator at run time — not set by callers
     job_id: str | None = None
     item_id: str | None = None
@@ -278,6 +279,51 @@ class MultiAgentOrchestrator:
         done_root = root.model_copy(update={"status": "done", "updated_at": datetime.now(UTC)})
         await self._store.update_task(done_root)
 
+    async def resume(self, job_id: str) -> AsyncIterator[OrchestratorEvent]:
+        """Resume an interrupted job from persistent storage.
+
+        Resets any in_progress tasks (interrupted mid-run) back to todo, then
+        re-runs the worker and reporter phases. The planner phase is skipped —
+        the work queue already exists from the original run.
+        """
+        root = await self._store.get_task(job_id)
+        if root is None:
+            raise KeyError(f"job {job_id!r} not found in store")
+
+        queue = WorkQueue(self._store, parent_id=job_id)
+
+        # Reset any tasks that were in_progress when the job was interrupted
+        in_progress = await self._store.list_tasks(parent_id=job_id, status="in_progress")
+        for task in in_progress:
+            reset = task.model_copy(
+                update={
+                    "status": "todo",
+                    "metadata": {
+                        **task.metadata,
+                        "_resume_reset": True,
+                    },
+                    "updated_at": datetime.now(UTC),
+                }
+            )
+            await self._store.update_task(reset)
+
+        # Re-mark root as in_progress if it was marked done prematurely
+        if root.status == "done":
+            await self._store.update_task(
+                root.model_copy(update={"status": "in_progress", "updated_at": datetime.now(UTC)})
+            )
+
+        async for event in self._run_workers(queue):
+            yield event
+
+        async for event in self._run_reporter(queue):
+            yield event
+
+        done_root = (await self._store.get_task(job_id)) or root
+        await self._store.update_task(
+            done_root.model_copy(update={"status": "done", "updated_at": datetime.now(UTC)})
+        )
+
     async def _run_planner(self, prompt: str, queue: WorkQueue) -> AsyncIterator[OrchestratorEvent]:
         session_id = f"planner_{uuid.uuid4().hex[:8]}"
         role = self._planner_role.model_copy(update={"job_id": queue._parent_id})
@@ -333,7 +379,7 @@ class MultiAgentOrchestrator:
                     session_id=session_id,
                     provider=self._provider,
                     model=role.model or self._model,
-                    max_steps=self._max_worker_steps,
+                    max_steps=role.max_steps or self._max_worker_steps,
                 )
                 await output_queue.put(AgentStartedEvent(role=worker_name, session_id=session_id))
                 async for event in agent.run(request):
