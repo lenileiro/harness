@@ -23,6 +23,14 @@ everything (handy for non-interactive use), or set approvals in config.
 from __future__ import annotations
 
 import asyncio
+
+# Load .env from the working directory (or any parent) before anything reads env vars.
+try:
+    from dotenv import load_dotenv as _load_dotenv
+
+    _load_dotenv(override=False)
+except ImportError:
+    pass
 import difflib
 import os
 import re
