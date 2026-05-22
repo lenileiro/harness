@@ -1,20 +1,37 @@
-"""HTTP fetch tool for Harness agents.
+"""Web tools for Harness agents: HTTP fetch, DuckDuckGo search, and SearXNG.
 
-Single tool: `fetch_url(url, timeout?)`. GET-only by design — the agent has
-no business issuing POST/PUT/DELETE through a generic tool.
+Tools:
+- ``fetch_url(url, timeout?)`` — GET-only HTTP fetch, capped + allow-listed.
+- ``WebSearchTool`` — DuckDuckGo search via the ``ddgs`` library; no API key.
+- ``SearXNGSearchTool`` — Search via a self-hosted SearXNG instance; open source,
+  no API key, aggregates 70+ engines. Requires a running SearXNG server.
 
-Defences:
-- Only `http://` and `https://` schemes are accepted.
-- Response body is capped at `max_bytes`.
-- Content-Type must match the allow-list (default: text/*, application/json,
-  application/xml, application/javascript).
-- Configurable timeout, hard-capped by `max_timeout`.
-- Approval default is `prompt` — fetching arbitrary URLs is a network egress
-  capability worth confirming.
+fetch_url defences:
+- Only ``http://`` and ``https://`` schemes are accepted.
+- Response body is capped at ``max_bytes``.
+- Content-Type must match the allow-list.
+- Configurable timeout, hard-capped by ``max_timeout``.
+- Approval default is ``prompt``.
+
+SearXNG quick-start (Docker, one command)::
+
+    docker run -d --name searxng -p 8080:8080 \\
+      -e SEARXNG_SECRET=$(openssl rand -hex 32) \\
+      searxng/searxng:latest
+
+Then enable JSON format in settings.yml (inside the container)::
+
+    search:
+      formats:
+        - html
+        - json
+
+Point ``SearXNGSearchTool(base_url="http://localhost:8080")`` at it.
 """
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 from urllib.parse import urlparse
 
@@ -163,4 +180,275 @@ class FetchUrlTool:
         )
 
 
-__all__ = ["DEFAULT_ALLOWED_MIME_PREFIXES", "FetchUrlTool", "__version__"]
+_WEB_SEARCH_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "query": {
+            "type": "string",
+            "description": "Search query.",
+        },
+        "max_results": {
+            "type": "integer",
+            "description": "Maximum number of results to return (default 5, max 20).",
+        },
+    },
+    "required": ["query"],
+}
+
+
+class WebSearchTool:
+    """Search the web via DuckDuckGo. No API key required."""
+
+    name = "web_search"
+    description = (
+        "Search the internet using DuckDuckGo. Returns titles, snippets, and URLs "
+        "for the most relevant results. Use this to research topics, find current "
+        "information, or look up documentation."
+    )
+    approval: ApprovalDecision = "auto"
+    phases: tuple[str, ...] = ("*",)
+
+    def __init__(self, *, max_results: int = 5) -> None:
+        self._default_max_results = min(max_results, 20)
+        self.parameters_schema: dict[str, Any] = _WEB_SEARCH_SCHEMA
+
+    async def __call__(self, call: ToolCall) -> ToolResult:
+        query = call.arguments.get("query")
+        if not isinstance(query, str) or not query.strip():
+            return ToolResult(
+                tool_call_id=call.id,
+                name=self.name,
+                content="missing or empty `query` argument",
+                is_error=True,
+            )
+
+        max_results_arg = call.arguments.get("max_results", self._default_max_results)
+        try:
+            max_results = max(1, min(int(max_results_arg), 20))
+        except (TypeError, ValueError):
+            max_results = self._default_max_results
+
+        try:
+            results = await asyncio.to_thread(self._search, query.strip(), max_results)
+        except Exception as exc:
+            return ToolResult(
+                tool_call_id=call.id,
+                name=self.name,
+                content=f"search failed: {exc}",
+                is_error=True,
+            )
+
+        if not results:
+            return ToolResult(
+                tool_call_id=call.id,
+                name=self.name,
+                content=f"no results found for: {query}",
+            )
+
+        lines = [f"Results for: {query}\n"]
+        for i, r in enumerate(results, 1):
+            title = r.get("title", "").strip()
+            body = r.get("body", "").strip()
+            href = r.get("href", "").strip()
+            lines.append(f"{i}. {title}")
+            if body:
+                lines.append(f"   {body}")
+            if href:
+                lines.append(f"   URL: {href}")
+            lines.append("")
+
+        return ToolResult(
+            tool_call_id=call.id,
+            name=self.name,
+            content="\n".join(lines).rstrip(),
+            metadata={"query": query, "result_count": len(results)},
+        )
+
+    @staticmethod
+    def _search(query: str, max_results: int) -> list[dict[str, str]]:
+        from duckduckgo_search import DDGS
+
+        return list(DDGS().text(query, max_results=max_results))
+
+
+_SEARXNG_SEARCH_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "query": {
+            "type": "string",
+            "description": "Search query.",
+        },
+        "max_results": {
+            "type": "integer",
+            "description": "Maximum number of results to return (default 5, max 20).",
+        },
+        "engines": {
+            "type": "string",
+            "description": "Comma-separated list of search engines to use (e.g. 'google,bing,duckduckgo'). Leave empty to use SearXNG defaults.",
+        },
+    },
+    "required": ["query"],
+}
+
+
+class SearXNGSearchTool:
+    """Search the web via a self-hosted SearXNG instance. No API key required.
+
+    Start SearXNG with Docker::
+
+        docker run -d --name searxng -p 8080:8080 \\
+          -e SEARXNG_SECRET=$(openssl rand -hex 32) \\
+          searxng/searxng:latest
+
+    Then enable JSON format in the container's settings.yml::
+
+        search:
+          formats: [html, json]
+    """
+
+    name = "web_search"
+    description = (
+        "Search the internet via SearXNG (open-source, self-hosted, no API key). "
+        "Returns titles, snippets, and URLs for the most relevant results. "
+        "Use this to research topics, find current information, or look up documentation."
+    )
+    approval: ApprovalDecision = "auto"
+    phases: tuple[str, ...] = ("*",)
+
+    def __init__(
+        self,
+        *,
+        base_url: str = "http://localhost:8080",
+        default_max_results: int = 5,
+        timeout: float = 15.0,
+        client: httpx.AsyncClient | None = None,
+    ) -> None:
+        self._base_url = base_url.rstrip("/")
+        self._default_max_results = min(default_max_results, 20)
+        self._timeout = timeout
+        self._injected_client = client
+        self.parameters_schema: dict[str, Any] = _SEARXNG_SEARCH_SCHEMA
+
+    async def __call__(self, call: ToolCall) -> ToolResult:
+        query = call.arguments.get("query")
+        if not isinstance(query, str) or not query.strip():
+            return ToolResult(
+                tool_call_id=call.id,
+                name=self.name,
+                content="missing or empty `query` argument",
+                is_error=True,
+            )
+
+        max_results_arg = call.arguments.get("max_results", self._default_max_results)
+        try:
+            max_results = max(1, min(int(max_results_arg), 20))
+        except (TypeError, ValueError):
+            max_results = self._default_max_results
+
+        engines = call.arguments.get("engines", "")
+
+        params: dict[str, str] = {
+            "q": query.strip(),
+            "format": "json",
+            "pageno": "1",
+        }
+        if engines and isinstance(engines, str):
+            params["engines"] = engines
+
+        owns_client = self._injected_client is None
+        client = self._injected_client or httpx.AsyncClient(
+            timeout=self._timeout, follow_redirects=True
+        )
+        try:
+            try:
+                response = await client.get(
+                    f"{self._base_url}/search", params=params, timeout=self._timeout
+                )
+            except httpx.ConnectError as exc:
+                return ToolResult(
+                    tool_call_id=call.id,
+                    name=self.name,
+                    content=f"could not connect to SearXNG at {self._base_url}: {exc}",
+                    is_error=True,
+                )
+            except httpx.TimeoutException:
+                return ToolResult(
+                    tool_call_id=call.id,
+                    name=self.name,
+                    content=f"SearXNG request timed out after {self._timeout}s",
+                    is_error=True,
+                )
+        finally:
+            if owns_client:
+                await client.aclose()
+
+        if response.status_code == 403:
+            return ToolResult(
+                tool_call_id=call.id,
+                name=self.name,
+                content=(
+                    "SearXNG returned 403 Forbidden. "
+                    "Enable JSON format in settings.yml: search.formats: [html, json]"
+                ),
+                is_error=True,
+            )
+        if response.status_code >= 400:
+            return ToolResult(
+                tool_call_id=call.id,
+                name=self.name,
+                content=f"SearXNG returned HTTP {response.status_code}",
+                is_error=True,
+            )
+
+        try:
+            data = response.json()
+        except Exception:
+            return ToolResult(
+                tool_call_id=call.id,
+                name=self.name,
+                content="SearXNG returned non-JSON response; is JSON format enabled?",
+                is_error=True,
+            )
+
+        results = data.get("results", [])[:max_results]
+
+        if not results:
+            return ToolResult(
+                tool_call_id=call.id,
+                name=self.name,
+                content=f"no results found for: {query}",
+            )
+
+        lines = [f"Results for: {query}\n"]
+        for i, r in enumerate(results, 1):
+            title = r.get("title", "").strip()
+            snippet = r.get("content", "").strip()
+            url = r.get("url", "").strip()
+            engine = r.get("engine", "")
+            lines.append(f"{i}. {title}" + (f" [{engine}]" if engine else ""))
+            if snippet:
+                lines.append(f"   {snippet}")
+            if url:
+                lines.append(f"   URL: {url}")
+            lines.append("")
+
+        return ToolResult(
+            tool_call_id=call.id,
+            name=self.name,
+            content="\n".join(lines).rstrip(),
+            metadata={
+                "query": query,
+                "result_count": len(results),
+                "backend": "searxng",
+                "base_url": self._base_url,
+            },
+        )
+
+
+__all__ = [
+    "DEFAULT_ALLOWED_MIME_PREFIXES",
+    "FetchUrlTool",
+    "SearXNGSearchTool",
+    "WebSearchTool",
+    "__version__",
+]
