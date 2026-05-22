@@ -184,12 +184,12 @@ _DEFAULT_SYSTEM_PROMPT = (
     "read files, list directories, or run shell commands when the user asks "
     "about the current project or codebase. "
     "Do not ask the user for information you can look up yourself with a tool.\n\n"
-    "When asked to analyze multiple files: first check total size with the shell tool "
-    "(e.g. `find . -name '*.py' | xargs wc -c 2>/dev/null | tail -1`). "
-    "If total content exceeds ~200 KB, use the spawn_agents tool with a clear goal "
-    "describing which files to analyze and what output you need — this distributes "
-    "the work across multiple worker agents that each read a subset of files. "
-    "For small sets of files, read them directly."
+    "When a task requires reading multiple files: first identify only the files "
+    "relevant to the question (use glob or targeted find, not a full tree walk). "
+    "Check their total size (e.g. `find <specific-path> -name '*.py' | xargs wc -c 2>/dev/null | tail -1`). "
+    "If the relevant files exceed ~200 KB total, use spawn_agents with a goal "
+    "that names exactly which paths to analyze and what output you need. "
+    "For small or targeted reads, read the files directly."
 )
 
 _SPAWN_SCHEMA: dict[str, Any] = {
@@ -289,13 +289,12 @@ class SpawnAgentsTool:
         planner_role = AgentRole(
             name="planner",
             system_prompt=(
-                "You are a Planner. Your job: use list_dir to discover top-level "
-                "subdirectories, then create ONE work item per subdirectory using "
-                "create_work_item. Each item must say exactly which directory the "
-                "worker should analyze (e.g. 'Analyze packages/core — read its Python "
-                "files and summarize what the package does'). Do NOT read file contents "
-                "yourself. Call list_dir first, then create_work_item for each "
-                "subdirectory, then stop immediately."
+                "You are a Planner. Read the goal carefully and decompose it into "
+                "independent work items — one per distinct area the goal explicitly "
+                "asks about. Do NOT explore the whole project. Use list_dir or glob "
+                "only when you need to confirm which specific paths exist for a part "
+                "of the goal. Create as few items as needed. Stop immediately after "
+                "calling create_work_item for each part."
             ),
         )
         worker_role = AgentRole(
@@ -316,16 +315,6 @@ class SpawnAgentsTool:
             ),
         )
 
-        def _validate_plan(items: list[Task]) -> str | None:
-            if len(items) < 2:
-                return (
-                    f"Planner created only {len(items)} work item(s). "
-                    "You must create one work item per subdirectory — "
-                    "use list_dir first to discover subdirectories, then "
-                    "call create_work_item once for each one."
-                )
-            return None
-
         orchestrator = MultiAgentOrchestrator(
             agent_factory=agent_factory,
             store=store,
@@ -336,8 +325,6 @@ class SpawnAgentsTool:
             job_cwd=self._cwd,
             provider=self._provider,
             model=self._model,
-            planner_validator=_validate_plan,
-            max_planner_retries=1,
         )
 
         reporter_text: list[str] = []
