@@ -10,6 +10,7 @@ dependencies = [
     "storage-sqlite",
     "adapter-ollama",
     "adapter-openrouter",
+    "adapter-anthropic",
     "tools-fs",
     "tools-shell",
     "tools-web",
@@ -36,6 +37,7 @@ storage-memory = { workspace = true }
 storage-sqlite = { workspace = true }
 adapter-ollama = { workspace = true }
 adapter-openrouter = { workspace = true }
+adapter-anthropic = { workspace = true }
 tools-fs = { workspace = true }
 tools-shell = { workspace = true }
 tools-web = { workspace = true }

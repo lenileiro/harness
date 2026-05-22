@@ -50,6 +50,7 @@ from rich.prompt import Confirm
 from rich.spinner import Spinner
 from rich.table import Table
 
+from harness.adapters.anthropic import AnthropicAdapter
 from harness.adapters.ollama import OllamaAdapter
 from harness.adapters.openrouter import OpenRouterAdapter
 from harness.cli.approval import RichApprovalHandler
@@ -406,6 +407,8 @@ def _build_adapter(provider: str, *, base_url: str | None, config: HarnessConfig
             http_referer=settings.get("http_referer"),
             x_title=settings.get("x_title"),
         )
+    if provider == "anthropic":
+        return AnthropicAdapter(base_url=effective_base_url)
     raise typer.BadParameter(f"unknown provider: {provider!r}")
 
 
@@ -3537,8 +3540,7 @@ def eval_run(
     resolved_provider = provider or cfg.default_provider or "ollama"
     resolved_model = model or cfg.default_model or "llama3.2"
     resolved_judge_model = judge_model or resolved_model
-    # When the agent uses 'claude -p', it can't also serve as the judge adapter.
-    # Fall back to ollama for judging unless the caller specifies --judge-provider.
+    # claude -p has no adapter; fall back to ollama for judging unless overridden.
     resolved_judge_provider = judge_provider or (
         "ollama" if resolved_provider == "claude" else resolved_provider
     )

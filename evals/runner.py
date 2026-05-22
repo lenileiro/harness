@@ -96,7 +96,11 @@ def _agent_cmd(
     work: Path,
     harness_bin: str | None,
 ) -> list[str]:
-    """Return the command list to invoke the agent for a given provider."""
+    """Return the command to invoke the agent for the given provider.
+
+    'claude' provider shells out to `claude -p` (Claude Code CLI).
+    All other providers go through `harness run`.
+    """
     if provider == "claude":
         claude_bin = shutil.which("claude") or "claude"
         return [
