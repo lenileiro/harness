@@ -23,8 +23,8 @@ from typing import Protocol, runtime_checkable
 
 from harness.core.activity import ActivityEvent
 from harness.core.adapter import Adapter
-from harness.core.events import Done, TextDelta, ToolCallEvent
-from harness.core.schemas import Message, Session, ToolCall, ToolResult, VerificationResult
+from harness.core.events import Done, TextDelta
+from harness.core.schemas import Message, Session, VerificationResult
 
 
 @runtime_checkable
@@ -48,38 +48,6 @@ class Critic(Protocol):
 
 
 SearchFn = Callable[[str], Awaitable[str]]
-
-_WEB_SEARCH_TOOL: dict = {
-    "type": "function",
-    "function": {
-        "name": "web_search",
-        "description": (
-            "Search the web for relevant patterns, documentation, or examples. "
-            "Use 1-2 targeted queries to research the design pattern or concept "
-            "the failing test is checking."
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "query": {
-                    "type": "string",
-                    "description": "The search query.",
-                },
-            },
-            "required": ["query"],
-        },
-    },
-}
-
-_RESEARCH_SYSTEM = """\
-You are a code review critic with access to web_search.
-
-Use web_search (1-2 calls) to research:
-- The specific design pattern the failing test checks
-- Known correct implementations in the relevant language
-
-After searching (or if no search is needed), write your critique directly.\
-"""
 
 _CRITIC_SYSTEM = """\
 You are a code review critic embedded in an AI repair loop.
@@ -173,73 +141,40 @@ class LLMCritic:
         self._search_fn = search_fn
         self._max_searches = max_searches
 
+    def _build_search_queries(self, failure_text: str, agent_text: str) -> list[str]:
+        """Extract search queries from failure text without an LLM call."""
+        import re
+
+        queries: list[str] = []
+
+        # Pull the failing test name → "<slug> implementation pattern"
+        test_names = re.findall(r"FAILED[^\n]*::(test_\w+)", failure_text)
+        for name in test_names[:1]:
+            slug = name.replace("test_", "").replace("_", " ")
+            queries.append(f"{slug} implementation pattern")
+
+        # Pull AssertionError messages verbatim as the second query
+        assert_msgs = re.findall(r"AssertionError:\s*(.+)", failure_text)
+        for msg in assert_msgs[:1]:
+            words = msg.strip()[:100]
+            if words:
+                queries.append(words)
+
+        return queries[: self._max_searches]
+
     async def _research(self, agent_text: str, failure_text: str) -> str:
-        """Run up to max_searches web searches using native tool calling."""
-        messages: list[Message] = [
-            Message(role="system", content=_RESEARCH_SYSTEM),
-            Message(
-                role="user",
-                content=(
-                    f"Agent's last response:\n{agent_text[:1000]}\n\n"
-                    f"Test failure:\n{failure_text[:1500]}\n\n"
-                    "Search for relevant patterns, then write your critique."
-                ),
-            ),
-        ]
-
+        """Run targeted web searches derived from the failure text."""
+        if self._search_fn is None:
+            return ""
+        queries = self._build_search_queries(failure_text, agent_text)
         findings: list[str] = []
-        for _ in range(self._max_searches):
-            pending_calls: list[ToolCall] = []
-            text_parts: list[str] = []
-
+        for query in queries:
             try:
-                async for event in self._adapter.stream(
-                    model=self._model,
-                    messages=messages,
-                    tools=[_WEB_SEARCH_TOOL],
-                    max_tokens=200,
-                    temperature=0.0,
-                ):
-                    if isinstance(event, TextDelta):
-                        text_parts.append(event.text)
-                    elif isinstance(event, ToolCallEvent):
-                        pending_calls.append(event.call)
-                    elif isinstance(event, Done):
-                        break
+                result = await self._search_fn(query)  # type: ignore[misc]
+                if result:
+                    findings.append(f"Search: {query}\n{result[:1200]}")
             except Exception:
-                break
-
-            if not pending_calls:
-                break
-
-            # Execute each tool call and feed results back.
-            tool_results: list[ToolResult] = []
-            for tc in pending_calls:
-                query = (
-                    str(tc.arguments.get("query", "")).strip()
-                    if isinstance(tc.arguments, dict)
-                    else ""
-                )
-                if query:
-                    result = await self._search_fn(query)  # type: ignore[misc]
-                    findings.append(f"Search: {query}\n{result[:1000]}")
-                    tool_results.append(
-                        ToolResult(tool_call_id=tc.id, name=tc.name, content=result[:1000])
-                    )
-
-            if not tool_results:
-                break
-
-            messages.append(
-                Message(
-                    role="assistant", content="".join(text_parts) or None, tool_calls=pending_calls
-                )
-            )
-            for tr in tool_results:
-                messages.append(
-                    Message(role="tool", content=tr.content, tool_call_id=tr.tool_call_id)
-                )
-
+                pass
         return "\n\n".join(findings)
 
     async def critique(
@@ -252,6 +187,17 @@ class LLMCritic:
         agent_text = _last_assistant_text(session)
         failure_text = verification_result.reason[:3000]
 
+        # Run web research before critique (no LLM tool-calling — query extracted
+        # directly from failure text so local models without tool support still work).
+        research_section = ""
+        if self._search_fn is not None:
+            try:
+                findings = await self._research(agent_text, failure_text)
+                if findings:
+                    research_section = _RESEARCH_SECTION.format(findings=findings)
+            except Exception:
+                pass
+
         messages: list[Message] = [
             Message(role="system", content=_CRITIC_SYSTEM),
             Message(
@@ -259,68 +205,21 @@ class LLMCritic:
                 content=_CRITIC_USER.format(
                     agent_last=agent_text,
                     failure=failure_text,
-                    research_section="",
+                    research_section=research_section,
                 ),
             ),
         ]
 
-        # Give the critic web_search as its only tool when search is available.
-        tools = [_WEB_SEARCH_TOOL] if self._search_fn is not None else None
-
         try:
-            return await self._run_critique_with_tools(messages, tools)
-        except Exception:
-            return ""
-
-    async def _run_critique_with_tools(
-        self,
-        messages: list[Message],
-        tools: list[dict] | None,
-    ) -> str:
-        """Stream the critique, handling web_search tool calls inline."""
-        for _ in range(self._max_searches + 1):
-            text_parts: list[str] = []
-            pending_calls: list[ToolCall] = []
-
-            async for event in self._adapter.stream(
-                model=self._model,
-                messages=messages,
-                tools=tools or None,
+            return await _stream_text(
+                self._adapter,
+                self._model,
+                messages,
                 max_tokens=self._max_tokens,
                 temperature=self._temperature,
-            ):
-                if isinstance(event, TextDelta):
-                    text_parts.append(event.text)
-                elif isinstance(event, ToolCallEvent):
-                    pending_calls.append(event.call)
-                elif isinstance(event, Done):
-                    if event.final_message and event.final_message.content:
-                        return event.final_message.content.strip()
-                    break
-
-            if not pending_calls:
-                return "".join(text_parts).strip()
-
-            # Execute web_search calls and continue.
-            messages.append(
-                Message(
-                    role="assistant",
-                    content="".join(text_parts) or None,
-                    tool_calls=pending_calls,
-                )
             )
-            for tc in pending_calls:
-                query = (
-                    str(tc.arguments.get("query", "")).strip()
-                    if isinstance(tc.arguments, dict)
-                    else ""
-                )
-                result = (
-                    await self._search_fn(query) if query and self._search_fn else "(no results)"
-                )  # type: ignore[misc]
-                messages.append(Message(role="tool", content=result[:1500], tool_call_id=tc.id))
-
-        return ""
+        except Exception:
+            return ""
 
 
 _DEVIL_SYSTEM = """\
@@ -334,8 +233,8 @@ Rules:
 - Identify the design pattern or concept the failing test is checking \
   (e.g. "concurrent deduplication", "atomic compare-and-swap", "idempotency")
 - In 1-2 sentences, hint at the right direction: what class of solution \
-  addresses this pattern? (e.g. "in-flight request tracking using a dict of \
-  futures/tasks", "a lock protecting shared state")
+  addresses this pattern? Consider the runtime model (async, threaded, \
+  single-threaded) implied by the test when naming the mechanism.
 - Do NOT write code. Do NOT reproduce the solution. Just name the pattern \
   and one concrete hint about the data structure or mechanism.
 - Be concise: 2-3 sentences maximum.
