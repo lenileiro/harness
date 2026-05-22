@@ -504,6 +504,25 @@ def _build_verifier(
     )
 
 
+def _build_search_fn() -> Any:
+    """Return a TavilySearchTool wrapper if TAVILY_API_KEY is set, else None."""
+    if not os.environ.get("TAVILY_API_KEY"):
+        return None
+    try:
+        from harness.tools.web import TavilySearchTool
+
+        _searcher = TavilySearchTool()
+
+        async def _search(query: str) -> str:
+            call = ToolCall(id=f"s_{query[:8]}", name="web_search", arguments={"query": query})
+            result: ToolResult = await _searcher(call)
+            return result.content or ""
+
+        return _search
+    except Exception:
+        return None
+
+
 def _build_critic(
     critic: str | None,
     *,
@@ -514,26 +533,15 @@ def _build_critic(
     """Resolve --critic value to a Critic instance (or None).
 
     Options:
-      llm        — LLMCritic without web search
-      llm+search — LLMCritic with Tavily web search (requires TAVILY_API_KEY)
+      llm        — MultiCritic without web search
+      llm+search — MultiCritic with Tavily web search (requires TAVILY_API_KEY)
       none       — disabled (default)
     """
     if not critic or critic == "none":
         return None
     if critic in ("llm", "llm+search"):
         adapter = _build_adapter(chain[0], base_url=None, config=config)
-        search_fn = None
-        if critic == "llm+search":
-            from harness.tools.web import TavilySearchTool
-
-            _searcher = TavilySearchTool()
-
-            async def _search(query: str) -> str:
-                call = ToolCall(id=f"s_{query[:8]}", name="web_search", arguments={"query": query})
-                result: ToolResult = await _searcher(call)
-                return result.content or ""
-
-            search_fn = _search
+        search_fn = _build_search_fn() if critic == "llm+search" else None
         return make_multi_critic(adapter=adapter, model=model, search_fn=search_fn)
     raise typer.BadParameter(f"unknown --critic value: {critic!r} (use llm|llm+search|none)")
 
@@ -632,7 +640,13 @@ def _build_agent(
     )
     tools.register(VerifyWorkTool(cwd=cwd))
     primary_adapter = adapters[chain[0]]
-    tools.register(RequestCritiqueTool(adapter=primary_adapter, model=model))
+    tools.register(
+        RequestCritiqueTool(
+            adapter=primary_adapter,
+            model=model,
+            search_fn=_build_search_fn(),
+        )
+    )
 
     # Always enforce: if the agent modified files, it must call verify_work.
     # Chain on top of whatever --verify verifier was passed (may be None).

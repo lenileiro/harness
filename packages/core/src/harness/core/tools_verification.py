@@ -23,7 +23,8 @@ from pathlib import Path
 from typing import Any
 
 from harness.core.adapter import Adapter
-from harness.core.events import Done, TextDelta
+from harness.core.critic import _WEB_SEARCH_TOOL, SearchFn
+from harness.core.events import Done, TextDelta, ToolCallEvent
 from harness.core.schemas import ApprovalDecision, Message, ToolCall, ToolResult
 
 _CRITIQUE_SYSTEM = """\
@@ -178,11 +179,15 @@ class RequestCritiqueTool:
         *,
         max_tokens: int = 400,
         temperature: float = 0.3,
+        search_fn: SearchFn | None = None,
+        max_searches: int = 2,
     ) -> None:
         self._adapter = adapter
         self._model = model
         self._max_tokens = max_tokens
         self._temperature = temperature
+        self._search_fn = search_fn
+        self._max_searches = max_searches
         self.parameters_schema = _CRITIQUE_SCHEMA
 
     async def __call__(self, call: ToolCall) -> ToolResult:
@@ -197,7 +202,7 @@ class RequestCritiqueTool:
                 is_error=True,
             )
 
-        messages = [
+        messages: list[Message] = [
             Message(role="system", content=_CRITIQUE_SYSTEM),
             Message(
                 role="user",
@@ -207,25 +212,15 @@ class RequestCritiqueTool:
                 ),
             ),
         ]
+        tools = [_WEB_SEARCH_TOOL] if self._search_fn is not None else None
 
-        text_parts: list[str] = []
         try:
-            async for event in self._adapter.stream(
-                model=self._model,
-                messages=messages,
-                max_tokens=self._max_tokens,
-                temperature=self._temperature,
-            ):
-                if isinstance(event, TextDelta):
-                    text_parts.append(event.text)
-                elif isinstance(event, Done):
-                    if event.final_message and event.final_message.content:
-                        return ToolResult(
-                            tool_call_id=call.id,
-                            name=self.name,
-                            content=event.final_message.content.strip(),
-                        )
-                    break
+            critique = await self._run_with_tools(messages, tools)
+            return ToolResult(
+                tool_call_id=call.id,
+                name=self.name,
+                content=critique or "(critic produced no output)",
+            )
         except Exception as exc:
             return ToolResult(
                 tool_call_id=call.id,
@@ -234,12 +229,53 @@ class RequestCritiqueTool:
                 is_error=True,
             )
 
-        critique = "".join(text_parts).strip()
-        return ToolResult(
-            tool_call_id=call.id,
-            name=self.name,
-            content=critique or "(critic produced no output)",
-        )
+    async def _run_with_tools(
+        self,
+        messages: list[Message],
+        tools: list[dict] | None,
+    ) -> str:
+        for _ in range(self._max_searches + 1):
+            text_parts: list[str] = []
+            pending_calls: list[ToolCall] = []
+
+            async for event in self._adapter.stream(
+                model=self._model,
+                messages=messages,
+                tools=tools or None,
+                max_tokens=self._max_tokens,
+                temperature=self._temperature,
+            ):
+                if isinstance(event, TextDelta):
+                    text_parts.append(event.text)
+                elif isinstance(event, ToolCallEvent):
+                    pending_calls.append(event.call)
+                elif isinstance(event, Done):
+                    if event.final_message and event.final_message.content:
+                        return event.final_message.content.strip()
+                    break
+
+            if not pending_calls:
+                return "".join(text_parts).strip()
+
+            messages.append(
+                Message(
+                    role="assistant",
+                    content="".join(text_parts) or None,
+                    tool_calls=pending_calls,
+                )
+            )
+            for tc in pending_calls:
+                query = (
+                    str(tc.arguments.get("query", "")).strip()
+                    if isinstance(tc.arguments, dict)
+                    else ""
+                )
+                result = (
+                    await self._search_fn(query) if query and self._search_fn else "(no results)"
+                )  # type: ignore[misc]
+                messages.append(Message(role="tool", content=result[:1500], tool_call_id=tc.id))
+
+        return ""
 
 
 __all__ = ["RequestCritiqueTool", "VerifyWorkTool"]
