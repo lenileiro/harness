@@ -75,15 +75,33 @@ def start(fn: Callable) -> Callable:
     return fn
 
 
-def listen(target: Callable | str) -> Callable[[Callable], Callable]:
+def listen(
+    target: Callable | str | list[Callable | str],
+) -> Callable[[Callable], Callable]:
     """Mark this method to run after *target* completes.
 
-    *target* may be a method reference (resolved to its ``__name__``) or a
-    plain string label (used for router output routing).
+    *target* may be:
+
+    * A method reference — resolved to its ``__name__``.
+    * A plain string label — used for router output routing.
+    * A **list** of the above — the decorated method becomes a *join step*
+      that runs only after **all** listed predecessors have completed
+      (fan-in / barrier semantics).
+
+    Example fan-in::
+
+        @listen([fetch_a, fetch_b])
+        async def merge(self):
+            ...  # runs only after both fetch_a and fetch_b are done
     """
 
     def decorator(fn: Callable) -> Callable:
-        fn._flow_listen = target.__name__ if callable(target) else target  # type: ignore[attr-defined]
+        if isinstance(target, list):
+            fn._flow_listen_all = [  # type: ignore[attr-defined]
+                t.__name__ if callable(t) else t for t in target
+            ]
+        else:
+            fn._flow_listen = target.__name__ if callable(target) else target  # type: ignore[attr-defined]
         return fn
 
     return decorator
@@ -201,6 +219,8 @@ class FlowRunner:
         self._persists: set[str] = set()
         # target_name → [listener_names]  (used for both method and label routing)
         self._listens: dict[str, list[str]] = {}
+        # join step → {set of predecessor names that must ALL complete first}
+        self._join_conditions: dict[str, set[str]] = {}
         self._build()
 
     def _build(self) -> None:
@@ -213,16 +233,20 @@ class FlowRunner:
 
             is_start = getattr(fn, "_flow_start", False)
             listen_target = getattr(fn, "_flow_listen", None)
+            listen_all: list[str] | None = getattr(fn, "_flow_listen_all", None)
             is_router = getattr(fn, "_flow_router", False)
             is_persist = getattr(fn, "_flow_persist", False)
 
-            if is_start or listen_target is not None or is_router:
+            if is_start or listen_target is not None or listen_all is not None or is_router:
                 self._steps[name] = getattr(self._flow, name)
 
             if is_start:
                 self._starts.append(name)
             if listen_target is not None:
                 self._listens.setdefault(listen_target, []).append(name)
+            if listen_all is not None:
+                # Join step: only runs when all predecessors have completed.
+                self._join_conditions[name] = set(listen_all)
             if is_router:
                 self._routers.add(name)
             if is_persist:
@@ -275,6 +299,11 @@ class FlowRunner:
                 for listener_name in self._listens.get(step_name, []):
                     if listener_name not in executed:
                         queue.append(listener_name)
+
+            # Fan-in: check if any join step now has all its deps satisfied.
+            for join_step, deps in self._join_conditions.items():
+                if join_step not in executed and join_step not in queue and deps.issubset(executed):
+                    queue.append(join_step)
 
         return self._flow.state  # type: ignore[return-value]
 

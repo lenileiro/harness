@@ -63,11 +63,14 @@ class Done(_EventBase):
     """Terminal event — the run finished successfully.
 
     `final_message` is the assistant's last Message (the answer).
+    When `result_type` was set on the :class:`~harness.core.schemas.RunRequest`,
+    `structured_result` holds the validated model as a plain dict.
     """
 
     type: Literal["done"] = "done"
     final_message: Message | None = None
     usage: Usage | None = None
+    structured_result: dict | None = None
 
 
 class ErrorEvent(_EventBase):
@@ -138,6 +141,19 @@ class GuardrailTrippedEvent(_EventBase):
     reason: str
 
 
+class HandoffEvent(_EventBase):
+    """Control is being handed off to another agent.
+
+    Emitted by the runtime when a tool raises
+    :class:`~harness.core.errors.Handoff`. The target agent then takes over
+    the session from the same conversation state.
+    """
+
+    type: Literal["handoff"] = "handoff"
+    target_name: str
+    reason: str
+
+
 Event = Annotated[
     TextDelta
     | ToolCallEvent
@@ -150,7 +166,8 @@ Event = Annotated[
     | PredictionEvent
     | PredictionMismatchEvent
     | ModelRequestEvent
-    | GuardrailTrippedEvent,
+    | GuardrailTrippedEvent
+    | HandoffEvent,
     Field(discriminator="type"),
 ]
 
@@ -160,6 +177,7 @@ __all__ = [
     "ErrorEvent",
     "Event",
     "GuardrailTrippedEvent",
+    "HandoffEvent",
     "ModelRequestEvent",
     "PredictionEvent",
     "PredictionMismatchEvent",

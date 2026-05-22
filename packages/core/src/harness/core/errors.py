@@ -6,6 +6,8 @@ against the next adapter in the chain or fail terminally.
 
 from __future__ import annotations
 
+from typing import Any
+
 
 class HarnessError(Exception):
     """Base class for all Harness errors."""
@@ -92,10 +94,35 @@ class ToolRetry(Exception):
         self.message = message
 
 
+class Handoff(Exception):
+    """Raised by a tool to hand control to another Agent instance.
+
+    Not a HarnessError — it is a control-flow signal the runtime catches in
+    ``_invoke_tool``. The runtime yields a ``HandoffEvent`` then replays the
+    current session through ``target``.
+
+    Example::
+
+        class RouterTool:
+            async def __call__(self, call: ToolCall) -> ToolResult:
+                raise Handoff(target=specialist_agent, reason="needs domain expertise")
+
+    Args:
+        target: The :class:`~harness.core.runtime.Agent` to hand off to.
+        reason: Human-readable explanation emitted in the ``HandoffEvent``.
+    """
+
+    def __init__(self, target: Any, reason: str = "") -> None:
+        super().__init__(reason)
+        self.target: Any = target
+        self.reason = reason
+
+
 __all__ = [
     "ApprovalDeniedError",
     "CancelledError",
     "ConfigurationError",
+    "Handoff",
     "HarnessError",
     "InternalError",
     "ModelUnavailableError",

@@ -17,13 +17,13 @@ Role = Literal["system", "user", "assistant", "tool"]
 ApprovalDecision = Literal["auto", "prompt", "deny"]
 SessionStatus = Literal["pending", "running", "paused", "done", "failed", "cancelled"]
 EffectScope = Literal[
-    "read_only",            # read_file, list_dir — never approval-required
-    "session_ephemeral",    # in-process scratch state, disappears with session
-    "task_durable",         # writes to harness task/session storage
+    "read_only",  # read_file, list_dir — never approval-required
+    "session_ephemeral",  # in-process scratch state, disappears with session
+    "task_durable",  # writes to harness task/session storage
     "agent_orchestration",  # spawns child agents
-    "workspace_durable",    # write_file, edit_file, shell — mutates workspace
-    "external_side_effect", # HTTP calls, external APIs — irreversible
-    "routed",               # goes through an action router
+    "workspace_durable",  # write_file, edit_file, shell — mutates workspace
+    "external_side_effect",  # HTTP calls, external APIs — irreversible
+    "routed",  # goes through an action router
 ]
 
 
@@ -141,9 +141,13 @@ class RunRequest(BaseModel):
     `prompt` is the user's new turn — the runtime appends it as a user
     Message before invoking the adapter. If `session_id` matches an existing
     session, history is loaded; otherwise a new session is created.
+
+    Set `result_type` to a Pydantic :class:`~pydantic.BaseModel` subclass to
+    enable structured output: the runtime injects a JSON-schema system message
+    and validates the final assistant response against it, retrying on failure.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
 
     prompt: str
     session_id: str = Field(default_factory=lambda: _new_id("sess"))
@@ -156,6 +160,9 @@ class RunRequest(BaseModel):
     task_id: str | None = None
     """Optional id of the parent Task. When set on a new session, the session
     inherits this `task_id`."""
+    result_type: type | None = Field(default=None, exclude=True)
+    """When set to a Pydantic model class, the runtime validates the final
+    response as JSON and populates ``Done.structured_result``."""
 
 
 # ---------------------------------------------------------------------------

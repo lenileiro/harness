@@ -24,6 +24,7 @@ from harness.core.errors import (
     ApprovalDeniedError,
     CancelledError,
     ConfigurationError,
+    Handoff,
     HarnessError,
     InternalError,
     ModelUnavailableError,
@@ -39,6 +40,7 @@ from harness.core.events import (
     ErrorEvent,
     Event,
     GuardrailTrippedEvent,
+    HandoffEvent,
     ModelRequestEvent,
     PredictionEvent,
     PredictionMismatchEvent,
@@ -58,6 +60,7 @@ from harness.core.flow_checkpoint import (
     InMemoryCheckpointStore,
 )
 from harness.core.guardrails import Guardrail, GuardrailMode, GuardrailResult
+from harness.core.handoff import HandoffTool
 from harness.core.memory import MemoryEntry, MemoryKind, MemoryStore
 from harness.core.orchestrator import (
     AgentDoneEvent,
@@ -164,6 +167,9 @@ __all__ = [
     "GuardrailMode",
     "GuardrailResult",
     "GuardrailTrippedEvent",
+    "Handoff",
+    "HandoffEvent",
+    "HandoffTool",
     "EffectScope",
     "ErrorEvent",
     "ErrorKind",

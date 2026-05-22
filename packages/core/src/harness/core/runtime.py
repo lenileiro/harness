@@ -42,6 +42,7 @@ from harness.core.compactor import ContextCompactor
 from harness.core.errors import (
     CancelledError,
     ConfigurationError,
+    Handoff,
     HarnessError,
     InternalError,
     StallError,
@@ -52,6 +53,7 @@ from harness.core.events import (
     ErrorEvent,
     Event,
     GuardrailTrippedEvent,
+    HandoffEvent,
     ModelRequestEvent,
     PredictionEvent,
     PredictionMismatchEvent,
@@ -173,6 +175,7 @@ class Agent:
         self.system_prompt = system_prompt
         self._compactor = compactor
         self.guardrails: list[Guardrail] = guardrails or []
+        self._tool_cache: dict[str, ToolResult] = {}
 
     # ------------------------------------------------------------------ #
     # Approval replay                                                     #
@@ -336,6 +339,20 @@ class Agent:
                 memory_prefix = [Message(role="system", content=f"Remembered context:\n{text}")]
         if self.system_prompt:
             memory_prefix.append(Message(role="system", content=self.system_prompt))
+
+        if request.result_type is not None:
+            import json as _json_schema
+
+            schema = request.result_type.model_json_schema()  # type: ignore[attr-defined]
+            memory_prefix.append(
+                Message(
+                    role="system",
+                    content=(
+                        "Respond ONLY with a valid JSON object (no markdown, no prose) "
+                        "matching this schema:\n" + _json_schema.dumps(schema, indent=2)
+                    ),
+                )
+            )
 
         session.messages.append(Message(role="user", content=request.prompt))
         session.status = "running"
@@ -661,6 +678,10 @@ class Agent:
         session: Session,
         memory_prefix: list[Message] | None = None,
     ):
+        import json as _json
+
+        from pydantic import ValidationError as _ValidationError
+
         _retry_counts: dict[str, int] = {}
         for _turn in range(request.max_steps):
             final: Message | None = None
@@ -713,13 +734,51 @@ class Agent:
             session.touch()
 
             if not final.tool_calls:
+                # Structured output: validate assistant response against result_type.
+                if request.result_type is not None:
+                    raw = (final.content or "").strip()
+                    # Strip markdown code fences if present.
+                    if raw.startswith("```"):
+                        raw = raw.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+                    try:
+                        parsed = request.result_type.model_validate_json(raw)  # type: ignore[attr-defined]
+                        yield Done(
+                            final_message=final,
+                            usage=usage,
+                            structured_result=parsed.model_dump(),
+                        )
+                        return
+                    except (_ValidationError, _json.JSONDecodeError, ValueError) as exc:
+                        session.messages.append(
+                            Message(
+                                role="user",
+                                content=(
+                                    f"Your response did not match the required JSON schema: {exc}. "
+                                    "Please respond with valid JSON only."
+                                ),
+                            )
+                        )
+                        continue  # retry the adapter turn
+
                 yield Done(final_message=final, usage=usage)
                 return
 
             for tool_call in final.tool_calls:
-                result, extra_events = await self._invoke_tool(
-                    tool_call, session, _retry_counts=_retry_counts
-                )
+                try:
+                    result, extra_events = await self._invoke_tool(
+                        tool_call, session, _retry_counts=_retry_counts
+                    )
+                except Handoff as handoff:
+                    target_agent = handoff.target
+                    target_name = getattr(target_agent, "name", type(target_agent).__name__)
+                    yield HandoffEvent(target_name=target_name, reason=handoff.reason)
+                    provider_name = target_agent.default_provider
+                    target_adapter = target_agent.adapters[provider_name]
+                    async for ev in target_agent._react_with(
+                        target_adapter, request, session, memory_prefix=memory_prefix
+                    ):
+                        yield ev
+                    return
                 for ev in extra_events:
                     yield ev
                 session.messages.append(
@@ -738,6 +797,14 @@ class Agent:
     # ------------------------------------------------------------------ #
     # Tool dispatch                                                       #
     # ------------------------------------------------------------------ #
+
+    @staticmethod
+    def _cache_key(tool_name: str, arguments: dict) -> str:
+        import hashlib
+        import json as _json
+
+        payload = tool_name + _json.dumps(arguments, sort_keys=True)
+        return hashlib.sha256(payload.encode()).hexdigest()
 
     async def _invoke_tool(
         self,
@@ -865,6 +932,23 @@ class Agent:
             )
             extra_events.append(PredictionEvent(prediction=prediction))
 
+        # Tool result cache: opt-in via `cache = True` attribute on the tool.
+        tool_cacheable = getattr(tool, "cache", False)
+        cache_key: str = ""
+        if tool_cacheable:
+            cache_key = self._cache_key(call.name, call.arguments)
+            cached = self._tool_cache.get(cache_key)
+            if cached is not None:
+                result = ToolResult(
+                    tool_call_id=call.id,
+                    name=call.name,
+                    content=cached.content,
+                    is_error=cached.is_error,
+                    metadata=cached.metadata,
+                )
+                await self._emit_tool_completed(session, call, result)
+                return result, extra_events
+
         max_retries: int = getattr(tool, "max_retries", 3)
         retry_counts = _retry_counts if _retry_counts is not None else {}
         prior_retries = retry_counts.get(call.name, 0)
@@ -906,6 +990,9 @@ class Agent:
                 )
             await self._emit_tool_completed(session, call, result, duration_ms=duration_ms)
             return result, extra_events
+        except Handoff:
+            # Re-raise so _react_with can catch it and delegate to the target agent.
+            raise
         except Exception as exc:
             logger.warning("agent.tool.error", tool=call.name, error=str(exc))
             result = ToolResult(
@@ -916,6 +1003,10 @@ class Agent:
             )
         duration_ms = int((time.perf_counter() - started) * 1000)
         await self._emit_tool_completed(session, call, result, duration_ms=duration_ms)
+
+        # Store in cache if the tool opted in and the result is not an error.
+        if tool_cacheable and not result.is_error:
+            self._tool_cache[cache_key] = result
 
         # Phase 2 — PredictionError: compare prediction vs actual.
         pred_outcome = None
