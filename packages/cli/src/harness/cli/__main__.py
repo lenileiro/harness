@@ -188,7 +188,11 @@ _DEFAULT_SYSTEM_PROMPT = (
     "(note: 'find' is a shell command, not a standalone tool — always call it via shell)\n"
     "2. If total exceeds ~200 KB, call spawn_agents with a goal that names "
     "the exact path and what analysis you need.\n"
-    "3. If under 200 KB, read the key files and synthesize a complete answer."
+    "3. If under 200 KB, read the key files and synthesize a complete answer.\n\n"
+    "When asked about architecture, design, or how components interact: "
+    "read the relevant source files first, then include a Mermaid diagram "
+    "(flowchart or sequence diagram) that shows the actual relationships and "
+    "data flow found in the code. Fence it with ```mermaid ... ```."
 )
 
 _SPAWN_SCHEMA: dict[str, Any] = {
