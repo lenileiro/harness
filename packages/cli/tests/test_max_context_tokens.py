@@ -142,10 +142,11 @@ class TestMaxContextTokensFlag:
             ]
         )
         assert result.exit_code == 0, result.stdout
-        # New session → only the new user message; no pruning happens.
+        # New session → system prompt + user message only; no old history pruned.
         assert RecordingAdapter.call_count == 1
-        assert len(RecordingAdapter.last_messages) == 1
-        assert RecordingAdapter.last_messages[0].role == "user"
+        roles = [m.role for m in RecordingAdapter.last_messages]
+        assert roles[-1] == "user"
+        assert all(r in ("system", "user") for r in roles)
 
     def test_no_flag_no_pruning_even_with_huge_history(
         self, patch_adapter, db_path: Path, tmp_path: Path

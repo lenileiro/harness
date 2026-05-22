@@ -175,6 +175,14 @@ console = Console()
 
 KNOWN_PROVIDERS: tuple[str, ...] = ("ollama", "openrouter")
 
+_DEFAULT_SYSTEM_PROMPT = (
+    "You are a helpful AI agent with access to filesystem and shell tools. "
+    "Use your tools proactively to answer questions about the environment — "
+    "for example, read files, list directories, or run shell commands when the "
+    "user asks about the current project or codebase. "
+    "Do not ask the user to provide information you can look up yourself with a tool."
+)
+
 
 # ---------------------------------------------------------------------------
 # Construction helpers
@@ -259,6 +267,7 @@ def _build_agent(
     session_overrides: dict[str, ApprovalDecision] | None = None,
     predictor: ConsequencePredictor | None = None,
     repair: RepairOrchestrator | None = None,
+    system_prompt: str | None = None,
 ) -> Agent:
     """Build an Agent over a provider chain. `chain[0]` is the primary.
 
@@ -316,6 +325,7 @@ def _build_agent(
         planner=planner,
         predictor=predictor,
         repair=repair,
+        system_prompt=system_prompt,
     )
 
 
@@ -567,6 +577,7 @@ async def _run_once(
             planner=planner,
             predictor=ConsequencePredictor() if predict else None,
             repair=RepairOrchestrator() if predict else None,
+            system_prompt=_DEFAULT_SYSTEM_PROMPT,
         )
 
         request_kwargs: dict[str, object] = {
@@ -1639,6 +1650,7 @@ async def _chat_loop(
             verifier=verifier,
             budget=budget,
             memory_store=storage,  # type: ignore[arg-type]
+            system_prompt=_DEFAULT_SYSTEM_PROMPT,
         )
 
         first_turn = existing is None
