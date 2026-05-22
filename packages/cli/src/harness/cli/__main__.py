@@ -2770,8 +2770,12 @@ def lab_run(
             )
         console.print()
 
-        async for event in orchestrator.run(prompt):
-            renderer.render(event)
+        try:
+            async for event in orchestrator.run(prompt):
+                renderer.render(event)
+        finally:
+            if hasattr(storage, "close"):
+                await storage.close()  # type: ignore[attr-defined]
 
     asyncio.run(_run())
 
@@ -2790,29 +2794,32 @@ def lab_status(
         from harness.storage.sqlite import SQLiteStorage
 
         storage = SQLiteStorage(path=db)
-        items = await storage.list_tasks(parent_id=job_id)
-        if not items:
-            console.print(f"[yellow]No work items found for job {job_id!r}[/yellow]")
-            return
+        try:
+            items = await storage.list_tasks(parent_id=job_id)
+            if not items:
+                console.print(f"[yellow]No work items found for job {job_id!r}[/yellow]")
+                return
 
-        status_colors = {
-            "todo": "white",
-            "in_progress": "cyan",
-            "done": "green",
-            "cancelled": "red",
-        }
+            status_colors = {
+                "todo": "white",
+                "in_progress": "cyan",
+                "done": "green",
+                "cancelled": "red",
+            }
 
-        console.print(f"[bold]Job {job_id}[/bold] — {len(items)} work items\n")
-        for item in sorted(items, key=lambda t: t.created_at):
-            color = status_colors.get(item.status, "white")
-            summary = item.metadata.get("result_summary", "")
-            summary_str = f"  [dim]{summary[:80]}[/dim]" if summary else ""
-            retries = item.metadata.get("_judge_retries", 0)
-            retry_str = f" [yellow](retried {retries}x)[/yellow]" if retries else ""
-            console.print(
-                f"  [{color}]{item.status:12}[/{color}] {item.ref or item.id[:8]}  {item.title}"
-                f"{retry_str}{summary_str}"
-            )
+            console.print(f"[bold]Job {job_id}[/bold] — {len(items)} work items\n")
+            for item in sorted(items, key=lambda t: t.created_at):
+                color = status_colors.get(item.status, "white")
+                summary = item.metadata.get("result_summary", "")
+                summary_str = f"  [dim]{summary[:80]}[/dim]" if summary else ""
+                retries = item.metadata.get("_judge_retries", 0)
+                retry_str = f" [yellow](retried {retries}x)[/yellow]" if retries else ""
+                console.print(
+                    f"  [{color}]{item.status:12}[/{color}] {item.ref or item.id[:8]}  {item.title}"
+                    f"{retry_str}{summary_str}"
+                )
+        finally:
+            await storage.close()
 
     asyncio.run(_run())
 
@@ -2830,30 +2837,33 @@ def lab_list(
         from harness.storage.sqlite import SQLiteStorage
 
         storage = SQLiteStorage(path=db)
-        # Root tasks have no parent_id
-        all_tasks = await storage.list_tasks(parent_id=None)
-        jobs = [t for t in all_tasks if t.parent_id is None]
-        if not jobs:
-            console.print("[yellow]No jobs found.[/yellow]")
-            return
+        try:
+            # Root tasks have no parent_id
+            all_tasks = await storage.list_tasks(parent_id=None)
+            jobs = [t for t in all_tasks if t.parent_id is None]
+            if not jobs:
+                console.print("[yellow]No jobs found.[/yellow]")
+                return
 
-        status_colors = {
-            "todo": "white",
-            "in_progress": "cyan",
-            "done": "green",
-            "cancelled": "red",
-        }
+            status_colors = {
+                "todo": "white",
+                "in_progress": "cyan",
+                "done": "green",
+                "cancelled": "red",
+            }
 
-        for job in sorted(jobs, key=lambda t: t.created_at, reverse=True):
-            color = status_colors.get(job.status, "white")
-            items = await storage.list_tasks(parent_id=job.id)
-            done_count = sum(1 for t in items if t.status == "done")
-            total_count = len(items)
-            ts = job.created_at.strftime("%Y-%m-%d %H:%M")
-            console.print(
-                f"[{color}]{job.status:12}[/{color}]  {job.id[:16]}  "
-                f"[dim]{ts}[/dim]  {done_count}/{total_count} items  {job.title[:60]}"
-            )
+            for job in sorted(jobs, key=lambda t: t.created_at, reverse=True):
+                color = status_colors.get(job.status, "white")
+                items = await storage.list_tasks(parent_id=job.id)
+                done_count = sum(1 for t in items if t.status == "done")
+                total_count = len(items)
+                ts = job.created_at.strftime("%Y-%m-%d %H:%M")
+                console.print(
+                    f"[{color}]{job.status:12}[/{color}]  {job.id[:16]}  "
+                    f"[dim]{ts}[/dim]  {done_count}/{total_count} items  {job.title[:60]}"
+                )
+        finally:
+            await storage.close()
 
     asyncio.run(_run())
 
@@ -3021,8 +3031,11 @@ def lab_resume(
         )
         console.print()
 
-        async for event in orchestrator.resume(job_id):
-            renderer.render(event)
+        try:
+            async for event in orchestrator.resume(job_id):
+                renderer.render(event)
+        finally:
+            await storage.close()
 
     asyncio.run(_run())
 
