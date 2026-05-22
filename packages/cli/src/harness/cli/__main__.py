@@ -74,11 +74,14 @@ from harness.core import (
     ContextBudget,
     ContextCompactor,
     CreateWorkItemTool,
+    Critic,
+    Critique,
     Done,
     ErrorEvent,
     FailoverPolicy,
     InboxApprovalHandler,
     ListWorkItemsTool,
+    LLMCritic,
     LLMJudgeVerifier,
     LLMPlanner,
     MemoryEntry,
@@ -476,6 +479,40 @@ def _build_verifier(
     )
 
 
+def _build_critic(
+    critic: str | None,
+    *,
+    chain: list[str],
+    model: str,
+    config: HarnessConfig,
+) -> Critic | None:
+    """Resolve --critic value to a Critic instance (or None).
+
+    Options:
+      llm        — LLMCritic without web search
+      llm+search — LLMCritic with Tavily web search (requires TAVILY_API_KEY)
+      none       — disabled (default)
+    """
+    if not critic or critic == "none":
+        return None
+    if critic in ("llm", "llm+search"):
+        adapter = _build_adapter(chain[0], base_url=None, config=config)
+        search_fn = None
+        if critic == "llm+search":
+            from harness.tools.web import TavilySearchTool
+
+            _searcher = TavilySearchTool()
+
+            async def _search(query: str) -> str:
+                call = ToolCall(id=f"s_{query[:8]}", name="web_search", arguments={"query": query})
+                result: ToolResult = await _searcher(call)
+                return result.content or ""
+
+            search_fn = _search
+        return LLMCritic(adapter=adapter, model=model, search_fn=search_fn)
+    raise typer.BadParameter(f"unknown --critic value: {critic!r} (use llm|llm+search|none)")
+
+
 def _load_project_context(cwd: Path) -> str:
     """Walk from cwd up to filesystem root, collecting CLAUDE.md and AGENTS.md files.
 
@@ -523,6 +560,7 @@ def _build_agent(
     activity_store: ActivityStore | None = None,
     approval_store: ApprovalStore | None = None,
     verifier: Verifier | None = None,
+    critic: Critic | None = None,
     budget: ContextBudget | None = None,
     memory_store: Any | None = None,
     planner: Planner | None = None,
@@ -595,6 +633,7 @@ def _build_agent(
         activity_store=activity_store,
         approval_store=approval_store,
         verifier=verifier,
+        critic=critic,
         budget=budget,
         default_model=model,
         default_cwd=str(cwd),
@@ -748,6 +787,16 @@ def run(
             help="Shell command for --verify shell. Exit 0 = pass, non-zero = fail + repair.",
         ),
     ] = None,
+    critic: Annotated[
+        str | None,
+        typer.Option(
+            "--critic",
+            help=(
+                "Critic mode: llm (challenge agent hypothesis after each failed repair) | "
+                "llm+search (same + Tavily web research, requires TAVILY_API_KEY) | none."
+            ),
+        ),
+    ] = None,
     require_tools: Annotated[
         bool,
         typer.Option(
@@ -825,6 +874,7 @@ def run(
                 inbox=inbox,
                 verify=verify,
                 verify_command=verify_command,
+                critic=critic,
                 require_tools=require_tools,
                 goal=goal,
                 max_context_tokens=max_context_tokens,
@@ -854,6 +904,7 @@ async def _run_once(
     inbox: bool,
     verify: str | None,
     verify_command: str | None = None,
+    critic: str | None = None,
     require_tools: bool = False,
     goal: bool = False,
     max_context_tokens: int | None = None,
@@ -870,6 +921,7 @@ async def _run_once(
         verifier = _build_verifier(
             verify, chain=chain, model=model, config=config, cwd=cwd, verify_command=verify_command
         )
+        critic_obj = _build_critic(critic, chain=chain, model=model, config=config)
         budget = (
             ContextBudget(max_tokens=max_context_tokens) if max_context_tokens is not None else None
         )
@@ -893,6 +945,7 @@ async def _run_once(
             activity_store=storage,  # type: ignore[arg-type]
             approval_store=storage,  # type: ignore[arg-type]
             verifier=verifier,
+            critic=critic_obj,
             budget=budget,
             memory_store=storage,  # type: ignore[arg-type]
             planner=planner,
@@ -2337,6 +2390,15 @@ class Renderer:
             self._console.print(
                 f"{marker} [bold]verify[/bold] ({r.verifier_name})  {r.reason}{conf}"
             )
+        elif isinstance(event, Critique):
+            self._flush_text()
+            self._console.print()
+            self._console.print(
+                f"[yellow bold]critic[/yellow bold] [dim](attempt {event.attempt})[/dim]"
+            )
+            for line in event.text.splitlines():
+                self._console.print(f"  [yellow]{line}[/yellow]")
+            self._console.print()
         elif isinstance(event, PredictionEvent):
             p = event.prediction
             scope = p.effect_scope or "unknown"

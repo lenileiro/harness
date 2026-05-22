@@ -97,6 +97,19 @@ class Verification(_EventBase):
     result: VerificationResult
 
 
+class Critique(_EventBase):
+    """Critic's challenge to the agent after a failed repair attempt.
+
+    Emitted by the repair loop after a Critic produces its review, before the
+    repair directive is appended to the session. Consumers can render this
+    distinctively so users can see what hypothesis is being challenged.
+    """
+
+    type: Literal["critique"] = "critique"
+    attempt: int
+    text: str
+
+
 class PredictionEvent(_EventBase):
     """Pre-execution prediction committed by ConsequencePredictor.
 
@@ -163,6 +176,7 @@ Event = Annotated[
     | Done
     | ErrorEvent
     | Verification
+    | Critique
     | PredictionEvent
     | PredictionMismatchEvent
     | ModelRequestEvent
@@ -173,6 +187,7 @@ Event = Annotated[
 
 
 __all__ = [
+    "Critique",
     "Done",
     "ErrorEvent",
     "Event",

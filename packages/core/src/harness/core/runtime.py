@@ -39,6 +39,7 @@ from harness.core.approval import ApprovalOutcome, ApprovalStore
 from harness.core.budget import ContextBudget, count_tokens, prune
 from harness.core.calibration import OutcomeCalibration
 from harness.core.compactor import ContextCompactor
+from harness.core.critic import Critic
 from harness.core.errors import (
     CancelledError,
     ConfigurationError,
@@ -49,6 +50,7 @@ from harness.core.errors import (
     ToolRetry,
 )
 from harness.core.events import (
+    Critique,
     Done,
     ErrorEvent,
     Event,
@@ -121,6 +123,7 @@ class Agent:
         activity_store: ActivityStore | None = None,
         approval_store: ApprovalStore | None = None,
         verifier: Verifier | None = None,
+        critic: Critic | None = None,
         max_repair_attempts: int = 3,
         budget: ContextBudget | None = None,
         current_phase: str | None = None,
@@ -157,6 +160,11 @@ class Agent:
         """When set, the runtime calls verifier.verify(...) after the terminal
         Done event and yields a Verification(result=...) event. The verdict is
         also recorded as a `verification.completed` activity entry."""
+        self.critic = critic
+        """When set, the repair loop calls critic.critique(...) after each
+        failed verification and prepends the critique to the repair directive.
+        This forces the agent to address a specific hypothesis challenge rather
+        than just re-reading raw failure output."""
         self._max_repair_attempts = max_repair_attempts
         """How many times to re-run the agent when the verifier returns
         can_finish=False. Each retry appends the failure output as a user
@@ -447,13 +455,39 @@ class Agent:
                 ):
                     break
 
-                # Feed the failure back to the agent and run another turn.
-                repair_msg = (
+                # Optionally call the critic to challenge the agent's hypothesis
+                # before assembling the repair directive.
+                critique_text = ""
+                if self.critic is not None:
+                    activity_for_critic: list[ActivityEvent] = []
+                    if self.activity_store is not None:
+                        activity_for_critic = await self.activity_store.list_activity(
+                            session_id=session.id, limit=500
+                        )
+                    critique_text = await self.critic.critique(
+                        session=session,
+                        verification_result=last_verification.result,
+                        activity=activity_for_critic,
+                    )
+                    if critique_text:
+                        yield Critique(attempt=_repair_attempt + 1, text=critique_text)
+
+                # Build the repair directive: critique (if any) + raw failure output.
+                attempt_label = (
                     f"Verification failed (attempt {_repair_attempt + 1} of "
                     f"{self._max_repair_attempts}).\n\n"
-                    f"{last_verification.result.reason}\n\n"
-                    "Fix the remaining failures and try again."
                 )
+                if critique_text:
+                    repair_msg = (
+                        attempt_label + f"**Code Review:**\n{critique_text}\n\n"
+                        f"**Test Output:**\n{last_verification.result.reason}\n\n"
+                        "Address the code review and fix the remaining failures."
+                    )
+                else:
+                    repair_msg = (
+                        attempt_label + f"{last_verification.result.reason}\n\n"
+                        "Fix the remaining failures and try again."
+                    )
                 session.messages.append(Message(role="user", content=repair_msg))
                 await self._emit(
                     session,
@@ -461,6 +495,7 @@ class Agent:
                     {
                         "attempt": _repair_attempt + 1,
                         "verifier": last_verification.result.verifier_name,
+                        "critic": bool(critique_text),
                         "reason_preview": last_verification.result.reason[:300],
                     },
                 )

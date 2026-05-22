@@ -20,6 +20,7 @@ from harness.core.approval import (
 from harness.core.budget import ContextBudget, count_tokens, prune
 from harness.core.calibration import CalibrationRecord, OutcomeCalibration
 from harness.core.compactor import ContextCompactor
+from harness.core.critic import Critic, LLMCritic
 from harness.core.errors import (
     ApprovalDeniedError,
     CancelledError,
@@ -36,6 +37,7 @@ from harness.core.errors import (
     ToolRetry,
 )
 from harness.core.events import (
+    Critique,
     Done,
     ErrorEvent,
     Event,
@@ -173,6 +175,8 @@ __all__ = [
     "ContextBudget",
     "ContextCompactor",
     "CreateWorkItemTool",
+    "Critic",
+    "Critique",
     "Done",
     "EffectScope",
     "ErrorEvent",
@@ -197,6 +201,7 @@ __all__ = [
     "InMemoryCheckpointStore",
     "InboxApprovalHandler",
     "InternalError",
+    "LLMCritic",
     "LLMJudgeVerifier",
     "LLMPlanner",
     "ListWorkItemsTool",

@@ -128,7 +128,15 @@ def _agent_cmd(
         model,
     ]
     if verify_command:
-        cmd += ["--verify", "shell", "--verify-command", verify_command]
+        critic_mode = "llm+search" if os.environ.get("TAVILY_API_KEY") else "llm"
+        cmd += [
+            "--verify",
+            "shell",
+            "--verify-command",
+            verify_command,
+            "--critic",
+            critic_mode,
+        ]
     else:
         cmd += ["--verify", "rule"]
     return cmd
