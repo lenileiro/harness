@@ -121,6 +121,7 @@ class Agent:
         activity_store: ActivityStore | None = None,
         approval_store: ApprovalStore | None = None,
         verifier: Verifier | None = None,
+        max_repair_attempts: int = 3,
         budget: ContextBudget | None = None,
         current_phase: str | None = None,
         default_provider: str | None = None,
@@ -156,6 +157,10 @@ class Agent:
         """When set, the runtime calls verifier.verify(...) after the terminal
         Done event and yields a Verification(result=...) event. The verdict is
         also recorded as a `verification.completed` activity entry."""
+        self._max_repair_attempts = max_repair_attempts
+        """How many times to re-run the agent when the verifier returns
+        can_finish=False. Each retry appends the failure output as a user
+        message so the agent has concrete feedback to act on."""
         self.budget = budget
         """When set, the runtime prunes session.messages with a token-aware
         sliding window before each adapter call. The full session history is
@@ -423,13 +428,49 @@ class Agent:
             yield ErrorEvent(error=str(exc), kind=kind, recoverable=False)
             return
 
-        # Run the optional verifier before marking the session done. The
-        # verifier may decide can_finish=False, but the session is still
-        # closed for this turn — the verdict is advisory in v1, with the
-        # consumer choosing what to do (resume, escalate, ignore).
+        # Verification + repair loop.
+        # If the verifier returns can_finish=False we append the failure as a
+        # user message and run another agent turn, up to max_repair_attempts.
+        # This is what gives weaker models the feedback loop they need.
         if self.verifier is not None:
-            async for ev in self._run_verification(session):
-                yield ev
+            for _repair_attempt in range(self._max_repair_attempts + 1):
+                last_verification: Verification | None = None
+                async for ev in self._run_verification(session):
+                    yield ev
+                    if isinstance(ev, Verification):
+                        last_verification = ev
+
+                if (
+                    last_verification is None
+                    or last_verification.result.can_finish
+                    or _repair_attempt >= self._max_repair_attempts
+                ):
+                    break
+
+                # Feed the failure back to the agent and run another turn.
+                repair_msg = (
+                    f"Verification failed (attempt {_repair_attempt + 1} of "
+                    f"{self._max_repair_attempts}).\n\n"
+                    f"{last_verification.result.reason}\n\n"
+                    "Fix the remaining failures and try again."
+                )
+                session.messages.append(Message(role="user", content=repair_msg))
+                await self._emit(
+                    session,
+                    activity_kinds.REPAIR_DIRECTIVE_ISSUED,
+                    {
+                        "attempt": _repair_attempt + 1,
+                        "verifier": last_verification.result.verifier_name,
+                        "reason_preview": last_verification.result.reason[:300],
+                    },
+                )
+                async for ev in self._step_with_failover(
+                    request=request,
+                    session=session,
+                    initial_yield_flag=True,
+                    memory_prefix=memory_prefix,
+                ):
+                    yield ev
 
         session.status = "done"
         session.touch()

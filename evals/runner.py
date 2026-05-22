@@ -119,7 +119,7 @@ def _agent_cmd(
         str(work),
         "--yes",
         "--verify",
-        "none",
+        "rule",
         "--in-memory",
         "--provider",
         provider,
