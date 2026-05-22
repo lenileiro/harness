@@ -1847,7 +1847,14 @@ def chat(
     verify: Annotated[
         str | None,
         typer.Option("--verify", help="Post-run verifier: rule | llm | none."),
-    ] = None,
+    ] = "grounding",
+    require_tools: Annotated[
+        bool,
+        typer.Option(
+            "--require-tools/--no-require-tools",
+            help="Force the model to call at least one tool before answering.",
+        ),
+    ] = False,
     max_context_tokens: Annotated[
         int | None,
         typer.Option("--max-context-tokens", help="Token budget for pruning per turn."),
@@ -1864,6 +1871,10 @@ def chat(
 ) -> None:
     """Interactive REPL: chat with the agent, drive tools, resume across turns."""
     configure_logging(level="DEBUG" if verbose else "INFO")
+    if not yes and os.environ.get("HARNESS_YES"):
+        yes = True
+    if verify == "none":
+        verify = None
     cfg = _load_cli_config(config_path)
     chain = _resolve_chain(failover_flag=failover, provider_flag=provider, config=cfg)
     effective_model = model or cfg.default_model or "llama3.2"
@@ -1887,6 +1898,7 @@ def chat(
                 yes=yes,
                 inbox=inbox,
                 verify=verify,
+                require_tools=require_tools,
                 max_context_tokens=max_context_tokens,
                 auto_compact=auto_compact,
                 config=cfg,
@@ -1911,6 +1923,7 @@ async def _chat_loop(
     yes: bool,
     inbox: bool,
     verify: str | None,
+    require_tools: bool = False,
     max_context_tokens: int | None,
     auto_compact: bool = False,
     config: HarnessConfig,
@@ -1926,7 +1939,7 @@ async def _chat_loop(
 
         task_id, _task = await _resolve_task_attachment(storage, task_ref, current_session_id)
 
-        verifier = _build_verifier(verify, chain=chain, model=model, config=config)
+        verifier = _build_verifier(verify, chain=chain, model=model, config=config, cwd=cwd)
         budget = (
             ContextBudget(max_tokens=max_context_tokens) if max_context_tokens is not None else None
         )
@@ -1996,6 +2009,7 @@ async def _chat_loop(
                         "session_id": current_session_id,
                         "model": model,
                         "max_steps": max_steps,
+                        "require_tool_use": require_tools,
                     }
                     if task_id:
                         request_kwargs["task_id"] = task_id
