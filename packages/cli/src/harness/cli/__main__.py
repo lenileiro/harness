@@ -124,7 +124,7 @@ from harness.tools.fs import (
     WriteFileTool,
 )
 from harness.tools.shell import ShellTool
-from harness.tools.web import FetchUrlTool, SearXNGSearchTool, WebSearchTool
+from harness.tools.web import FetchUrlTool, PlaywrightSearchTool, SearXNGSearchTool, WebSearchTool
 
 app = typer.Typer(
     name="harness",
@@ -394,7 +394,12 @@ def _build_adapter(provider: str, *, base_url: str | None, config: HarnessConfig
     raise typer.BadParameter(f"unknown provider: {provider!r}")
 
 
-def _build_tools(cwd: Path, *, searxng_url: str | None = None) -> ToolRegistry:
+def _build_tools(
+    cwd: Path,
+    *,
+    searxng_url: str | None = None,
+    use_chrome: bool = False,
+) -> ToolRegistry:
     registry = ToolRegistry()
     registry.register(ReadFileTool(cwd=cwd))
     registry.register(WriteFileTool(cwd=cwd))
@@ -404,6 +409,8 @@ def _build_tools(cwd: Path, *, searxng_url: str | None = None) -> ToolRegistry:
     registry.register(ShellTool(cwd=cwd))
     if searxng_url:
         registry.register(SearXNGSearchTool(base_url=searxng_url))
+    elif use_chrome:
+        registry.register(PlaywrightSearchTool())
     else:
         registry.register(WebSearchTool())
     registry.register(FetchUrlTool())
@@ -510,6 +517,7 @@ def _build_agent(
     system_prompt: str | None = None,
     compactor: Any | None = None,
     searxng_url: str | None = None,
+    use_chrome: bool = False,
 ) -> Agent:
     """Build an Agent over a provider chain. `chain[0]` is the primary.
 
@@ -537,7 +545,7 @@ def _build_agent(
     elif project_ctx:
         system_prompt = project_ctx
 
-    tools = _build_tools(cwd, searxng_url=searxng_url)
+    tools = _build_tools(cwd, searxng_url=searxng_url, use_chrome=use_chrome)
     tools.register(
         SpawnAgentsTool(
             provider=chain[0],
@@ -767,6 +775,14 @@ def run(
             envvar="HARNESS_SEARXNG_URL",
         ),
     ] = None,
+    chrome: Annotated[
+        bool,
+        typer.Option(
+            "--chrome/--no-chrome",
+            help="Use headless Chromium (Playwright) for web_search instead of the DDG API. "
+            "Requires: playwright install chromium",
+        ),
+    ] = False,
     verbose: Annotated[
         bool, typer.Option("--verbose", "-v", help="Enable DEBUG logging to stderr.")
     ] = False,
@@ -810,6 +826,7 @@ def run(
                 predict=predict,
                 auto_compact=auto_compact,
                 searxng_url=searxng_url,
+                use_chrome=chrome,
                 config=cfg,
             )
         )
@@ -839,6 +856,7 @@ async def _run_once(
     predict: bool = False,
     auto_compact: bool = False,
     searxng_url: str | None = None,
+    use_chrome: bool = False,
     config: HarnessConfig,
 ) -> None:
     storage = _build_storage(db=db, in_memory=in_memory, cwd=cwd)
@@ -879,6 +897,7 @@ async def _run_once(
             system_prompt=_DEFAULT_SYSTEM_PROMPT,
             compactor=compactor,
             searxng_url=searxng_url,
+            use_chrome=use_chrome,
         )
 
         request_kwargs: dict[str, object] = {
@@ -1881,6 +1900,14 @@ def chat(
             envvar="HARNESS_SEARXNG_URL",
         ),
     ] = None,
+    chrome: Annotated[
+        bool,
+        typer.Option(
+            "--chrome/--no-chrome",
+            help="Use headless Chromium (Playwright) for web_search instead of the DDG API. "
+            "Requires: playwright install chromium",
+        ),
+    ] = False,
     max_context_tokens: Annotated[
         int | None,
         typer.Option("--max-context-tokens", help="Token budget for pruning per turn."),
@@ -1926,6 +1953,7 @@ def chat(
                 verify=verify,
                 require_tools=require_tools,
                 searxng_url=searxng_url,
+                use_chrome=chrome,
                 max_context_tokens=max_context_tokens,
                 auto_compact=auto_compact,
                 config=cfg,
@@ -1952,6 +1980,7 @@ async def _chat_loop(
     verify: str | None,
     require_tools: bool = False,
     searxng_url: str | None = None,
+    use_chrome: bool = False,
     max_context_tokens: int | None,
     auto_compact: bool = False,
     config: HarnessConfig,
@@ -1992,6 +2021,7 @@ async def _chat_loop(
             system_prompt=_DEFAULT_SYSTEM_PROMPT,
             compactor=compactor,
             searxng_url=searxng_url,
+            use_chrome=use_chrome,
         )
 
         first_turn = existing is None

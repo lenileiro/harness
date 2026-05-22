@@ -445,9 +445,167 @@ class SearXNGSearchTool:
         )
 
 
+_PLAYWRIGHT_SEARCH_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "query": {
+            "type": "string",
+            "description": "Search query.",
+        },
+        "max_results": {
+            "type": "integer",
+            "description": "Maximum number of results to return (default 5, max 20).",
+        },
+    },
+    "required": ["query"],
+}
+
+# XPath expressions for DuckDuckGo HTML endpoint result parsing.
+_DDG_HTML_RESULT_XPATH = '//div[contains(@class, "web-result")]'
+_DDG_HTML_TITLE_XPATH = './/a[contains(@class, "result__a")]'
+_DDG_HTML_SNIPPET_XPATH = './/*[contains(@class, "result__snippet")]'
+_DDG_HTML_URL_XPATH = './/*[contains(@class, "result__url")]'
+
+
+class PlaywrightSearchTool:
+    """Search the web via DuckDuckGo's HTML endpoint.
+
+    Uses ``httpx`` + ``lxml`` to query DuckDuckGo's plain-HTML search
+    (``html.duckduckgo.com``), bypassing bot detection that blocks headless
+    browsers on all major search engines. No API key, no browser install,
+    no rate-limit concerns for normal usage.
+
+    Playwright (``playwright install chromium``) is available on the same
+    agent for rendering specific pages via ``fetch_url`` once you have URLs
+    from this tool.
+    """
+
+    name = "web_search"
+    description = (
+        "Search the internet via DuckDuckGo HTML. Returns titles, snippets, "
+        "and URLs for the most relevant results. No API key required. "
+        "Use for research, current events, documentation lookup."
+    )
+    approval: ApprovalDecision = "auto"
+    phases: tuple[str, ...] = ("*",)
+
+    def __init__(
+        self,
+        *,
+        default_max_results: int = 5,
+        timeout: float = 15.0,
+        client: httpx.AsyncClient | None = None,
+    ) -> None:
+        self._default_max_results = min(default_max_results, 20)
+        self._timeout = timeout
+        self._injected_client = client
+        self.parameters_schema: dict[str, Any] = _PLAYWRIGHT_SEARCH_SCHEMA
+
+    async def __call__(self, call: ToolCall) -> ToolResult:
+        query = call.arguments.get("query")
+        if not isinstance(query, str) or not query.strip():
+            return ToolResult(
+                tool_call_id=call.id,
+                name=self.name,
+                content="missing or empty `query` argument",
+                is_error=True,
+            )
+
+        max_results_arg = call.arguments.get("max_results", self._default_max_results)
+        try:
+            max_results = max(1, min(int(max_results_arg), 20))
+        except (TypeError, ValueError):
+            max_results = self._default_max_results
+
+        try:
+            results = await self._search(query.strip(), max_results)
+        except Exception as exc:
+            return ToolResult(
+                tool_call_id=call.id,
+                name=self.name,
+                content=f"search failed: {exc}",
+                is_error=True,
+            )
+
+        if not results:
+            return ToolResult(
+                tool_call_id=call.id,
+                name=self.name,
+                content=f"no results found for: {query}",
+            )
+
+        lines = [f"Results for: {query}\n"]
+        for i, r in enumerate(results, 1):
+            lines.append(f"{i}. {r['title']}")
+            if r.get("snippet"):
+                lines.append(f"   {r['snippet']}")
+            if r.get("url"):
+                lines.append(f"   URL: {r['url']}")
+            lines.append("")
+
+        return ToolResult(
+            tool_call_id=call.id,
+            name=self.name,
+            content="\n".join(lines).rstrip(),
+            metadata={
+                "query": query,
+                "result_count": len(results),
+                "backend": "playwright-chromium",
+            },
+        )
+
+    async def _search(self, query: str, max_results: int) -> list[dict[str, str]]:
+        from lxml import html as lxml_html
+
+        owns_client = self._injected_client is None
+        client = self._injected_client or httpx.AsyncClient(
+            timeout=self._timeout,
+            follow_redirects=True,
+            headers={
+                "User-Agent": (
+                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/124.0.0.0 Safari/537.36"
+                )
+            },
+        )
+        try:
+            response = await client.post(
+                "https://html.duckduckgo.com/html/",
+                data={"q": query},
+                timeout=self._timeout,
+            )
+        finally:
+            if owns_client:
+                await client.aclose()
+
+        if response.status_code >= 400:
+            raise RuntimeError(f"DDG returned HTTP {response.status_code}")
+
+        tree = lxml_html.fromstring(response.content)
+        result_nodes = tree.xpath(_DDG_HTML_RESULT_XPATH)
+
+        parsed: list[dict[str, str]] = []
+        for node in result_nodes[:max_results]:
+            title_nodes = node.xpath(_DDG_HTML_TITLE_XPATH)
+            title = title_nodes[0].text_content().strip() if title_nodes else ""
+
+            snippet_nodes = node.xpath(_DDG_HTML_SNIPPET_XPATH)
+            snippet = snippet_nodes[0].text_content().strip() if snippet_nodes else ""
+
+            url_nodes = node.xpath(_DDG_HTML_URL_XPATH)
+            display_url = url_nodes[0].text_content().strip() if url_nodes else ""
+
+            if title or display_url:
+                parsed.append({"title": title, "snippet": snippet, "url": display_url})
+
+        return parsed
+
+
 __all__ = [
     "DEFAULT_ALLOWED_MIME_PREFIXES",
     "FetchUrlTool",
+    "PlaywrightSearchTool",
     "SearXNGSearchTool",
     "WebSearchTool",
     "__version__",
