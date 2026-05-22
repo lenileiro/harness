@@ -187,6 +187,13 @@ memory_app = typer.Typer(
 )
 app.add_typer(memory_app, name="memory")
 
+eval_app = typer.Typer(
+    name="eval",
+    help="Behavioral eval harness: run fixtures and score agent output.",
+    no_args_is_help=True,
+)
+app.add_typer(eval_app, name="eval")
+
 console = Console()
 
 KNOWN_PROVIDERS: tuple[str, ...] = ("ollama", "openrouter")
@@ -3425,6 +3432,204 @@ def lab_resume(
             await storage.close()
 
     asyncio.run(_run())
+
+
+# ---------------------------------------------------------------------------
+# eval subcommands
+# ---------------------------------------------------------------------------
+
+
+def _load_eval_module(name: str, evals_root: Path):
+    """Load runner.py or judge.py from the evals/ directory at runtime."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(name, evals_root / f"{name}.py")
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Could not load {name}.py from {evals_root}")
+    import sys as _sys
+
+    mod = importlib.util.module_from_spec(spec)
+    _sys.modules[name] = mod  # register before exec so @dataclass can resolve its module
+    spec.loader.exec_module(mod)  # type: ignore[union-attr]
+    return mod
+
+
+def _find_evals_root() -> Path | None:
+    """Walk CWD upward looking for evals/fixtures/."""
+    current = Path.cwd().resolve()
+    while True:
+        if (current / "evals" / "fixtures").is_dir():
+            return current / "evals"
+        parent = current.parent
+        if parent == current:
+            return None
+        current = parent
+
+
+@eval_app.command("list")
+def eval_list() -> None:
+    """List all available eval fixtures."""
+    evals_root = _find_evals_root()
+    if evals_root is None:
+        console.print("[red]No evals/fixtures/ directory found — run from the harness repo.[/red]")
+        raise typer.Exit(1)
+
+    runner = _load_eval_module("runner", evals_root)
+    fixtures = runner.discover_fixtures(evals_root)
+    if not fixtures:
+        console.print("[dim]No fixtures found.[/dim]")
+        return
+
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("Fixture", no_wrap=True)
+    table.add_column("Primary Dimension")
+    table.add_column("Trap (summary)")
+    for fx in fixtures:
+        primary = ""
+        trap = ""
+        for line in fx.eval_md.splitlines():
+            if line.startswith("primary_dimension:"):
+                primary = line.split(":", 1)[1].strip()
+            if line.strip().startswith("trap:") or (trap and line.startswith(" ")):
+                trap += line.split(":", 1)[-1].strip() + " "
+        table.add_row(fx.name, primary, _truncate(trap.strip(), 70))
+    console.print(table)
+
+
+@eval_app.command("run")
+def eval_run(
+    fixture_name: Annotated[
+        str | None,
+        typer.Argument(help="Fixture to run (e.g. 01-reproduce-before-repair). Omit to run all."),
+    ] = None,
+    provider: Annotated[
+        str | None,
+        typer.Option("--provider", "-p", help="Provider for the agent."),
+    ] = None,
+    model: Annotated[
+        str | None,
+        typer.Option("--model", "-m", help="Model for the agent."),
+    ] = None,
+    judge_model: Annotated[
+        str | None,
+        typer.Option("--judge-model", help="Model for the judge (defaults to --model)."),
+    ] = None,
+    agent_timeout: Annotated[
+        int,
+        typer.Option("--timeout", help="Agent timeout per fixture in seconds."),
+    ] = 300,
+    config_path: Annotated[Path | None, typer.Option("--config")] = None,
+) -> None:
+    """Run one or all eval fixtures and display scored results."""
+    evals_root = _find_evals_root()
+    if evals_root is None:
+        console.print("[red]No evals/fixtures/ directory found — run from the harness repo.[/red]")
+        raise typer.Exit(1)
+
+    cfg = _load_cli_config(config_path)
+    resolved_provider = provider or cfg.default_provider or "ollama"
+    resolved_model = model or cfg.default_model or "llama3.2"
+    resolved_judge_model = judge_model or resolved_model
+
+    runner = _load_eval_module("runner", evals_root)
+    judge_mod = _load_eval_module("judge", evals_root)
+
+    fixtures = runner.discover_fixtures(evals_root)
+    if fixture_name:
+        fixtures = [f for f in fixtures if f.name == fixture_name]
+        if not fixtures:
+            console.print(f"[red]Fixture not found:[/red] {fixture_name}")
+            raise typer.Exit(1)
+
+    if not fixtures:
+        console.print("[dim]No fixtures to run.[/dim]")
+        return
+
+    judge_adapter = _build_adapter(resolved_provider, base_url=None, config=cfg)
+
+    results = []
+    for fx in fixtures:
+        console.print(f"\n[bold blue]▶ {fx.name}[/bold blue]")
+        with console.status(f"[dim]running agent ({resolved_provider}/{resolved_model})...[/dim]"):
+            try:
+                outcome = runner.run_fixture(
+                    fx,
+                    provider=resolved_provider,
+                    model=resolved_model,
+                    agent_timeout=agent_timeout,
+                )
+            except Exception as exc:
+                console.print(f"  [red]run failed:[/red] {exc}")
+                continue
+
+        exit_icon = "[green]✓[/green]" if outcome.agent_exit_code == 0 else "[yellow]![/yellow]"
+        test_icon = "[green]✓[/green]" if outcome.test_exit_code == 0 else "[red]✗[/red]"
+        console.print(
+            f"  agent {exit_icon} (exit {outcome.agent_exit_code})  "
+            f"tests {test_icon} (exit {outcome.test_exit_code})"
+        )
+
+        with console.status("[dim]scoring...[/dim]"):
+            try:
+                result = judge_mod.judge(
+                    adapter=judge_adapter,
+                    model=resolved_judge_model,
+                    fixture_name=fx.name,
+                    task_text=fx.task_text,
+                    eval_md=fx.eval_md,
+                    transcript=outcome.transcript,
+                    git_diff=outcome.git_diff,
+                    test_output=outcome.test_output,
+                )
+                results.append(result)
+            except Exception as exc:
+                console.print(f"  [red]judge failed:[/red] {exc}")
+                continue
+
+    if not results:
+        return
+
+    # Summary table.
+    console.print()
+    table = Table(show_header=True, header_style="bold", title="Eval Results")
+    table.add_column("Fixture", no_wrap=True)
+    table.add_column("Verif.", justify="center")
+    table.add_column("Scope", justify="center")
+    table.add_column("Decomp.", justify="center")
+    table.add_column("Correct.", justify="center")
+    table.add_column("Overall", justify="center")
+    table.add_column("Pass?", justify="center")
+
+    def _score_cell(score: int) -> str:
+        color = "green" if score >= 4 else ("yellow" if score == 3 else "red")
+        return f"[{color}]{score}/5[/{color}]"
+
+    for r in results:
+        table.add_row(
+            r.fixture_name,
+            _score_cell(r.verification.score),
+            _score_cell(r.scope.score),
+            _score_cell(r.decomposition.score),
+            _score_cell(r.correctness.score),
+            _score_cell(r.overall.score),
+            "[green]PASS[/green]" if r.passed else "[red]FAIL[/red]",
+        )
+    console.print(table)
+
+    # Per-fixture rationales.
+    for r in results:
+        console.print(f"\n[bold]{r.fixture_name}[/bold]")
+        for dim_name, dim in [
+            ("verification", r.verification),
+            ("scope", r.scope),
+            ("decomposition", r.decomposition),
+            ("correctness", r.correctness),
+            ("overall", r.overall),
+        ]:
+            color = "green" if dim.score >= 4 else ("yellow" if dim.score == 3 else "red")
+            console.print(
+                f"  [{color}]{dim.score}/5[/{color}] [dim]{dim_name}[/dim]  {dim.rationale}"
+            )
 
 
 if __name__ == "__main__":
