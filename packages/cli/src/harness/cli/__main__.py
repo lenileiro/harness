@@ -72,6 +72,7 @@ from harness.core import (
     MultiAgentOrchestrator,
     PendingApproval,
     Planner,
+    PlanRejectedEvent,
     PredictionEvent,
     PredictionMismatchEvent,
     RepairOrchestrator,
@@ -256,6 +257,7 @@ class SpawnAgentsTool:
             sub_tools = ToolRegistry()
 
             if role.name == "planner":
+                sub_tools.register(ListDirTool(cwd=self._cwd))
                 sub_tools.register(CreateWorkItemTool(store, parent_id=job_id, cwd=self._cwd))
                 sub_tools.register(ListWorkItemsTool(store, job_id))
             elif role.name.startswith("worker"):
@@ -287,10 +289,13 @@ class SpawnAgentsTool:
         planner_role = AgentRole(
             name="planner",
             system_prompt=(
-                "You are a Planner. Decompose the goal into independent work items "
-                "using create_work_item. Use as few items as possible — prefer 2-5 "
-                "self-contained file analysis tasks. Do NOT read files yourself. "
-                "Once done creating work items, stop immediately."
+                "You are a Planner. Your job: use list_dir to discover top-level "
+                "subdirectories, then create ONE work item per subdirectory using "
+                "create_work_item. Each item must say exactly which directory the "
+                "worker should analyze (e.g. 'Analyze packages/core — read its Python "
+                "files and summarize what the package does'). Do NOT read file contents "
+                "yourself. Call list_dir first, then create_work_item for each "
+                "subdirectory, then stop immediately."
             ),
         )
         worker_role = AgentRole(
@@ -311,6 +316,16 @@ class SpawnAgentsTool:
             ),
         )
 
+        def _validate_plan(items: list[Task]) -> str | None:
+            if len(items) < 2:
+                return (
+                    f"Planner created only {len(items)} work item(s). "
+                    "You must create one work item per subdirectory — "
+                    "use list_dir first to discover subdirectories, then "
+                    "call create_work_item once for each one."
+                )
+            return None
+
         orchestrator = MultiAgentOrchestrator(
             agent_factory=agent_factory,
             store=store,
@@ -321,6 +336,8 @@ class SpawnAgentsTool:
             job_cwd=self._cwd,
             provider=self._provider,
             model=self._model,
+            planner_validator=_validate_plan,
+            max_planner_retries=1,
         )
 
         reporter_text: list[str] = []
@@ -2703,6 +2720,10 @@ class LabRenderer:
             self._console.print(
                 f"[yellow]  ~ {event.task_ref} orphaned"
                 f" (attempt {event.attempt}) — re-queued[/yellow]"
+            )
+        elif isinstance(event, PlanRejectedEvent):
+            self._console.print(
+                f"[red]  ✗ plan rejected (attempt {event.attempt}): {event.reason}[/red]"
             )
         elif isinstance(event, AgentEventWrapper):
             self._render_wrapped(event.role, event.event)

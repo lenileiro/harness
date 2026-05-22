@@ -128,6 +128,12 @@ class AgentEventWrapper(BaseModel):
     event: Event
 
 
+class PlanRejectedEvent(BaseModel):
+    type: Literal["plan_rejected"] = "plan_rejected"
+    reason: str
+    attempt: int
+
+
 OrchestratorEvent = (
     AgentStartedEvent
     | AgentDoneEvent
@@ -137,6 +143,7 @@ OrchestratorEvent = (
     | WorkItemVerifiedEvent
     | WorkItemRejectedEvent
     | WorkItemOrphanedEvent
+    | PlanRejectedEvent
     | AgentEventWrapper
 )
 
@@ -230,6 +237,8 @@ class MultiAgentOrchestrator:
         work_item_judge: WorkItemJudge | None = None,
         max_judge_retries: int = 2,
         activity_store: _ActivityStore | None = None,
+        planner_validator: Callable[[list[Task]], str | None] | None = None,
+        max_planner_retries: int = 1,
     ) -> None:
         self._factory = agent_factory
         self._store = store
@@ -244,6 +253,8 @@ class MultiAgentOrchestrator:
         self._work_item_judge = work_item_judge
         self._max_judge_retries = max_judge_retries
         self._activity_store = activity_store
+        self._planner_validator = planner_validator
+        self._max_planner_retries = max_planner_retries
 
     async def run(
         self,
@@ -268,6 +279,30 @@ class MultiAgentOrchestrator:
 
         async for event in self._run_planner(prompt, queue):
             yield event
+
+        # Validate planner output; retry up to max_planner_retries times.
+        if self._planner_validator is not None:
+            for attempt in range(1, self._max_planner_retries + 2):
+                items = await queue.list(status="todo")
+                error = self._planner_validator(items)
+                if error is None:
+                    break
+                yield PlanRejectedEvent(reason=error, attempt=attempt)
+                if attempt > self._max_planner_retries:
+                    break
+                # Cancel bad items and retry the planner with feedback
+                for item in items:
+                    cancelled = item.model_copy(
+                        update={"status": "cancelled", "updated_at": datetime.now(UTC)}
+                    )
+                    await self._store.update_task(cancelled)
+                retry_prompt = (
+                    f"{prompt}\n\n"
+                    f"VALIDATION FEEDBACK (attempt {attempt}): {error}\n"
+                    "Fix: create one work item per subdirectory, not one item for everything."
+                )
+                async for event in self._run_planner(retry_prompt, queue):
+                    yield event
 
         async for event in self._run_workers(queue):
             yield event
