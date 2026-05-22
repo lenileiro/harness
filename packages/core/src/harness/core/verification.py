@@ -1203,10 +1203,12 @@ class VerifyBeforeDoneVerifier:
             return VerificationResult(
                 can_finish=False,
                 reason=(
-                    "You made file changes but have not called verify_work yet. "
-                    "Run the project's test suite with verify_work before finishing. "
-                    "Choose the appropriate command for this project "
-                    "(e.g. 'pytest tests/', 'npm test', 'cargo test', 'go test ./...')."
+                    "You made file changes but never ran verify_work. "
+                    "You must test your changes before finishing. "
+                    "Call verify_work with the appropriate command "
+                    "(e.g. 'pytest tests/', 'npm test', 'cargo test'). "
+                    "Read the output — if tests fail, fix the specific failures "
+                    "and call verify_work again. Iterate until all tests pass."
                 ),
                 verifier_name=self.name,
             )
@@ -1216,8 +1218,10 @@ class VerifyBeforeDoneVerifier:
             return VerificationResult(
                 can_finish=False,
                 reason=(
-                    "The last verify_work call reported failures. "
-                    "Fix the issues reported by verify_work before declaring the task complete."
+                    "verify_work reported test failures. "
+                    "Read the failure output carefully — it tells you exactly what is wrong. "
+                    "Revise your implementation to fix the specific failing tests, "
+                    "then call verify_work again. Keep iterating until all tests pass."
                 ),
                 verifier_name=self.name,
             )

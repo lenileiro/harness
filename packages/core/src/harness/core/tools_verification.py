@@ -95,9 +95,11 @@ class VerifyWorkTool:
 
     name = "verify_work"
     description = (
-        "Run a verification command (tests, linter, build) to confirm your fix is correct. "
-        "Choose the command appropriate for this project's language and test framework. "
-        "Call this before declaring the task complete."
+        "Run the project's test suite to check whether your current code is correct. "
+        "Use this as your inner feedback loop: write or edit code, call verify_work, "
+        "read the failure output, revise your approach, call verify_work again. "
+        "Repeat until all tests pass. Do NOT declare the task complete until "
+        "verify_work returns PASSED."
     )
     approval: ApprovalDecision = "auto"
     effect_scope = "read_only"
