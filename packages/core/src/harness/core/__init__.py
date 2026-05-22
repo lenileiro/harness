@@ -11,6 +11,7 @@ from harness.core.approval import (
 )
 from harness.core.budget import ContextBudget, count_tokens, prune
 from harness.core.calibration import CalibrationRecord, OutcomeCalibration
+from harness.core.compactor import ContextCompactor
 from harness.core.errors import (
     ApprovalDeniedError,
     CancelledError,
@@ -127,6 +128,7 @@ __all__ = [
     "Capabilities",
     "ConfigurationError",
     "ContextBudget",
+    "ContextCompactor",
     "Done",
     "EffectScope",
     "ErrorEvent",

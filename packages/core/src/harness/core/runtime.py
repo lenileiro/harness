@@ -35,6 +35,7 @@ from harness.core.adapter import Adapter
 from harness.core.approval import ApprovalOutcome, ApprovalStore
 from harness.core.budget import ContextBudget, count_tokens, prune
 from harness.core.calibration import OutcomeCalibration
+from harness.core.compactor import ContextCompactor
 from harness.core.errors import (
     CancelledError,
     ConfigurationError,
@@ -122,6 +123,7 @@ class Agent:
         repair: RepairOrchestrator | None = None,
         evidence_contract: EvidenceContract | None = None,
         system_prompt: str | None = None,
+        compactor: ContextCompactor | None = None,
     ) -> None:
         if not adapters:
             raise ConfigurationError("at least one adapter is required")
@@ -161,6 +163,7 @@ class Agent:
         self._repair = repair
         self._evidence_contract = evidence_contract
         self.system_prompt = system_prompt
+        self._compactor = compactor
 
     # ------------------------------------------------------------------ #
     # Approval replay                                                     #
@@ -386,8 +389,16 @@ class Agent:
 
         session.status = "done"
         session.touch()
+        await self._maybe_compact(session)
         await self.storage.save(session)
         await self._emit(session, activity_kinds.AGENT_RUN_COMPLETED)
+
+    async def _maybe_compact(self, session: Session) -> None:
+        if self._compactor is None:
+            return
+        if not self._compactor.should_compact(session.messages):
+            return
+        session.messages = await self._compactor.compact(session.messages)
 
     async def _run_verification(self, session: Session) -> AsyncIterator[Event]:
         """Call the configured verifier, emit Verification event + activity."""

@@ -27,6 +27,7 @@ import difflib
 import os
 import re
 import time
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Any
@@ -60,6 +61,7 @@ from harness.core import (
     CompleteWorkItemTool,
     ConsequencePredictor,
     ContextBudget,
+    ContextCompactor,
     CreateWorkItemTool,
     Done,
     ErrorEvent,
@@ -416,6 +418,40 @@ def _build_verifier(
     raise typer.BadParameter(f"unknown --verify value: {verify!r} (use rule|llm|auto|none)")
 
 
+def _load_project_context(cwd: Path) -> str:
+    """Walk from cwd up to filesystem root, collecting CLAUDE.md and AGENTS.md files.
+
+    Returns an XML-tagged block suitable for injection into the system prompt, or an
+    empty string if no files are found.
+    """
+    target_names = {"CLAUDE.md", "AGENTS.md"}
+    collected: list[str] = []
+    current = cwd.resolve()
+    visited: set[Path] = set()
+    while True:
+        if current in visited:
+            break
+        visited.add(current)
+        for name in sorted(target_names):
+            candidate = current / name
+            if candidate.is_file():
+                try:
+                    text = candidate.read_text(encoding="utf-8", errors="replace").strip()
+                    if text:
+                        collected.append(f"# {candidate}\n{text}")
+                except OSError:
+                    pass
+        parent = current.parent
+        if parent == current:
+            break
+        current = parent
+
+    if not collected:
+        return ""
+    body = "\n\n---\n\n".join(reversed(collected))
+    return f"<project_instructions>\n{body}\n</project_instructions>"
+
+
 def _build_agent(
     *,
     chain: list[str],
@@ -436,6 +472,7 @@ def _build_agent(
     predictor: ConsequencePredictor | None = None,
     repair: RepairOrchestrator | None = None,
     system_prompt: str | None = None,
+    compactor: Any | None = None,
 ) -> Agent:
     """Build an Agent over a provider chain. `chain[0]` is the primary.
 
@@ -456,6 +493,12 @@ def _build_agent(
     for i, provider in enumerate(chain):
         provider_base_url = base_url if i == 0 else None
         adapters[provider] = _build_adapter(provider, base_url=provider_base_url, config=config)
+
+    project_ctx = _load_project_context(cwd)
+    if project_ctx and system_prompt:
+        system_prompt = f"{system_prompt}\n\n{project_ctx}"
+    elif project_ctx:
+        system_prompt = project_ctx
 
     tools = _build_tools(cwd)
     tools.register(
@@ -502,6 +545,7 @@ def _build_agent(
         predictor=predictor,
         repair=repair,
         system_prompt=system_prompt,
+        compactor=compactor,
     )
 
 
@@ -659,6 +703,13 @@ def run(
             help="Enable ConsequencePredictor: commit a prediction before each tool executes.",
         ),
     ] = False,
+    auto_compact: Annotated[
+        bool,
+        typer.Option(
+            "--auto-compact",
+            help="Summarize old messages via LLM when context exceeds 80% of max_tokens.",
+        ),
+    ] = False,
     verbose: Annotated[
         bool, typer.Option("--verbose", "-v", help="Enable DEBUG logging to stderr.")
     ] = False,
@@ -694,6 +745,7 @@ def run(
                 goal=goal,
                 max_context_tokens=max_context_tokens,
                 predict=predict,
+                auto_compact=auto_compact,
                 config=cfg,
             )
         )
@@ -720,6 +772,7 @@ async def _run_once(
     goal: bool = False,
     max_context_tokens: int | None,
     predict: bool = False,
+    auto_compact: bool = False,
     config: HarnessConfig,
 ) -> None:
     storage = _build_storage(db=db, in_memory=in_memory, cwd=cwd)
@@ -736,6 +789,10 @@ async def _run_once(
         if goal:
             adapter = _build_adapter(chain[0], base_url=base_url, config=config)
             planner = LLMPlanner(adapter=adapter, model=model)
+        compactor: ContextCompactor | None = None
+        if auto_compact:
+            adapter = _build_adapter(chain[0], base_url=base_url, config=config)
+            compactor = ContextCompactor(adapter=adapter, model=model)
         agent = _build_agent(
             chain=chain,
             base_url=base_url,
@@ -754,6 +811,7 @@ async def _run_once(
             predictor=ConsequencePredictor() if predict else None,
             repair=RepairOrchestrator() if predict else None,
             system_prompt=_DEFAULT_SYSTEM_PROMPT,
+            compactor=compactor,
         )
 
         request_kwargs: dict[str, object] = {
@@ -1744,6 +1802,13 @@ def chat(
         typer.Option("--max-context-tokens", help="Token budget for pruning per turn."),
     ] = None,
     config_path: Annotated[Path | None, typer.Option("--config")] = None,
+    auto_compact: Annotated[
+        bool,
+        typer.Option(
+            "--auto-compact",
+            help="Summarize old messages via LLM when context exceeds 80% of max_tokens.",
+        ),
+    ] = False,
     verbose: Annotated[bool, typer.Option("--verbose", "-v")] = False,
 ) -> None:
     """Interactive REPL: chat with the agent, drive tools, resume across turns."""
@@ -1772,6 +1837,7 @@ def chat(
                 inbox=inbox,
                 verify=verify,
                 max_context_tokens=max_context_tokens,
+                auto_compact=auto_compact,
                 config=cfg,
             )
         )
@@ -1795,6 +1861,7 @@ async def _chat_loop(
     inbox: bool,
     verify: str | None,
     max_context_tokens: int | None,
+    auto_compact: bool = False,
     config: HarnessConfig,
 ) -> None:
     from uuid import uuid4
@@ -1812,6 +1879,10 @@ async def _chat_loop(
         budget = (
             ContextBudget(max_tokens=max_context_tokens) if max_context_tokens is not None else None
         )
+        compactor: ContextCompactor | None = None
+        if auto_compact:
+            adapter = _build_adapter(chain[0], base_url=base_url, config=config)
+            compactor = ContextCompactor(adapter=adapter, model=model)
         agent = _build_agent(
             chain=chain,
             base_url=base_url,
@@ -1827,6 +1898,7 @@ async def _chat_loop(
             budget=budget,
             memory_store=storage,  # type: ignore[arg-type]
             system_prompt=_DEFAULT_SYSTEM_PROMPT,
+            compactor=compactor,
         )
 
         first_turn = existing is None
@@ -1901,54 +1973,101 @@ _HELP_TEXT = (
     "/session           show current session id and turn count\n"
     "/diff              show file changes made this session\n"
     "/clear             clear the terminal\n"
+    "/model [name]      show or switch the active model mid-session\n"
 )
+
+# ---------------------------------------------------------------------------
+# Slash command registry
+# ---------------------------------------------------------------------------
+
+SlashHandler = Callable[..., Awaitable[bool]]
+
+_SLASH_REGISTRY: dict[str, SlashHandler] = {}
+
+
+def _slash(name: str) -> Callable[[SlashHandler], SlashHandler]:
+    """Decorator to register a slash command handler."""
+
+    def decorator(fn: SlashHandler) -> SlashHandler:
+        _SLASH_REGISTRY[name] = fn
+        return fn
+
+    return decorator
+
+
+@_slash("/quit")
+@_slash("/exit")
+@_slash("/q")
+async def _slash_quit(line: str, *, agent: Agent, session_id: str, storage: Storage) -> bool:
+    console.print("[yellow]bye[/yellow]")
+    return False
+
+
+@_slash("/help")
+async def _slash_help(line: str, *, agent: Agent, session_id: str, storage: Storage) -> bool:
+    console.print(Panel(_HELP_TEXT.rstrip(), title="commands", expand=False))
+    return True
+
+
+@_slash("/tools")
+async def _slash_tools(line: str, *, agent: Agent, session_id: str, storage: Storage) -> bool:
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("Tool")
+    table.add_column("Approval")
+    for tool in agent.tools.all():
+        effective = agent.approval_policy.decide(tool)
+        color = {"auto": "green", "prompt": "yellow", "deny": "red"}.get(effective, "white")
+        table.add_row(tool.name, f"[{color}]{effective}[/{color}]")
+    console.print(table)
+    return True
+
+
+@_slash("/session")
+async def _slash_session(line: str, *, agent: Agent, session_id: str, storage: Storage) -> bool:
+    session = await storage.get(session_id)
+    if session is None:
+        console.print(f"[dim]Session {session_id} (no turns yet)[/dim]")
+    else:
+        console.print(
+            f"[dim]Session {session_id}, status: {session.status}, "
+            f"{len(session.messages)} messages[/dim]"
+        )
+    return True
+
+
+@_slash("/diff")
+async def _slash_diff(line: str, *, agent: Agent, session_id: str, storage: Storage) -> bool:
+    activity = await storage.list_activity(session_id=session_id)  # type: ignore[attr-defined]
+    _render_session_diff(activity, console)
+    return True
+
+
+@_slash("/clear")
+async def _slash_clear(line: str, *, agent: Agent, session_id: str, storage: Storage) -> bool:
+    console.clear()
+    return True
+
+
+@_slash("/model")
+async def _slash_model(line: str, *, agent: Agent, session_id: str, storage: Storage) -> bool:
+    parts = line.split(None, 1)
+    if len(parts) == 1:
+        console.print(f"[dim]Active model: {agent.default_model}[/dim]")
+    else:
+        new_model = parts[1].strip()
+        agent.default_model = new_model
+        console.print(f"[green]Switched model to:[/green] {new_model}")
+    return True
 
 
 async def _handle_slash(line: str, *, agent: Agent, session_id: str, storage: Storage) -> bool:
-    """Dispatch a /command. Returns False to terminate the REPL."""
+    """Dispatch a /command via the registry. Returns False to terminate the REPL."""
     cmd = line.split(None, 1)[0].lower()
-
-    if cmd in {"/quit", "/exit", "/q"}:
-        console.print("[yellow]bye[/yellow]")
-        return False
-
-    if cmd == "/help":
-        console.print(Panel(_HELP_TEXT.rstrip(), title="commands", expand=False))
+    handler = _SLASH_REGISTRY.get(cmd)
+    if handler is None:
+        console.print(f"[red]Unknown command:[/red] {cmd}.  Try /help.")
         return True
-
-    if cmd == "/tools":
-        table = Table(show_header=True, header_style="bold")
-        table.add_column("Tool")
-        table.add_column("Approval")
-        for tool in agent.tools.all():
-            effective = agent.approval_policy.decide(tool)
-            color = {"auto": "green", "prompt": "yellow", "deny": "red"}.get(effective, "white")
-            table.add_row(tool.name, f"[{color}]{effective}[/{color}]")
-        console.print(table)
-        return True
-
-    if cmd == "/session":
-        session = await storage.get(session_id)
-        if session is None:
-            console.print(f"[dim]Session {session_id} (no turns yet)[/dim]")
-        else:
-            console.print(
-                f"[dim]Session {session_id}, status: {session.status}, "
-                f"{len(session.messages)} messages[/dim]"
-            )
-        return True
-
-    if cmd == "/diff":
-        activity = await storage.list_activity(session_id=session_id)  # type: ignore[attr-defined]
-        _render_session_diff(activity, console)
-        return True
-
-    if cmd == "/clear":
-        console.clear()
-        return True
-
-    console.print(f"[red]Unknown command:[/red] {cmd}.  Try /help.")
-    return True
+    return await handler(line, agent=agent, session_id=session_id, storage=storage)
 
 
 # ---------------------------------------------------------------------------
