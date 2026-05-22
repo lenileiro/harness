@@ -122,6 +122,7 @@ from harness.core.tools_orchestration import (
     ListWorkItemsTool,
 )
 from harness.core.verification import (
+    ChainedVerifier,
     ClaimGroundingVerifier,
     ConsensusVerifier,
     EvidenceContract,
@@ -225,6 +226,7 @@ __all__ = [
     "ToolResultStep",
     "ToolRetry",
     "CalibrationRecord",
+    "ChainedVerifier",
     "ClaimGroundingVerifier",
     "ConsensusVerifier",
     "ConsequencePredictor",

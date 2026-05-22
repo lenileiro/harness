@@ -70,7 +70,9 @@ def _run(args: list[str]) -> Result:
 
 
 class TestVerifyFlag:
-    def test_no_verifier_by_default(self, patch_adapter, db_path: Path, tmp_path: Path) -> None:
+    def test_grounding_verifier_by_default(
+        self, patch_adapter, db_path: Path, tmp_path: Path
+    ) -> None:
         patch_adapter([text_turn("done")])
         result = _run(
             [
@@ -84,7 +86,26 @@ class TestVerifyFlag:
             ]
         )
         assert result.exit_code == 0
-        # No verdict line.
+        # Default verify=grounding renders a verdict line.
+        assert "verify" in result.stdout
+
+    def test_no_verifier_with_none_flag(self, patch_adapter, db_path: Path, tmp_path: Path) -> None:
+        patch_adapter([text_turn("done")])
+        result = _run(
+            [
+                "run",
+                "hi",
+                "--cwd",
+                str(tmp_path),
+                "--db",
+                str(db_path),
+                "--yes",
+                "--verify",
+                "none",
+            ]
+        )
+        assert result.exit_code == 0
+        # Explicit --verify none suppresses verdict.
         assert "verify" not in result.stdout
 
     def test_rule_verifier_renders_verdict_on_clean_run(

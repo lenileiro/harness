@@ -1030,7 +1030,53 @@ class ConsensusVerifier:
         )
 
 
+# ---------------------------------------------------------------------------
+# ChainedVerifier
+# ---------------------------------------------------------------------------
+
+
+class ChainedVerifier:
+    """Runs multiple verifiers in order, returning the first failure.
+
+    All verifiers receive the same session and activity list. The first
+    `can_finish=False` result short-circuits the chain. If every verifier
+    passes, the last result is returned (highest-confidence positive verdict).
+
+    Use this to compose cheap verifiers (ClaimGroundingVerifier, StateVerifier)
+    before the expensive LLM judge so the LLM only runs when the cheap checks
+    are satisfied.
+    """
+
+    name = "chained"
+
+    def __init__(self, *verifiers: Verifier) -> None:
+        self._verifiers = list(verifiers)
+
+    async def verify(
+        self, *, session: Session, activity: list[ActivityEvent]
+    ) -> VerificationResult:
+        last: VerificationResult | None = None
+        for verifier in self._verifiers:
+            result = await verifier.verify(session=session, activity=activity)
+            last = result
+            if not result.can_finish:
+                return VerificationResult(
+                    can_finish=False,
+                    reason=result.reason,
+                    confidence=result.confidence,
+                    evidence_event_ids=result.evidence_event_ids,
+                    verifier_name=self.name,
+                )
+        return last or VerificationResult(
+            can_finish=True,
+            reason="no verifiers in chain",
+            confidence=0.5,
+            verifier_name=self.name,
+        )
+
+
 __all__ = [
+    "ChainedVerifier",
     "ClaimGroundingVerifier",
     "ConsensusVerifier",
     "EvidenceCheckKind",

@@ -58,6 +58,8 @@ from harness.core import (
     ApprovalPolicy,
     ApprovalStore,
     AutoApprove,
+    ChainedVerifier,
+    ClaimGroundingVerifier,
     CompleteWorkItemTool,
     ConsequencePredictor,
     ContextBudget,
@@ -81,6 +83,7 @@ from harness.core import (
     RuleVerifier,
     RunRequest,
     Session,
+    StateVerifier,
     StepCompleted,
     StepStarted,
     Storage,
@@ -184,6 +187,11 @@ _DEFAULT_SYSTEM_PROMPT = (
     "You are a helpful AI agent with access to filesystem and shell tools. "
     "Complete the task fully before responding — do not stop mid-task to ask "
     "questions or offer options. Use tools to find everything you need.\n\n"
+    "Shell hygiene rules (follow these on every shell call):\n"
+    "- Exclude .venv, __pycache__, node_modules, .git from find/glob commands:\n"
+    "  find . -name '*.py' -not -path './.venv/*' -not -path './__pycache__/*'\n"
+    "- Use pipes to count/sort/summarize large output: | wc -l, | sort | uniq -c | sort -rn\n"
+    "- Never run long-running background processes.\n\n"
     "When a task requires reading source files:\n"
     "1. Use the shell tool to check total size: "
     "`find <path> -name '*.py' | xargs wc -c 2>/dev/null | tail -1` "
@@ -399,11 +407,29 @@ def _build_tools(cwd: Path) -> ToolRegistry:
 
 
 def _build_verifier(
-    verify: str | None, *, chain: list[str], model: str, config: HarnessConfig
+    verify: str | None,
+    *,
+    chain: list[str],
+    model: str,
+    config: HarnessConfig,
+    cwd: Path | None = None,
 ) -> Verifier | None:
-    """Resolve `--verify rule|llm|auto|none` to a Verifier instance (or None)."""
+    """Resolve --verify value to a Verifier instance (or None).
+
+    Options:
+      grounding  — ClaimGroundingVerifier only (free, no LLM call)
+      state      — StateVerifier only (filesystem + shell re-run checks)
+      rule       — RuleVerifier only (heuristic: stalls, refusals, tool errors)
+      llm        — LLMJudgeVerifier only (one extra adapter call)
+      auto       — ChainedVerifier: grounding → state → rule/llm router
+      none       — disabled
+    """
     if not verify or verify == "none":
         return None
+    if verify == "grounding":
+        return ClaimGroundingVerifier()
+    if verify == "state":
+        return StateVerifier(cwd=cwd or Path.cwd())
     if verify == "rule":
         return RuleVerifier()
     if verify == "llm":
@@ -411,11 +437,17 @@ def _build_verifier(
         return LLMJudgeVerifier(adapter=adapter, model=model)
     if verify == "auto":
         adapter = _build_adapter(chain[0], base_url=None, config=config)
-        return VerifierRouter(
-            rule=RuleVerifier(),
-            llm=LLMJudgeVerifier(adapter=adapter, model=model),
+        return ChainedVerifier(
+            ClaimGroundingVerifier(),
+            StateVerifier(cwd=cwd or Path.cwd()),
+            VerifierRouter(
+                rule=RuleVerifier(),
+                llm=LLMJudgeVerifier(adapter=adapter, model=model),
+            ),
         )
-    raise typer.BadParameter(f"unknown --verify value: {verify!r} (use rule|llm|auto|none)")
+    raise typer.BadParameter(
+        f"unknown --verify value: {verify!r} (use grounding|state|rule|llm|auto|none)"
+    )
 
 
 def _load_project_context(cwd: Path) -> str:
@@ -662,7 +694,8 @@ def run(
         bool, typer.Option("--in-memory", help="Use in-memory storage (session lost on exit).")
     ] = False,
     yes: Annotated[
-        bool, typer.Option("--yes", "-y", help="Auto-approve all tool calls (non-interactive).")
+        bool,
+        typer.Option("--yes", "-y", help="Auto-approve all tool calls (non-interactive)."),
     ] = False,
     inbox: Annotated[
         bool,
@@ -675,9 +708,19 @@ def run(
         str | None,
         typer.Option(
             "--verify",
-            help="Post-run verifier: rule (built-in heuristic) | llm (extra adapter call) | auto | none.",
+            help=(
+                "Post-run verifier: grounding (claim check, free) | state (filesystem check) | "
+                "rule (heuristic) | llm (extra adapter call) | auto (all chained) | none."
+            ),
         ),
-    ] = None,
+    ] = "grounding",
+    require_tools: Annotated[
+        bool,
+        typer.Option(
+            "--require-tools/--no-require-tools",
+            help="Force model to call at least one tool before answering (prevents memory-only replies).",
+        ),
+    ] = False,
     goal: Annotated[
         bool,
         typer.Option(
@@ -717,6 +760,11 @@ def run(
     """Run a single prompt through the agent and stream the result to stdout."""
     configure_logging(level="DEBUG" if verbose else "INFO")
 
+    # HARNESS_YES=1 in the environment is equivalent to --yes, making it easy
+    # to run the agent autonomously without repeating the flag every invocation.
+    if not yes and os.environ.get("HARNESS_YES"):
+        yes = True
+
     cfg = _load_cli_config(config_path)
     chain = _resolve_chain(failover_flag=failover, provider_flag=provider, config=cfg)
     effective_model = model or cfg.default_model or "llama3.2"
@@ -742,6 +790,7 @@ def run(
                 yes=yes,
                 inbox=inbox,
                 verify=verify,
+                require_tools=require_tools,
                 goal=goal,
                 max_context_tokens=max_context_tokens,
                 predict=predict,
@@ -769,6 +818,7 @@ async def _run_once(
     yes: bool,
     inbox: bool,
     verify: str | None,
+    require_tools: bool = False,
     goal: bool = False,
     max_context_tokens: int | None,
     predict: bool = False,
@@ -781,7 +831,7 @@ async def _run_once(
         # appends session_id to task.session_ids).
         task_id, _task = await _resolve_task_attachment(storage, task_ref, session_id)
 
-        verifier = _build_verifier(verify, chain=chain, model=model, config=config)
+        verifier = _build_verifier(verify, chain=chain, model=model, config=config, cwd=cwd)
         budget = (
             ContextBudget(max_tokens=max_context_tokens) if max_context_tokens is not None else None
         )
@@ -818,6 +868,7 @@ async def _run_once(
             "prompt": prompt,
             "model": model,
             "max_steps": max_steps,
+            "require_tool_use": require_tools,
         }
         if session_id:
             request_kwargs["session_id"] = session_id
