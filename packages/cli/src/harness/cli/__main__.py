@@ -92,6 +92,7 @@ from harness.core import (
     PredictionEvent,
     PredictionMismatchEvent,
     RepairOrchestrator,
+    RequestCritiqueTool,
     RuleVerifier,
     RunRequest,
     Session,
@@ -109,6 +110,7 @@ from harness.core import (
     Verification,
     Verifier,
     VerifierRouter,
+    VerifyWorkTool,
     WorkItemClaimedEvent,
     WorkItemCompletedEvent,
     WorkItemCreatedEvent,
@@ -207,6 +209,13 @@ _DEFAULT_SYSTEM_PROMPT = (
     "You are a helpful AI agent with access to filesystem and shell tools. "
     "Complete the task fully before responding — do not stop mid-task to ask "
     "questions or offer options. Use tools to find everything you need.\n\n"
+    "Self-verification tools (always available — use them proactively):\n"
+    "- verify_work: Run the project's test suite after making changes. Provide the "
+    "appropriate test command for this project (e.g. 'pytest tests/', 'npm test', "
+    "'cargo test'). Call this before declaring the task complete.\n"
+    "- request_critique: Get a second opinion on your proposed approach before making "
+    "changes. Describe what you plan to do and why — the critic will identify flaws "
+    "in your reasoning. Call this when you're uncertain about your diagnosis.\n\n"
     "Shell hygiene rules (follow these on every shell call):\n"
     "- Exclude .venv, __pycache__, node_modules, .git from find/glob commands:\n"
     "  find . -name '*.py' -not -path './.venv/*' -not -path './__pycache__/*'\n"
@@ -605,6 +614,9 @@ def _build_agent(
             config=config,
         )
     )
+    tools.register(VerifyWorkTool(cwd=cwd))
+    primary_adapter = adapters[chain[0]]
+    tools.register(RequestCritiqueTool(adapter=primary_adapter, model=model))
     approval_policy = ApprovalPolicy(default="prompt", per_tool=dict(config.approval))
 
     approval_handler: ApprovalHandler

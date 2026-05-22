@@ -123,6 +123,7 @@ from harness.core.tools_orchestration import (
     CreateWorkItemTool,
     ListWorkItemsTool,
 )
+from harness.core.tools_verification import RequestCritiqueTool, VerifyWorkTool
 from harness.core.verification import (
     ChainedVerifier,
     ClaimGroundingVerifier,
@@ -263,6 +264,8 @@ __all__ = [
     "VerificationResult",
     "Verifier",
     "VerifierRouter",
+    "VerifyWorkTool",
+    "RequestCritiqueTool",
     "WorkItemClaimedEvent",
     "WorkItemCompletedEvent",
     "WorkItemCreatedEvent",

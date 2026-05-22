@@ -12,14 +12,12 @@ from harness.core import (
     ActivityStore,
     Agent,
     AutoApprove,
-    ErrorEvent,
     FailoverPolicy,
     LLMJudgeVerifier,
     Message,
     RuleVerifier,
     RunRequest,
     Session,
-    StallError,
     ToolRegistry,
     Verification,
     VerificationResult,
@@ -296,6 +294,7 @@ def _agent(*, adapter: MockAdapter, verifier, sink: ActivityStore) -> Agent:
         activity_store=sink,
         verifier=verifier,
         default_model="m",
+        max_repair_attempts=0,
     )
 
 
