@@ -20,7 +20,7 @@ from harness.core.approval import (
 from harness.core.budget import ContextBudget, count_tokens, prune
 from harness.core.calibration import CalibrationRecord, OutcomeCalibration
 from harness.core.compactor import ContextCompactor
-from harness.core.critic import Critic, LLMCritic
+from harness.core.critic import Critic, LLMCritic, MultiCritic, make_multi_critic
 from harness.core.errors import (
     ApprovalDeniedError,
     CancelledError,
@@ -215,6 +215,7 @@ __all__ = [
     "ModelRequestStep",
     "ModelUnavailableError",
     "MultiAgentOrchestrator",
+    "MultiCritic",
     "NetworkError",
     "NoOpPlanner",
     "OrchestratorEvent",
@@ -286,6 +287,7 @@ __all__ = [
     "fork_session",
     "get_logger",
     "listen",
+    "make_multi_critic",
     "persist",
     "prune",
     "router",

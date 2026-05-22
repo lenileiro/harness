@@ -242,4 +242,143 @@ class LLMCritic:
             return ""
 
 
-__all__ = ["Critic", "LLMCritic", "SearchFn"]
+_DEVIL_SYSTEM = """\
+You are a devil's advocate critic in an AI repair loop.
+
+An AI agent's fix failed. Your role is different from the main critic: \
+instead of explaining why the fix is wrong, you should suggest what the \
+CORRECT approach likely looks like — without writing code.
+
+Rules:
+- Identify the design pattern or concept the failing test is checking \
+  (e.g. "concurrent deduplication", "atomic compare-and-swap", "idempotency")
+- In 1-2 sentences, hint at the right direction: what class of solution \
+  addresses this pattern? (e.g. "in-flight request tracking using a dict of \
+  futures/tasks", "a lock protecting shared state")
+- Do NOT write code. Do NOT reproduce the solution. Just name the pattern \
+  and one concrete hint about the data structure or mechanism.
+- Be concise: 2-3 sentences maximum.
+"""
+
+_DEVIL_USER = """\
+## Failing test output
+
+{failure}
+
+## Agent's last response
+
+{agent_last}
+
+Name the design pattern this test is checking and give one concrete hint \
+about the mechanism needed (no code). 2-3 sentences.\
+"""
+
+
+class MultiCritic:
+    """Runs two critic perspectives and concatenates their output.
+
+    Critic 1 (``primary``): identifies the mismatch between the agent's change
+    and what the failing test actually checks (hypothesis challenger).
+
+    Critic 2 (``devil``): names the correct design pattern and hints at the
+    mechanism without writing code (constructive nudge).
+
+    Either or both may be ``None``; missing critics are silently skipped.
+    """
+
+    def __init__(self, primary: Critic, devil: Critic | None = None) -> None:
+        self._primary = primary
+        self._devil = devil
+
+    async def critique(
+        self,
+        *,
+        session: Session,
+        verification_result: VerificationResult,
+        activity: list[ActivityEvent],
+    ) -> str:
+        results: list[str] = []
+        primary_text = await self._primary.critique(
+            session=session,
+            verification_result=verification_result,
+            activity=activity,
+        )
+        if primary_text:
+            results.append(f"**Critic 1 — hypothesis check:**\n{primary_text}")
+
+        if self._devil is not None:
+            devil_text = await self._devil.critique(
+                session=session,
+                verification_result=verification_result,
+                activity=activity,
+            )
+            if devil_text:
+                results.append(f"**Critic 2 — design pattern hint:**\n{devil_text}")
+
+        return "\n\n".join(results)
+
+
+class _DevilLLMCritic:
+    """Devil's advocate: names the correct pattern and hints at the mechanism."""
+
+    def __init__(
+        self,
+        adapter: Adapter,
+        model: str,
+        *,
+        max_tokens: int = 200,
+        temperature: float = 0.4,
+    ) -> None:
+        self._adapter = adapter
+        self._model = model
+        self._max_tokens = max_tokens
+        self._temperature = temperature
+
+    async def critique(
+        self,
+        *,
+        session: Session,
+        verification_result: VerificationResult,
+        activity: list[ActivityEvent],
+    ) -> str:
+        agent_text = _last_assistant_text(session)
+        failure_text = verification_result.reason[:3000]
+        messages = [
+            Message(role="system", content=_DEVIL_SYSTEM),
+            Message(
+                role="user",
+                content=_DEVIL_USER.format(
+                    failure=failure_text,
+                    agent_last=agent_text[:1500],
+                ),
+            ),
+        ]
+        try:
+            return await _stream_text(
+                self._adapter,
+                self._model,
+                messages,
+                max_tokens=self._max_tokens,
+                temperature=self._temperature,
+            )
+        except Exception:
+            return ""
+
+
+def make_multi_critic(
+    adapter: Adapter,
+    model: str,
+    *,
+    search_fn: SearchFn | None = None,
+) -> MultiCritic:
+    """Build the default two-critic setup used by the CLI.
+
+    Critic 1: hypothesis challenger with optional web search.
+    Critic 2: devil's advocate pattern hint (no search needed).
+    """
+    primary = LLMCritic(adapter=adapter, model=model, search_fn=search_fn)
+    devil = _DevilLLMCritic(adapter=adapter, model=model)
+    return MultiCritic(primary=primary, devil=devil)
+
+
+__all__ = ["Critic", "LLMCritic", "MultiCritic", "SearchFn", "make_multi_critic"]

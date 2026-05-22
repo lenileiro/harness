@@ -81,7 +81,6 @@ from harness.core import (
     FailoverPolicy,
     InboxApprovalHandler,
     ListWorkItemsTool,
-    LLMCritic,
     LLMJudgeVerifier,
     LLMPlanner,
     MemoryEntry,
@@ -121,6 +120,7 @@ from harness.core import (
     WorkItemVerifiedEvent,
     configure_logging,
     fork_session,
+    make_multi_critic,
 )
 from harness.storage.memory import InMemoryStorage
 from harness.storage.sqlite import SQLiteStorage, default_db_path
@@ -534,7 +534,7 @@ def _build_critic(
                 return result.content or ""
 
             search_fn = _search
-        return LLMCritic(adapter=adapter, model=model, search_fn=search_fn)
+        return make_multi_critic(adapter=adapter, model=model, search_fn=search_fn)
     raise typer.BadParameter(f"unknown --critic value: {critic!r} (use llm|llm+search|none)")
 
 

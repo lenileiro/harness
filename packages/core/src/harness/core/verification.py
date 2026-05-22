@@ -1213,22 +1213,12 @@ class VerifyBeforeDoneVerifier:
                 verifier_name=self.name,
             )
 
-        last_verify = verify_calls[-1]
-        if last_verify.data.get("is_error"):
-            return VerificationResult(
-                can_finish=False,
-                reason=(
-                    "verify_work reported test failures. "
-                    "Read the failure output carefully — it tells you exactly what is wrong. "
-                    "Revise your implementation to fix the specific failing tests, "
-                    "then call verify_work again. Keep iterating until all tests pass."
-                ),
-                verifier_name=self.name,
-            )
-
+        # verify_work was called at least once — let downstream verifiers (e.g.
+        # ShellVerifier) handle whether the tests actually passed. They have the
+        # real test output the critic needs to generate a pointed challenge.
         return VerificationResult(
             can_finish=True,
-            reason="verify_work passed — changes verified.",
+            reason="verify_work was called — deferring to downstream verifier.",
             verifier_name=self.name,
         )
 

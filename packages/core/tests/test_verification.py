@@ -409,15 +409,17 @@ class TestVerifyBeforeDoneVerifier:
         result = await verifier.verify(session=_session(), activity=activity)
         assert result.can_finish is True
 
-    async def test_write_then_failed_verify_blocks(self) -> None:
+    async def test_write_then_failed_verify_passes_through(self) -> None:
+        # Once verify_work was called (even if it failed), VerifyBeforeDoneVerifier
+        # defers to downstream verifiers that have the real test output.
         verifier = VerifyBeforeDoneVerifier()
         activity = [
             self._activity(kind="tool_call.completed", name="shell", is_error=False),
             self._activity(kind="tool_call.completed", name="verify_work", is_error=True),
         ]
         result = await verifier.verify(session=_session(), activity=activity)
-        assert result.can_finish is False
-        assert "failed" in result.reason.lower() or "fix" in result.reason.lower()
+        assert result.can_finish is True
+        assert "downstream" in result.reason.lower() or "deferring" in result.reason.lower()
 
     async def test_empty_activity_passes(self) -> None:
         verifier = VerifyBeforeDoneVerifier()
