@@ -1,38 +1,26 @@
-"""Web tools for Harness agents: HTTP fetch, DuckDuckGo search, and SearXNG.
+"""Web tools for Harness agents: HTTP fetch and Tavily search.
 
 Tools:
-- ``fetch_url(url, timeout?)`` — GET-only HTTP fetch, capped + allow-listed.
-- ``WebSearchTool`` — DuckDuckGo search via the ``ddgs`` library; no API key.
-- ``SearXNGSearchTool`` — Search via a self-hosted SearXNG instance; open source,
-  no API key, aggregates 70+ engines. Requires a running SearXNG server.
+- ``FetchUrlTool`` — GET-only HTTP fetch, capped + allow-listed.
+- ``TavilySearchTool`` — Web search via the Tavily API.
 
-fetch_url defences:
+FetchUrlTool defences:
 - Only ``http://`` and ``https://`` schemes are accepted.
 - Response body is capped at ``max_bytes``.
 - Content-Type must match the allow-list.
 - Configurable timeout, hard-capped by ``max_timeout``.
 - Approval default is ``prompt``.
 
-SearXNG quick-start (Docker, one command)::
-
-    docker run -d --name searxng -p 8080:8080 \\
-      -e SEARXNG_SECRET=$(openssl rand -hex 32) \\
-      searxng/searxng:latest
-
-Then enable JSON format in settings.yml (inside the container)::
-
-    search:
-      formats:
-        - html
-        - json
-
-Point ``SearXNGSearchTool(base_url="http://localhost:8080")`` at it.
+TavilySearchTool notes:
+- Requires ``TAVILY_API_KEY`` environment variable (or pass ``api_key`` directly).
+- Returns titles, snippets, and URLs from Tavily's search index.
+- Approval default is ``auto`` — search is read-only.
 """
 
 from __future__ import annotations
 
-import asyncio
-from typing import Any
+import os
+from typing import Any, Literal
 from urllib.parse import urlparse
 
 import httpx
@@ -86,7 +74,6 @@ class FetchUrlTool:
         "and non-2xx responses."
     )
     approval: ApprovalDecision = "prompt"
-    # GET is observational from harness' perspective — safe across phases.
     phases: tuple[str, ...] = ("*",)
 
     def __init__(
@@ -143,21 +130,14 @@ class FetchUrlTool:
 
         if response.status_code >= 400:
             preview = response.text[:200] if response.text else ""
-            return _error(
-                call,
-                self.name,
-                f"HTTP {response.status_code}: {preview}",
-            )
+            return _error(call, self.name, f"HTTP {response.status_code}: {preview}")
 
         content_type = response.headers.get("content-type", "")
         if not _mime_allowed(content_type, self.allowed_mime_prefixes):
             return _error(
-                call,
-                self.name,
-                f"content-type {content_type!r} is not in the allow-list",
+                call, self.name, f"content-type {content_type!r} is not in the allow-list"
             )
 
-        # Re-check size after the fact (Content-Length may be missing or wrong).
         body = response.content
         if len(body) > self.max_bytes:
             return _error(
@@ -180,7 +160,7 @@ class FetchUrlTool:
         )
 
 
-_WEB_SEARCH_SCHEMA: dict[str, Any] = {
+_TAVILY_SEARCH_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
         "query": {
@@ -196,21 +176,32 @@ _WEB_SEARCH_SCHEMA: dict[str, Any] = {
 }
 
 
-class WebSearchTool:
-    """Search the web via DuckDuckGo. No API key required."""
+class TavilySearchTool:
+    """Search the web via Tavily. Requires TAVILY_API_KEY environment variable."""
 
     name = "web_search"
     description = (
-        "Search the internet using DuckDuckGo. Returns titles, snippets, and URLs "
+        "Search the internet using Tavily. Returns titles, snippets, and URLs "
         "for the most relevant results. Use this to research topics, find current "
         "information, or look up documentation."
     )
     approval: ApprovalDecision = "auto"
     phases: tuple[str, ...] = ("*",)
 
-    def __init__(self, *, max_results: int = 5) -> None:
-        self._default_max_results = min(max_results, 20)
-        self.parameters_schema: dict[str, Any] = _WEB_SEARCH_SCHEMA
+    def __init__(
+        self,
+        *,
+        api_key: str | None = None,
+        default_max_results: int = 5,
+        search_depth: Literal["basic", "advanced", "fast", "ultra-fast"] = "basic",
+    ) -> None:
+        self._api_key = api_key
+        self._default_max_results = min(default_max_results, 20)
+        self._search_depth: Literal["basic", "advanced", "fast", "ultra-fast"] = search_depth
+        self.parameters_schema: dict[str, Any] = _TAVILY_SEARCH_SCHEMA
+
+    def _resolve_key(self) -> str | None:
+        return self._api_key or os.environ.get("TAVILY_API_KEY")
 
     async def __call__(self, call: ToolCall) -> ToolResult:
         query = call.arguments.get("query")
@@ -222,6 +213,18 @@ class WebSearchTool:
                 is_error=True,
             )
 
+        api_key = self._resolve_key()
+        if not api_key:
+            return ToolResult(
+                tool_call_id=call.id,
+                name=self.name,
+                content=(
+                    "TAVILY_API_KEY is not set. "
+                    "Export it before running: export TAVILY_API_KEY=<your-key>"
+                ),
+                is_error=True,
+            )
+
         max_results_arg = call.arguments.get("max_results", self._default_max_results)
         try:
             max_results = max(1, min(int(max_results_arg), 20))
@@ -229,7 +232,7 @@ class WebSearchTool:
             max_results = self._default_max_results
 
         try:
-            results = await asyncio.to_thread(self._search, query.strip(), max_results)
+            results = await self._search(query.strip(), api_key, max_results)
         except Exception as exc:
             return ToolResult(
                 tool_call_id=call.id,
@@ -247,187 +250,11 @@ class WebSearchTool:
 
         lines = [f"Results for: {query}\n"]
         for i, r in enumerate(results, 1):
-            title = r.get("title", "").strip()
-            body = r.get("body", "").strip()
-            href = r.get("href", "").strip()
-            lines.append(f"{i}. {title}")
-            if body:
-                lines.append(f"   {body}")
-            if href:
-                lines.append(f"   URL: {href}")
-            lines.append("")
-
-        return ToolResult(
-            tool_call_id=call.id,
-            name=self.name,
-            content="\n".join(lines).rstrip(),
-            metadata={"query": query, "result_count": len(results)},
-        )
-
-    @staticmethod
-    def _search(query: str, max_results: int) -> list[dict[str, str]]:
-        from duckduckgo_search import DDGS
-
-        return list(DDGS().text(query, max_results=max_results))
-
-
-_SEARXNG_SEARCH_SCHEMA: dict[str, Any] = {
-    "type": "object",
-    "properties": {
-        "query": {
-            "type": "string",
-            "description": "Search query.",
-        },
-        "max_results": {
-            "type": "integer",
-            "description": "Maximum number of results to return (default 5, max 20).",
-        },
-        "engines": {
-            "type": "string",
-            "description": "Comma-separated list of search engines to use (e.g. 'google,bing,duckduckgo'). Leave empty to use SearXNG defaults.",
-        },
-    },
-    "required": ["query"],
-}
-
-
-class SearXNGSearchTool:
-    """Search the web via a self-hosted SearXNG instance. No API key required.
-
-    Start SearXNG with Docker::
-
-        docker run -d --name searxng -p 8080:8080 \\
-          -e SEARXNG_SECRET=$(openssl rand -hex 32) \\
-          searxng/searxng:latest
-
-    Then enable JSON format in the container's settings.yml::
-
-        search:
-          formats: [html, json]
-    """
-
-    name = "web_search"
-    description = (
-        "Search the internet via SearXNG (open-source, self-hosted, no API key). "
-        "Returns titles, snippets, and URLs for the most relevant results. "
-        "Use this to research topics, find current information, or look up documentation."
-    )
-    approval: ApprovalDecision = "auto"
-    phases: tuple[str, ...] = ("*",)
-
-    def __init__(
-        self,
-        *,
-        base_url: str = "http://localhost:8080",
-        default_max_results: int = 5,
-        timeout: float = 15.0,
-        client: httpx.AsyncClient | None = None,
-    ) -> None:
-        self._base_url = base_url.rstrip("/")
-        self._default_max_results = min(default_max_results, 20)
-        self._timeout = timeout
-        self._injected_client = client
-        self.parameters_schema: dict[str, Any] = _SEARXNG_SEARCH_SCHEMA
-
-    async def __call__(self, call: ToolCall) -> ToolResult:
-        query = call.arguments.get("query")
-        if not isinstance(query, str) or not query.strip():
-            return ToolResult(
-                tool_call_id=call.id,
-                name=self.name,
-                content="missing or empty `query` argument",
-                is_error=True,
-            )
-
-        max_results_arg = call.arguments.get("max_results", self._default_max_results)
-        try:
-            max_results = max(1, min(int(max_results_arg), 20))
-        except (TypeError, ValueError):
-            max_results = self._default_max_results
-
-        engines = call.arguments.get("engines", "")
-
-        params: dict[str, str] = {
-            "q": query.strip(),
-            "format": "json",
-            "pageno": "1",
-        }
-        if engines and isinstance(engines, str):
-            params["engines"] = engines
-
-        owns_client = self._injected_client is None
-        client = self._injected_client or httpx.AsyncClient(
-            timeout=self._timeout, follow_redirects=True
-        )
-        try:
-            try:
-                response = await client.get(
-                    f"{self._base_url}/search", params=params, timeout=self._timeout
-                )
-            except httpx.ConnectError as exc:
-                return ToolResult(
-                    tool_call_id=call.id,
-                    name=self.name,
-                    content=f"could not connect to SearXNG at {self._base_url}: {exc}",
-                    is_error=True,
-                )
-            except httpx.TimeoutException:
-                return ToolResult(
-                    tool_call_id=call.id,
-                    name=self.name,
-                    content=f"SearXNG request timed out after {self._timeout}s",
-                    is_error=True,
-                )
-        finally:
-            if owns_client:
-                await client.aclose()
-
-        if response.status_code == 403:
-            return ToolResult(
-                tool_call_id=call.id,
-                name=self.name,
-                content=(
-                    "SearXNG returned 403 Forbidden. "
-                    "Enable JSON format in settings.yml: search.formats: [html, json]"
-                ),
-                is_error=True,
-            )
-        if response.status_code >= 400:
-            return ToolResult(
-                tool_call_id=call.id,
-                name=self.name,
-                content=f"SearXNG returned HTTP {response.status_code}",
-                is_error=True,
-            )
-
-        try:
-            data = response.json()
-        except Exception:
-            return ToolResult(
-                tool_call_id=call.id,
-                name=self.name,
-                content="SearXNG returned non-JSON response; is JSON format enabled?",
-                is_error=True,
-            )
-
-        results = data.get("results", [])[:max_results]
-
-        if not results:
-            return ToolResult(
-                tool_call_id=call.id,
-                name=self.name,
-                content=f"no results found for: {query}",
-            )
-
-        lines = [f"Results for: {query}\n"]
-        for i, r in enumerate(results, 1):
-            title = r.get("title", "").strip()
-            snippet = r.get("content", "").strip()
+            lines.append(f"{i}. {r.get('title', '').strip()}")
+            content = r.get("content", "").strip()
+            if content:
+                lines.append(f"   {content}")
             url = r.get("url", "").strip()
-            engine = r.get("engine", "")
-            lines.append(f"{i}. {title}" + (f" [{engine}]" if engine else ""))
-            if snippet:
-                lines.append(f"   {snippet}")
             if url:
                 lines.append(f"   URL: {url}")
             lines.append("")
@@ -439,174 +266,28 @@ class SearXNGSearchTool:
             metadata={
                 "query": query,
                 "result_count": len(results),
-                "backend": "searxng",
-                "base_url": self._base_url,
+                "backend": "tavily",
             },
         )
 
+    async def _search(self, query: str, api_key: str, max_results: int) -> list[dict[str, str]]:
+        import asyncio
 
-_PLAYWRIGHT_SEARCH_SCHEMA: dict[str, Any] = {
-    "type": "object",
-    "properties": {
-        "query": {
-            "type": "string",
-            "description": "Search query.",
-        },
-        "max_results": {
-            "type": "integer",
-            "description": "Maximum number of results to return (default 5, max 20).",
-        },
-    },
-    "required": ["query"],
-}
+        from tavily import TavilyClient
 
-# XPath expressions for DuckDuckGo HTML endpoint result parsing.
-_DDG_HTML_RESULT_XPATH = '//div[contains(@class, "web-result")]'
-_DDG_HTML_TITLE_XPATH = './/a[contains(@class, "result__a")]'
-_DDG_HTML_SNIPPET_XPATH = './/*[contains(@class, "result__snippet")]'
-_DDG_HTML_URL_XPATH = './/*[contains(@class, "result__url")]'
-
-
-class PlaywrightSearchTool:
-    """Search the web via DuckDuckGo's HTML endpoint.
-
-    Uses ``httpx`` + ``lxml`` to query DuckDuckGo's plain-HTML search
-    (``html.duckduckgo.com``), bypassing bot detection that blocks headless
-    browsers on all major search engines. No API key, no browser install,
-    no rate-limit concerns for normal usage.
-
-    Playwright (``playwright install chromium``) is available on the same
-    agent for rendering specific pages via ``fetch_url`` once you have URLs
-    from this tool.
-    """
-
-    name = "web_search"
-    description = (
-        "Search the internet via DuckDuckGo HTML. Returns titles, snippets, "
-        "and URLs for the most relevant results. No API key required. "
-        "Use for research, current events, documentation lookup."
-    )
-    approval: ApprovalDecision = "auto"
-    phases: tuple[str, ...] = ("*",)
-
-    def __init__(
-        self,
-        *,
-        default_max_results: int = 5,
-        timeout: float = 15.0,
-        client: httpx.AsyncClient | None = None,
-    ) -> None:
-        self._default_max_results = min(default_max_results, 20)
-        self._timeout = timeout
-        self._injected_client = client
-        self.parameters_schema: dict[str, Any] = _PLAYWRIGHT_SEARCH_SCHEMA
-
-    async def __call__(self, call: ToolCall) -> ToolResult:
-        query = call.arguments.get("query")
-        if not isinstance(query, str) or not query.strip():
-            return ToolResult(
-                tool_call_id=call.id,
-                name=self.name,
-                content="missing or empty `query` argument",
-                is_error=True,
-            )
-
-        max_results_arg = call.arguments.get("max_results", self._default_max_results)
-        try:
-            max_results = max(1, min(int(max_results_arg), 20))
-        except (TypeError, ValueError):
-            max_results = self._default_max_results
-
-        try:
-            results = await self._search(query.strip(), max_results)
-        except Exception as exc:
-            return ToolResult(
-                tool_call_id=call.id,
-                name=self.name,
-                content=f"search failed: {exc}",
-                is_error=True,
-            )
-
-        if not results:
-            return ToolResult(
-                tool_call_id=call.id,
-                name=self.name,
-                content=f"no results found for: {query}",
-            )
-
-        lines = [f"Results for: {query}\n"]
-        for i, r in enumerate(results, 1):
-            lines.append(f"{i}. {r['title']}")
-            if r.get("snippet"):
-                lines.append(f"   {r['snippet']}")
-            if r.get("url"):
-                lines.append(f"   URL: {r['url']}")
-            lines.append("")
-
-        return ToolResult(
-            tool_call_id=call.id,
-            name=self.name,
-            content="\n".join(lines).rstrip(),
-            metadata={
-                "query": query,
-                "result_count": len(results),
-                "backend": "playwright-chromium",
-            },
+        client = TavilyClient(api_key=api_key)
+        response = await asyncio.to_thread(
+            client.search,
+            query,
+            max_results=max_results,
+            search_depth=self._search_depth,
         )
-
-    async def _search(self, query: str, max_results: int) -> list[dict[str, str]]:
-        from lxml import html as lxml_html
-
-        owns_client = self._injected_client is None
-        client = self._injected_client or httpx.AsyncClient(
-            timeout=self._timeout,
-            follow_redirects=True,
-            headers={
-                "User-Agent": (
-                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/124.0.0.0 Safari/537.36"
-                )
-            },
-        )
-        try:
-            response = await client.post(
-                "https://html.duckduckgo.com/html/",
-                data={"q": query},
-                timeout=self._timeout,
-            )
-        finally:
-            if owns_client:
-                await client.aclose()
-
-        if response.status_code >= 400:
-            raise RuntimeError(f"DDG returned HTTP {response.status_code}")
-
-        tree = lxml_html.fromstring(response.content)
-        result_nodes = tree.xpath(_DDG_HTML_RESULT_XPATH)
-
-        parsed: list[dict[str, str]] = []
-        for node in result_nodes[:max_results]:
-            title_nodes = node.xpath(_DDG_HTML_TITLE_XPATH)
-            title = title_nodes[0].text_content().strip() if title_nodes else ""
-
-            snippet_nodes = node.xpath(_DDG_HTML_SNIPPET_XPATH)
-            snippet = snippet_nodes[0].text_content().strip() if snippet_nodes else ""
-
-            url_nodes = node.xpath(_DDG_HTML_URL_XPATH)
-            display_url = url_nodes[0].text_content().strip() if url_nodes else ""
-
-            if title or display_url:
-                parsed.append({"title": title, "snippet": snippet, "url": display_url})
-
-        return parsed
+        return response.get("results", [])
 
 
 __all__ = [
     "DEFAULT_ALLOWED_MIME_PREFIXES",
     "FetchUrlTool",
-    "PlaywrightSearchTool",
-    "SearXNGSearchTool",
-    "WebSearchTool",
+    "TavilySearchTool",
     "__version__",
 ]

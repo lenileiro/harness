@@ -124,7 +124,7 @@ from harness.tools.fs import (
     WriteFileTool,
 )
 from harness.tools.shell import ShellTool
-from harness.tools.web import FetchUrlTool, PlaywrightSearchTool, SearXNGSearchTool, WebSearchTool
+from harness.tools.web import FetchUrlTool, TavilySearchTool
 
 app = typer.Typer(
     name="harness",
@@ -394,12 +394,7 @@ def _build_adapter(provider: str, *, base_url: str | None, config: HarnessConfig
     raise typer.BadParameter(f"unknown provider: {provider!r}")
 
 
-def _build_tools(
-    cwd: Path,
-    *,
-    searxng_url: str | None = None,
-    use_chrome: bool = False,
-) -> ToolRegistry:
+def _build_tools(cwd: Path) -> ToolRegistry:
     registry = ToolRegistry()
     registry.register(ReadFileTool(cwd=cwd))
     registry.register(WriteFileTool(cwd=cwd))
@@ -407,12 +402,7 @@ def _build_tools(
     registry.register(ListDirTool(cwd=cwd))
     registry.register(GlobTool(cwd=cwd))
     registry.register(ShellTool(cwd=cwd))
-    if searxng_url:
-        registry.register(SearXNGSearchTool(base_url=searxng_url))
-    elif use_chrome:
-        registry.register(PlaywrightSearchTool())
-    else:
-        registry.register(WebSearchTool())
+    registry.register(TavilySearchTool())
     registry.register(FetchUrlTool())
     return registry
 
@@ -516,8 +506,6 @@ def _build_agent(
     repair: RepairOrchestrator | None = None,
     system_prompt: str | None = None,
     compactor: Any | None = None,
-    searxng_url: str | None = None,
-    use_chrome: bool = False,
 ) -> Agent:
     """Build an Agent over a provider chain. `chain[0]` is the primary.
 
@@ -545,7 +533,7 @@ def _build_agent(
     elif project_ctx:
         system_prompt = project_ctx
 
-    tools = _build_tools(cwd, searxng_url=searxng_url, use_chrome=use_chrome)
+    tools = _build_tools(cwd)
     tools.register(
         SpawnAgentsTool(
             provider=chain[0],
@@ -766,23 +754,6 @@ def run(
             help="Summarize old messages via LLM when context exceeds 80% of max_tokens.",
         ),
     ] = False,
-    searxng_url: Annotated[
-        str | None,
-        typer.Option(
-            "--searxng-url",
-            help="Base URL of a self-hosted SearXNG instance (e.g. http://localhost:8080). "
-            "When set, uses SearXNG instead of DuckDuckGo for web_search.",
-            envvar="HARNESS_SEARXNG_URL",
-        ),
-    ] = None,
-    chrome: Annotated[
-        bool,
-        typer.Option(
-            "--chrome/--no-chrome",
-            help="Use headless Chromium (Playwright) for web_search instead of the DDG API. "
-            "Requires: playwright install chromium",
-        ),
-    ] = False,
     verbose: Annotated[
         bool, typer.Option("--verbose", "-v", help="Enable DEBUG logging to stderr.")
     ] = False,
@@ -825,8 +796,6 @@ def run(
                 max_context_tokens=max_context_tokens,
                 predict=predict,
                 auto_compact=auto_compact,
-                searxng_url=searxng_url,
-                use_chrome=chrome,
                 config=cfg,
             )
         )
@@ -855,8 +824,6 @@ async def _run_once(
     max_context_tokens: int | None,
     predict: bool = False,
     auto_compact: bool = False,
-    searxng_url: str | None = None,
-    use_chrome: bool = False,
     config: HarnessConfig,
 ) -> None:
     storage = _build_storage(db=db, in_memory=in_memory, cwd=cwd)
@@ -896,8 +863,6 @@ async def _run_once(
             repair=RepairOrchestrator() if predict else None,
             system_prompt=_DEFAULT_SYSTEM_PROMPT,
             compactor=compactor,
-            searxng_url=searxng_url,
-            use_chrome=use_chrome,
         )
 
         request_kwargs: dict[str, object] = {
@@ -1891,23 +1856,6 @@ def chat(
             help="Force the model to call at least one tool before answering.",
         ),
     ] = False,
-    searxng_url: Annotated[
-        str | None,
-        typer.Option(
-            "--searxng-url",
-            help="Base URL of a self-hosted SearXNG instance (e.g. http://localhost:8080). "
-            "When set, uses SearXNG instead of DuckDuckGo for web_search.",
-            envvar="HARNESS_SEARXNG_URL",
-        ),
-    ] = None,
-    chrome: Annotated[
-        bool,
-        typer.Option(
-            "--chrome/--no-chrome",
-            help="Use headless Chromium (Playwright) for web_search instead of the DDG API. "
-            "Requires: playwright install chromium",
-        ),
-    ] = False,
     max_context_tokens: Annotated[
         int | None,
         typer.Option("--max-context-tokens", help="Token budget for pruning per turn."),
@@ -1952,8 +1900,6 @@ def chat(
                 inbox=inbox,
                 verify=verify,
                 require_tools=require_tools,
-                searxng_url=searxng_url,
-                use_chrome=chrome,
                 max_context_tokens=max_context_tokens,
                 auto_compact=auto_compact,
                 config=cfg,
@@ -1979,8 +1925,6 @@ async def _chat_loop(
     inbox: bool,
     verify: str | None,
     require_tools: bool = False,
-    searxng_url: str | None = None,
-    use_chrome: bool = False,
     max_context_tokens: int | None,
     auto_compact: bool = False,
     config: HarnessConfig,
@@ -2020,8 +1964,6 @@ async def _chat_loop(
             memory_store=storage,  # type: ignore[arg-type]
             system_prompt=_DEFAULT_SYSTEM_PROMPT,
             compactor=compactor,
-            searxng_url=searxng_url,
-            use_chrome=use_chrome,
         )
 
         first_turn = existing is None
@@ -3093,7 +3035,7 @@ def lab_run(
                 tools.register(WriteFileTool(cwd=working_dir))
                 tools.register(EditFileTool(cwd=working_dir))
                 tools.register(ShellTool(cwd=working_dir))
-                tools.register(WebSearchTool())
+                tools.register(TavilySearchTool())
                 tools.register(FetchUrlTool())
                 tools.register(ListWorkItemsTool(storage, job_id))
                 tools.register(CompleteWorkItemTool(storage, item_id))
@@ -3380,7 +3322,7 @@ def lab_resume(
                 tools.register(WriteFileTool(cwd=working_dir))
                 tools.register(EditFileTool(cwd=working_dir))
                 tools.register(ShellTool(cwd=working_dir))
-                tools.register(WebSearchTool())
+                tools.register(TavilySearchTool())
                 tools.register(FetchUrlTool())
                 tools.register(ListWorkItemsTool(storage, job))
                 tools.register(CompleteWorkItemTool(storage, item))
