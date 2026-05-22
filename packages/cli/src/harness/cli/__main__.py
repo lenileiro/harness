@@ -180,16 +180,15 @@ KNOWN_PROVIDERS: tuple[str, ...] = ("ollama", "openrouter")
 
 _DEFAULT_SYSTEM_PROMPT = (
     "You are a helpful AI agent with access to filesystem and shell tools. "
-    "Use your tools proactively to answer questions about the environment — "
-    "read files, list directories, or run shell commands when the user asks "
-    "about the current project or codebase. "
-    "Do not ask the user for information you can look up yourself with a tool.\n\n"
-    "When a task requires reading multiple files: first identify only the files "
-    "relevant to the question (use glob or targeted find, not a full tree walk). "
-    "Check their total size (e.g. `find <specific-path> -name '*.py' | xargs wc -c 2>/dev/null | tail -1`). "
-    "If the relevant files exceed ~200 KB total, use spawn_agents with a goal "
-    "that names exactly which paths to analyze and what output you need. "
-    "For small or targeted reads, read the files directly."
+    "Complete the task fully before responding — do not stop mid-task to ask "
+    "questions or offer options. Use tools to find everything you need.\n\n"
+    "When a task requires reading source files:\n"
+    "1. Use the shell tool to check total size: "
+    "`find <path> -name '*.py' | xargs wc -c 2>/dev/null | tail -1` "
+    "(note: 'find' is a shell command, not a standalone tool — always call it via shell)\n"
+    "2. If total exceeds ~200 KB, call spawn_agents with a goal that names "
+    "the exact path and what analysis you need.\n"
+    "3. If under 200 KB, read the key files and synthesize a complete answer."
 )
 
 _SPAWN_SCHEMA: dict[str, Any] = {
@@ -366,7 +365,12 @@ def _build_adapter(provider: str, *, base_url: str | None, config: HarnessConfig
     settings = config.provider(provider)
     effective_base_url = base_url or settings.get("base_url")
     if provider == "ollama":
-        return OllamaAdapter(base_url=effective_base_url) if effective_base_url else OllamaAdapter()
+        timeout = float(settings.get("timeout", 120.0))
+        return (
+            OllamaAdapter(base_url=effective_base_url, timeout=timeout)
+            if effective_base_url
+            else OllamaAdapter(timeout=timeout)
+        )
     if provider == "openrouter":
         return OpenRouterAdapter(
             base_url=effective_base_url,
