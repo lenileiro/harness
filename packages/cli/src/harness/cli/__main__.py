@@ -3514,6 +3514,13 @@ def eval_run(
         str | None,
         typer.Option("--judge-model", help="Model for the judge (defaults to --model)."),
     ] = None,
+    judge_provider: Annotated[
+        str | None,
+        typer.Option(
+            "--judge-provider",
+            help="Provider for the judge (defaults to --provider, or ollama when provider=claude).",
+        ),
+    ] = None,
     agent_timeout: Annotated[
         int,
         typer.Option("--timeout", help="Agent timeout per fixture in seconds."),
@@ -3530,6 +3537,11 @@ def eval_run(
     resolved_provider = provider or cfg.default_provider or "ollama"
     resolved_model = model or cfg.default_model or "llama3.2"
     resolved_judge_model = judge_model or resolved_model
+    # When the agent uses 'claude -p', it can't also serve as the judge adapter.
+    # Fall back to ollama for judging unless the caller specifies --judge-provider.
+    resolved_judge_provider = judge_provider or (
+        "ollama" if resolved_provider == "claude" else resolved_provider
+    )
 
     runner = _load_eval_module("runner", evals_root)
     judge_mod = _load_eval_module("judge", evals_root)
@@ -3545,12 +3557,17 @@ def eval_run(
         console.print("[dim]No fixtures to run.[/dim]")
         return
 
-    judge_adapter = _build_adapter(resolved_provider, base_url=None, config=cfg)
+    judge_adapter = _build_adapter(resolved_judge_provider, base_url=None, config=cfg)
 
     results = []
     for fx in fixtures:
         console.print(f"\n[bold blue]▶ {fx.name}[/bold blue]")
-        with console.status(f"[dim]running agent ({resolved_provider}/{resolved_model})...[/dim]"):
+        agent_desc = (
+            resolved_provider
+            if resolved_provider == "claude"
+            else f"{resolved_provider}/{resolved_model}"
+        )
+        with console.status(f"[dim]running agent ({agent_desc})...[/dim]"):
             try:
                 outcome = runner.run_fixture(
                     fx,

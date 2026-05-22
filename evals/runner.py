@@ -89,6 +89,41 @@ def _git_env() -> dict[str, str]:
     return env
 
 
+def _agent_cmd(
+    provider: str,
+    model: str,
+    task_text: str,
+    work: Path,
+    harness_bin: str | None,
+) -> list[str]:
+    """Return the command list to invoke the agent for a given provider."""
+    if provider == "claude":
+        claude_bin = shutil.which("claude") or "claude"
+        return [
+            claude_bin,
+            "-p",
+            task_text.strip(),
+            "--allowedTools",
+            "Read,Write,Edit,Bash",
+        ]
+    harness_cmd = harness_bin or shutil.which("harness") or "harness"
+    return [
+        harness_cmd,
+        "run",
+        task_text.strip(),
+        "--cwd",
+        str(work),
+        "--yes",
+        "--verify",
+        "none",
+        "--in-memory",
+        "--provider",
+        provider,
+        "--model",
+        model,
+    ]
+
+
 def run_fixture(
     fixture: FixtureMeta,
     *,
@@ -99,8 +134,6 @@ def run_fixture(
     test_timeout: int = 60,
 ) -> RunOutcome:
     """Run one fixture end-to-end in an isolated temp directory."""
-    harness_cmd = harness_bin or shutil.which("harness") or "harness"
-
     with tempfile.TemporaryDirectory(prefix="harness_eval_") as tmp_str:
         work = Path(tmp_str) / fixture.name
         shutil.copytree(fixture.path, work)
@@ -108,6 +141,8 @@ def run_fixture(
         git_env = _git_env()
 
         # Create a clean git baseline so git diff HEAD captures only agent changes.
+        # Write a .gitignore first so __pycache__ / *.pyc don't pollute the diff.
+        (work / ".gitignore").write_text("__pycache__/\n*.pyc\n*.pyo\n")
         subprocess.run(
             ["git", "-c", "init.defaultBranch=main", "init"],
             cwd=work,
@@ -131,22 +166,9 @@ def run_fixture(
         )
 
         # Run the agent.
+        cmd = _agent_cmd(provider, model, fixture.task_text, work, harness_bin)
         agent_result = subprocess.run(
-            [
-                harness_cmd,
-                "run",
-                fixture.task_text.strip(),
-                "--cwd",
-                str(work),
-                "--yes",
-                "--verify",
-                "none",
-                "--in-memory",
-                "--provider",
-                provider,
-                "--model",
-                model,
-            ],
+            cmd,
             cwd=work,
             capture_output=True,
             text=True,
