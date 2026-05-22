@@ -7,7 +7,7 @@ and executes it, threading ``self.state`` through every step.
 Example::
 
     from pydantic import BaseModel
-    from harness.core.flow import Flow, FlowRunner, listen, router, start
+    from harness.core.flow import Flow, FlowRunner, listen, persist, router, start
 
     class ResearchState(BaseModel):
         topic: str = ""
@@ -20,9 +20,11 @@ Example::
             self.state.topic = "agent frameworks"
 
         @listen(gather_topic)
+        @persist
         async def write_outline(self):
             self.state.outline = f"Outline for: {self.state.topic}"
 
+        @listen(write_outline)
         @router()
         async def decide_depth(self) -> str:
             return "deep" if len(self.state.topic) > 5 else "shallow"
@@ -35,22 +37,29 @@ Example::
         async def write_short_draft(self):
             self.state.draft = f"[short] {self.state.outline}"
 
+    store = InMemoryCheckpointStore()
     flow = ResearchFlow()
-    runner = FlowRunner(flow)
+    runner = FlowRunner(flow, checkpoint_store=store, flow_id="run-1")
     final_state = await runner.run()
 
-Note:
-    ``@persist`` (snapshot/fork-from-checkpoint) is not yet implemented.
-    State lives in memory only; a crash loses it.
+    # Fork from the write_outline checkpoint
+    cp = await store.load("run-1", "write_outline")
+    forked = FlowRunner.from_checkpoint(cp, ResearchFlow())
+    alt_state = await forked.run()
 """
 
 from __future__ import annotations
 
 import inspect
+import uuid
 from collections.abc import Callable
-from typing import Any, Generic, TypeVar, get_args, get_origin
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any, Generic, TypeVar, get_args, get_origin
 
 from pydantic import BaseModel
+
+if TYPE_CHECKING:
+    from harness.core.flow_checkpoint import CheckpointStore, FlowCheckpoint
 
 StateT = TypeVar("StateT", bound=BaseModel)
 
@@ -92,6 +101,18 @@ def router() -> Callable[[Callable], Callable]:
         return fn
 
     return decorator
+
+
+def persist(fn: Callable) -> Callable:
+    """Snapshot flow state after this step completes.
+
+    When :class:`FlowRunner` is configured with a ``checkpoint_store``, it
+    serialises the current state into a :class:`~harness.core.flow_checkpoint.FlowCheckpoint`
+    after every ``@persist``-decorated step. The checkpoint can later be passed
+    to :meth:`FlowRunner.from_checkpoint` to fork a new run from that point.
+    """
+    fn._flow_persist = True  # type: ignore[attr-defined]
+    return fn
 
 
 # ---------------------------------------------------------------------------
@@ -149,13 +170,35 @@ class FlowRunner:
     The runner inspects all decorated methods on the flow instance at
     construction time, builds an adjacency dict, then walks it in BFS order
     during :meth:`run`.
+
+    Optional checkpoint support::
+
+        runner = FlowRunner(flow, checkpoint_store=store, flow_id="run-42")
+        await runner.run()  # saves a checkpoint after every @persist step
+
+    Fork from a past checkpoint::
+
+        cp = await store.load("run-42", "expensive_step")
+        forked = FlowRunner.from_checkpoint(cp, MyFlow())
+        await forked.run()  # re-runs from after "expensive_step"
     """
 
-    def __init__(self, flow: Flow) -> None:
+    def __init__(
+        self,
+        flow: Flow,
+        *,
+        checkpoint_store: CheckpointStore | None = None,
+        flow_id: str | None = None,
+        _resume_from: str | None = None,
+    ) -> None:
         self._flow = flow
+        self._checkpoint_store = checkpoint_store
+        self._flow_id = flow_id
+        self._resume_from = _resume_from
         self._steps: dict[str, Callable] = {}
         self._starts: list[str] = []
         self._routers: set[str] = set()
+        self._persists: set[str] = set()
         # target_name → [listener_names]  (used for both method and label routing)
         self._listens: dict[str, list[str]] = {}
         self._build()
@@ -171,6 +214,7 @@ class FlowRunner:
             is_start = getattr(fn, "_flow_start", False)
             listen_target = getattr(fn, "_flow_listen", None)
             is_router = getattr(fn, "_flow_router", False)
+            is_persist = getattr(fn, "_flow_persist", False)
 
             if is_start or listen_target is not None or is_router:
                 self._steps[name] = getattr(self._flow, name)
@@ -181,16 +225,27 @@ class FlowRunner:
                 self._listens.setdefault(listen_target, []).append(name)
             if is_router:
                 self._routers.add(name)
+            if is_persist:
+                self._persists.add(name)
 
     async def run(self) -> StateT:
         """Execute the flow DAG and return the final state.
 
-        Entry points (``@start``) are queued first. Execution proceeds in BFS
-        order, respecting ``@listen`` edges and ``@router`` label routing.
-        Each step runs exactly once per ``run()`` call.
+        If ``_resume_from`` is set (via :meth:`from_checkpoint`), the named
+        step is treated as already executed and its listeners are queued first.
+        Otherwise, entry points (``@start``) are queued.
+
+        Each step runs exactly once per ``run()`` call. After every
+        ``@persist``-decorated step, the current state is saved to the
+        configured ``checkpoint_store`` (if any).
         """
         executed: set[str] = set()
-        queue: list[str] = list(self._starts)
+
+        if self._resume_from:
+            executed.add(self._resume_from)
+            queue: list[str] = list(self._listens.get(self._resume_from, []))
+        else:
+            queue = list(self._starts)
 
         while queue:
             step_name = queue.pop(0)
@@ -207,6 +262,9 @@ class FlowRunner:
             else:
                 result = step_fn()
 
+            if step_name in self._persists and self._checkpoint_store is not None:
+                await self._save_checkpoint(step_name)
+
             if step_name in self._routers and isinstance(result, str):
                 # Router: resolve label → listeners
                 for listener_name in self._listens.get(result, []):
@@ -220,5 +278,48 @@ class FlowRunner:
 
         return self._flow.state  # type: ignore[return-value]
 
+    async def _save_checkpoint(self, step_name: str) -> None:
+        from harness.core.flow_checkpoint import FlowCheckpoint
 
-__all__ = ["Flow", "FlowRunner", "listen", "router", "start"]
+        flow_id = self._flow_id or f"flow_{uuid.uuid4().hex[:12]}"
+        self._flow_id = flow_id
+        checkpoint = FlowCheckpoint(
+            flow_id=flow_id,
+            step_name=step_name,
+            state_json=self._flow.state.model_dump_json(),
+            created_at=datetime.now(UTC),
+        )
+        assert self._checkpoint_store is not None
+        await self._checkpoint_store.save(checkpoint)
+
+    @classmethod
+    def from_checkpoint(
+        cls,
+        checkpoint: FlowCheckpoint,
+        flow: Flow,
+        *,
+        checkpoint_store: CheckpointStore | None = None,
+    ) -> FlowRunner:
+        """Return a :class:`FlowRunner` with state restored from *checkpoint*.
+
+        Execution resumes from the listeners of the persisted step — i.e. the
+        step itself is NOT re-run, only what comes after it. This is the
+        "fork" semantics: take the world as it was at that point and continue.
+
+        Example::
+
+            cp = await store.load("run-42", "write_outline")
+            forked = FlowRunner.from_checkpoint(cp, ResearchFlow())
+            state = await forked.run()
+        """
+        state_type = type(flow.state)
+        flow.state = state_type.model_validate_json(checkpoint.state_json)
+        return cls(
+            flow,
+            checkpoint_store=checkpoint_store,
+            flow_id=checkpoint.flow_id,
+            _resume_from=checkpoint.step_name,
+        )
+
+
+__all__ = ["Flow", "FlowRunner", "listen", "persist", "router", "start"]

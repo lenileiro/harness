@@ -50,7 +50,13 @@ from harness.core.events import (
     Verification,
 )
 from harness.core.failover import ErrorKind, FailoverPolicy, classify
-from harness.core.flow import Flow, FlowRunner, listen, router, start
+from harness.core.flow import Flow, FlowRunner, listen, persist, router, start
+from harness.core.flow_checkpoint import (
+    CheckpointStore,
+    FileCheckpointStore,
+    FlowCheckpoint,
+    InMemoryCheckpointStore,
+)
 from harness.core.guardrails import Guardrail, GuardrailMode, GuardrailResult
 from harness.core.memory import MemoryEntry, MemoryKind, MemoryStore
 from harness.core.orchestrator import (
@@ -149,7 +155,10 @@ __all__ = [
     "ContextCompactor",
     "Done",
     "FinalResponseStep",
+    "CheckpointStore",
+    "FileCheckpointStore",
     "Flow",
+    "FlowCheckpoint",
     "FlowRunner",
     "Guardrail",
     "GuardrailMode",
@@ -183,7 +192,9 @@ __all__ = [
     "Role",
     "StallDetectedEvent",
     "StallError",
+    "InMemoryCheckpointStore",
     "listen",
+    "persist",
     "router",
     "start",
     "RuleVerifier",
