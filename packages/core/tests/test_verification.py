@@ -21,6 +21,7 @@ from harness.core import (
     ToolRegistry,
     Verification,
     VerificationResult,
+    VerifyBeforeDoneVerifier,
 )
 from harness.core import activity as activity_kinds
 from harness.core.verification import _is_repetitive
@@ -374,3 +375,51 @@ class TestAgentWiring:
         assert verdict.can_finish is False
         assert "raised" in verdict.reason
         assert isinstance(verdict, VerificationResult)
+
+
+# ---------------------------------------------------------------------------
+# VerifyBeforeDoneVerifier
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+class TestVerifyBeforeDoneVerifier:
+    def _activity(self, *, kind: str, **data: object) -> ActivityEvent:
+        return ActivityEvent(session_id="s1", kind=kind, data=dict(data))
+
+    async def test_no_writes_passes(self) -> None:
+        verifier = VerifyBeforeDoneVerifier()
+        activity = [self._activity(kind="tool_call.completed", name="read_file", is_error=False)]
+        result = await verifier.verify(session=_session(), activity=activity)
+        assert result.can_finish is True
+
+    async def test_write_without_verify_blocks(self) -> None:
+        verifier = VerifyBeforeDoneVerifier()
+        activity = [self._activity(kind="tool_call.completed", name="write_file", is_error=False)]
+        result = await verifier.verify(session=_session(), activity=activity)
+        assert result.can_finish is False
+        assert "verify_work" in result.reason
+
+    async def test_write_then_verify_passes(self) -> None:
+        verifier = VerifyBeforeDoneVerifier()
+        activity = [
+            self._activity(kind="tool_call.completed", name="write_file", is_error=False),
+            self._activity(kind="tool_call.completed", name="verify_work", is_error=False),
+        ]
+        result = await verifier.verify(session=_session(), activity=activity)
+        assert result.can_finish is True
+
+    async def test_write_then_failed_verify_blocks(self) -> None:
+        verifier = VerifyBeforeDoneVerifier()
+        activity = [
+            self._activity(kind="tool_call.completed", name="shell", is_error=False),
+            self._activity(kind="tool_call.completed", name="verify_work", is_error=True),
+        ]
+        result = await verifier.verify(session=_session(), activity=activity)
+        assert result.can_finish is False
+        assert "failed" in result.reason.lower() or "fix" in result.reason.lower()
+
+    async def test_empty_activity_passes(self) -> None:
+        verifier = VerifyBeforeDoneVerifier()
+        result = await verifier.verify(session=_session(), activity=[])
+        assert result.can_finish is True

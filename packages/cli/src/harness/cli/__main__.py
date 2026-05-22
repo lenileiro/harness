@@ -110,6 +110,7 @@ from harness.core import (
     Verification,
     Verifier,
     VerifierRouter,
+    VerifyBeforeDoneVerifier,
     VerifyWorkTool,
     WorkItemClaimedEvent,
     WorkItemCompletedEvent,
@@ -617,6 +618,12 @@ def _build_agent(
     tools.register(VerifyWorkTool(cwd=cwd))
     primary_adapter = adapters[chain[0]]
     tools.register(RequestCritiqueTool(adapter=primary_adapter, model=model))
+
+    # Always enforce: if the agent modified files, it must call verify_work.
+    # Chain on top of whatever --verify verifier was passed (may be None).
+    enforce_verify = VerifyBeforeDoneVerifier()
+    verifier = ChainedVerifier(enforce_verify, verifier) if verifier is not None else enforce_verify
+
     approval_policy = ApprovalPolicy(default="prompt", per_tool=dict(config.approval))
 
     approval_handler: ApprovalHandler

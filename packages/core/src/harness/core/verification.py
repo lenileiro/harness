@@ -1151,6 +1151,84 @@ class ShellVerifier:
             )
 
 
+_WRITE_TOOL_NAMES = frozenset(
+    {
+        "write_file",
+        "edit_file",
+        "shell",
+        "bash",
+        "run_command",
+        "execute",
+        "apply_diff",
+        "patch",
+    }
+)
+
+
+class VerifyBeforeDoneVerifier:
+    """Block Done unless the agent called verify_work at least once after making changes.
+
+    Checks the activity ledger for any write/edit/shell tool calls. If found and
+    no successful ``verify_work`` call follows, it returns ``can_finish=False``
+    with an instruction to call ``verify_work`` before finishing.
+
+    This is always-on structural enforcement — the LLM can't skip verification
+    just by ignoring system prompt instructions.
+
+    Args:
+        write_tool_names: Set of tool names considered "modifying". Defaults
+            to ``_WRITE_TOOL_NAMES`` (write_file, edit_file, shell, …).
+    """
+
+    name = "verify_before_done"
+
+    def __init__(self, write_tool_names: frozenset[str] | None = None) -> None:
+        self._writes = write_tool_names if write_tool_names is not None else _WRITE_TOOL_NAMES
+
+    async def verify(
+        self, *, session: Session, activity: list[ActivityEvent]
+    ) -> VerificationResult:
+        tool_events = [e for e in activity if e.kind == "tool_call.completed"]
+
+        wrote = any(e.data.get("name") in self._writes for e in tool_events)
+        if not wrote:
+            return VerificationResult(
+                can_finish=True,
+                reason="No modifying tool calls detected — verification not required.",
+                verifier_name=self.name,
+            )
+
+        verify_calls = [e for e in tool_events if e.data.get("name") == "verify_work"]
+        if not verify_calls:
+            return VerificationResult(
+                can_finish=False,
+                reason=(
+                    "You made file changes but have not called verify_work yet. "
+                    "Run the project's test suite with verify_work before finishing. "
+                    "Choose the appropriate command for this project "
+                    "(e.g. 'pytest tests/', 'npm test', 'cargo test', 'go test ./...')."
+                ),
+                verifier_name=self.name,
+            )
+
+        last_verify = verify_calls[-1]
+        if last_verify.data.get("is_error"):
+            return VerificationResult(
+                can_finish=False,
+                reason=(
+                    "The last verify_work call reported failures. "
+                    "Fix the issues reported by verify_work before declaring the task complete."
+                ),
+                verifier_name=self.name,
+            )
+
+        return VerificationResult(
+            can_finish=True,
+            reason="verify_work passed — changes verified.",
+            verifier_name=self.name,
+        )
+
+
 __all__ = [
     "ChainedVerifier",
     "ClaimGroundingVerifier",
@@ -1166,6 +1244,7 @@ __all__ = [
     "VerificationResult",
     "Verifier",
     "VerifierRouter",
+    "VerifyBeforeDoneVerifier",
     "WorkItemJudge",
     "evaluate_evidence",
 ]
