@@ -26,6 +26,7 @@ class FixtureMeta:
     path: Path
     task_text: str
     eval_md: str  # raw EVAL.md text, passed to judge as context
+    verify_command: str = "pytest tests/ -v --tb=short --no-header"
 
 
 @dataclass
@@ -95,11 +96,13 @@ def _agent_cmd(
     task_text: str,
     work: Path,
     harness_bin: str | None,
+    verify_command: str | None = None,
 ) -> list[str]:
     """Return the command to invoke the agent for the given provider.
 
     'claude' provider shells out to `claude -p` (Claude Code CLI).
-    All other providers go through `harness run`.
+    All other providers go through `harness run` with ShellVerifier so the
+    repair loop fires when the verify_command exits non-zero.
     """
     if provider == "claude":
         claude_bin = shutil.which("claude") or "claude"
@@ -111,21 +114,24 @@ def _agent_cmd(
             "Read,Write,Edit,Bash",
         ]
     harness_cmd = harness_bin or shutil.which("harness") or "harness"
-    return [
+    cmd = [
         harness_cmd,
         "run",
         task_text.strip(),
         "--cwd",
         str(work),
         "--yes",
-        "--verify",
-        "rule",
         "--in-memory",
         "--provider",
         provider,
         "--model",
         model,
     ]
+    if verify_command:
+        cmd += ["--verify", "shell", "--verify-command", verify_command]
+    else:
+        cmd += ["--verify", "rule"]
+    return cmd
 
 
 def run_fixture(
@@ -170,7 +176,14 @@ def run_fixture(
         )
 
         # Run the agent.
-        cmd = _agent_cmd(provider, model, fixture.task_text, work, harness_bin)
+        cmd = _agent_cmd(
+            provider,
+            model,
+            fixture.task_text,
+            work,
+            harness_bin,
+            verify_command=fixture.verify_command,
+        )
         agent_result = subprocess.run(
             cmd,
             cwd=work,

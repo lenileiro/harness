@@ -1075,6 +1075,82 @@ class ChainedVerifier:
         )
 
 
+# ---------------------------------------------------------------------------
+# ShellVerifier
+# ---------------------------------------------------------------------------
+
+
+class ShellVerifier:
+    """Run a caller-supplied shell command and treat non-zero exit as failure.
+
+    The caller injects this at Agent construction time — no source-code
+    access or file writes required. The repair loop feeds stdout/stderr back
+    to the agent so it has concrete output to act on.
+
+    Args:
+        command: Shell command string (passed to ``asyncio.create_subprocess_shell``).
+        cwd: Working directory override. Falls back to the session's cwd.
+        timeout: Seconds before the command is killed and treated as failure.
+    """
+
+    name = "shell"
+
+    def __init__(
+        self,
+        command: str,
+        *,
+        cwd: Path | None = None,
+        timeout: float = 120.0,
+    ) -> None:
+        self._command = command
+        self._cwd = cwd
+        self._timeout = timeout
+
+    async def verify(
+        self, *, session: Session, activity: list[ActivityEvent]
+    ) -> VerificationResult:
+        effective_cwd = self._cwd
+        if effective_cwd is None and hasattr(session, "cwd") and session.cwd:
+            effective_cwd = Path(session.cwd)
+        if effective_cwd is None:
+            effective_cwd = Path.cwd()
+
+        try:
+            proc = await asyncio.create_subprocess_shell(
+                self._command,
+                cwd=effective_cwd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+            )
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=self._timeout)
+            output = stdout.decode(errors="replace").strip()
+            if proc.returncode == 0:
+                return VerificationResult(
+                    can_finish=True,
+                    reason=output or "command succeeded",
+                    verifier_name=self.name,
+                )
+            return VerificationResult(
+                can_finish=False,
+                reason=(
+                    f"Command `{self._command}` exited with code {proc.returncode}.\n\n" f"{output}"
+                ),
+                verifier_name=self.name,
+            )
+        except TimeoutError:
+            return VerificationResult(
+                can_finish=False,
+                reason=f"Command `{self._command}` timed out after {self._timeout}s.",
+                verifier_name=self.name,
+            )
+        except Exception as exc:
+            return VerificationResult(
+                can_finish=False,
+                reason=f"ShellVerifier error running `{self._command}`: {exc}",
+                verifier_name=self.name,
+            )
+
+
 __all__ = [
     "ChainedVerifier",
     "ClaimGroundingVerifier",
@@ -1084,6 +1160,7 @@ __all__ = [
     "EvidenceContractResult",
     "LLMJudgeVerifier",
     "RuleVerifier",
+    "ShellVerifier",
     "StateVerifier",
     "VerificationGateway",
     "VerificationResult",

@@ -92,6 +92,7 @@ from harness.core import (
     RuleVerifier,
     RunRequest,
     Session,
+    ShellVerifier,
     StateVerifier,
     StepCompleted,
     StepStarted,
@@ -432,6 +433,7 @@ def _build_verifier(
     model: str,
     config: HarnessConfig,
     cwd: Path | None = None,
+    verify_command: str | None = None,
 ) -> Verifier | None:
     """Resolve --verify value to a Verifier instance (or None).
 
@@ -439,6 +441,7 @@ def _build_verifier(
       grounding  — ClaimGroundingVerifier only (free, no LLM call)
       state      — StateVerifier only (filesystem + shell re-run checks)
       rule       — RuleVerifier only (heuristic: stalls, refusals, tool errors)
+      shell      — ShellVerifier: runs --verify-command and checks exit code
       llm        — LLMJudgeVerifier only (one extra adapter call)
       auto       — ChainedVerifier: grounding → state → rule/llm router
       none       — disabled
@@ -451,6 +454,10 @@ def _build_verifier(
         return StateVerifier(cwd=cwd or Path.cwd())
     if verify == "rule":
         return RuleVerifier()
+    if verify == "shell":
+        if not verify_command:
+            raise typer.BadParameter("--verify shell requires --verify-command <cmd>")
+        return ShellVerifier(verify_command, cwd=cwd)
     if verify == "llm":
         adapter = _build_adapter(chain[0], base_url=None, config=config)
         return LLMJudgeVerifier(adapter=adapter, model=model)
@@ -465,7 +472,7 @@ def _build_verifier(
             ),
         )
     raise typer.BadParameter(
-        f"unknown --verify value: {verify!r} (use grounding|state|rule|llm|auto|none)"
+        f"unknown --verify value: {verify!r} (use grounding|state|rule|shell|llm|auto|none)"
     )
 
 
@@ -729,10 +736,18 @@ def run(
             "--verify",
             help=(
                 "Post-run verifier: grounding (claim check, free) | state (filesystem check) | "
-                "rule (heuristic) | llm (extra adapter call) | auto (all chained) | none."
+                "rule (heuristic) | shell (run --verify-command) | llm (extra adapter call) | "
+                "auto (all chained) | none."
             ),
         ),
     ] = "grounding",
+    verify_command: Annotated[
+        str | None,
+        typer.Option(
+            "--verify-command",
+            help="Shell command for --verify shell. Exit 0 = pass, non-zero = fail + repair.",
+        ),
+    ] = None,
     require_tools: Annotated[
         bool,
         typer.Option(
@@ -809,6 +824,7 @@ def run(
                 yes=yes,
                 inbox=inbox,
                 verify=verify,
+                verify_command=verify_command,
                 require_tools=require_tools,
                 goal=goal,
                 max_context_tokens=max_context_tokens,
@@ -837,9 +853,10 @@ async def _run_once(
     yes: bool,
     inbox: bool,
     verify: str | None,
+    verify_command: str | None = None,
     require_tools: bool = False,
     goal: bool = False,
-    max_context_tokens: int | None,
+    max_context_tokens: int | None = None,
     predict: bool = False,
     auto_compact: bool = False,
     config: HarnessConfig,
@@ -850,7 +867,9 @@ async def _run_once(
         # appends session_id to task.session_ids).
         task_id, _task = await _resolve_task_attachment(storage, task_ref, session_id)
 
-        verifier = _build_verifier(verify, chain=chain, model=model, config=config, cwd=cwd)
+        verifier = _build_verifier(
+            verify, chain=chain, model=model, config=config, cwd=cwd, verify_command=verify_command
+        )
         budget = (
             ContextBudget(max_tokens=max_context_tokens) if max_context_tokens is not None else None
         )
