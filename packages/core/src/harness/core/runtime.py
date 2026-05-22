@@ -27,7 +27,10 @@ from __future__ import annotations
 import asyncio
 import time
 from collections.abc import AsyncIterator
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from harness.core.agent_iter import AgentRun
 
 from harness.core import activity as activity_kinds
 from harness.core.activity import ActivityEvent, ActivityStore
@@ -42,11 +45,14 @@ from harness.core.errors import (
     HarnessError,
     InternalError,
     StallError,
+    ToolRetry,
 )
 from harness.core.events import (
     Done,
     ErrorEvent,
     Event,
+    GuardrailTrippedEvent,
+    ModelRequestEvent,
     PredictionEvent,
     PredictionMismatchEvent,
     StepCompleted,
@@ -56,6 +62,7 @@ from harness.core.events import (
     Verification,
 )
 from harness.core.failover import FailoverPolicy, classify
+from harness.core.guardrails import Guardrail
 from harness.core.memory import MemoryStore
 from harness.core.planner import NoOpPlanner, PlanContext, Planner
 from harness.core.prediction import ConsequencePredictor, ToolPrediction, compare_prediction
@@ -124,6 +131,7 @@ class Agent:
         evidence_contract: EvidenceContract | None = None,
         system_prompt: str | None = None,
         compactor: ContextCompactor | None = None,
+        guardrails: list[Guardrail] | None = None,
     ) -> None:
         if not adapters:
             raise ConfigurationError("at least one adapter is required")
@@ -164,6 +172,7 @@ class Agent:
         self._evidence_contract = evidence_contract
         self.system_prompt = system_prompt
         self._compactor = compactor
+        self.guardrails: list[Guardrail] = guardrails or []
 
     # ------------------------------------------------------------------ #
     # Approval replay                                                     #
@@ -292,6 +301,24 @@ class Agent:
         async for event in self._run(request):
             yield event
 
+    def iter(self, request: RunRequest) -> AgentRun:
+        """Return an :class:`~harness.core.agent_iter.AgentRun` context manager.
+
+        Exposes the run loop as typed :data:`~harness.core.agent_iter.AgentRunStep`
+        objects rather than raw events::
+
+            async with agent.iter(request) as run:
+                async for step in run:
+                    match step:
+                        case ToolCallStep(tool_call=call):
+                            print(f"calling {call.name}")
+                        case FinalResponseStep(text=text):
+                            print(text)
+        """
+        from harness.core.agent_iter import AgentRun
+
+        return AgentRun(self, request)
+
     async def _run(self, request: RunRequest) -> AsyncIterator[Event]:
         session = await self._get_or_create_session(request)
 
@@ -392,6 +419,74 @@ class Agent:
         await self._maybe_compact(session)
         await self.storage.save(session)
         await self._emit(session, activity_kinds.AGENT_RUN_COMPLETED)
+
+    async def _stream_with_guardrails(
+        self,
+        stream: AsyncIterator[Event],
+        messages: list[Message],
+    ) -> AsyncIterator[Event]:
+        """Wrap an adapter stream with guardrail checking.
+
+        Blocking guardrails run before the stream starts. Parallel guardrails
+        run as background tasks while the stream is consumed; if one trips, the
+        stream is abandoned and a :class:`~harness.core.events.GuardrailTrippedEvent`
+        is yielded instead of the remaining stream events.
+        """
+        if not self.guardrails:
+            async for event in stream:
+                yield event
+            return
+
+        blocking = [g for g in self.guardrails if g.mode == "blocking"]
+        parallel = [g for g in self.guardrails if g.mode == "parallel"]
+
+        for g in blocking:
+            result = await g(messages)
+            if result.tripped:
+                yield GuardrailTrippedEvent(guardrail_name=g.name, reason=result.reason)
+                return
+
+        if not parallel:
+            async for event in stream:
+                yield event
+            return
+
+        # Launch parallel guardrails as background tasks
+        guard_tasks = [asyncio.ensure_future(g(messages)) for g in parallel]
+        guard_names = [g.name for g in parallel]
+
+        async for event in stream:
+            # Yield a tick so scheduled guardrail tasks can run.
+            await asyncio.sleep(0)
+            # Check completed guardrail tasks after each streamed event
+            for i, task in enumerate(guard_tasks):
+                if task.done() and not task.cancelled():
+                    try:
+                        gr = task.result()
+                        if gr.tripped:
+                            for t in guard_tasks:
+                                if not t.done():
+                                    t.cancel()
+                            yield GuardrailTrippedEvent(
+                                guardrail_name=guard_names[i], reason=gr.reason
+                            )
+                            return
+                    except Exception:
+                        pass
+            yield event
+
+        # Stream finished — await any remaining guardrail tasks before declaring clean.
+        for i, task in enumerate(guard_tasks):
+            try:
+                gr = await task
+                if gr.tripped:
+                    for t in guard_tasks:
+                        if not t.done():
+                            t.cancel()
+                    yield GuardrailTrippedEvent(guardrail_name=guard_names[i], reason=gr.reason)
+                    return
+            except (asyncio.CancelledError, Exception):
+                pass
 
     async def _maybe_compact(self, session: Session) -> None:
         if self._compactor is None:
@@ -521,7 +616,8 @@ class Agent:
                     async for event in self._react_with(
                         adapter, request, session, memory_prefix=memory_prefix
                     ):
-                        yielded_any = True
+                        if not isinstance(event, ModelRequestEvent):
+                            yielded_any = True
                         yield event
                 return
             except asyncio.CancelledError:
@@ -565,6 +661,7 @@ class Agent:
         session: Session,
         memory_prefix: list[Message] | None = None,
     ):
+        _retry_counts: dict[str, int] = {}
         for _turn in range(request.max_steps):
             final: Message | None = None
             usage = None
@@ -573,6 +670,7 @@ class Agent:
             messages_for_turn = await self._apply_budget(session, request)
             if memory_prefix:
                 messages_for_turn = memory_prefix + messages_for_turn
+            yield ModelRequestEvent(messages=messages_for_turn)
             stream = adapter.stream(
                 model=request.model or session.model,
                 messages=messages_for_turn,
@@ -580,7 +678,15 @@ class Agent:
                 temperature=request.temperature,
                 max_tokens=request.max_tokens,
             )
-            async for event in stream:
+            _stream_source = (
+                self._stream_with_guardrails(stream, messages_for_turn)
+                if self.guardrails
+                else stream
+            )
+            async for event in _stream_source:
+                if isinstance(event, GuardrailTrippedEvent):
+                    yield event
+                    return
                 if isinstance(event, Done):
                     final = event.final_message
                     usage = event.usage
@@ -611,7 +717,9 @@ class Agent:
                 return
 
             for tool_call in final.tool_calls:
-                result, extra_events = await self._invoke_tool(tool_call, session)
+                result, extra_events = await self._invoke_tool(
+                    tool_call, session, _retry_counts=_retry_counts
+                )
                 for ev in extra_events:
                     yield ev
                 session.messages.append(
@@ -632,7 +740,10 @@ class Agent:
     # ------------------------------------------------------------------ #
 
     async def _invoke_tool(
-        self, call: ToolCall, session: Session
+        self,
+        call: ToolCall,
+        session: Session,
+        _retry_counts: dict[str, int] | None = None,
     ) -> tuple[ToolResult, list[Event]]:
         """Dispatch a tool call through the full gate pipeline.
 
@@ -754,10 +865,47 @@ class Agent:
             )
             extra_events.append(PredictionEvent(prediction=prediction))
 
+        max_retries: int = getattr(tool, "max_retries", 3)
+        retry_counts = _retry_counts if _retry_counts is not None else {}
+        prior_retries = retry_counts.get(call.name, 0)
+
         started = time.perf_counter()
         try:
             with span("agent.tool", tool=call.name, call_id=call.id):
                 result = await tool(call)
+        except ToolRetry as exc:
+            duration_ms = int((time.perf_counter() - started) * 1000)
+            if prior_retries >= max_retries:
+                logger.warning(
+                    "agent.tool.retry_exhausted",
+                    tool=call.name,
+                    attempts=prior_retries,
+                    feedback=exc.message,
+                )
+                result = ToolResult(
+                    tool_call_id=call.id,
+                    name=call.name,
+                    content=(
+                        f"[ToolRetry exhausted after {prior_retries} attempt(s)] {exc.message}"
+                    ),
+                    is_error=True,
+                )
+            else:
+                retry_counts[call.name] = prior_retries + 1
+                logger.info(
+                    "agent.tool.retry",
+                    tool=call.name,
+                    attempt=prior_retries + 1,
+                    feedback=exc.message,
+                )
+                result = ToolResult(
+                    tool_call_id=call.id,
+                    name=call.name,
+                    content=f"[ToolRetry] {exc.message} — please fix your input and try again.",
+                    is_error=True,
+                )
+            await self._emit_tool_completed(session, call, result, duration_ms=duration_ms)
+            return result, extra_events
         except Exception as exc:
             logger.warning("agent.tool.error", tool=call.name, error=str(exc))
             result = ToolResult(

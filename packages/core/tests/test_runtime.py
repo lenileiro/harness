@@ -18,7 +18,6 @@ from harness.core import (
     FailoverPolicy,
     NetworkError,
     RunRequest,
-    StallError,
     StepCompleted,
     StepStarted,
     TextDelta,
@@ -79,10 +78,9 @@ class TestHappyPath:
 
         events = await collect(agent.run(RunRequest(prompt="hi there")))
 
-        # Stream shape: StepStarted, TextDelta, Done, StepCompleted
         assert isinstance(events[0], StepStarted)
-        assert isinstance(events[1], TextDelta)
-        assert events[1].text == "hello world"
+        text_event = next(e for e in events if isinstance(e, TextDelta))
+        assert text_event.text == "hello world"
         done = next(e for e in events if isinstance(e, Done))
         assert done.final_message is not None
         assert done.final_message.content == "hello world"

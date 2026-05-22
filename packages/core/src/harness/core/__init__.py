@@ -3,6 +3,14 @@
 from harness.core import activity
 from harness.core.activity import ActivityEvent, ActivityStore
 from harness.core.adapter import Adapter
+from harness.core.agent_iter import (
+    AgentRun,
+    AgentRunStep,
+    FinalResponseStep,
+    ModelRequestStep,
+    ToolCallStep,
+    ToolResultStep,
+)
 from harness.core.approval import (
     ApprovalOutcome,
     ApprovalStatus,
@@ -24,11 +32,14 @@ from harness.core.errors import (
     StallError,
     TimeoutError,
     ToolError,
+    ToolRetry,
 )
 from harness.core.events import (
     Done,
     ErrorEvent,
     Event,
+    GuardrailTrippedEvent,
+    ModelRequestEvent,
     PredictionEvent,
     PredictionMismatchEvent,
     StepCompleted,
@@ -39,6 +50,8 @@ from harness.core.events import (
     Verification,
 )
 from harness.core.failover import ErrorKind, FailoverPolicy, classify
+from harness.core.flow import Flow, FlowRunner, listen, router, start
+from harness.core.guardrails import Guardrail, GuardrailMode, GuardrailResult
 from harness.core.memory import MemoryEntry, MemoryKind, MemoryStore
 from harness.core.orchestrator import (
     AgentDoneEvent,
@@ -48,6 +61,9 @@ from harness.core.orchestrator import (
     MultiAgentOrchestrator,
     OrchestratorEvent,
     PlanRejectedEvent,
+    ProgressLedger,
+    ReplanRequestedEvent,
+    StallDetectedEvent,
     WorkItemClaimedEvent,
     WorkItemCompletedEvent,
     WorkItemCreatedEvent,
@@ -127,9 +143,18 @@ __all__ = [
     "CancelledError",
     "Capabilities",
     "ConfigurationError",
+    "AgentRun",
+    "AgentRunStep",
     "ContextBudget",
     "ContextCompactor",
     "Done",
+    "FinalResponseStep",
+    "Flow",
+    "FlowRunner",
+    "Guardrail",
+    "GuardrailMode",
+    "GuardrailResult",
+    "GuardrailTrippedEvent",
     "EffectScope",
     "ErrorEvent",
     "ErrorKind",
@@ -144,6 +169,8 @@ __all__ = [
     "MemoryKind",
     "MemoryStore",
     "Message",
+    "ModelRequestEvent",
+    "ModelRequestStep",
     "ModelUnavailableError",
     "NetworkError",
     "NoOpPlanner",
@@ -154,7 +181,11 @@ __all__ = [
     "Planner",
     "RateLimitError",
     "Role",
+    "StallDetectedEvent",
     "StallError",
+    "listen",
+    "router",
+    "start",
     "RuleVerifier",
     "RunRequest",
     "Session",
@@ -167,8 +198,11 @@ __all__ = [
     "Tool",
     "ToolCall",
     "ToolCallEvent",
+    "ToolCallStep",
     "ToolError",
     "ToolRegistry",
+    "ToolResultStep",
+    "ToolRetry",
     "CalibrationRecord",
     "ConsequencePredictor",
     "EvidenceContract",
@@ -187,6 +221,8 @@ __all__ = [
     "MultiAgentOrchestrator",
     "OrchestratorEvent",
     "PlanRejectedEvent",
+    "ProgressLedger",
+    "ReplanRequestedEvent",
     "RepairDirective",
     "RepairMode",
     "RepairOrchestrator",

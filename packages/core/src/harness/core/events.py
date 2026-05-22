@@ -116,6 +116,28 @@ class PredictionMismatchEvent(_EventBase):
     outcome: PredictionOutcome
 
 
+class ModelRequestEvent(_EventBase):
+    """Emitted immediately before the runtime calls the adapter.
+
+    Useful for agent.iter() consumers and middleware that needs to inspect
+    or modify the exact messages sent to the LLM each turn.
+    """
+
+    type: Literal["model_request"] = "model_request"
+    messages: list[Message]
+
+
+class GuardrailTrippedEvent(_EventBase):
+    """A guardrail fired and the model response was cancelled.
+
+    The run terminates after this event without a Done event.
+    """
+
+    type: Literal["guardrail_tripped"] = "guardrail_tripped"
+    guardrail_name: str
+    reason: str
+
+
 Event = Annotated[
     TextDelta
     | ToolCallEvent
@@ -126,7 +148,9 @@ Event = Annotated[
     | ErrorEvent
     | Verification
     | PredictionEvent
-    | PredictionMismatchEvent,
+    | PredictionMismatchEvent
+    | ModelRequestEvent
+    | GuardrailTrippedEvent,
     Field(discriminator="type"),
 ]
 
@@ -135,6 +159,8 @@ __all__ = [
     "Done",
     "ErrorEvent",
     "Event",
+    "GuardrailTrippedEvent",
+    "ModelRequestEvent",
     "PredictionEvent",
     "PredictionMismatchEvent",
     "StepCompleted",

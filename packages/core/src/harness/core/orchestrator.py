@@ -134,6 +134,23 @@ class PlanRejectedEvent(BaseModel):
     attempt: int
 
 
+class StallDetectedEvent(BaseModel):
+    """Emitted when enough workers have exited without completing their items."""
+
+    type: Literal["stall_detected"] = "stall_detected"
+    stall_count: int
+    max_stalls: int
+    stalled_item_ids: list[str]
+
+
+class ReplanRequestedEvent(BaseModel):
+    """Emitted when the orchestrator triggers a replan after stall detection."""
+
+    type: Literal["replan_requested"] = "replan_requested"
+    attempt: int
+    reason: str
+
+
 OrchestratorEvent = (
     AgentStartedEvent
     | AgentDoneEvent
@@ -144,8 +161,50 @@ OrchestratorEvent = (
     | WorkItemRejectedEvent
     | WorkItemOrphanedEvent
     | PlanRejectedEvent
+    | StallDetectedEvent
+    | ReplanRequestedEvent
     | AgentEventWrapper
 )
+
+
+# ---------------------------------------------------------------------------
+# ProgressLedger
+# ---------------------------------------------------------------------------
+
+
+class ProgressLedger:
+    """Tracks per-item completion to detect systemic stalls.
+
+    A stall is defined as a worker agent completing its run without marking
+    its work item done. When ``stall_count`` reaches ``max_stalls``, the
+    orchestrator should replan. One successful completion resets the counter.
+    """
+
+    def __init__(self, max_stalls: int = 2) -> None:
+        self.max_stalls = max_stalls
+        self.stall_count: int = 0
+        self._stalled_ids: list[str] = []
+
+    def record_completion(self, task_id: str, *, completed: bool) -> None:
+        """Record whether a work item was completed or stalled."""
+        if completed:
+            self.stall_count = 0
+            self._stalled_ids.clear()
+        else:
+            self.stall_count += 1
+            self._stalled_ids.append(task_id)
+
+    @property
+    def is_stalled(self) -> bool:
+        return self.stall_count >= self.max_stalls
+
+    @property
+    def stalled_item_ids(self) -> list[str]:
+        return list(self._stalled_ids)
+
+    def reset(self) -> None:
+        self.stall_count = 0
+        self._stalled_ids.clear()
 
 
 # ---------------------------------------------------------------------------
@@ -239,6 +298,8 @@ class MultiAgentOrchestrator:
         activity_store: _ActivityStore | None = None,
         planner_validator: Callable[[list[Task]], str | None] | None = None,
         max_planner_retries: int = 1,
+        max_stalls: int = 2,
+        max_replan_attempts: int = 1,
     ) -> None:
         self._factory = agent_factory
         self._store = store
@@ -255,6 +316,8 @@ class MultiAgentOrchestrator:
         self._activity_store = activity_store
         self._planner_validator = planner_validator
         self._max_planner_retries = max_planner_retries
+        self._max_stalls = max_stalls
+        self._max_replan_attempts = max_replan_attempts
 
     async def run(
         self,
@@ -304,8 +367,39 @@ class MultiAgentOrchestrator:
                 async for event in self._run_planner(retry_prompt, queue):
                     yield event
 
-        async for event in self._run_workers(queue):
-            yield event
+        ledger = ProgressLedger(self._max_stalls)
+        replan_attempts = 0
+        while True:
+            stall_detected = False
+            async for event in self._run_workers(queue, ledger=ledger):
+                yield event
+                if isinstance(event, StallDetectedEvent):
+                    stall_detected = True
+
+            if not stall_detected or replan_attempts >= self._max_replan_attempts:
+                break
+
+            replan_attempts += 1
+            reason = f"{ledger.stall_count} worker(s) exited without completing their items"
+            yield ReplanRequestedEvent(attempt=replan_attempts, reason=reason)
+
+            for item_id in ledger.stalled_item_ids:
+                stalled_task = await self._store.get_task(item_id)
+                if stalled_task and stalled_task.status == "in_progress":
+                    await self._store.update_task(
+                        stalled_task.model_copy(
+                            update={"status": "todo", "updated_at": datetime.now(UTC)}
+                        )
+                    )
+
+            ledger.reset()
+            replan_prompt = (
+                f"{prompt}\n\n"
+                f"[REPLAN {replan_attempts}]: {reason}. "
+                "Revise the plan for the remaining items only."
+            )
+            async for event in self._run_planner(replan_prompt, queue):
+                yield event
 
         async for event in self._run_reporter(queue):
             yield event
@@ -376,13 +470,16 @@ class MultiAgentOrchestrator:
             yield AgentEventWrapper(role="planner", event=event)
         yield AgentDoneEvent(role="planner", session_id=session_id, turn_count=turn_count)
 
-    async def _run_workers(self, queue: WorkQueue) -> AsyncIterator[OrchestratorEvent]:
+    async def _run_workers(
+        self, queue: WorkQueue, ledger: ProgressLedger | None = None
+    ) -> AsyncIterator[OrchestratorEvent]:
         output_queue: asyncio.Queue[OrchestratorEvent] = asyncio.Queue()
         done_event = asyncio.Event()
+        stall_triggered = asyncio.Event()
 
         async def worker(idx: int) -> None:
             worker_name = f"worker-{idx}"
-            while True:
+            while not stall_triggered.is_set():
                 session_id = f"w{idx}_{uuid.uuid4().hex[:6]}"
                 task = await queue.claim(claimed_by=worker_name, worker_session_id=session_id)
                 if task is None:
@@ -424,6 +521,22 @@ class MultiAgentOrchestrator:
                 # Post-run check: inspect task status and run judge / handle orphan
                 async for post_event in self._post_run_check(task, session_id):
                     await output_queue.put(post_event)
+
+                # Stall detection: record whether the work item ended as done
+                if ledger is not None:
+                    refreshed = await self._store.get_task(task.id)
+                    completed = refreshed is not None and refreshed.status == "done"
+                    ledger.record_completion(task.id, completed=completed)
+                    if ledger.is_stalled:
+                        await output_queue.put(
+                            StallDetectedEvent(
+                                stall_count=ledger.stall_count,
+                                max_stalls=ledger.max_stalls,
+                                stalled_item_ids=ledger.stalled_item_ids,
+                            )
+                        )
+                        stall_triggered.set()
+                        return
 
         worker_tasks = [asyncio.create_task(worker(i)) for i in range(self._max_workers)]
 
@@ -587,6 +700,10 @@ __all__ = [
     "AgentStartedEvent",
     "MultiAgentOrchestrator",
     "OrchestratorEvent",
+    "PlanRejectedEvent",
+    "ProgressLedger",
+    "ReplanRequestedEvent",
+    "StallDetectedEvent",
     "WorkItemClaimedEvent",
     "WorkItemCompletedEvent",
     "WorkItemCreatedEvent",

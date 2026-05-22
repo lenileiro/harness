@@ -68,6 +68,30 @@ class StallError(HarnessError):
     """
 
 
+class ToolRetry(Exception):
+    """Raised by a tool to ask the model to fix its input and retry.
+
+    Not a HarnessError — it is a control-flow signal the runtime intercepts
+    before the exception propagates. Tools raise this instead of returning
+    ``is_error=True`` when they want the model to self-correct and try again.
+
+    Example::
+
+        async def __call__(self, call: ToolCall) -> ToolResult:
+            path = call.arguments.get("path")
+            if not path:
+                raise ToolRetry("'path' argument is required")
+            ...
+
+    Args:
+        message: Feedback sent back to the model explaining what to fix.
+    """
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        self.message = message
+
+
 __all__ = [
     "ApprovalDeniedError",
     "CancelledError",
@@ -80,4 +104,5 @@ __all__ = [
     "StallError",
     "TimeoutError",
     "ToolError",
+    "ToolRetry",
 ]
