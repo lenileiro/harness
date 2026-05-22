@@ -23,6 +23,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
+from pathlib import Path
 from typing import Any, Literal, Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -658,12 +660,385 @@ class VerificationGateway:
         return await self._verifier.verify(session=session, activity=activity)
 
 
+# ---------------------------------------------------------------------------
+# ClaimGroundingVerifier
+# ---------------------------------------------------------------------------
+
+_COUNT_CLAIM_RE = re.compile(
+    r"\b(\d+)\s+(?:(?:python|source|total)\s+)?"
+    r"(?:file|error|line|package|module|item|result|function|class|number)s?"
+    r"(?:\s+(?:were|was|found|counted|detected|identified))?",
+    re.IGNORECASE,
+)
+
+_WRITE_CLAIM_RE = re.compile(
+    r"(?:wrote|saved|created|written|stored|saving)\s+(?:to\s+)?"
+    r"([\w./][\w./\-]*\.(?:py|txt|json|sh|md|csv|yaml|yml))",
+    re.IGNORECASE,
+)
+
+
+class ClaimGroundingVerifier:
+    """Verifier that checks whether specific claims in the final message are
+    backed by actual tool output.
+
+    Checks two claim types:
+
+    1. **Count claims**: numbers followed by file/error/line/etc. keywords —
+       the claimed number must appear in at least one successful tool call's
+       ``content_preview``.
+    2. **Write claims**: "wrote/saved/created X.py" — a ``write_file`` activity
+       event with a matching path must exist.
+
+    Returns ``can_finish=True, confidence=0.4`` when there are no completed
+    tool events to ground against (nothing to check). Returns
+    ``can_finish=True, confidence=0.85`` when every claim is grounded.
+    Returns ``can_finish=False, confidence=0.75`` listing up to 3 ungrounded
+    claims.
+    """
+
+    name = "claim_grounding"
+
+    async def verify(
+        self, *, session: Session, activity: list[ActivityEvent]
+    ) -> VerificationResult:
+        completed = [
+            e for e in activity if e.kind == "tool_call.completed" and not e.data.get("is_error")
+        ]
+
+        if not completed:
+            return VerificationResult(
+                can_finish=True,
+                reason="no completed tool events — nothing to ground claims against",
+                confidence=0.4,
+                verifier_name=self.name,
+            )
+
+        final_text = _last_assistant_text(session)
+
+        # Build corpus of all content_previews (as strings) for count checking.
+        corpus = " ".join(str(e.data.get("content_preview") or "") for e in completed)
+
+        # Build set of write_file paths (basename + full) for write checking.
+        write_paths: set[str] = set()
+        for e in completed:
+            if e.data.get("name") == "write_file":
+                path = e.data.get("arguments", {}).get("path", "")
+                if path:
+                    write_paths.add(path)
+                    write_paths.add(Path(path).name)
+
+        ungrounded: list[str] = []
+
+        # Check count claims.
+        for m in _COUNT_CLAIM_RE.finditer(final_text):
+            number = m.group(1)
+            if number not in corpus:
+                ungrounded.append(
+                    f"count claim '{m.group(0).strip()}' (number {number} not found in tool output)"
+                )
+                if len(ungrounded) >= 3:
+                    break
+
+        # Check write claims (only if we haven't hit the cap yet).
+        if len(ungrounded) < 3:
+            for m in _WRITE_CLAIM_RE.finditer(final_text):
+                claimed_path = m.group(1)
+                basename = Path(claimed_path).name
+                if claimed_path not in write_paths and basename not in write_paths:
+                    ungrounded.append(
+                        f"write claim '{m.group(0).strip()}' (no write_file event for {claimed_path!r})"
+                    )
+                    if len(ungrounded) >= 3:
+                        break
+
+        if ungrounded:
+            return VerificationResult(
+                can_finish=False,
+                reason="ungrounded claims: " + "; ".join(ungrounded),
+                confidence=0.75,
+                verifier_name=self.name,
+            )
+
+        return VerificationResult(
+            can_finish=True,
+            reason="all claims grounded in tool output",
+            confidence=0.85,
+            verifier_name=self.name,
+        )
+
+
+# ---------------------------------------------------------------------------
+# StateVerifier
+# ---------------------------------------------------------------------------
+
+_SAFE_PREFIXES = ("find ", "ls", "wc ", "cat ", "head ", "tail ", "date", "pwd")
+_UNSAFE_FRAGMENTS = ("rm ", "mv ", "cp ", "mkdir", "> ", ">> ", "chmod", "chown", "kill")
+
+
+def _is_safe_command(cmd: str) -> bool:
+    """Return True if the shell command is read-only and safe to re-run."""
+    stripped = cmd.strip()
+    if not any(stripped.startswith(p) for p in _SAFE_PREFIXES):
+        return False
+    return not any(frag in cmd for frag in _UNSAFE_FRAGMENTS)
+
+
+def _first_numeric_token(text: str) -> str | None:
+    """Return the first purely-digit token found in text, or None."""
+    m = re.search(r"\b(\d+)\b", text)
+    return m.group(1) if m else None
+
+
+class StateVerifier:
+    """Verifier that checks on-disk state matches what the model claimed.
+
+    Two checks:
+
+    1. **File existence**: for every successful ``write_file`` event, confirm
+       the written path exists on disk.
+    2. **Shell re-run**: for up to 3 safe (read-only) shell commands, re-run
+       them and compare the first numeric token in the output against the
+       original ``content_preview``. A divergence flags a stale or fabricated
+       result.
+
+    Returns:
+    - ``can_finish=False, confidence=0.9`` if any issues are found.
+    - ``can_finish=True, confidence=0.5`` if no write/shell events to check.
+    - ``can_finish=True, confidence=0.9`` if all checks passed.
+    """
+
+    name = "state"
+
+    def __init__(self, *, cwd: Path | str = ".") -> None:
+        self._cwd = Path(cwd)
+
+    async def verify(
+        self, *, session: Session, activity: list[ActivityEvent]
+    ) -> VerificationResult:
+        completed = [
+            e for e in activity if e.kind == "tool_call.completed" and not e.data.get("is_error")
+        ]
+
+        write_events = [e for e in completed if e.data.get("name") == "write_file"]
+        shell_events = [e for e in completed if e.data.get("name") == "shell"]
+
+        if not write_events and not shell_events:
+            return VerificationResult(
+                can_finish=True,
+                reason="no write_file or shell events to verify",
+                confidence=0.5,
+                verifier_name=self.name,
+            )
+
+        issues: list[str] = []
+
+        # Check 1: written files exist on disk.
+        for e in write_events:
+            raw_path = e.data.get("arguments", {}).get("path", "")
+            if not raw_path:
+                continue
+            p = Path(raw_path) if Path(raw_path).is_absolute() else self._cwd / raw_path
+            if not p.exists():
+                issues.append(f"write_file claimed to write {raw_path!r} but file does not exist")
+
+        # Check 2: re-run safe shell commands and compare first numeric token.
+        safe_to_check = [
+            e
+            for e in shell_events
+            if _is_safe_command(e.data.get("arguments", {}).get("command", ""))
+        ][:3]
+
+        for e in safe_to_check:
+            cmd = e.data.get("arguments", {}).get("command", "")
+            original_preview: str = e.data.get("content_preview") or ""
+            original_num = _first_numeric_token(original_preview)
+            if original_num is None:
+                continue  # Nothing to compare.
+
+            try:
+                proc = await asyncio.wait_for(
+                    asyncio.create_subprocess_shell(
+                        cmd,
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.DEVNULL,
+                        cwd=str(self._cwd),
+                    ),
+                    timeout=10.0,
+                )
+                stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=10.0)
+                rerun_output = stdout.decode("utf-8", errors="replace")[:200]
+                rerun_num = _first_numeric_token(rerun_output)
+                if rerun_num is not None and rerun_num != original_num:
+                    issues.append(
+                        f"shell command {cmd!r} originally returned leading number "
+                        f"{original_num!r} but re-run returned {rerun_num!r}"
+                    )
+            except Exception:
+                pass  # Silently skip on any error or timeout.
+
+        if issues:
+            return VerificationResult(
+                can_finish=False,
+                reason="; ".join(issues),
+                confidence=0.9,
+                verifier_name=self.name,
+            )
+
+        return VerificationResult(
+            can_finish=True,
+            reason="all state checks passed",
+            confidence=0.9,
+            verifier_name=self.name,
+        )
+
+
+# ---------------------------------------------------------------------------
+# ConsensusVerifier
+# ---------------------------------------------------------------------------
+
+_CONSENSUS_SYSTEM_PROMPT = (
+    "You are an independent fact-checker reviewing an AI assistant's answer.\n\n"
+    "You will be given the original task and a first model's answer. Check whether "
+    "the answer is plausible, internally consistent, and correct.\n\n"
+    "AUTOMATIC REJECT conditions:\n"
+    "- Specific numbers or counts that are implausible or seem fabricated\n"
+    "- Claims to have done work (ran a command, wrote a file) with no logical basis\n"
+    "- Answer is clearly incomplete for the task requested\n"
+    "- The answer contradicts itself\n\n"
+    "Reply ONLY with JSON on a single line:\n"
+    '{"agrees": true|false, "reason": "<short explanation>", "confidence": 0.0..1.0}\n'
+    "No prose outside the JSON."
+)
+
+
+def _parse_consensus_response(text: str) -> tuple[bool, str, float] | None:
+    """Return (agrees, reason, confidence) or None on parse failure.
+
+    Handles ```json``` fences and surrounding whitespace.
+    """
+    body = text.strip()
+    if body.startswith("```"):
+        lines = body.splitlines()
+        if lines:
+            lines = lines[1:]
+            if lines and lines[-1].strip().startswith("```"):
+                lines = lines[:-1]
+        body = "\n".join(lines).strip()
+    try:
+        obj = json.loads(body)
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(obj, dict) or "agrees" not in obj:
+        return None
+    agrees = bool(obj["agrees"])
+    reason = str(obj.get("reason", "")).strip() or "(no reason given)"
+    conf_raw = obj.get("confidence", 0.7)
+    try:
+        confidence = float(conf_raw)
+    except (TypeError, ValueError):
+        confidence = 0.7
+    return agrees, reason, confidence
+
+
+class ConsensusVerifier:
+    """Verifier that uses a second LLM call to independently fact-check the
+    first model's answer.
+
+    The consensus model receives the original task and the first model's
+    final answer, and decides whether the answer is plausible, internally
+    consistent, and correct. This catches common lower-tier model failure
+    modes: fabricated numbers, unsupported claims, and contradictions.
+
+    Non-JSON or malformed responses degrade gracefully to
+    ``can_finish=False, confidence=0.0`` after retries are exhausted.
+    """
+
+    name = "consensus"
+
+    def __init__(self, *, adapter: Adapter, model: str, max_retries: int = 2) -> None:
+        self.adapter = adapter
+        self.model = model
+        self.max_retries = max_retries
+
+    async def verify(
+        self, *, session: Session, activity: list[ActivityEvent]
+    ) -> VerificationResult:
+        goal = _first_user_message(session)
+        answer = _last_assistant_text(session)
+
+        if not answer:
+            return VerificationResult(
+                can_finish=False,
+                reason="no final assistant answer to check",
+                confidence=0.0,
+                verifier_name=self.name,
+            )
+
+        prompt = f"ORIGINAL TASK:\n{goal}\n\n" f"FIRST MODEL'S ANSWER:\n{answer}\n"
+        messages = [
+            Message(role="system", content=_CONSENSUS_SYSTEM_PROMPT),
+            Message(role="user", content=prompt),
+        ]
+
+        last_reason = "consensus judge failed after retries"
+        for attempt in range(self.max_retries):
+            if attempt > 0:
+                await asyncio.sleep(2**attempt)
+
+            accumulated: list[str] = []
+            final_content: str | None = None
+            try:
+                async for event in self.adapter.stream(model=self.model, messages=messages):
+                    if isinstance(event, TextDelta):
+                        accumulated.append(event.text)
+                    elif isinstance(event, Done):
+                        if event.final_message and event.final_message.content:
+                            final_content = event.final_message.content
+                        else:
+                            final_content = "".join(accumulated)
+                        break
+            except Exception as exc:
+                last_reason = f"consensus call failed (attempt {attempt + 1}): {exc!s}"
+                continue
+
+            if final_content is None:
+                last_reason = (
+                    f"consensus stream ended without a final message (attempt {attempt + 1})"
+                )
+                continue
+
+            parsed = _parse_consensus_response(final_content)
+            if parsed is None:
+                preview = final_content.strip()[:200]
+                last_reason = f"consensus returned non-JSON (attempt {attempt + 1}): {preview!r}"
+                continue
+
+            agrees, reason, confidence = parsed
+            return VerificationResult(
+                can_finish=agrees,
+                reason=f"consensus: {reason}",
+                confidence=confidence,
+                verifier_name=self.name,
+            )
+
+        return VerificationResult(
+            can_finish=False,
+            reason=last_reason,
+            confidence=0.0,
+            verifier_name=self.name,
+        )
+
+
 __all__ = [
+    "ClaimGroundingVerifier",
+    "ConsensusVerifier",
     "EvidenceCheckKind",
     "EvidenceContract",
     "EvidenceContractResult",
     "LLMJudgeVerifier",
     "RuleVerifier",
+    "StateVerifier",
     "VerificationGateway",
     "VerificationResult",
     "Verifier",

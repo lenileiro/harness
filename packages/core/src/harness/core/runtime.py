@@ -692,12 +692,21 @@ class Agent:
             if memory_prefix:
                 messages_for_turn = memory_prefix + messages_for_turn
             yield ModelRequestEvent(messages=messages_for_turn)
+            _any_tool_called = any(m.role == "tool" for m in session.messages)
+            _tool_choice: str | None = (
+                "required"
+                if request.require_tool_use
+                and not _any_tool_called
+                and self.tools.openai_schemas(phase=self.current_phase)
+                else None
+            )
             stream = adapter.stream(
                 model=request.model or session.model,
                 messages=messages_for_turn,
                 tools=self.tools.openai_schemas(phase=self.current_phase) or None,
                 temperature=request.temperature,
                 max_tokens=request.max_tokens,
+                tool_choice=_tool_choice,
             )
             _stream_source = (
                 self._stream_with_guardrails(stream, messages_for_turn)

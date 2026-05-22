@@ -163,6 +163,10 @@ class RunRequest(BaseModel):
     result_type: type | None = Field(default=None, exclude=True)
     """When set to a Pydantic model class, the runtime validates the final
     response as JSON and populates ``Done.structured_result``."""
+    require_tool_use: bool = False
+    """When True, the runtime forces the model to call at least one tool before
+    emitting a final answer. Prevents models from answering from memory when
+    tool evidence is required."""
 
 
 # ---------------------------------------------------------------------------

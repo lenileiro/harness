@@ -73,14 +73,16 @@ class OllamaAdapter:
         tools: list[dict[str, Any]] | None = None,
         temperature: float | None = None,
         max_tokens: int | None = None,
-        **_kwargs: Any,
+        **kwargs: Any,
     ) -> AsyncIterator[Event]:
+        tool_choice = kwargs.get("tool_choice")
         return self._stream(
             model=model,
             messages=messages,
             tools=tools,
             temperature=temperature,
             max_tokens=max_tokens,
+            tool_choice=tool_choice,
         )
 
     async def capabilities(self) -> Capabilities:
@@ -103,6 +105,7 @@ class OllamaAdapter:
         tools: list[dict[str, Any]] | None,
         temperature: float | None,
         max_tokens: int | None,
+        tool_choice: str | None = None,
     ) -> AsyncIterator[Event]:
         payload: dict[str, Any] = {
             "model": model,
@@ -111,6 +114,8 @@ class OllamaAdapter:
         }
         if tools:
             payload["tools"] = tools
+            if tool_choice:
+                payload["tool_choice"] = tool_choice
         if temperature is not None:
             payload["temperature"] = temperature
         if max_tokens is not None:
