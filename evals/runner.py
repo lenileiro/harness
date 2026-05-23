@@ -141,8 +141,11 @@ def _agent_cmd(
         "--max-repair",
         "2",
     ]
-    if variant == "bare":
-        cmd.append("--bare")
+    # "defended" → full strict chain (the historic A/B "with defenses" arm).
+    # "bare"     → no chain, no critic.
+    # Eval keeps using both labels so EVAL.md tables stay comparable across
+    # commits; the CLI flag is --profile now.
+    cmd += ["--profile", "strict" if variant == "defended" else "bare"]
     if verify_command:
         # In bare mode, keep ShellVerifier (the test runner) but skip the
         # critic — bare = agent + tools + test signal, nothing else.

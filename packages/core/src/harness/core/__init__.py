@@ -119,6 +119,7 @@ from harness.core.schemas import (
     Usage,
     VerificationResult,
 )
+from harness.core.secret_redaction import has_secrets, redact_secrets
 from harness.core.shell_safety import check_dangerous_command
 from harness.core.storage import Storage
 from harness.core.telemetry import configure_logging, get_logger, span
@@ -318,11 +319,13 @@ __all__ = [
     "fork_session",
     "format_ledger",
     "get_logger",
+    "has_secrets",
     "listen",
     "make_multi_critic",
     "parse_ledger_text",
     "persist",
     "prune",
+    "redact_secrets",
     "router",
     "scan_text",
     "span",

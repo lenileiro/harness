@@ -621,7 +621,7 @@ def _build_agent(
     system_prompt: str | None = None,
     compactor: Any | None = None,
     max_repair_attempts: int = 3,
-    bare: bool = False,
+    profile: str = "minimal",
 ) -> Agent:
     """Build an Agent over a provider chain. `chain[0]` is the primary.
 
@@ -631,6 +631,17 @@ def _build_agent(
 
     Handler precedence: `--yes` (AutoApprove) > `--inbox` (InboxApprovalHandler)
     > default (RichApprovalHandler).
+
+    `profile` selects the structural defense level:
+      - "bare":    no chain, no critic. Model + tools only.
+      - "minimal": only VerifyBeforeDoneVerifier (catches "forgot to test").
+      - "strict":  full chain (FileScope, MinimalFix, TestsBeforeEdit,
+                   VerifyBeforeDone, DiagnosisAlignment, MisdirectedSuggestion).
+
+    Default is "minimal" — cross-model A/B data (see evals/EVAL.md) showed
+    the full strict chain regressed pass rate on capable hosted models. The
+    minimal profile keeps the one defense that consistently correlates with
+    PASS (forgot-to-test) without the over-engineering surface of the rest.
     """
     if not chain:
         raise typer.BadParameter("provider chain is empty")
@@ -676,9 +687,11 @@ def _build_agent(
     #      one historical failing test — otherwise it's scope creep driven
     #      by the prompt rather than the bug.
     # All deterministic — no LLM, no false positives on no-op turns.
-    # `bare=True` skips this chain entirely so callers can A/B test "harness
-    # defenses vs no defenses" against the same model + tool surface.
-    if not bare:
+    # Profile controls which run:
+    #   bare    → none of these wire in.
+    #   minimal → only VerifyBeforeDoneVerifier (the "forgot to test" catch).
+    #   strict  → full chain.
+    if profile == "strict":
         enforce_scope = FileScopeVerifier()
         enforce_minimal = MinimalFixVerifier()
         enforce_tests_first = TestsBeforeEditVerifier()
@@ -694,6 +707,14 @@ def _build_agent(
             enforce_no_scope_creep,
         )
         verifier = ChainedVerifier(structural, verifier) if verifier is not None else structural
+    elif profile == "minimal":
+        # Just the catch for "agent edited but never ran tests" — the one
+        # defense that correlated with PASS in every A/B run so far.
+        enforce_verify = VerifyBeforeDoneVerifier()
+        verifier = (
+            ChainedVerifier(enforce_verify, verifier) if verifier is not None else enforce_verify
+        )
+    # else profile == "bare": nothing structural, just whatever user passed.
 
     approval_policy = ApprovalPolicy(default="prompt", per_tool=dict(config.approval))
 
@@ -951,17 +972,26 @@ def run(
             help="Summarize old messages via LLM when context exceeds 80% of max_tokens.",
         ),
     ] = False,
+    profile: Annotated[
+        str,
+        typer.Option(
+            "--profile",
+            help=(
+                "Structural defense level. 'bare' = no chain, no critic "
+                "(model + tools only). 'minimal' (default) = only the "
+                "tests-before-done check. 'strict' = full chain (file scope, "
+                "minimal fix, tests-first, verify-before-done, diagnosis "
+                "alignment, misdirected suggestion). See evals/EVAL.md for "
+                "the cross-model A/B data behind the default."
+            ),
+        ),
+    ] = "minimal",
     bare: Annotated[
         bool,
         typer.Option(
             "--bare",
-            help=(
-                "Skip the always-on structural verifier chain (file scope, "
-                "minimal fix, tests-before-edit, verify-before-done, diagnosis "
-                "alignment, misdirected suggestion) AND any critic. Used by "
-                "the eval to A/B compare 'harness defenses on' vs 'agent + "
-                "tools only' against the same model."
-            ),
+            help="Deprecated alias for --profile bare.",
+            hidden=True,
         ),
     ] = False,
     verbose: Annotated[
@@ -975,6 +1005,16 @@ def run(
     # to run the agent autonomously without repeating the flag every invocation.
     if not yes and os.environ.get("HARNESS_YES"):
         yes = True
+
+    # --bare is a deprecated alias for --profile bare. If both are given,
+    # --bare takes precedence (legacy behavior). If neither, use --profile.
+    if bare:
+        profile = "bare"
+    if profile not in ("bare", "minimal", "strict"):
+        console.print(
+            f"[red]Invalid --profile {profile!r}; expected bare, minimal, or strict.[/red]"
+        )
+        raise typer.Exit(2)
 
     cfg = _load_cli_config(config_path)
     chain = _resolve_chain(failover_flag=failover, provider_flag=provider, config=cfg)
@@ -1009,7 +1049,7 @@ def run(
                 predict=predict,
                 auto_compact=auto_compact,
                 max_repair=max_repair,
-                bare=bare,
+                profile=profile,
                 config=cfg,
             )
         )
@@ -1041,7 +1081,7 @@ async def _run_once(
     predict: bool = False,
     auto_compact: bool = False,
     max_repair: int = 3,
-    bare: bool = False,
+    profile: str = "minimal",
     config: HarnessConfig,
 ) -> None:
     storage = _build_storage(db=db, in_memory=in_memory, cwd=cwd)
@@ -1053,10 +1093,12 @@ async def _run_once(
         verifier = _build_verifier(
             verify, chain=chain, model=model, config=config, cwd=cwd, verify_command=verify_command
         )
-        # `--bare` disables the critic too — the A/B baseline arm should be
-        # the model + tools alone, with no harness-side reasoning support.
+        # The "bare" profile disables the critic too — the A/B baseline arm
+        # is the model + tools alone, with no harness-side reasoning support.
         critic_obj = (
-            None if bare else _build_critic(critic, chain=chain, model=model, config=config)
+            None
+            if profile == "bare"
+            else _build_critic(critic, chain=chain, model=model, config=config)
         )
         budget = (
             ContextBudget(max_tokens=max_context_tokens) if max_context_tokens is not None else None
@@ -1090,7 +1132,7 @@ async def _run_once(
             system_prompt=_DEFAULT_SYSTEM_PROMPT,
             compactor=compactor,
             max_repair_attempts=max_repair,
-            bare=bare,
+            profile=profile,
         )
 
         request_kwargs: dict[str, object] = {

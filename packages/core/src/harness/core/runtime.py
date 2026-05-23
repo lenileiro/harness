@@ -878,16 +878,22 @@ class Agent:
                     return
                 for ev in extra_events:
                     yield ev
-                # Prompt-injection probe: scan tool output for hijack patterns
-                # before it enters the next agent turn's context. If the output
-                # contains text like "ignore previous instructions" or fake
-                # SYSTEM:/[INST] markers, prepend a notice telling the model
-                # to treat the content as data, not as instructions.
-                # Local import: prompt_injection_probe imports re-only, so
-                # this is effectively free at module-load time.
+                # Tool-output preprocessing — two layers, both cheap regex:
+                #   1. Secret redaction: strip API keys / tokens / Bearer
+                #      headers / env-var assignments before the content
+                #      enters the next turn or hits the judge.
+                #   2. Prompt-injection probe: scan for hijack patterns
+                #      ("ignore previous instructions", fake [INST] markers,
+                #      role hijacks) and prepend a security notice telling
+                #      the model to treat the content as data, not as
+                #      instructions.
+                # Order matters: redact first so we don't ship a leaked
+                # secret into the warning preamble.
                 from harness.core.prompt_injection_probe import annotate_if_suspicious
+                from harness.core.secret_redaction import redact_secrets
 
-                annotated_content = annotate_if_suspicious(result.content or "")
+                redacted_content, _redact_labels = redact_secrets(result.content or "")
+                annotated_content = annotate_if_suspicious(redacted_content)
                 session.messages.append(
                     Message(
                         role="tool",
