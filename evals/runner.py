@@ -26,6 +26,11 @@ class FixtureMeta:
     task_text: str
     eval_md: str  # raw EVAL.md text, passed to judge as context
     verify_command: str = "pytest tests/ -v --tb=short --no-header"
+    phases: list[str] | None = None
+    """Optional phase plan inferred from EVAL.md. When set, the runner
+    passes ``--phases`` to ``harness run`` so the LLM is hinted to declare
+    each phase via the gated phase tool. Multi-step fixtures benefit;
+    single-step ones leave this None."""
 
 
 @dataclass
@@ -69,15 +74,56 @@ def discover_fixtures(evals_root: Path | None = None) -> list[FixtureMeta]:
         eval_path = entry / "EVAL.md"
         if not task_path.exists() or not eval_path.exists():
             continue
+        eval_md = eval_path.read_text(encoding="utf-8")
         result.append(
             FixtureMeta(
                 name=entry.name,
                 path=entry,
                 task_text=task_path.read_text(encoding="utf-8"),
-                eval_md=eval_path.read_text(encoding="utf-8"),
+                eval_md=eval_md,
+                phases=_parse_phases(eval_md),
             )
         )
     return result
+
+
+def _parse_phases(eval_md: str) -> list[str] | None:
+    """Pull a `phases:` line from EVAL.md into an ordered phase list.
+
+    Accepts either inline comma-separated form:
+        phases: implement, test, document, verify
+    or a leading-dash list (one phase per line, indented two spaces):
+        phases:
+          - implement
+          - test
+    """
+    import re
+
+    lines = eval_md.splitlines()
+    for i, line in enumerate(lines):
+        m = re.match(r"^\s*phases\s*:\s*(.*)$", line, re.IGNORECASE)
+        if not m:
+            continue
+        inline = m.group(1).strip()
+        if inline:
+            parts = [p.strip().lower() for p in inline.split(",") if p.strip()]
+            return parts or None
+        # Block form — gather indented `- name` lines.
+        names: list[str] = []
+        for follow in lines[i + 1 :]:
+            stripped = follow.strip()
+            if not stripped:
+                break
+            if not follow.startswith((" ", "\t")):
+                break
+            if stripped.startswith("-"):
+                name = stripped.lstrip("- ").strip().lower()
+                if name:
+                    names.append(name)
+            else:
+                break
+        return names or None
+    return None
 
 
 def _git_env() -> dict[str, str]:
@@ -101,6 +147,7 @@ def _agent_cmd(
     harness_bin: str | None,
     verify_command: str | None = None,
     variant: str = "defended",
+    phases: list[str] | None = None,
 ) -> list[str]:
     """Return the command to invoke the agent for the given provider.
 
@@ -160,6 +207,12 @@ def _agent_cmd(
             cmd += ["--critic", critic_mode]
     else:
         cmd += ["--verify", "rule"]
+    # Phases are a defended-arm feature. The system-message hint plus the
+    # gated phase tool only count as a fair test when paired with the rest
+    # of the structural chain. Bare = "model + tools only, no harness-side
+    # reasoning support" — that has to include the phase plan.
+    if phases and variant != "bare":
+        cmd += ["--phases", ",".join(phases)]
     return cmd
 
 
@@ -214,6 +267,7 @@ def run_fixture(
             harness_bin,
             verify_command=fixture.verify_command,
             variant=variant,
+            phases=fixture.phases,
         )
         agent_result = subprocess.run(
             cmd,

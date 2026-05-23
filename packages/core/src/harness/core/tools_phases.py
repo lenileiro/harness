@@ -109,66 +109,108 @@ class PhaseTool:
         if action == "status":
             return await self._status(call)
 
-        # Read current phase state from the activity log so the gate sees the
-        # same source of truth the runtime uses to reconstruct session.phases.
+        # Read current phase state from the activity log so the advisory
+        # check sees the same source of truth the runtime uses to
+        # reconstruct session.phases.
         declared_order, completed_names = await self._derive_state()
         in_flight = [p for p in declared_order if p not in completed_names]
 
-        # ── Gates ────────────────────────────────────────────────────────
-        # The LLM drives phase creation, but each transition has to pass
-        # through here. Out-of-order or skipped phases are refused with a
-        # concrete error the agent can act on.
+        # ── Advisory gates ───────────────────────────────────────────────
+        # We deliberately don't refuse here — early experiments showed
+        # weak-instruction-following models get stuck in refusal loops
+        # they can't escape. Instead the call always succeeds and a
+        # warning is surfaced when the transition looks malformed. The
+        # *hard* gate stays at Done time via PhaseGateVerifier: any
+        # declared phase that's never marked complete blocks completion.
+        warnings: list[str] = []
+        side_effects: list[tuple[str, str]] = []  # extra (kind, phase) events to write
+        skip_primary_event = False
+
         if action == "declare":
-            if in_flight:
-                current = in_flight[-1]
-                return self._error(
-                    call,
-                    f"cannot declare phase {name!r}: phase {current!r} is still "
-                    f"in flight. Call phase(action='complete', name={current!r}) "
-                    f"with evidence first, then declare the next phase.",
-                )
             if name in declared_order:
-                return self._error(
-                    call,
-                    f"phase {name!r} was already declared (status: "
-                    f"{'completed' if name in completed_names else 'unknown'}). "
-                    f"Phase names must be unique within a session.",
+                # Idempotent. No state change, just an INFO line so the
+                # agent knows its redeclare was a no-op.
+                completion_state = "completed" if name in completed_names else "in flight"
+                warnings.append(
+                    f"[INFO] phase {name!r} was already declared "
+                    f"(currently {completion_state}); re-declare is a no-op."
+                )
+                skip_primary_event = True
+            elif in_flight:
+                current = in_flight[-1]
+                warnings.append(
+                    f"[WARNING] declaring phase {name!r} while phase {current!r} "
+                    f"is still in flight. If {current!r} is actually done, complete "
+                    f"it via phase(action='complete', name={current!r}). "
+                    f"PhaseGateVerifier will refuse Done while any phase is "
+                    f"outstanding."
                 )
         else:  # complete
             if not in_flight:
-                return self._error(
-                    call,
-                    f"cannot complete phase {name!r}: no phase is currently in "
-                    f"flight. Use phase(action='declare', name={name!r}) to "
-                    f"start it first.",
-                )
-            expected = in_flight[-1]
-            if name != expected:
-                return self._error(
-                    call,
-                    f"cannot complete phase {name!r}: the currently in-flight "
-                    f"phase is {expected!r}. Complete that one first, or use "
-                    f"phase(action='status') to see the current plan.",
-                )
+                if name in completed_names:
+                    warnings.append(
+                        f"[INFO] phase {name!r} was already completed; " f"re-complete is a no-op."
+                    )
+                    skip_primary_event = True
+                else:
+                    warnings.append(
+                        f"[WARNING] no phase was in flight when you marked "
+                        f"{name!r} complete. Recording {name!r} as both "
+                        f"declared and completed in a single step."
+                    )
+                    # Synthesize the missing declare so state stays consistent.
+                    side_effects.append((activity_kinds.PHASE_DECLARED, name))
+            else:
+                expected = in_flight[-1]
+                if name != expected:
+                    if name in declared_order:
+                        # Completing an older still-pending phase out of order.
+                        warnings.append(
+                            f"[WARNING] completing phase {name!r} while {expected!r} "
+                            f"is the most recent in-flight phase. Phases are "
+                            f"usually completed in declaration order; mark "
+                            f"{expected!r} too if it's done."
+                        )
+                    else:
+                        # Completing a name that was never declared.
+                        warnings.append(
+                            f"[WARNING] phase {name!r} was never declared. "
+                            f"Recording it as declared+completed in a single step. "
+                            f"The currently in-flight phase {expected!r} is still "
+                            f"outstanding."
+                        )
+                        side_effects.append((activity_kinds.PHASE_DECLARED, name))
 
-        # Gate passed — record the transition.
-        kind = (
-            activity_kinds.PHASE_DECLARED if action == "declare" else activity_kinds.PHASE_COMPLETED
-        )
+        # Write side-effect events (synthetic declares) before the primary one.
         if self._activity_store is not None:
-            event = ActivityEvent(
-                session_id=self._session_id,
-                kind=kind,
-                data={"phase": name, "notes": notes} if notes else {"phase": name},
-            )
-            await self._activity_store.append_activity(event)
+            for side_kind, side_name in side_effects:
+                ev = ActivityEvent(
+                    session_id=self._session_id,
+                    kind=side_kind,
+                    data={"phase": side_name, "auto_declared": True},
+                )
+                await self._activity_store.append_activity(ev)
+            if not skip_primary_event:
+                primary_kind = (
+                    activity_kinds.PHASE_DECLARED
+                    if action == "declare"
+                    else activity_kinds.PHASE_COMPLETED
+                )
+                primary_event = ActivityEvent(
+                    session_id=self._session_id,
+                    kind=primary_kind,
+                    data={"phase": name, "notes": notes} if notes else {"phase": name},
+                )
+                await self._activity_store.append_activity(primary_event)
 
         verb = "declared" if action == "declare" else "completed"
+        body = f"phase {name!r} {verb}" + (f": {notes}" if notes else "")
+        content = "\n".join([*warnings, body]) if warnings else body
         return ToolResult(
             tool_call_id=call.id,
             name=self.name,
-            content=f"phase {name!r} {verb}" + (f": {notes}" if notes else ""),
-            metadata={"phase": name, "action": action},
+            content=content,
+            metadata={"phase": name, "action": action, "warnings": len(warnings)},
         )
 
     async def _derive_state(self) -> tuple[list[str], set[str]]:

@@ -648,6 +648,7 @@ def _build_agent(
     compactor: Any | None = None,
     max_repair_attempts: int = 3,
     profile: str = "minimal",
+    phases_enabled: bool = False,
 ) -> Agent:
     """Build an Agent over a provider chain. `chain[0]` is the primary.
 
@@ -688,11 +689,14 @@ def _build_agent(
 
     tools = _build_tools(cwd)
     tools.register(VerifyWorkTool(cwd=cwd))
-    # PhaseTool is always registered so external callers (the `harness phase`
-    # CLI) and internal agents share the same activity-event vocabulary.
-    # The PhaseGateVerifier only fires when the agent actually declared
-    # phases, so registering this tool is free for tasks that don't use it.
-    tools.register(PhaseTool(activity_store=activity_store))
+    # PhaseTool is opt-in. The tool's docstring invites use on multi-step
+    # tasks, which means an LLM that sees it will reach for it any time the
+    # prompt enumerates steps — and then trip on the gates. Register it
+    # only when the caller has explicitly asked for phase tracking (via
+    # --phases / RunRequest.phases / the external `harness phase` CLI
+    # having seeded prior phase events).
+    if phases_enabled:
+        tools.register(PhaseTool(activity_store=activity_store))
     primary_adapter = adapters[chain[0]]
     tools.register(
         RequestCritiqueTool(
@@ -1181,6 +1185,7 @@ async def _run_once(
             compactor=compactor,
             max_repair_attempts=max_repair,
             profile=profile,
+            phases_enabled=bool(phases),
         )
 
         request_kwargs: dict[str, object] = {
