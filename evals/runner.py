@@ -36,6 +36,10 @@ class RunOutcome:
     test_output: str
     agent_exit_code: int
     test_exit_code: int
+    # "defended" = full structural verifier chain + critic active.
+    # "bare"     = same model + tools but no structural defenses, no critic.
+    # Used by the eval's A/B mode to measure harness value-add.
+    variant: str = "defended"
 
 
 def _find_evals_root() -> Path:
@@ -96,12 +100,17 @@ def _agent_cmd(
     work: Path,
     harness_bin: str | None,
     verify_command: str | None = None,
+    variant: str = "defended",
 ) -> list[str]:
     """Return the command to invoke the agent for the given provider.
 
     'claude' provider shells out to `claude -p` (Claude Code CLI).
     All other providers go through `harness run` with ShellVerifier so the
     repair loop fires when the verify_command exits non-zero.
+
+    `variant="bare"` adds the `--bare` flag to disable the structural
+    verifier chain and critic — the agent runs with model + tools only.
+    Used by A/B mode to measure harness value-add.
     """
     if provider == "claude":
         claude_bin = shutil.which("claude") or "claude"
@@ -132,16 +141,20 @@ def _agent_cmd(
         "--max-repair",
         "2",
     ]
+    if variant == "bare":
+        cmd.append("--bare")
     if verify_command:
-        critic_mode = "llm+search" if os.environ.get("TAVILY_API_KEY") else "llm"
+        # In bare mode, keep ShellVerifier (the test runner) but skip the
+        # critic — bare = agent + tools + test signal, nothing else.
         cmd += [
             "--verify",
             "shell",
             "--verify-command",
             verify_command,
-            "--critic",
-            critic_mode,
         ]
+        if variant != "bare":
+            critic_mode = "llm+search" if os.environ.get("TAVILY_API_KEY") else "llm"
+            cmd += ["--critic", critic_mode]
     else:
         cmd += ["--verify", "rule"]
     return cmd
@@ -155,6 +168,7 @@ def run_fixture(
     harness_bin: str | None = None,
     agent_timeout: int = 300,
     test_timeout: int = 60,
+    variant: str = "defended",
 ) -> RunOutcome:
     """Run one fixture end-to-end in an isolated temp directory."""
     with tempfile.TemporaryDirectory(prefix="harness_eval_") as tmp_str:
@@ -196,6 +210,7 @@ def run_fixture(
             work,
             harness_bin,
             verify_command=fixture.verify_command,
+            variant=variant,
         )
         agent_result = subprocess.run(
             cmd,
@@ -238,4 +253,5 @@ def run_fixture(
             test_output=test_output,
             agent_exit_code=agent_result.returncode,
             test_exit_code=test_result.returncode,
+            variant=variant,
         )

@@ -610,6 +610,7 @@ def _build_agent(
     system_prompt: str | None = None,
     compactor: Any | None = None,
     max_repair_attempts: int = 3,
+    bare: bool = False,
 ) -> Agent:
     """Build an Agent over a provider chain. `chain[0]` is the primary.
 
@@ -656,7 +657,7 @@ def _build_agent(
         )
     )
 
-    # Always enforce six structural defenses:
+    # Always enforce six structural defenses (unless bare=True):
     #   1. If the prompt named specific files, the agent may only modify those.
     #   2. If the prompt asked for a "minimal fix", the agent may not write a large diff.
     #   3. If the agent edited, it must have run the tests first.
@@ -668,21 +669,24 @@ def _build_agent(
     #      one historical failing test — otherwise it's scope creep driven
     #      by the prompt rather than the bug.
     # All deterministic — no LLM, no false positives on no-op turns.
-    enforce_scope = FileScopeVerifier()
-    enforce_minimal = MinimalFixVerifier()
-    enforce_tests_first = TestsBeforeEditVerifier()
-    enforce_verify = VerifyBeforeDoneVerifier()
-    enforce_alignment = DiagnosisAlignmentVerifier()
-    enforce_no_scope_creep = MisdirectedSuggestionVerifier()
-    structural = ChainedVerifier(
-        enforce_scope,
-        enforce_minimal,
-        enforce_tests_first,
-        enforce_verify,
-        enforce_alignment,
-        enforce_no_scope_creep,
-    )
-    verifier = ChainedVerifier(structural, verifier) if verifier is not None else structural
+    # `bare=True` skips this chain entirely so callers can A/B test "harness
+    # defenses vs no defenses" against the same model + tool surface.
+    if not bare:
+        enforce_scope = FileScopeVerifier()
+        enforce_minimal = MinimalFixVerifier()
+        enforce_tests_first = TestsBeforeEditVerifier()
+        enforce_verify = VerifyBeforeDoneVerifier()
+        enforce_alignment = DiagnosisAlignmentVerifier()
+        enforce_no_scope_creep = MisdirectedSuggestionVerifier()
+        structural = ChainedVerifier(
+            enforce_scope,
+            enforce_minimal,
+            enforce_tests_first,
+            enforce_verify,
+            enforce_alignment,
+            enforce_no_scope_creep,
+        )
+        verifier = ChainedVerifier(structural, verifier) if verifier is not None else structural
 
     approval_policy = ApprovalPolicy(default="prompt", per_tool=dict(config.approval))
 
@@ -926,6 +930,19 @@ def run(
             help="Summarize old messages via LLM when context exceeds 80% of max_tokens.",
         ),
     ] = False,
+    bare: Annotated[
+        bool,
+        typer.Option(
+            "--bare",
+            help=(
+                "Skip the always-on structural verifier chain (file scope, "
+                "minimal fix, tests-before-edit, verify-before-done, diagnosis "
+                "alignment, misdirected suggestion) AND any critic. Used by "
+                "the eval to A/B compare 'harness defenses on' vs 'agent + "
+                "tools only' against the same model."
+            ),
+        ),
+    ] = False,
     verbose: Annotated[
         bool, typer.Option("--verbose", "-v", help="Enable DEBUG logging to stderr.")
     ] = False,
@@ -971,6 +988,7 @@ def run(
                 predict=predict,
                 auto_compact=auto_compact,
                 max_repair=max_repair,
+                bare=bare,
                 config=cfg,
             )
         )
@@ -1002,6 +1020,7 @@ async def _run_once(
     predict: bool = False,
     auto_compact: bool = False,
     max_repair: int = 3,
+    bare: bool = False,
     config: HarnessConfig,
 ) -> None:
     storage = _build_storage(db=db, in_memory=in_memory, cwd=cwd)
@@ -1013,7 +1032,11 @@ async def _run_once(
         verifier = _build_verifier(
             verify, chain=chain, model=model, config=config, cwd=cwd, verify_command=verify_command
         )
-        critic_obj = _build_critic(critic, chain=chain, model=model, config=config)
+        # `--bare` disables the critic too — the A/B baseline arm should be
+        # the model + tools alone, with no harness-side reasoning support.
+        critic_obj = (
+            None if bare else _build_critic(critic, chain=chain, model=model, config=config)
+        )
         budget = (
             ContextBudget(max_tokens=max_context_tokens) if max_context_tokens is not None else None
         )
@@ -1046,6 +1069,7 @@ async def _run_once(
             system_prompt=_DEFAULT_SYSTEM_PROMPT,
             compactor=compactor,
             max_repair_attempts=max_repair,
+            bare=bare,
         )
 
         request_kwargs: dict[str, object] = {
@@ -3752,6 +3776,18 @@ def eval_run(
             ),
         ),
     ] = 1,
+    ab: Annotated[
+        bool,
+        typer.Option(
+            "--ab",
+            help=(
+                "A/B mode: run each fixture twice per rep — once with the "
+                "full harness defense chain (defended), once with --bare "
+                "(no structural verifiers, no critic). Reports both arms "
+                "side-by-side so you can measure the harness's value-add."
+            ),
+        ),
+    ] = False,
     config_path: Annotated[Path | None, typer.Option("--config")] = None,
 ) -> None:
     """Run one or all eval fixtures and display scored results."""
@@ -3789,38 +3825,44 @@ def eval_run(
         color = "green" if score >= 4 else ("yellow" if score == 3 else "red")
         return f"[{color}]{score}/5[/{color}]"
 
+    _DIM_ORDER = (
+        ("verification", "Verif."),
+        ("scope", "Scope"),
+        ("decomposition", "Decomp."),
+        ("correctness", "Correct."),
+        ("pushback", "Pushback"),
+        ("epistemic", "Epist."),
+        ("overall", "Overall"),
+    )
+
     def _print_per_fixture(r: Any) -> None:
         """Print one fixture's scorecard + rationales immediately, so a
         killed batch still leaves partial results in the transcript."""
         row_table = Table(show_header=True, header_style="bold")
         row_table.add_column("Fixture", no_wrap=True)
-        for col in ("Verif.", "Scope", "Decomp.", "Correct.", "Overall", "Pass?"):
+        for _, col in _DIM_ORDER:
             row_table.add_column(col, justify="center")
+        row_table.add_column("Pass?", justify="center")
         row_table.add_row(
             r.fixture_name,
-            _score_cell(r.verification.score),
-            _score_cell(r.scope.score),
-            _score_cell(r.decomposition.score),
-            _score_cell(r.correctness.score),
-            _score_cell(r.overall.score),
+            *(_score_cell(getattr(r, dim).score) for dim, _ in _DIM_ORDER),
             "[green]PASS[/green]" if r.passed else "[red]FAIL[/red]",
         )
         console.print(row_table)
-        for dim_name, dim in [
-            ("verification", r.verification),
-            ("scope", r.scope),
-            ("decomposition", r.decomposition),
-            ("correctness", r.correctness),
-            ("overall", r.overall),
-        ]:
+        for dim_name, _ in _DIM_ORDER:
+            dim = getattr(r, dim_name)
             color = "green" if dim.score >= 4 else ("yellow" if dim.score == 3 else "red")
             console.print(
                 f"  [{color}]{dim.score}/5[/{color}] [dim]{dim_name}[/dim]  {dim.rationale}"
             )
 
-    # Collect every per-run EvalResult, grouped by fixture name so we can
-    # report median + range across runs.
-    runs_by_fixture: dict[str, list[Any]] = {}
+    # Variant arms: when --ab is on, run each fixture twice per rep — once
+    # defended (full structural chain + critic), once bare (model + tools
+    # only). The judge stays blind to which arm produced the output.
+    variants: tuple[str, ...] = ("defended", "bare") if ab else ("defended",)
+
+    # Collect every per-run EvalResult, keyed by (fixture, variant).
+    runs_by_pair: dict[tuple[str, str], list[Any]] = {}
     for fx in fixtures:
         console.print(f"\n[bold blue]▶ {fx.name}[/bold blue]")
         agent_desc = (
@@ -3828,54 +3870,60 @@ def eval_run(
             if resolved_provider == "claude"
             else f"{resolved_provider}/{resolved_model}"
         )
-        fixture_runs: list[Any] = []
-        for run_idx in range(n_runs):
-            run_label = f" (run {run_idx + 1}/{n_runs})" if n_runs > 1 else ""
-            with console.status(f"[dim]running agent ({agent_desc}){run_label}...[/dim]"):
-                try:
-                    outcome = runner.run_fixture(
-                        fx,
-                        provider=resolved_provider,
-                        model=resolved_model,
-                        agent_timeout=agent_timeout,
-                    )
-                except Exception as exc:
-                    console.print(f"  [red]run failed{run_label}:[/red] {exc}")
-                    continue
+        for variant in variants:
+            for run_idx in range(n_runs):
+                pieces: list[str] = []
+                if ab:
+                    pieces.append(f"[{variant}]")
+                if n_runs > 1:
+                    pieces.append(f"(run {run_idx + 1}/{n_runs})")
+                run_label = " " + " ".join(pieces) if pieces else ""
+                with console.status(f"[dim]running agent ({agent_desc}){run_label}...[/dim]"):
+                    try:
+                        outcome = runner.run_fixture(
+                            fx,
+                            provider=resolved_provider,
+                            model=resolved_model,
+                            agent_timeout=agent_timeout,
+                            variant=variant,
+                        )
+                    except Exception as exc:
+                        console.print(f"  [red]run failed{run_label}:[/red] {exc}")
+                        continue
 
-            exit_icon = "[green]✓[/green]" if outcome.agent_exit_code == 0 else "[yellow]![/yellow]"
-            test_icon = "[green]✓[/green]" if outcome.test_exit_code == 0 else "[red]✗[/red]"
-            console.print(
-                f"  agent {exit_icon} (exit {outcome.agent_exit_code})  "
-                f"tests {test_icon} (exit {outcome.test_exit_code}){run_label}"
-            )
+                exit_icon = (
+                    "[green]✓[/green]" if outcome.agent_exit_code == 0 else "[yellow]![/yellow]"
+                )
+                test_icon = "[green]✓[/green]" if outcome.test_exit_code == 0 else "[red]✗[/red]"
+                console.print(
+                    f"  agent {exit_icon} (exit {outcome.agent_exit_code})  "
+                    f"tests {test_icon} (exit {outcome.test_exit_code}){run_label}"
+                )
 
-            with console.status(f"[dim]scoring{run_label}...[/dim]"):
-                try:
-                    result = judge_mod.judge(
-                        adapter=judge_adapter,
-                        model=resolved_judge_model,
-                        fixture_name=fx.name,
-                        task_text=fx.task_text,
-                        eval_md=fx.eval_md,
-                        transcript=outcome.transcript,
-                        git_diff=outcome.git_diff,
-                        test_output=outcome.test_output,
-                    )
-                    fixture_runs.append(result)
-                except Exception as exc:
-                    console.print(f"  [red]judge failed{run_label}:[/red] {exc}")
-                    continue
+                with console.status(f"[dim]scoring{run_label}...[/dim]"):
+                    try:
+                        result = judge_mod.judge(
+                            adapter=judge_adapter,
+                            model=resolved_judge_model,
+                            fixture_name=fx.name,
+                            task_text=fx.task_text,
+                            eval_md=fx.eval_md,
+                            transcript=outcome.transcript,
+                            git_diff=outcome.git_diff,
+                            test_output=outcome.test_output,
+                        )
+                        runs_by_pair.setdefault((fx.name, variant), []).append(result)
+                    except Exception as exc:
+                        console.print(f"  [red]judge failed{run_label}:[/red] {exc}")
+                        continue
 
-            _print_per_fixture(result)
-        if fixture_runs:
-            runs_by_fixture[fx.name] = fixture_runs
+                _print_per_fixture(result)
 
-    if not runs_by_fixture:
+    if not runs_by_pair:
         return
 
-    # End-of-batch rollup: one row per fixture. With n_runs>1, each cell is
-    # "<median>/5 (min..max)" so you can see both center and spread.
+    # End-of-batch rollup. With n_runs>1, each cell is "<median>/5 (min..max)".
+    # With --ab, the fixture column carries the variant label too.
     def _cell_for_runs(runs: list[Any], dim_name: str) -> str:
         scores = [getattr(r, dim_name).score for r in runs]
         scores.sort()
@@ -3886,21 +3934,24 @@ def eval_run(
         return f"[{color}]{median}/5[/{color}] [dim]({scores[0]}..{scores[-1]})[/dim]"
 
     console.print()
-    title = "Eval Results" + (f" — {n_runs} runs each" if n_runs > 1 else "")
+    title_pieces = ["Eval Results"]
+    if n_runs > 1:
+        title_pieces.append(f"{n_runs} runs each")
+    if ab:
+        title_pieces.append("A/B: defended vs bare")
+    title = " — ".join(title_pieces)
     table = Table(show_header=True, header_style="bold", title=title)
-    table.add_column("Fixture", no_wrap=True)
-    for col in ("Verif.", "Scope", "Decomp.", "Correct.", "Overall", "Pass rate"):
+    table.add_column("Fixture / variant", no_wrap=True)
+    for _, col in _DIM_ORDER:
         table.add_column(col, justify="center")
-    for fx_name, runs in runs_by_fixture.items():
+    table.add_column("Pass rate", justify="center")
+    for (fx_name, variant), runs in runs_by_pair.items():
         n_passed = sum(1 for r in runs if r.passed)
         pass_color = "green" if n_passed == len(runs) else ("yellow" if n_passed > 0 else "red")
+        label = f"{fx_name} [dim]({variant})[/dim]" if ab else fx_name
         table.add_row(
-            fx_name,
-            _cell_for_runs(runs, "verification"),
-            _cell_for_runs(runs, "scope"),
-            _cell_for_runs(runs, "decomposition"),
-            _cell_for_runs(runs, "correctness"),
-            _cell_for_runs(runs, "overall"),
+            label,
+            *(_cell_for_runs(runs, dim) for dim, _ in _DIM_ORDER),
             f"[{pass_color}]{n_passed}/{len(runs)}[/{pass_color}]",
         )
     console.print(table)
