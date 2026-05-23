@@ -240,6 +240,29 @@ tips_app = typer.Typer(
 )
 app.add_typer(tips_app, name="tips")
 
+tune_app = typer.Typer(
+    name="tune",
+    help=(
+        "ACON-style verifier/critic prompt tuner. Given a current prompt "
+        "plus paired A/B trajectories, ask an LLM to propose a revised "
+        "prompt. Always advisory — proposals must be reviewed before "
+        "being applied."
+    ),
+    no_args_is_help=True,
+)
+app.add_typer(tune_app, name="tune")
+
+resume_app = typer.Typer(
+    name="resume",
+    help=(
+        "Cross-session resume contract. JSON file at .harness/resume.json "
+        "describing the workspace roadmap and the in-flight feature; "
+        "injected into the system prompt at run start."
+    ),
+    no_args_is_help=True,
+)
+app.add_typer(resume_app, name="resume")
+
 contracts_app = typer.Typer(
     name="contracts",
     help=(
@@ -674,6 +697,7 @@ def _build_agent(
     loop_detector: Any | None = None,
     contracts: Any | None = None,
     tips_provider: Any | None = None,
+    resume: Any | None = None,
 ) -> Agent:
     """Build an Agent over a provider chain. `chain[0]` is the primary.
 
@@ -834,6 +858,8 @@ def _build_agent(
         loop_detector=loop_detector,
         contracts=contracts,
         tips_provider=tips_provider,
+        resume=resume,
+        memory_tools_enabled=True,
     )
 
 
@@ -1236,10 +1262,16 @@ async def _run_once(
         # (kept as the A/B baseline arm). L3 is inside runtime dispatch and
         # always-on; no flag needed.
         from harness.core import (
+            DEFAULT_RESUME_PATH as _DEFAULT_RESUME_PATH,
+        )
+        from harness.core import (
             ContractRegistry as _ContractRegistry,
         )
         from harness.core import (
             LoopDetector as _LoopDetector,
+        )
+        from harness.core import (
+            ResumeContract as _ResumeContract,
         )
         from harness.core import (
             TipLibrary as _TipLibrary,
@@ -1267,6 +1299,8 @@ async def _run_once(
             if library:
                 tips_obj = library
 
+        resume_obj = _ResumeContract.load(cwd / _DEFAULT_RESUME_PATH)
+
         agent = _build_agent(
             chain=chain,
             base_url=base_url,
@@ -1293,6 +1327,7 @@ async def _run_once(
             loop_detector=loop_detector_obj,
             contracts=contracts_obj,
             tips_provider=tips_obj,
+            resume=resume_obj,
         )
 
         request_kwargs: dict[str, object] = {
@@ -4106,6 +4141,62 @@ def eval_list() -> None:
     console.print(table)
 
 
+@eval_app.command("mutate")
+def eval_mutate(
+    fixture_name: Annotated[
+        str,
+        typer.Argument(help="Fixture directory under evals/fixtures/ to mutate."),
+    ],
+    seed: Annotated[
+        int,
+        typer.Option(
+            "--seed",
+            help="Deterministic seed driving rename choices. Same seed = same mutation.",
+        ),
+    ] = 1,
+    dest: Annotated[
+        Path | None,
+        typer.Option(
+            "--dest",
+            help="Override destination root (default: evals/fixtures-mutated/).",
+        ),
+    ] = None,
+) -> None:
+    """Apply structure-preserving mutations to one fixture.
+
+    Writes a mutated copy under `evals/fixtures-mutated/<seed>-<name>/`
+    with symbol renames applied across source, tests, TASK.md, and
+    EVAL.md. The trap structure stays intact; only naming changes.
+
+    Useful for contamination-resistance checks: run the same eval against
+    the original fixture and the mutated copy. If the model passes
+    only the original (memorized solution) but fails the mutated one,
+    you've detected leakage.
+    """
+    evals_root = _find_evals_root()
+    if evals_root is None:
+        console.print("[red]No evals/fixtures/ directory found — run from the harness repo.[/red]")
+        raise typer.Exit(1)
+    mutator = _load_eval_module("mutator", evals_root)
+    src_dir = evals_root / "fixtures" / fixture_name
+    if not src_dir.is_dir():
+        console.print(f"[red]Fixture {fixture_name!r} not found at {src_dir}.[/red]")
+        raise typer.Exit(1)
+    result = mutator.mutate_fixture(src_dir, seed=seed, dest_root=dest)
+    if not result.renames:
+        console.print(
+            f"[yellow]No renames applied — the fixture didn't contain any "
+            f"of the pool symbols. Copy written to {result.dest_dir}.[/yellow]"
+        )
+        return
+    console.print(f"[green]Mutated {fixture_name} → {result.dest_dir}[/green]")
+    console.print("[bold]Renames:[/bold]")
+    for original, target in result.renames.items():
+        console.print(f"  {original} → {target}")
+    if result.touched_files:
+        console.print(f"[dim]Touched {len(result.touched_files)} file(s).[/dim]")
+
+
 @eval_app.command("run")
 def eval_run(
     fixture_name: Annotated[
@@ -4638,6 +4729,339 @@ def tips_mine(
     for tip in tips:
         library.add(tip, persist=True)
     console.print(f"[green]Added {len(tips)} tip(s)[/green] to {target}")
+
+
+# ---------------------------------------------------------------------------
+# tune subcommands — ACON-style prompt tuner
+# ---------------------------------------------------------------------------
+
+
+@tune_app.command("list")
+def tune_list(
+    cwd: Annotated[Path | None, typer.Option("--cwd")] = None,
+) -> None:
+    """List versioned tunable prompts under `.harness/tuned-prompts/`."""
+    from harness.core.verifier_tuner import DEFAULT_TUNED_DIR, TunablePrompt
+
+    working = (cwd or Path.cwd()).resolve()
+    target_dir = working / DEFAULT_TUNED_DIR
+    if not target_dir.is_dir():
+        console.print(f"[dim]No tuned prompts at {target_dir}.[/dim]")
+        return
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("Key", no_wrap=True)
+    table.add_column("Current version", justify="right")
+    table.add_column("Rationale", overflow="fold")
+    for entry in sorted(target_dir.glob("*.json")):
+        tp = TunablePrompt.load(entry)
+        if tp is None or not tp.versions:
+            continue
+        cur = tp.current
+        assert cur is not None
+        table.add_row(tp.key, str(cur.version), cur.rationale or "[dim](none)[/dim]")
+    console.print(table)
+
+
+@tune_app.command("show")
+def tune_show(
+    key: Annotated[str, typer.Argument(help="Prompt key (e.g. minimal_fix_verifier).")],
+    version: Annotated[int | None, typer.Option("--version", "-v")] = None,
+    cwd: Annotated[Path | None, typer.Option("--cwd")] = None,
+) -> None:
+    """Print one version (default: current) of a tunable prompt."""
+    from harness.core.verifier_tuner import DEFAULT_TUNED_DIR, TunablePrompt
+
+    working = (cwd or Path.cwd()).resolve()
+    path = working / DEFAULT_TUNED_DIR / f"{key}.json"
+    tp = TunablePrompt.load(path)
+    if tp is None or not tp.versions:
+        console.print(f"[red]No versions for {key!r} at {path}.[/red]")
+        raise typer.Exit(1)
+    if version is None:
+        selected = tp.current
+    else:
+        selected = next((v for v in tp.versions if v.version == version), None)
+    if selected is None:
+        console.print(f"[red]Version {version} not found for {key!r}.[/red]")
+        raise typer.Exit(1)
+    console.print(f"[bold]{key} v{selected.version}[/bold]")
+    if selected.rationale:
+        console.print(f"[dim]{selected.rationale}[/dim]")
+    console.print()
+    console.print(selected.text)
+
+
+@tune_app.command("propose")
+def tune_propose(
+    key: Annotated[str, typer.Argument(help="Prompt key to tune.")],
+    current_prompt_file: Annotated[
+        Path,
+        typer.Option("--current", help="File containing the current prompt text."),
+    ],
+    pairs_file: Annotated[
+        Path,
+        typer.Option(
+            "--pairs",
+            help="JSON file with a list of trajectory pairs (see verifier_tuner.TrajectoryPair).",
+        ),
+    ],
+    model: Annotated[str | None, typer.Option("--model", "-m")] = None,
+    provider: Annotated[str | None, typer.Option("--provider", "-p")] = None,
+    notes: Annotated[str | None, typer.Option("--notes")] = None,
+    config_path: Annotated[Path | None, typer.Option("--config")] = None,
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run",
+            help="Print the proposal without writing to .harness/tuned-prompts/.",
+        ),
+    ] = False,
+) -> None:
+    """Ask the configured LLM for a prompt-delta proposal.
+
+    The proposal is printed for review. Pass --dry-run to skip writing;
+    otherwise the new prompt is appended as a new version to
+    `.harness/tuned-prompts/<key>.json` (still requires explicit
+    runtime opt-in to actually use it).
+    """
+    import asyncio
+    import json as _json
+
+    from harness.core.events import Done as _Done
+    from harness.core.events import TextDelta as _TextDelta
+    from harness.core.schemas import Message as _Message
+    from harness.core.verifier_tuner import (
+        DEFAULT_TUNED_DIR,
+        TUNER_SYSTEM,
+        TrajectoryPair,
+        TunablePrompt,
+        TuneRequest,
+        parse_proposal,
+        render_tune_prompt,
+    )
+
+    cfg = _load_cli_config(config_path)
+    chain = _resolve_chain(failover_flag=None, provider_flag=provider, config=cfg)
+    effective_model = model or cfg.default_model or "gemma2:2b"
+    adapter = _build_adapter(chain[0], base_url=None, config=cfg)
+
+    current_text = current_prompt_file.read_text(encoding="utf-8").strip()
+    raw_pairs = _json.loads(pairs_file.read_text(encoding="utf-8"))
+    pairs = [
+        TrajectoryPair(
+            fixture=str(p.get("fixture", "")),
+            defended_excerpt=str(p.get("defended_excerpt", "")),
+            defended_outcome=str(p.get("defended_outcome", "")),
+            bare_excerpt=str(p.get("bare_excerpt", "")),
+            bare_outcome=str(p.get("bare_outcome", "")),
+            differing_dimension=p.get("differing_dimension"),
+        )
+        for p in raw_pairs
+        if isinstance(p, dict)
+    ]
+
+    request = TuneRequest(
+        prompt_key=key,
+        current_prompt=current_text,
+        pairs=pairs,
+        notes=notes or "",
+    )
+
+    user_msg = render_tune_prompt(request)
+
+    async def _go() -> str:
+        chunks: list[str] = []
+        async for ev in adapter.stream(
+            model=effective_model,
+            messages=[
+                _Message(role="system", content=TUNER_SYSTEM),
+                _Message(role="user", content=user_msg),
+            ],
+            temperature=0.0,
+            max_tokens=1500,
+        ):
+            if isinstance(ev, _TextDelta):
+                chunks.append(ev.text)
+            elif isinstance(ev, _Done):
+                break
+        return "".join(chunks)
+
+    response = asyncio.run(_go())
+    delta = parse_proposal(response, prompt_key=key)
+    if delta is None:
+        console.print("[red]Tuner LLM returned no parseable proposal.[/red]")
+        console.print("[dim]Raw response:[/dim]")
+        console.print(response[:1000])
+        raise typer.Exit(1)
+
+    console.print(f"[bold]Proposed delta for {key!r}[/bold]")
+    console.print()
+    console.print(f"[dim]Rationale: {delta.rationale}[/dim]")
+    console.print()
+    console.print(delta.new_prompt)
+
+    if dry_run:
+        console.print("\n[dim]--dry-run: not saving.[/dim]")
+        return
+
+    target = Path.cwd().resolve() / DEFAULT_TUNED_DIR / f"{key}.json"
+    tp = TunablePrompt.load(target) or TunablePrompt(key=key)
+    if not tp.versions:
+        # Seed with the current text as v1 so the diff is auditable.
+        tp.add_version(current_text, rationale="seed: pre-tune baseline")
+    tp.add_version(delta.new_prompt, rationale=delta.rationale)
+    tp.save(target)
+    saved = tp.current
+    assert saved is not None  # add_version above guarantees this
+    console.print(f"\n[green]Saved v{saved.version} to {target}[/green]")
+
+
+@tune_app.command("rollback")
+def tune_rollback(
+    key: Annotated[str, typer.Argument()],
+    cwd: Annotated[Path | None, typer.Option("--cwd")] = None,
+) -> None:
+    """Drop the latest version, restoring the previous one as current."""
+    from harness.core.verifier_tuner import DEFAULT_TUNED_DIR, TunablePrompt
+
+    working = (cwd or Path.cwd()).resolve()
+    path = working / DEFAULT_TUNED_DIR / f"{key}.json"
+    tp = TunablePrompt.load(path)
+    if tp is None or len(tp.versions) <= 1:
+        console.print(f"[red]Nothing to roll back at {path}.[/red]")
+        raise typer.Exit(1)
+    dropped = tp.versions.pop()
+    tp.save(path)
+    remaining = tp.current
+    assert remaining is not None  # we checked len(versions) > 1 above
+    console.print(
+        f"[yellow]Rolled back v{dropped.version}. Current is now v{remaining.version}.[/yellow]"
+    )
+
+
+# ---------------------------------------------------------------------------
+# resume subcommands — cross-session continuity
+# ---------------------------------------------------------------------------
+
+
+@resume_app.command("show")
+def resume_show(
+    cwd: Annotated[Path | None, typer.Option("--cwd")] = None,
+) -> None:
+    """Print the current resume contract (or a hint when missing)."""
+    from harness.core import DEFAULT_RESUME_PATH, ResumeContract
+
+    working = (cwd or Path.cwd()).resolve()
+    path = working / DEFAULT_RESUME_PATH
+    contract = ResumeContract.load(path)
+    if contract is None:
+        console.print(f"[dim]No resume contract at {path}.[/dim]")
+        console.print("Run `harness resume init` to create one.")
+        return
+    rendered = contract.render_for_prompt()
+    if rendered:
+        console.print(rendered)
+    else:
+        console.print(
+            "[yellow]Resume contract loaded but `current` is unset.[/yellow]\n"
+            f"Edit {path} to point at the feature this session should work on."
+        )
+
+
+@resume_app.command("init")
+def resume_init(
+    cwd: Annotated[Path | None, typer.Option("--cwd")] = None,
+    feature: Annotated[
+        str | None,
+        typer.Option("--feature", help="Name of the initial feature to seed."),
+    ] = None,
+    description: Annotated[
+        str | None,
+        typer.Option("--description", help="Description for the initial feature."),
+    ] = None,
+) -> None:
+    """Create a fresh `.harness/resume.json` with a single starter feature."""
+    from harness.core import DEFAULT_RESUME_PATH, FeatureItem, ResumeContract
+
+    working = (cwd or Path.cwd()).resolve()
+    path = working / DEFAULT_RESUME_PATH
+    if path.exists():
+        console.print(f"[yellow]{path} already exists. Use `resume show`.[/yellow]")
+        raise typer.Exit(1)
+    fname = (feature or "first-feature").strip()
+    contract = ResumeContract(
+        current=fname,
+        features=[
+            FeatureItem(
+                name=fname,
+                description=(description or "Describe what shipping this feature means.").strip(),
+                status="in_progress",
+            )
+        ],
+    )
+    contract.save(path)
+    console.print(f"[green]Wrote {path}[/green]")
+
+
+@resume_app.command("set-current")
+def resume_set_current(
+    feature_name: Annotated[str, typer.Argument()],
+    cwd: Annotated[Path | None, typer.Option("--cwd")] = None,
+) -> None:
+    """Point the resume contract at a different feature for the next session."""
+    from harness.core import DEFAULT_RESUME_PATH, ResumeContract
+
+    working = (cwd or Path.cwd()).resolve()
+    path = working / DEFAULT_RESUME_PATH
+    contract = ResumeContract.load(path)
+    if contract is None:
+        console.print(f"[red]No resume contract at {path}.[/red]")
+        raise typer.Exit(1)
+    if contract.feature(feature_name) is None:
+        console.print(
+            f"[red]Feature {feature_name!r} not on the roadmap. " f"Edit {path} to add it.[/red]"
+        )
+        raise typer.Exit(1)
+    contract.current = feature_name
+    contract.save(path)
+    console.print(f"[green]Current feature is now {feature_name!r}[/green]")
+
+
+@resume_app.command("add-feature")
+def resume_add_feature(
+    name: Annotated[str, typer.Argument(help="Kebab-case feature name.")],
+    description: Annotated[str | None, typer.Option("--description")] = None,
+    phases: Annotated[
+        str | None,
+        typer.Option(
+            "--phases",
+            help="Comma-separated phase plan (e.g. implement,test,document,verify).",
+        ),
+    ] = None,
+    cwd: Annotated[Path | None, typer.Option("--cwd")] = None,
+) -> None:
+    """Append a new pending feature to the roadmap."""
+    from harness.core import DEFAULT_RESUME_PATH, FeatureItem, ResumeContract
+
+    working = (cwd or Path.cwd()).resolve()
+    path = working / DEFAULT_RESUME_PATH
+    contract = ResumeContract.load(path) or ResumeContract()
+    if contract.feature(name) is not None:
+        console.print(f"[yellow]Feature {name!r} already exists. No change.[/yellow]")
+        raise typer.Exit(1)
+    phase_list = [p.strip().lower() for p in phases.split(",") if p.strip()] if phases else []
+    contract.features.append(
+        FeatureItem(
+            name=name,
+            description=(description or "").strip(),
+            status="pending",
+            phases=phase_list,
+        )
+    )
+    if contract.current is None:
+        contract.current = name
+    contract.save(path)
+    console.print(f"[green]Added {name!r} to {path}[/green]")
 
 
 if __name__ == "__main__":

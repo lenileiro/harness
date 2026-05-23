@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import pytest
-
 from harness.core.prediction import PredictionOutcome
-from harness.core.repair import RepairDirective, RepairOrchestrator
+from harness.core.repair import RepairOrchestrator
 from harness.core.schemas import ToolResult
 
 
@@ -24,8 +22,12 @@ def _outcome(*, matched: bool, severity: str = "none") -> PredictionOutcome:
         tool_call_id="call_001",
         matched=matched,
         severity=severity,  # type: ignore[arg-type]
-        lesson="prediction_matched" if matched else "future_plans_should_model_action_failure_before_retry",
-        actual_status="ok" if not matched and severity == "none" else ("error" if not matched else "ok"),
+        lesson="prediction_matched"
+        if matched
+        else "future_plans_should_model_action_failure_before_retry",
+        actual_status="ok"
+        if not matched and severity == "none"
+        else ("error" if not matched else "ok"),
     )
 
 
@@ -57,10 +59,18 @@ class TestRepairOrchestrator:
     def test_second_failure_exhausts_workspace_budget(self) -> None:
         repair = RepairOrchestrator()
         # workspace_durable budget=2; two consecutive failures → escalate
-        repair.assess(tool_name="write_file", effect_scope="workspace_durable",
-                      result=_result(is_error=True), outcome=None)
-        directive = repair.assess(tool_name="write_file", effect_scope="workspace_durable",
-                                  result=_result(is_error=True), outcome=None)
+        repair.assess(
+            tool_name="write_file",
+            effect_scope="workspace_durable",
+            result=_result(is_error=True),
+            outcome=None,
+        )
+        directive = repair.assess(
+            tool_name="write_file",
+            effect_scope="workspace_durable",
+            result=_result(is_error=True),
+            outcome=None,
+        )
         assert directive.mode == "escalate"
         assert directive.consecutive_failures == 2
         assert directive.retry_budget_remaining == 0
@@ -79,14 +89,26 @@ class TestRepairOrchestrator:
 
     def test_success_resets_failure_streak(self) -> None:
         repair = RepairOrchestrator()
-        repair.assess(tool_name="write_file", effect_scope="workspace_durable",
-                      result=_result(is_error=True), outcome=None)
+        repair.assess(
+            tool_name="write_file",
+            effect_scope="workspace_durable",
+            result=_result(is_error=True),
+            outcome=None,
+        )
         # Success resets the count
-        repair.assess(tool_name="write_file", effect_scope="workspace_durable",
-                      result=_result(is_error=False), outcome=None)
+        repair.assess(
+            tool_name="write_file",
+            effect_scope="workspace_durable",
+            result=_result(is_error=False),
+            outcome=None,
+        )
         # Failure again → streak starts fresh
-        directive = repair.assess(tool_name="write_file", effect_scope="workspace_durable",
-                                  result=_result(is_error=True), outcome=None)
+        directive = repair.assess(
+            tool_name="write_file",
+            effect_scope="workspace_durable",
+            result=_result(is_error=True),
+            outcome=None,
+        )
         assert directive.consecutive_failures == 1
         assert directive.mode == "continue"
 
@@ -134,15 +156,27 @@ class TestRepairOrchestrator:
     def test_read_only_budget_is_3(self) -> None:
         repair = RepairOrchestrator()
         # Two failures → still within budget
-        repair.assess(tool_name="read_file", effect_scope="read_only",
-                      result=_result(is_error=True), outcome=None)
-        d2 = repair.assess(tool_name="read_file", effect_scope="read_only",
-                           result=_result(is_error=True), outcome=None)
+        repair.assess(
+            tool_name="read_file",
+            effect_scope="read_only",
+            result=_result(is_error=True),
+            outcome=None,
+        )
+        d2 = repair.assess(
+            tool_name="read_file",
+            effect_scope="read_only",
+            result=_result(is_error=True),
+            outcome=None,
+        )
         assert d2.mode == "continue"
         assert d2.retry_budget_remaining == 1
         # Third failure → escalate
-        d3 = repair.assess(tool_name="read_file", effect_scope="read_only",
-                           result=_result(is_error=True), outcome=None)
+        d3 = repair.assess(
+            tool_name="read_file",
+            effect_scope="read_only",
+            result=_result(is_error=True),
+            outcome=None,
+        )
         assert d3.mode == "escalate"
 
     def test_directive_carries_tool_metadata(self) -> None:

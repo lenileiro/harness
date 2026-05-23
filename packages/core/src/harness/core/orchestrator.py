@@ -19,7 +19,7 @@ import uuid
 from collections.abc import AsyncIterator, Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, Protocol
+from typing import TYPE_CHECKING, Any, Literal, Protocol
 
 from pydantic import BaseModel
 
@@ -46,7 +46,14 @@ class _ActivityStore(Protocol):
 
 
 class AgentRole(BaseModel):
-    """Configuration for a role in a multi-agent job."""
+    """Configuration for a role in a multi-agent job.
+
+    Optional ``role_contract`` carries typed inputs/outputs schemas plus
+    authority bounds (allowed tools, cwd subpaths) and a stop condition.
+    When set, the orchestrator validates the role's inputs and outputs
+    against the contract and surfaces violations via the activity ledger.
+    See ``harness.core.role_contract.RoleContract``.
+    """
 
     name: str
     description: str = ""
@@ -56,6 +63,11 @@ class AgentRole(BaseModel):
     current_phase: str | None = None
     model: str | None = None
     max_steps: int | None = None
+    # Optional typed contract — frozen dict shape on the wire so the
+    # orchestrator can serialize it into the activity ledger. We carry
+    # it as `dict[str, Any]` rather than the `RoleContract` dataclass to
+    # avoid a circular import with `role_contract.py`.
+    role_contract: dict[str, Any] | None = None
     # Injected by orchestrator at run time — not set by callers
     job_id: str | None = None
     item_id: str | None = None

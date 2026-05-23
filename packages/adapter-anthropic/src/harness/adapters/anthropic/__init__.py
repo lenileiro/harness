@@ -108,14 +108,24 @@ class AnthropicAdapter:
     @staticmethod
     def _convert_messages(
         messages: list[Message],
-    ) -> tuple[str | None, list[dict[str, Any]]]:
+    ) -> tuple[str | list[dict[str, Any]] | None, list[dict[str, Any]]]:
         """Extract system prompt and convert messages to Anthropic format.
 
-        Returns (system_text_or_None, list_of_anthropic_message_dicts).
+        Returns (system, list_of_anthropic_message_dicts) where `system` is:
+          - None  → no system block
+          - str   → joined system text (legacy fast path)
+          - list  → list of system content blocks (when any system message
+                    has ``cache_breakpoint=True``, the blocks are returned
+                    in list form so the breakpoint block carries
+                    ``cache_control={"type": "ephemeral"}``).
+
         Consecutive tool-result messages (role='tool') are merged into a
         single user turn as Anthropic requires.
         """
-        system_parts: list[str] = []
+        # First pass: collect system parts along with their cache flags.
+        # Second pass below builds the wire-format `messages` list.
+        system_blocks: list[dict[str, Any]] = []
+        has_breakpoint = False
         wire: list[dict[str, Any]] = []
 
         i = 0
@@ -124,7 +134,11 @@ class AnthropicAdapter:
 
             if msg.role == "system":
                 if msg.content:
-                    system_parts.append(msg.content)
+                    block: dict[str, Any] = {"type": "text", "text": msg.content}
+                    if msg.cache_breakpoint:
+                        block["cache_control"] = {"type": "ephemeral"}
+                        has_breakpoint = True
+                    system_blocks.append(block)
                 i += 1
                 continue
 
@@ -169,8 +183,14 @@ class AnthropicAdapter:
             wire.append({"role": "user", "content": msg.content or ""})
             i += 1
 
-        system = "\n\n".join(system_parts) if system_parts else None
-        return system, wire
+        if not system_blocks:
+            return None, wire
+        if has_breakpoint:
+            # Return as block list so the cache_control field rides along.
+            return system_blocks, wire
+        # No cache breakpoint requested → return joined text (legacy shape,
+        # smaller payload).
+        return "\n\n".join(b["text"] for b in system_blocks), wire
 
     @staticmethod
     def _convert_tools(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -244,6 +264,11 @@ class AnthropicAdapter:
                 Usage(
                     prompt_tokens=final.usage.input_tokens,
                     completion_tokens=final.usage.output_tokens,
+                    cache_creation_input_tokens=getattr(
+                        final.usage, "cache_creation_input_tokens", 0
+                    )
+                    or 0,
+                    cache_read_input_tokens=getattr(final.usage, "cache_read_input_tokens", 0) or 0,
                 )
                 if final.usage
                 else None

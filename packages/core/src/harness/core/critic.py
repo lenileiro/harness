@@ -254,21 +254,151 @@ about the mechanism needed (no code). 2-3 sentences.\
 """
 
 
+# ---------------------------------------------------------------------------
+# Aggregators — combine N critic outputs into the final repair-directive prefix
+# ---------------------------------------------------------------------------
+
+# Each aggregator takes the list of (label, text) pairs (one per critic that
+# produced non-empty output) and returns the combined string the repair loop
+# prepends to the directive. Empty return = "no critic signal; skip".
+#
+# Borrowed from `Voting or Consensus? Decision-Making in Multi-Agent Debate`
+# (Kaesberg et al., arXiv 2502.19130). The four protocols below match the
+# paper's taxonomy with our text-only outputs: voting/consensus are quorum
+# rules on which critics produced signal, approval gates on a `[APPROVE]`
+# prefix, and concat is the prior MultiCritic behavior.
+Aggregator = Callable[[list[tuple[str, str]]], str]
+
+
+def _concat(parts: list[tuple[str, str]]) -> str:
+    """Default: emit every non-empty critic verbatim. Backwards-compatible."""
+    return "\n\n".join(f"**{label}:**\n{text}" for label, text in parts)
+
+
+def _majority(parts: list[tuple[str, str]], *, quorum: float = 0.5) -> str:
+    """Voting protocol — emit only when more than `quorum` critics spoke.
+
+    Default quorum 0.5 means *strict majority*: with 3 critics, ≥ 2 must
+    return non-empty text. Useful when one chatty critic shouldn't swing
+    a repair decision; the more critics agree there's a problem, the more
+    weight we give the signal. The paper reports +13.2% on reasoning
+    tasks for voting over flat aggregation.
+    """
+    # `parts` already excludes empty critics, but we need to know the
+    # *total* number of critics that were polled — passed as an extra
+    # closure-bound integer below in `make_majority`.
+    return _concat(parts)  # body is replaced by make_majority closure
+
+
+def make_majority(total_critics: int, *, quorum: float = 0.5) -> Aggregator:
+    """Factory that pins quorum against the known total."""
+    threshold = max(1, int(total_critics * quorum) + 1)
+
+    def _aggregator(parts: list[tuple[str, str]]) -> str:
+        if len(parts) < threshold:
+            return ""
+        return _concat(parts)
+
+    return _aggregator
+
+
+def make_unanimity(total_critics: int) -> Aggregator:
+    """All critics must speak. Conservative — silences when any critic punts."""
+
+    def _aggregator(parts: list[tuple[str, str]]) -> str:
+        if len(parts) < total_critics:
+            return ""
+        return _concat(parts)
+
+    return _aggregator
+
+
+def _approval(parts: list[tuple[str, str]]) -> str:
+    """Approval protocol — only forward when at least one critic starts with
+    ``[APPROVE]`` or the strict-majority of critics that spoke approve.
+
+    Critics opt in by formatting their output as ``[APPROVE] <text>`` or
+    ``[REJECT] <text>`` (case-insensitive). The aggregator strips the
+    marker before passing the text down to the repair loop. Critics that
+    don't follow the convention contribute as plain text.
+    """
+    approves = 0
+    rejects = 0
+    cleaned: list[tuple[str, str]] = []
+    for label, text in parts:
+        stripped = text.lstrip()
+        upper = stripped[:9].upper()
+        if upper.startswith("[APPROVE]"):
+            approves += 1
+            cleaned.append((label, stripped[9:].lstrip()))
+        elif upper.startswith("[REJECT]"):
+            rejects += 1
+            cleaned.append((label, stripped[8:].lstrip()))
+        else:
+            cleaned.append((label, text))
+    # Reject wins ties. If neither side spoke, fall back to concat.
+    if approves > 0 and approves >= rejects:
+        return _concat(cleaned)
+    if approves == 0 and rejects == 0:
+        return _concat(cleaned)
+    return ""
+
+
+# Built-in named aggregators indexed by friendly name. Callers select via
+# the `MultiCritic(... aggregator=...)` kwarg or by passing a string.
+AGGREGATORS: dict[str, Aggregator] = {
+    "concat": _concat,
+    "approval": _approval,
+}
+
+
 class MultiCritic:
-    """Runs two critic perspectives and concatenates their output.
+    """Run N critic perspectives and combine them with a pluggable aggregator.
 
-    Critic 1 (``primary``): identifies the mismatch between the agent's change
-    and what the failing test actually checks (hypothesis challenger).
+    Backwards-compatible with the prior two-critic constructor (``primary``,
+    ``devil``); the new ``critics`` keyword accepts an arbitrary list of
+    (label, critic) pairs. ``aggregator`` chooses how the outputs combine:
 
-    Critic 2 (``devil``): names the correct design pattern and hints at the
-    mechanism without writing code (constructive nudge).
+      • ``"concat"`` (default): every critic that produced text gets emitted.
+      • ``make_majority(N)``:   only emit when a quorum of critics spoke.
+      • ``make_unanimity(N)``:  only emit when every critic spoke.
+      • ``"approval"``:         critics opt-in with ``[APPROVE]``/``[REJECT]``
+                                prefixes; the directive forwards only when
+                                approves ≥ rejects.
 
-    Either or both may be ``None``; missing critics are silently skipped.
+    Either / both legacy critics may be ``None``; missing critics are
+    silently skipped.
     """
 
-    def __init__(self, primary: Critic, devil: Critic | None = None) -> None:
-        self._primary = primary
-        self._devil = devil
+    def __init__(
+        self,
+        primary: Critic | None = None,
+        devil: Critic | None = None,
+        *,
+        critics: list[tuple[str, Critic]] | None = None,
+        aggregator: Aggregator | str = "concat",
+    ) -> None:
+        # Build the unified critic list — legacy positional args go first
+        # so existing test expectations on label order keep working.
+        merged: list[tuple[str, Critic]] = []
+        if primary is not None:
+            merged.append(("Critic 1 — hypothesis check", primary))
+        if devil is not None:
+            merged.append(("Critic 2 — design pattern hint", devil))
+        if critics:
+            merged.extend(critics)
+        self._critics: list[tuple[str, Critic]] = merged
+
+        if isinstance(aggregator, str):
+            try:
+                self._aggregator: Aggregator = AGGREGATORS[aggregator]
+            except KeyError as exc:
+                raise ValueError(
+                    f"unknown aggregator {aggregator!r}; "
+                    f"use one of {list(AGGREGATORS)} or pass a callable"
+                ) from exc
+        else:
+            self._aggregator = aggregator
 
     async def critique(
         self,
@@ -277,25 +407,16 @@ class MultiCritic:
         verification_result: VerificationResult,
         activity: list[ActivityEvent],
     ) -> str:
-        results: list[str] = []
-        primary_text = await self._primary.critique(
-            session=session,
-            verification_result=verification_result,
-            activity=activity,
-        )
-        if primary_text:
-            results.append(f"**Critic 1 — hypothesis check:**\n{primary_text}")
-
-        if self._devil is not None:
-            devil_text = await self._devil.critique(
+        parts: list[tuple[str, str]] = []
+        for label, critic in self._critics:
+            text = await critic.critique(
                 session=session,
                 verification_result=verification_result,
                 activity=activity,
             )
-            if devil_text:
-                results.append(f"**Critic 2 — design pattern hint:**\n{devil_text}")
-
-        return "\n\n".join(results)
+            if text:
+                parts.append((label, text))
+        return self._aggregator(parts)
 
 
 class _DevilLLMCritic:
@@ -361,4 +482,14 @@ def make_multi_critic(
     return MultiCritic(primary=primary, devil=devil)
 
 
-__all__ = ["Critic", "LLMCritic", "MultiCritic", "SearchFn", "make_multi_critic"]
+__all__ = [
+    "AGGREGATORS",
+    "Aggregator",
+    "Critic",
+    "LLMCritic",
+    "MultiCritic",
+    "SearchFn",
+    "make_majority",
+    "make_multi_critic",
+    "make_unanimity",
+]

@@ -6,7 +6,6 @@ import pytest
 
 from harness.core.prediction import (
     ConsequencePredictor,
-    PredictionOutcome,
     ToolPrediction,
     compare_prediction,
 )
@@ -39,7 +38,9 @@ class TestConsequencePredictor:
     def test_workspace_durable_confidence(self) -> None:
         predictor = ConsequencePredictor()
         call = _call("write_file")
-        pred = predictor.predict(tool_name="write_file", call=call, effect_scope="workspace_durable")
+        pred = predictor.predict(
+            tool_name="write_file", call=call, effect_scope="workspace_durable"
+        )
         assert pred.expected_status == "ok"
         assert pred.confidence == pytest.approx(0.74)
         assert pred.reversibility == "git_or_manual"
@@ -47,7 +48,9 @@ class TestConsequencePredictor:
     def test_external_side_effect_is_ok_or_error(self) -> None:
         predictor = ConsequencePredictor()
         call = _call("http_call")
-        pred = predictor.predict(tool_name="http_call", call=call, effect_scope="external_side_effect")
+        pred = predictor.predict(
+            tool_name="http_call", call=call, effect_scope="external_side_effect"
+        )
         assert pred.expected_status == "ok_or_error"
         assert pred.confidence == pytest.approx(0.56)
         assert pred.reversibility == "none"
@@ -84,7 +87,9 @@ class TestConsequencePredictor:
 
 
 class TestComparePrediction:
-    def _prediction(self, *, effect_scope: str | None, override_status: str | None = None) -> ToolPrediction:
+    def _prediction(
+        self, *, effect_scope: str | None, override_status: str | None = None
+    ) -> ToolPrediction:
         predictor = ConsequencePredictor()
         call = _call()
         pred = predictor.predict(tool_name="t", call=call, effect_scope=effect_scope)  # type: ignore[arg-type]
@@ -126,7 +131,9 @@ class TestComparePrediction:
 
     def test_external_side_effect_unexpected_mismatch_is_high(self) -> None:
         # Force blocked_before_execution on external_side_effect, then pass ok result
-        pred = self._prediction(effect_scope="external_side_effect", override_status="blocked_before_execution")
+        pred = self._prediction(
+            effect_scope="external_side_effect", override_status="blocked_before_execution"
+        )
         # actual="ok" doesn't satisfy "blocked_before_execution"
         outcome = compare_prediction(pred, _result(is_error=False))
         assert outcome.matched is False

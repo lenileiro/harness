@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from harness.core.schemas import ToolCall, ToolResult
+from harness.core.schemas import ToolCall
 from harness.core.tools_orchestration import (
     CompleteWorkItemTool,
     CreateWorkItemTool,
@@ -52,7 +52,9 @@ class TestCreateWorkItemTool:
     async def test_optional_description_stored(self) -> None:
         store = InMemoryStorage()
         tool = CreateWorkItemTool(store, parent_id="job_1", cwd=Path("/tmp"))
-        result = await tool(_call("create_work_item", {"title": "Task A", "description": "Details here"}))
+        result = await tool(
+            _call("create_work_item", {"title": "Task A", "description": "Details here"})
+        )
         assert not result.is_error
         tasks = await store.list_tasks(parent_id="job_1")
         assert tasks[0].description == "Details here"

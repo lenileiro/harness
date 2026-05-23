@@ -121,12 +121,22 @@ from harness.core.prompt_injection_probe import (
     scan_text,
 )
 from harness.core.repair import RepairDirective, RepairMode, RepairOrchestrator
+from harness.core.resume import DEFAULT_RESUME_PATH, FeatureItem, ResumeContract
+from harness.core.role_contract import (
+    Authority,
+    ContractValidation,
+    RoleContract,
+    filter_tools_by_authority,
+    validate_inputs,
+    validate_outputs,
+)
 from harness.core.runtime import Agent, fork_session
 from harness.core.schemas import (
     ApprovalDecision,
     Capabilities,
     EffectScope,
     Message,
+    Note,
     PhaseStatus,
     Role,
     RunRequest,
@@ -151,6 +161,7 @@ from harness.core.tools import (
     ToolRegistry,
     tool_matches_phase,
 )
+from harness.core.tools_memory import NotesTool, PruneLedgerTool
 from harness.core.tools_messaging import CheckMessagesTool, NotifyTool
 from harness.core.tools_orchestration import (
     CompleteWorkItemTool,
@@ -186,6 +197,7 @@ from harness.core.verification import (
 __version__ = "0.0.0"
 
 __all__ = [
+    "DEFAULT_RESUME_PATH",
     "ActivityEvent",
     "ActivityStore",
     "Adapter",
@@ -203,6 +215,7 @@ __all__ = [
     "ApprovalPolicy",
     "ApprovalStatus",
     "ApprovalStore",
+    "Authority",
     "AutoApprove",
     "AutoDeny",
     "CalibrationRecord",
@@ -220,6 +233,7 @@ __all__ = [
     "ContextBudget",
     "ContextCompactor",
     "ContractRegistry",
+    "ContractValidation",
     "CreateWorkItemTool",
     "Critic",
     "Critique",
@@ -235,6 +249,7 @@ __all__ = [
     "EvidenceContract",
     "EvidenceContractResult",
     "FailoverPolicy",
+    "FeatureItem",
     "FileCheckpointStore",
     "FileScopeVerifier",
     "FinalResponseStep",
@@ -274,6 +289,8 @@ __all__ = [
     "MultiCritic",
     "NetworkError",
     "NoOpPlanner",
+    "Note",
+    "NotesTool",
     "NotifyTool",
     "OrchestratorEvent",
     "OutcomeCalibration",
@@ -292,13 +309,16 @@ __all__ = [
     "PredictionMismatchEvent",
     "PredictionOutcome",
     "ProgressLedger",
+    "PruneLedgerTool",
     "RateLimitError",
     "RepairDirective",
     "RepairMode",
     "RepairOrchestrator",
     "ReplanRequestedEvent",
     "RequestCritiqueTool",
+    "ResumeContract",
     "Role",
+    "RoleContract",
     "RuleVerifier",
     "RunRequest",
     "Session",
@@ -356,6 +376,7 @@ __all__ = [
     "correlate_defenses",
     "count_tokens",
     "evaluate_evidence",
+    "filter_tools_by_authority",
     "fork_session",
     "format_ledger",
     "get_logger",
@@ -373,4 +394,6 @@ __all__ = [
     "span",
     "start",
     "tool_matches_phase",
+    "validate_inputs",
+    "validate_outputs",
 ]

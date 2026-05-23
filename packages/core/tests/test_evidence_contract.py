@@ -2,20 +2,18 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from harness.core.activity import ActivityEvent
-from pathlib import Path
-
 from harness.core.schemas import Session, VerificationResult
 from harness.core.verification import (
     EvidenceContract,
-    EvidenceContractResult,
     RuleVerifier,
     VerificationGateway,
     evaluate_evidence,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

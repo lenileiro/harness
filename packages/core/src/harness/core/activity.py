@@ -113,6 +113,47 @@ TOOL_CALL_PREDICTION_ERROR = "tool_call.prediction_error"
 CALIBRATION_UPDATED = "calibration.updated"
 """Emitted after each prediction outcome adjusts the confidence score."""
 
+# Sub-agent role contracts
+ROLE_CONTRACT_VIOLATION = "role_contract.violation"
+"""Emitted when a sub-agent's input or output doesn't match its RoleContract.
+
+Event data shape:
+    {"role": str, "kind": "inputs"|"outputs",
+     "issues": list[str], "session_id": str}
+
+Advisory — the orchestrator logs the violation and continues. The CLI's
+defense ledger surfaces it so reviewers can spot contract drift.
+"""
+
+# Memory-as-Action (notes scratchpad + ledger pruning)
+NOTE_WRITTEN = "note.written"
+"""Emitted when the agent writes a note to its scratchpad."""
+NOTE_DELETED = "note.deleted"
+"""Emitted when the agent deletes a note by id."""
+LEDGER_PRUNED = "ledger.pruned"
+"""Emitted when the agent drops paired tool exchanges via the prune_ledger tool.
+
+Event data shape:
+    {"messages_dropped": int, "pairs_dropped": int, "pairs_remaining": int}
+"""
+
+# Cross-session resume
+RESUME_INJECTED = "resume.injected"
+"""Emitted at run start when a ResumeContract is loaded and rendered.
+
+Event data shape:
+    {"current": str|None, "feature_count": int}
+"""
+
+# Token + prompt-cache accounting
+USAGE_RECORDED = "usage.recorded"
+"""Emitted once per adapter turn with prompt/completion + cache token counts.
+
+Event data shape:
+    {"prompt_tokens": int, "completion_tokens": int,
+     "cache_creation_input_tokens": int, "cache_read_input_tokens": int}
+"""
+
 # Repair
 REPAIR_DIRECTIVE_ISSUED = "repair.directive_issued"
 """Emitted when the RepairOrchestrator issues a directive after a tool call."""
@@ -194,6 +235,9 @@ __all__ = [
     "CONTEXT_PRUNED",
     "ENV_CONTRACT_INJECTED",
     "INTER_AGENT_MESSAGE",
+    "LEDGER_PRUNED",
+    "NOTE_DELETED",
+    "NOTE_WRITTEN",
     "ORCHESTRATOR_JOB_COMPLETED",
     "ORCHESTRATOR_JOB_STARTED",
     "ORCHESTRATOR_PHASE_COMPLETED",
@@ -202,6 +246,8 @@ __all__ = [
     "PHASE_DECLARED",
     "PROCEDURAL_TIP_INJECTED",
     "REPAIR_DIRECTIVE_ISSUED",
+    "RESUME_INJECTED",
+    "ROLE_CONTRACT_VIOLATION",
     "STEP_COMPLETED",
     "STEP_STARTED",
     "TOOL_CALL_COMPLETED",
@@ -209,6 +255,7 @@ __all__ = [
     "TOOL_CALL_PREDICTED",
     "TOOL_CALL_PREDICTION_ERROR",
     "TRAJECTORY_REGULATED",
+    "USAGE_RECORDED",
     "VERIFICATION_COMPLETED",
     "WORK_ITEM_CLAIMED",
     "WORK_ITEM_COMPLETED",

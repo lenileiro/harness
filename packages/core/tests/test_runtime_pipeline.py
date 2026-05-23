@@ -11,10 +11,8 @@ import pytest
 from harness.core import (
     Agent,
     ApprovalPolicy,
-    AutoApprove,
     ConfigurationError,
     ConsequencePredictor,
-    Done,
     Event,
     FailoverPolicy,
     InboxApprovalHandler,
@@ -325,6 +323,7 @@ class TestConfigurationErrors:
     async def test_no_model_raises_configuration_error(self, tmp_path: Path) -> None:
         adapter = MockAdapter("mock", scripts=[text_turn("hi")])
         from harness.core import ToolRegistry
+
         storage = MockStorage()
         agent = Agent(
             adapters={"mock": adapter},  # type: ignore[arg-type]

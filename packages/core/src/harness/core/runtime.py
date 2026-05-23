@@ -74,6 +74,7 @@ from harness.core.planner import NoOpPlanner, PlanContext, Planner
 from harness.core.prediction import ConsequencePredictor, ToolPrediction, compare_prediction
 from harness.core.procedural_skill import TipsProvider
 from harness.core.repair import RepairOrchestrator
+from harness.core.resume import ResumeContract
 from harness.core.schemas import Message, RunRequest, Session, ToolCall, ToolResult
 from harness.core.storage import Storage
 from harness.core.telemetry import get_logger, span
@@ -145,6 +146,8 @@ class Agent:
         loop_detector: LoopDetector | None = None,
         contracts: ContractRegistry | None = None,
         tips_provider: TipsProvider | None = None,
+        resume: ResumeContract | None = None,
+        memory_tools_enabled: bool = False,
     ) -> None:
         if not adapters:
             raise ConfigurationError("at least one adapter is required")
@@ -209,6 +212,17 @@ class Agent:
         """L2 — procedural skill (tips). When set, the runtime queries the
         provider with the task text at run start and prepends matching
         tips to the system message. None disables L2."""
+        self._resume = resume
+        """Optional ResumeContract loaded from `.harness/resume.json`.
+        When present, the runtime injects a system block describing the
+        in-flight feature so a fresh session knows where to pick up."""
+        self._memory_tools_enabled = memory_tools_enabled
+        """Whether to register Memory-as-Action tools (notes, prune_ledger)
+        on the session at run start. The tools need a live Session ref
+        so they're registered lazily here, not at agent construction."""
+        self._memory_tools_registered = False
+        """Idempotent guard so the tools are only registered once even
+        if the same Agent instance handles multiple runs."""
 
     # ------------------------------------------------------------------ #
     # Approval replay                                                     #
@@ -363,20 +377,68 @@ class Agent:
         if self._loop_detector is not None:
             self._loop_detector.reset()
 
+        # Memory-as-Action tools need a live Session ref, so register
+        # them here at run start once we have one. Idempotent so the same
+        # Agent instance reused across multiple runs only registers once.
+        if self._memory_tools_enabled and not self._memory_tools_registered:
+            from harness.core.tools_memory import NotesTool, PruneLedgerTool
+
+            if not self.tools.has("notes"):
+                self.tools.register(NotesTool(session=session, activity_store=self.activity_store))
+            if not self.tools.has("prune_ledger"):
+                self.tools.register(
+                    PruneLedgerTool(session=session, activity_store=self.activity_store)
+                )
+            self._memory_tools_registered = True
+
         # Before appending the new user turn, replay any approvals the user
         # has granted out-of-band. This mutates the queued-for-approval tool
         # results in-place so the model sees real outcomes when it resumes.
         await self._replay_granted_approvals(session)
 
-        # Load memories once per run so they're injected into every adapter turn.
+        # Build the system-message prefix in cache-friendly order: most-
+        # stable content first, least-stable last. The same bytes need to
+        # appear turn-over-turn for the provider's prompt cache to hit,
+        # so the ordering matters even before we set explicit anchors.
+        #
+        # Stability ranking (most stable → least):
+        #   1. system_prompt        — model-wide, hand-authored, never changes
+        #   2. memory_store entries — workspace-wide, slow-changing
+        #   3. L1 contracts         — matched-against-task but stable for run
+        #   4. L2 procedural tips   — same
+        #   5. result_type schema   — per-RunRequest
+        #   6. phase hint (later)   — per-RunRequest
+        #
+        # The last system block before the volatile transcript gets a
+        # `cache_breakpoint=True` flag so cache-aware adapters can plant
+        # an explicit anchor. Adapters that ignore the flag still benefit
+        # from byte-identical prefixes via implicit prefix caching.
+        # See: `Don't Break the Cache` (arXiv 2601.06007, Jan 2026).
         memory_prefix: list[Message] = []
+        if self.system_prompt:
+            memory_prefix.append(Message(role="system", content=self.system_prompt))
         if self.memory_store is not None:
             entries = await self.memory_store.list_memory(limit=20)
             if entries:
                 text = "\n".join(f"[{e.kind}] {e.text}" for e in entries)
-                memory_prefix = [Message(role="system", content=f"Remembered context:\n{text}")]
-        if self.system_prompt:
-            memory_prefix.append(Message(role="system", content=self.system_prompt))
+                memory_prefix.append(Message(role="system", content=f"Remembered context:\n{text}"))
+
+        # Resume contract — cross-session continuity. Injected after the
+        # system prompt + workspace memories but before per-task signals
+        # (contracts, tips) so the model orients itself to "I'm picking
+        # up feature X" before reasoning about the current prompt.
+        if self._resume is not None:
+            rendered_resume = self._resume.render_for_prompt()
+            if rendered_resume:
+                memory_prefix.append(Message(role="system", content=rendered_resume))
+                await self._emit(
+                    session,
+                    activity_kinds.RESUME_INJECTED,
+                    {
+                        "current": self._resume.current,
+                        "feature_count": len(self._resume.features),
+                    },
+                )
 
         # L1 — environment contracts. Matched contracts become a single
         # system block prepended to the run. The block is high-priority
@@ -503,6 +565,23 @@ class Agent:
                     "cannot complete a phase that isn't the currently in-flight one."
                 )
                 memory_prefix.append(Message(role="system", content=hint))
+
+        # Notes scratchpad (Memory-as-Action). Render the current notes
+        # as a separate system block so the model sees its own prior
+        # observations even after older transcript exchanges are pruned.
+        if session.notes:
+            note_lines = ["[harness:notes] your scratchpad:"]
+            for note in session.notes:
+                tag_part = f" [{','.join(note.tags)}]" if note.tags else ""
+                note_lines.append(f"  - ({note.id}{tag_part}) {note.text}")
+            memory_prefix.append(Message(role="system", content="\n".join(note_lines)))
+
+        # Mark the last system block of the prefix as the cache anchor.
+        # Everything from index 0 up to and including this block is the
+        # stable prefix for this run; adapters that support explicit
+        # cache markers will place one here.
+        if memory_prefix:
+            memory_prefix[-1] = memory_prefix[-1].model_copy(update={"cache_breakpoint": True})
 
         plan = await self.planner.plan(
             request.prompt,
@@ -994,6 +1073,19 @@ class Agent:
                 if isinstance(event, Done):
                     final = event.final_message
                     usage = event.usage
+                    # Surface token + cache stats to the activity ledger
+                    # so the defense ledger can compute cache hit ratios.
+                    if usage is not None:
+                        await self._emit(
+                            session,
+                            activity_kinds.USAGE_RECORDED,
+                            {
+                                "prompt_tokens": usage.prompt_tokens,
+                                "completion_tokens": usage.completion_tokens,
+                                "cache_creation_input_tokens": usage.cache_creation_input_tokens,
+                                "cache_read_input_tokens": usage.cache_read_input_tokens,
+                            },
+                        )
                     break
                 if isinstance(event, TextDelta):
                     char_count += len(event.text)

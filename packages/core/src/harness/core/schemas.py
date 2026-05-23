@@ -87,6 +87,14 @@ class Message(BaseModel):
       - system / user: `content` required, no tool_calls / tool_call_id
       - assistant:     `content` optional, `tool_calls` optional
       - tool:          `content` required, `tool_call_id` required, `name` required
+
+    `cache_breakpoint=True` is a hint to cache-aware adapters: place a
+    provider-specific cache anchor on this message so the prefix up to
+    and including it is cached for subsequent turns. The runtime sets
+    this on the last stable system block when ordering messages for a
+    cache-friendly layout (`Don't Break the Cache`, arXiv 2601.06007).
+    Adapters that don't support explicit cache markers ignore it; the
+    ordering itself still produces prefix-cache hits via byte match.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -96,6 +104,7 @@ class Message(BaseModel):
     tool_calls: list[ToolCall] | None = None
     tool_call_id: str | None = None
     name: str | None = None
+    cache_breakpoint: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -120,14 +129,44 @@ class Capabilities(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+class Note(BaseModel):
+    """An agent-authored scratchpad entry attached to a session.
+
+    Notes are the *additive* half of Memory-as-Action (arXiv 2510.12635):
+    the agent uses a tool to write a durable observation it wants to
+    keep around even when older transcript messages are pruned. The
+    runtime injects the current notes list as a system block on every
+    turn, so the agent can refer back to them without paying for the
+    raw transcript bytes.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(default_factory=lambda: _new_id("note"))
+    text: str
+    created_at: datetime = Field(default_factory=_utcnow)
+    tags: list[str] = Field(default_factory=list)
+
+
 class Usage(BaseModel):
-    """Token accounting for a single adapter turn."""
+    """Token accounting for a single adapter turn.
+
+    The ``cache_*`` fields are populated by providers that surface prompt-
+    cache statistics (Anthropic via ``cache_creation_input_tokens`` /
+    ``cache_read_input_tokens``). Adapters that don't expose them leave
+    the fields at 0; the defense ledger uses non-zero values to track
+    cache hit ratios over a run.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     prompt_tokens: int = 0
     completion_tokens: int = 0
     total_tokens: int = 0
+    cache_creation_input_tokens: int = 0
+    """Tokens written into the provider's prompt cache on this turn."""
+    cache_read_input_tokens: int = 0
+    """Tokens served from the provider's prompt cache on this turn."""
 
 
 # ---------------------------------------------------------------------------
@@ -240,6 +279,10 @@ class Session(BaseModel):
     """Ordered list of declared phases. Populated from ``RunRequest.phases``
     at run start (if set) and updated as the agent advances. Defaults to
     empty for backward compatibility with existing serialized sessions."""
+    notes: list[Note] = Field(default_factory=list)
+    """Agent-authored scratchpad. Written via the ``notes`` tool; injected
+    as a system block on each turn so the agent can carry observations
+    across context-budget prunes. Memory-as-Action (arXiv 2510.12635)."""
 
     def touch(self) -> None:
         """Bump `updated_at` to now."""
@@ -290,6 +333,7 @@ __all__ = [
     "Capabilities",
     "EffectScope",
     "Message",
+    "Note",
     "Role",
     "RunRequest",
     "Session",

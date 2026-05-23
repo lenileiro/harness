@@ -24,6 +24,7 @@ from harness.core.activity import (
     REPAIR_DIRECTIVE_ISSUED,
     TOOL_CALL_COMPLETED,
     TRAJECTORY_REGULATED,
+    USAGE_RECORDED,
     VERIFICATION_COMPLETED,
     ActivityEvent,
 )
@@ -48,6 +49,12 @@ class DefenseLedger:
     tips_injected: int = 0
     actions_canonicalized: int = 0
     trajectory_regulations: int = 0
+    # Prompt-cache accounting (Anthropic-style cache_read / cache_creation
+    # tokens). Aggregated across all turns of the run. The hit ratio is
+    # surfaced in `format_ledger` when at least one cache-aware turn fired.
+    cache_creation_tokens: int = 0
+    cache_read_tokens: int = 0
+    prompt_tokens_total: int = 0
 
     def is_empty(self) -> bool:
         return (
@@ -61,7 +68,17 @@ class DefenseLedger:
             and self.tips_injected == 0
             and self.actions_canonicalized == 0
             and self.trajectory_regulations == 0
+            and self.cache_creation_tokens == 0
+            and self.cache_read_tokens == 0
         )
+
+    @property
+    def cache_hit_ratio(self) -> float | None:
+        """Fraction of input tokens served from cache. None if no cache data."""
+        cache_eligible = self.cache_read_tokens + self.cache_creation_tokens
+        if cache_eligible == 0:
+            return None
+        return self.cache_read_tokens / cache_eligible
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -76,6 +93,9 @@ class DefenseLedger:
             "tips_injected": self.tips_injected,
             "actions_canonicalized": self.actions_canonicalized,
             "trajectory_regulations": self.trajectory_regulations,
+            "cache_creation_tokens": self.cache_creation_tokens,
+            "cache_read_tokens": self.cache_read_tokens,
+            "prompt_tokens_total": self.prompt_tokens_total,
         }
 
 
@@ -108,6 +128,10 @@ def build_ledger(activity: list[ActivityEvent]) -> DefenseLedger:
             ledger.actions_canonicalized += 1
         elif ev.kind == TRAJECTORY_REGULATED:
             ledger.trajectory_regulations += 1
+        elif ev.kind == USAGE_RECORDED:
+            ledger.prompt_tokens_total += int(ev.data.get("prompt_tokens", 0) or 0)
+            ledger.cache_creation_tokens += int(ev.data.get("cache_creation_input_tokens", 0) or 0)
+            ledger.cache_read_tokens += int(ev.data.get("cache_read_input_tokens", 0) or 0)
     return ledger
 
 
@@ -153,6 +177,13 @@ def format_ledger(ledger: DefenseLedger) -> str:
         life_parts.append(f"L4 regulate x{ledger.trajectory_regulations}")
     if life_parts:
         lines.append("  lifeharness: " + ", ".join(life_parts))
+    if ledger.cache_read_tokens or ledger.cache_creation_tokens:
+        ratio = ledger.cache_hit_ratio
+        ratio_str = f"{ratio:.1%}" if ratio is not None else "n/a"
+        lines.append(
+            f"  cache: {ledger.cache_read_tokens} read / "
+            f"{ledger.cache_creation_tokens} written (hit ratio {ratio_str})"
+        )
     return "\n".join(lines)
 
 
