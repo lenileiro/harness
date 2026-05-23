@@ -93,6 +93,15 @@ class PhaseTool:
         self._session_id = session_id
         self._activity_store = activity_store
         self.parameters_schema = _PHASE_SCHEMA
+        # In-memory state. The activity log is the durable record (for the
+        # verifier and external readers), but we can't always reconstruct
+        # state from it: the CLI registers the tool BEFORE a session id is
+        # known, so filtering activity by ``session_id`` returns empty and
+        # the tool's own derivation breaks. The in-memory mirror means
+        # advisory checks always see the truth, regardless of session-id
+        # plumbing.
+        self._declared_order: list[str] = []
+        self._completed_names: set[str] = set()
 
     async def __call__(self, call: ToolCall) -> ToolResult:
         args = call.arguments if isinstance(call.arguments, dict) else {}
@@ -181,7 +190,22 @@ class PhaseTool:
                         )
                         side_effects.append((activity_kinds.PHASE_DECLARED, name))
 
-        # Write side-effect events (synthetic declares) before the primary one.
+        # Mirror state changes into our in-memory store FIRST so the next
+        # call sees them even when the activity store's session_id filter
+        # is unwired. Then write the durable record to the activity log.
+        for side_kind, side_name in side_effects:
+            if side_kind == activity_kinds.PHASE_DECLARED:
+                if side_name not in self._declared_order:
+                    self._declared_order.append(side_name)
+            elif side_kind == activity_kinds.PHASE_COMPLETED:
+                self._completed_names.add(side_name)
+        if not skip_primary_event:
+            if action == "declare":
+                if name not in self._declared_order:
+                    self._declared_order.append(name)
+            else:  # complete
+                self._completed_names.add(name)
+
         if self._activity_store is not None:
             for side_kind, side_name in side_effects:
                 ev = ActivityEvent(
@@ -214,48 +238,19 @@ class PhaseTool:
         )
 
     async def _derive_state(self) -> tuple[list[str], set[str]]:
-        """Return (declared_order, completed_names) from this session's activity log."""
-        if self._activity_store is None or self._session_id is None:
-            return [], set()
-        events = await self._activity_store.list_activity(
-            session_id=self._session_id,
-            kinds=(activity_kinds.PHASE_DECLARED, activity_kinds.PHASE_COMPLETED),
-            limit=500,
-        )
-        declared_order: list[str] = []
-        completed: set[str] = set()
-        for ev in events:
-            pname = str((ev.data or {}).get("phase", "")).strip().lower()
-            if not pname:
-                continue
-            if ev.kind == activity_kinds.PHASE_DECLARED and pname not in declared_order:
-                declared_order.append(pname)
-            elif ev.kind == activity_kinds.PHASE_COMPLETED:
-                completed.add(pname)
-        return declared_order, completed
+        """Return (declared_order, completed_names) for the current run.
+
+        Reads from the tool's in-memory mirror — fast, session-id-free, and
+        always-correct regardless of whether the activity store's
+        session_id filter is wired. The activity log remains the durable
+        record consumed by external readers (verifier, CLI render); the
+        in-memory state here is just for the advisory-warning logic.
+        """
+        return list(self._declared_order), set(self._completed_names)
 
     async def _status(self, call: ToolCall) -> ToolResult:
-        if self._activity_store is None or self._session_id is None:
-            return ToolResult(
-                tool_call_id=call.id,
-                name=self.name,
-                content="no activity store wired; status unavailable",
-            )
-        events = await self._activity_store.list_activity(
-            session_id=self._session_id,
-            kinds=(activity_kinds.PHASE_DECLARED, activity_kinds.PHASE_COMPLETED),
-            limit=200,
-        )
-        declared: list[str] = []
-        completed: set[str] = set()
-        for ev in events:
-            name = str((ev.data or {}).get("phase", "")).strip()
-            if not name:
-                continue
-            if ev.kind == activity_kinds.PHASE_DECLARED and name not in declared:
-                declared.append(name)
-            elif ev.kind == activity_kinds.PHASE_COMPLETED:
-                completed.add(name)
+        declared = list(self._declared_order)
+        completed = set(self._completed_names)
         if not declared:
             content = "no phases declared yet"
         else:

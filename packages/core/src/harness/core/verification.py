@@ -215,6 +215,32 @@ def _first_user_message(session: Session) -> str:
     return next((m.content or "" for m in session.messages if m.role == "user"), "")
 
 
+def _looks_like_feature_add(prompt: str) -> bool:
+    """Heuristic: is this a feature-add task or a bug-fix task?
+
+    Looks at the *first non-empty heading line* (stripped of leading ``#``
+    or other markup). Bug-fix prompts start with verbs like ``fix``,
+    ``debug``, ``handle``; feature-add prompts start with ``add``,
+    ``implement``, ``create``, ``support``. Body text isn't consulted, so
+    phrases like "Do not fix them" don't trigger false positives.
+    """
+    if not prompt:
+        return False
+    header = ""
+    for line in prompt.splitlines():
+        stripped = line.strip().lstrip("#").strip()
+        if stripped:
+            header = stripped.lower()
+            break
+    if not header:
+        return False
+    feature_verbs = ("add ", "implement ", "create ", "support ", "introduce ")
+    bug_verbs = ("fix ", "debug ", "handle ", "resolve ", "repair ", "patch ")
+    starts_with_feature = any(header.startswith(v) for v in feature_verbs)
+    starts_with_bug = any(header.startswith(v) for v in bug_verbs)
+    return starts_with_feature and not starts_with_bug
+
+
 def _last_assistant_text(session: Session) -> str:
     for m in reversed(session.messages):
         if m.role == "assistant" and m.content:
@@ -1821,6 +1847,20 @@ class TestsBeforeEditVerifier:
             return VerificationResult(
                 can_finish=True,
                 reason="verify_work ran before first edit — tests informed the fix",
+                verifier_name=self.name,
+            )
+
+        # Feature-add bypass: this verifier exists to catch wrong-diagnosis
+        # bug-fix patterns. Feature-add tasks have nothing to reproduce —
+        # the new code doesn't exist yet, so running tests first wouldn't
+        # surface a failing test that informs the fix. Detect the task
+        # class from the *first heading line* of the prompt — that line
+        # cleanly states the user's intent without false-positive matches
+        # from body text like "Do not fix them."
+        if _looks_like_feature_add(_first_user_message(session)):
+            return VerificationResult(
+                can_finish=True,
+                reason="feature-add task — tests-before-edit bypass",
                 verifier_name=self.name,
             )
 
