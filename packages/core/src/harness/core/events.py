@@ -110,6 +110,33 @@ class Critique(_EventBase):
     text: str
 
 
+class PhaseStartedEvent(_EventBase):
+    """Emitted by the runtime when a phase is declared (started).
+
+    Fires both when the runtime pre-declares phases from
+    ``RunRequest.phases`` and when the agent advances via the ``phase``
+    tool. Consumers render this as ``Phase 2/4: test...`` and similar.
+    """
+
+    type: Literal["phase_started"] = "phase_started"
+    name: str
+    notes: str = ""
+    index: int = 0
+    """Zero-based index in the session's phase list at the time of declaration."""
+    total: int = 0
+    """Total declared phases at the time of declaration."""
+
+
+class PhaseCompletedEvent(_EventBase):
+    """Emitted by the runtime when a phase is marked complete."""
+
+    type: Literal["phase_completed"] = "phase_completed"
+    name: str
+    notes: str = ""
+    index: int = 0
+    total: int = 0
+
+
 class PredictionEvent(_EventBase):
     """Pre-execution prediction committed by ConsequencePredictor.
 
@@ -177,6 +204,8 @@ Event = Annotated[
     | ErrorEvent
     | Verification
     | Critique
+    | PhaseStartedEvent
+    | PhaseCompletedEvent
     | PredictionEvent
     | PredictionMismatchEvent
     | ModelRequestEvent
@@ -194,6 +223,8 @@ __all__ = [
     "GuardrailTrippedEvent",
     "HandoffEvent",
     "ModelRequestEvent",
+    "PhaseCompletedEvent",
+    "PhaseStartedEvent",
     "PredictionEvent",
     "PredictionMismatchEvent",
     "StepCompleted",

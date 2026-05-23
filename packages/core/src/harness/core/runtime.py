@@ -378,6 +378,58 @@ class Agent:
             {"provider": session.provider, "model": session.model, "prompt": request.prompt},
         )
 
+        # Native phase tracking.
+        #
+        # The LLM owns phase creation: it declares phases via the `phase`
+        # tool and the tool enforces gating (no new declare while another
+        # phase is in flight, completes must match the in-flight phase).
+        # The runtime's job here is to keep session.phases in sync with
+        # the activity log so the verifier and the CLI render see a single
+        # source of truth, and to inject a system-message hint when the
+        # caller passed RunRequest.phases as a suggested plan.
+        existing_names = {p.name for p in session.phases}
+
+        # Replay any phase events written outside the current run (resumed
+        # sessions, external `harness phase ...` CLI calls). The events
+        # become PhaseStatus entries; session.phases is the merged view.
+        if self.activity_store is not None:
+            ext_events = await self.activity_store.list_activity(
+                session_id=session.id,
+                kinds=(activity_kinds.PHASE_DECLARED, activity_kinds.PHASE_COMPLETED),
+                limit=500,
+            )
+            from harness.core.schemas import PhaseStatus as _PhaseStatus
+
+            for ev in ext_events:
+                name = str((ev.data or {}).get("phase", "")).strip().lower()
+                if not name:
+                    continue
+                if ev.kind == activity_kinds.PHASE_DECLARED and name not in existing_names:
+                    session.phases.append(_PhaseStatus(name=name))
+                    existing_names.add(name)
+                elif ev.kind == activity_kinds.PHASE_COMPLETED:
+                    existing = session.phase_by_name(name)
+                    if existing is not None and existing.completed_at is None:
+                        existing.completed_at = ev.timestamp
+
+        # RunRequest.phases is a *hint*, not a pre-declaration. Inject a
+        # system message so the LLM sees the suggested plan and declares
+        # each phase via the tool — that way every phase still has to pass
+        # through the tool's gate.
+        if request.phases:
+            suggested = [p.strip().lower() for p in request.phases if p.strip()]
+            if suggested:
+                hint = (
+                    "The caller suggested phasing this work as: "
+                    + ", ".join(suggested)
+                    + ". For each phase, call phase(action='declare', name='<phase>') "
+                    "before starting work, then phase(action='complete', name='<phase>') "
+                    "with evidence when done. Each transition is gated by the runtime — "
+                    "you cannot declare a new phase while another is in flight, and you "
+                    "cannot complete a phase that isn't the currently in-flight one."
+                )
+                memory_prefix.append(Message(role="system", content=hint))
+
         plan = await self.planner.plan(
             request.prompt,
             PlanContext(
@@ -599,6 +651,66 @@ class Agent:
         if not self._compactor.should_compact(session.messages):
             return
         session.messages = await self._compactor.compact(session.messages)
+
+    async def _apply_phase_transition(
+        self, session: Session, call: ToolCall, result: ToolResult
+    ) -> AsyncIterator[Event]:
+        """Mutate session.phases and emit a phase event when `call` was the
+        phase tool. No-op otherwise. Tool metadata is the contract; the tool
+        itself stays stateless.
+
+        Errors here are non-fatal: a missing key or unrecognized action
+        silently skips the transition.
+        """
+        if call.name != "phase" or result.is_error:
+            return
+        meta = result.metadata or {}
+        action = str(meta.get("action", "")).lower()
+        name = str(meta.get("phase", "")).strip().lower()
+        if not action or not name or action not in ("declare", "complete"):
+            return
+
+        from harness.core.events import PhaseCompletedEvent, PhaseStartedEvent
+        from harness.core.schemas import PhaseStatus
+
+        existing = session.phase_by_name(name)
+        notes = str((call.arguments or {}).get("notes") or "")
+
+        if action == "declare":
+            if existing is None:
+                session.phases.append(PhaseStatus(name=name, notes=[notes] if notes else []))
+                existing = session.phases[-1]
+            elif notes:
+                existing.notes.append(notes)
+            idx = session.phases.index(existing)
+            yield PhaseStartedEvent(
+                name=name,
+                notes=notes,
+                index=idx,
+                total=len(session.phases),
+            )
+        else:  # complete
+            if existing is None:
+                # Complete without declare — record retroactively so the
+                # lifecycle stays consistent.
+                phase = PhaseStatus(name=name, notes=[notes] if notes else [])
+                phase.completed_at = phase.declared_at
+                session.phases.append(phase)
+                existing = phase
+            else:
+                from datetime import UTC, datetime
+
+                existing.completed_at = datetime.now(UTC)
+                if notes:
+                    existing.notes.append(notes)
+            idx = session.phases.index(existing)
+            yield PhaseCompletedEvent(
+                name=name,
+                notes=notes,
+                index=idx,
+                total=len(session.phases),
+            )
+        session.touch()
 
     async def _run_verification(self, session: Session) -> AsyncIterator[Event]:
         """Call the configured verifier, emit Verification event + activity."""
@@ -904,6 +1016,14 @@ class Agent:
                 )
                 session.touch()
                 yield ToolResultEvent(result=result)
+
+                # Phase tracking: when the agent calls the `phase` tool the
+                # runtime owns the state transition. The tool's metadata
+                # carries action + name; we mutate session.phases here and
+                # emit a lifecycle event so consumers see the transition
+                # without polling activity logs.
+                async for phase_ev in self._apply_phase_transition(session, tool_call, result):
+                    yield phase_ev
 
         raise InternalError(f"exceeded max_steps={request.max_steps} without final answer")
 

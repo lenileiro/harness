@@ -1701,6 +1701,66 @@ class MinimalFixVerifier:
 
 
 # ---------------------------------------------------------------------------
+# PhaseGateVerifier
+# ---------------------------------------------------------------------------
+
+
+class PhaseGateVerifier:
+    """Block Done when declared phases are outstanding.
+
+    Reads native phase state on ``session.phases`` (populated by the
+    runtime from ``RunRequest.phases`` and from ``phase`` tool calls).
+    Refuses ``can_finish`` when any declared phase has no ``completed_at``
+    timestamp.
+
+    Silently passes when ``session.phases`` is empty — phase tracking is
+    opt-in, not enforced on every run.
+
+    Why: the most common sycophancy failure mode on multi-step tasks is
+    the agent claiming completion of work it never actually did
+    ("I implemented and tested it" when no tests ran). With phases as
+    first-class runtime state, "tests done" requires an explicit
+    ``phase(action='complete', name='test')`` transition, not narrative.
+    """
+
+    name = "phase_gate"
+
+    async def verify(
+        self, *, session: Session, activity: list[ActivityEvent]
+    ) -> VerificationResult:
+        if not session.phases:
+            return VerificationResult(
+                can_finish=True,
+                reason="no phases declared — nothing to enforce",
+                confidence=0.4,
+                verifier_name=self.name,
+            )
+
+        outstanding = [p.name for p in session.phases if not p.is_complete]
+        declared_order = [p.name for p in session.phases]
+        if outstanding:
+            return VerificationResult(
+                can_finish=False,
+                reason=(
+                    f"You declared phase(s) {declared_order} but these are "
+                    f"still outstanding: {outstanding}. Finish each one and "
+                    f"call phase(action='complete', name='<phase>') with "
+                    f"evidence, or revisit the plan if the original phasing "
+                    f"was wrong."
+                ),
+                confidence=0.9,
+                verifier_name=self.name,
+            )
+
+        return VerificationResult(
+            can_finish=True,
+            reason=f"all {len(declared_order)} declared phase(s) completed",
+            confidence=0.9,
+            verifier_name=self.name,
+        )
+
+
+# ---------------------------------------------------------------------------
 # TestsBeforeEditVerifier
 # ---------------------------------------------------------------------------
 
@@ -1917,6 +1977,7 @@ __all__ = [
     "LLMJudgeVerifier",
     "MinimalFixVerifier",
     "MisdirectedSuggestionVerifier",
+    "PhaseGateVerifier",
     "RuleVerifier",
     "ShellVerifier",
     "StateVerifier",

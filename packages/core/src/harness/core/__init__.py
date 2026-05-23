@@ -52,6 +52,8 @@ from harness.core.events import (
     GuardrailTrippedEvent,
     HandoffEvent,
     ModelRequestEvent,
+    PhaseCompletedEvent,
+    PhaseStartedEvent,
     PredictionEvent,
     PredictionMismatchEvent,
     StepCompleted,
@@ -110,6 +112,7 @@ from harness.core.schemas import (
     Capabilities,
     EffectScope,
     Message,
+    PhaseStatus,
     Role,
     RunRequest,
     Session,
@@ -133,11 +136,13 @@ from harness.core.tools import (
     ToolRegistry,
     tool_matches_phase,
 )
+from harness.core.tools_messaging import CheckMessagesTool, NotifyTool
 from harness.core.tools_orchestration import (
     CompleteWorkItemTool,
     CreateWorkItemTool,
     ListWorkItemsTool,
 )
+from harness.core.tools_phases import PhaseTool
 from harness.core.tools_verification import RequestCritiqueTool, VerifyWorkTool
 from harness.core.verification import (
     ChainedVerifier,
@@ -150,6 +155,7 @@ from harness.core.verification import (
     LLMJudgeVerifier,
     MinimalFixVerifier,
     MisdirectedSuggestionVerifier,
+    PhaseGateVerifier,
     RuleVerifier,
     ShellVerifier,
     StateVerifier,
@@ -188,6 +194,7 @@ __all__ = [
     "CancelledError",
     "Capabilities",
     "ChainedVerifier",
+    "CheckMessagesTool",
     "CheckpointStore",
     "ClaimGroundingVerifier",
     "CompleteWorkItemTool",
@@ -245,9 +252,15 @@ __all__ = [
     "MultiCritic",
     "NetworkError",
     "NoOpPlanner",
+    "NotifyTool",
     "OrchestratorEvent",
     "OutcomeCalibration",
     "PendingApproval",
+    "PhaseCompletedEvent",
+    "PhaseGateVerifier",
+    "PhaseStartedEvent",
+    "PhaseStatus",
+    "PhaseTool",
     "Plan",
     "PlanContext",
     "PlanRejectedEvent",

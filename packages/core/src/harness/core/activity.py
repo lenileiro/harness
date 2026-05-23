@@ -117,6 +117,24 @@ CALIBRATION_UPDATED = "calibration.updated"
 REPAIR_DIRECTIVE_ISSUED = "repair.directive_issued"
 """Emitted when the RepairOrchestrator issues a directive after a tool call."""
 
+# Phase tracking (coordination primitive)
+PHASE_DECLARED = "phase.declared"
+"""Emitted when an agent or external caller declares the start of a phase."""
+PHASE_COMPLETED = "phase.completed"
+"""Emitted when a phase is marked complete."""
+
+# Inter-agent messaging (coordination primitive for MultiAgentOrchestrator)
+INTER_AGENT_MESSAGE = "inter_agent.message"
+"""Emitted when an agent sends a broadcast message to the rest of its job.
+
+Event data shape:
+    {"from_role": "<sender role/name>", "text": "<message body>"}
+
+Other agents in the same job (filtered by task_id) can read these via the
+``check_messages`` tool. This is a coarse broadcast channel — there's no
+explicit addressing — which keeps the protocol simple. Routing semantics
+(planner-only, peer-only, etc.) are a future refinement."""
+
 # Multi-agent orchestration
 ORCHESTRATOR_JOB_STARTED = "orchestrator.job_started"
 ORCHESTRATOR_JOB_COMPLETED = "orchestrator.job_completed"
@@ -140,10 +158,13 @@ __all__ = [
     "APPROVAL_REQUESTED",
     "CALIBRATION_UPDATED",
     "CONTEXT_PRUNED",
+    "INTER_AGENT_MESSAGE",
     "ORCHESTRATOR_JOB_COMPLETED",
     "ORCHESTRATOR_JOB_STARTED",
     "ORCHESTRATOR_PHASE_COMPLETED",
     "ORCHESTRATOR_PHASE_STARTED",
+    "PHASE_COMPLETED",
+    "PHASE_DECLARED",
     "REPAIR_DIRECTIVE_ISSUED",
     "STEP_COMPLETED",
     "STEP_STARTED",

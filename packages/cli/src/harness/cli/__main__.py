@@ -68,6 +68,7 @@ from harness.core import (
     ApprovalStore,
     AutoApprove,
     ChainedVerifier,
+    CheckMessagesTool,
     ClaimGroundingVerifier,
     CompleteWorkItemTool,
     ConsequencePredictor,
@@ -89,7 +90,12 @@ from harness.core import (
     MinimalFixVerifier,
     MisdirectedSuggestionVerifier,
     MultiAgentOrchestrator,
+    NotifyTool,
     PendingApproval,
+    PhaseCompletedEvent,
+    PhaseGateVerifier,
+    PhaseStartedEvent,
+    PhaseTool,
     Planner,
     PlanRejectedEvent,
     PredictionEvent,
@@ -211,6 +217,18 @@ eval_app = typer.Typer(
 )
 app.add_typer(eval_app, name="eval")
 
+phase_app = typer.Typer(
+    name="phase",
+    help=(
+        "Coordination primitive for multi-step tasks. External agents "
+        "(Claude Code, Cursor, etc.) can shell out to `harness phase` "
+        "to record SDLC progress against the most recent session, and "
+        "the structural PhaseGateVerifier reads the same activity log."
+    ),
+    no_args_is_help=True,
+)
+app.add_typer(phase_app, name="phase")
+
 console = Console()
 
 KNOWN_PROVIDERS: tuple[str, ...] = ("ollama", "openrouter")
@@ -331,6 +349,14 @@ class SpawnAgentsTool:
             job_id = role.job_id or "_job_"
             item_id = role.item_id or "_item_"
             sub_tools = ToolRegistry()
+
+            # Inter-agent messaging — every sub-agent gets notify + check
+            # scoped to the job_id, so peers can broadcast progress and
+            # blockers without waiting for the parent to harvest results.
+            sub_tools.register(NotifyTool(role=role.name, task_id=job_id, activity_store=store))
+            sub_tools.register(
+                CheckMessagesTool(role=role.name, task_id=job_id, activity_store=store)
+            )
 
             if role.name == "planner":
                 sub_tools.register(ListDirTool(cwd=self._cwd))
@@ -662,6 +688,11 @@ def _build_agent(
 
     tools = _build_tools(cwd)
     tools.register(VerifyWorkTool(cwd=cwd))
+    # PhaseTool is always registered so external callers (the `harness phase`
+    # CLI) and internal agents share the same activity-event vocabulary.
+    # The PhaseGateVerifier only fires when the agent actually declared
+    # phases, so registering this tool is free for tasks that don't use it.
+    tools.register(PhaseTool(activity_store=activity_store))
     primary_adapter = adapters[chain[0]]
     tools.register(
         RequestCritiqueTool(
@@ -698,6 +729,7 @@ def _build_agent(
         enforce_verify = VerifyBeforeDoneVerifier()
         enforce_alignment = DiagnosisAlignmentVerifier()
         enforce_no_scope_creep = MisdirectedSuggestionVerifier()
+        enforce_phase_gate = PhaseGateVerifier()
         structural = ChainedVerifier(
             enforce_scope,
             enforce_minimal,
@@ -705,6 +737,7 @@ def _build_agent(
             enforce_verify,
             enforce_alignment,
             enforce_no_scope_creep,
+            enforce_phase_gate,
         )
         verifier = ChainedVerifier(structural, verifier) if verifier is not None else structural
     elif profile == "minimal":
@@ -994,6 +1027,19 @@ def run(
             hidden=True,
         ),
     ] = False,
+    phases: Annotated[
+        str | None,
+        typer.Option(
+            "--phases",
+            help=(
+                "Comma-separated phase names to pre-declare on the session "
+                "(e.g. --phases implement,test,document,verify). Runtime "
+                "tracks state natively; PhaseGateVerifier (in strict profile) "
+                "refuses Done until all phases are completed via the phase "
+                "tool."
+            ),
+        ),
+    ] = None,
     verbose: Annotated[
         bool, typer.Option("--verbose", "-v", help="Enable DEBUG logging to stderr.")
     ] = False,
@@ -1050,6 +1096,7 @@ def run(
                 auto_compact=auto_compact,
                 max_repair=max_repair,
                 profile=profile,
+                phases=phases,
                 config=cfg,
             )
         )
@@ -1082,6 +1129,7 @@ async def _run_once(
     auto_compact: bool = False,
     max_repair: int = 3,
     profile: str = "minimal",
+    phases: str | None = None,
     config: HarnessConfig,
 ) -> None:
     storage = _build_storage(db=db, in_memory=in_memory, cwd=cwd)
@@ -1145,6 +1193,10 @@ async def _run_once(
             request_kwargs["session_id"] = session_id
         if task_id:
             request_kwargs["task_id"] = task_id
+        if phases:
+            parsed_phases = [p.strip().lower() for p in phases.split(",") if p.strip()]
+            if parsed_phases:
+                request_kwargs["phases"] = parsed_phases
         request = RunRequest(**request_kwargs)  # type: ignore[arg-type]
 
         last_verification: Verification | None = None
@@ -2591,6 +2643,16 @@ class Renderer:
             for line in event.text.splitlines():
                 self._console.print(f"  [yellow]{line}[/yellow]")
             self._console.print()
+        elif isinstance(event, PhaseStartedEvent):
+            self._flush_text()
+            position = f" {event.index + 1}/{event.total}" if event.total > 1 else ""
+            note = f"  [dim]{event.notes}[/dim]" if event.notes else ""
+            self._console.print(f"[cyan]▶ phase{position}: {event.name}[/cyan]{note}")
+        elif isinstance(event, PhaseCompletedEvent):
+            self._flush_text()
+            position = f" {event.index + 1}/{event.total}" if event.total > 1 else ""
+            note = f"  [dim]{event.notes}[/dim]" if event.notes else ""
+            self._console.print(f"[green]✓ phase{position}: {event.name}[/green]{note}")
         elif isinstance(event, PredictionEvent):
             p = event.prediction
             scope = p.effect_scope or "unknown"
@@ -3735,6 +3797,139 @@ def lab_resume(
             await storage.close()
 
     asyncio.run(_run())
+
+
+# ---------------------------------------------------------------------------
+# phase subcommands — external coordination primitive
+# ---------------------------------------------------------------------------
+
+
+async def _latest_session_id(storage: Storage) -> str | None:
+    """Most recent session in the workspace (None if storage is empty)."""
+    sessions = await storage.list(limit=1)  # type: ignore[attr-defined]
+    return sessions[0].id if sessions else None
+
+
+async def _append_phase_event(storage: Storage, kind: str, name: str, notes: str) -> str | None:
+    """Append a phase-* activity event to the most recent session."""
+    sid = await _latest_session_id(storage)
+    if sid is None:
+        return None
+    data: dict[str, Any] = {"phase": name}
+    if notes:
+        data["notes"] = notes
+    event = ActivityEvent(session_id=sid, kind=kind, data=data)
+    await storage.append_activity(event)  # type: ignore[attr-defined]
+    return sid
+
+
+@phase_app.command("declare")
+def phase_declare(
+    name: Annotated[str, typer.Argument(help="Phase name (e.g. implement, test).")],
+    notes: Annotated[
+        str | None,
+        typer.Option("--notes", "-n", help="Optional one-line note about this phase start."),
+    ] = None,
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+    in_memory: Annotated[bool, typer.Option("--in-memory")] = False,
+) -> None:
+    """Record the start of a phase against the most recent session."""
+
+    async def _go() -> None:
+        storage = _build_storage(db=db, in_memory=in_memory)
+        try:
+            sid = await _append_phase_event(
+                storage, "phase.declared", name.strip().lower(), (notes or "").strip()
+            )
+            if sid is None:
+                console.print(
+                    "[yellow]No sessions found in workspace storage. Run `harness run` "
+                    "at least once before declaring phases.[/yellow]"
+                )
+                raise typer.Exit(1)
+            console.print(f"[green]declared[/green] phase {name!r}  (session {sid})")
+        finally:
+            if isinstance(storage, SQLiteStorage):
+                await storage.close()
+
+    asyncio.run(_go())
+
+
+@phase_app.command("complete")
+def phase_complete(
+    name: Annotated[str, typer.Argument(help="Phase name to mark complete.")],
+    notes: Annotated[
+        str | None,
+        typer.Option("--notes", "-n", help="Optional note about what was achieved."),
+    ] = None,
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+    in_memory: Annotated[bool, typer.Option("--in-memory")] = False,
+) -> None:
+    """Mark a phase as complete against the most recent session."""
+
+    async def _go() -> None:
+        storage = _build_storage(db=db, in_memory=in_memory)
+        try:
+            sid = await _append_phase_event(
+                storage, "phase.completed", name.strip().lower(), (notes or "").strip()
+            )
+            if sid is None:
+                console.print("[yellow]No sessions found in workspace storage.[/yellow]")
+                raise typer.Exit(1)
+            console.print(f"[green]completed[/green] phase {name!r}  (session {sid})")
+        finally:
+            if isinstance(storage, SQLiteStorage):
+                await storage.close()
+
+    asyncio.run(_go())
+
+
+@phase_app.command("status")
+def phase_status(
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+    in_memory: Annotated[bool, typer.Option("--in-memory")] = False,
+) -> None:
+    """List declared / completed phases for the most recent session."""
+
+    async def _go() -> None:
+        storage = _build_storage(db=db, in_memory=in_memory)
+        try:
+            sid = await _latest_session_id(storage)
+            if sid is None:
+                console.print("[dim]No sessions yet.[/dim]")
+                return
+            events = await storage.list_activity(  # type: ignore[attr-defined]
+                session_id=sid,
+                kinds=("phase.declared", "phase.completed"),
+                limit=200,
+            )
+            declared: list[str] = []
+            completed: list[str] = []
+            for ev in events:
+                pname = str((ev.data or {}).get("phase", "")).strip()
+                if not pname:
+                    continue
+                if ev.kind == "phase.declared" and pname not in declared:
+                    declared.append(pname)
+                elif ev.kind == "phase.completed" and pname not in completed:
+                    completed.append(pname)
+            console.print(f"session: [dim]{sid}[/dim]")
+            if not declared:
+                console.print("[dim]no phases declared[/dim]")
+                return
+            console.print(f"declared (in order): {', '.join(declared)}")
+            if completed:
+                console.print(f"completed: {', '.join(completed)}")
+            outstanding = [p for p in declared if p not in completed]
+            if outstanding:
+                console.print(f"[yellow]outstanding:[/yellow] {', '.join(outstanding)}")
+            else:
+                console.print("[green]all declared phases completed[/green]")
+        finally:
+            if isinstance(storage, SQLiteStorage):
+                await storage.close()
+
+    asyncio.run(_go())
 
 
 # ---------------------------------------------------------------------------

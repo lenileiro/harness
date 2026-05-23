@@ -131,6 +131,39 @@ class Usage(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Phase status (native runtime coordination state)
+# ---------------------------------------------------------------------------
+
+
+class PhaseStatus(BaseModel):
+    """A single phase in a multi-step task — declared, in-flight, or done.
+
+    Phases are a first-class runtime concept: callers can declare an
+    ordered list via ``RunRequest.phases`` (or omit them entirely), the
+    agent advances them via the ``phase`` tool, and the runtime emits
+    ``PhaseStartedEvent`` / ``PhaseCompletedEvent`` so consumers (CLI,
+    eval, external coordinators) see transitions live.
+
+    Status transitions are append-only on declared_at and completed_at:
+    once declared, a phase can either stay declared (in flight) or move
+    to completed. Reopening a completed phase is not modeled.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    """Lowercase identifier, e.g. 'implement', 'test', 'document'."""
+    declared_at: datetime = Field(default_factory=_utcnow)
+    completed_at: datetime | None = None
+    notes: list[str] = Field(default_factory=list)
+    """Optional notes captured at declare- and complete-time, oldest first."""
+
+    @property
+    def is_complete(self) -> bool:
+        return self.completed_at is not None
+
+
+# ---------------------------------------------------------------------------
 # Run request (input to Agent.run)
 # ---------------------------------------------------------------------------
 
@@ -167,6 +200,12 @@ class RunRequest(BaseModel):
     """When True, the runtime forces the model to call at least one tool before
     emitting a final answer. Prevents models from answering from memory when
     tool evidence is required."""
+    phases: list[str] | None = None
+    """Optional ordered list of phase names the runtime should track. When
+    set, the runtime pre-populates :attr:`Session.phases` with declared
+    entries and ``PhaseGateVerifier`` will refuse Done until each one has
+    been completed. When None, phases are still trackable via the
+    ``phase`` tool but the runtime doesn't pre-declare any."""
 
 
 # ---------------------------------------------------------------------------
@@ -197,10 +236,26 @@ class Session(BaseModel):
     / standalone sessions; set when a session was created under `--task T-NNN`."""
     forked_from: str | None = None
     """Parent session id when this session was created via `harness sessions fork`."""
+    phases: list[PhaseStatus] = Field(default_factory=list)
+    """Ordered list of declared phases. Populated from ``RunRequest.phases``
+    at run start (if set) and updated as the agent advances. Defaults to
+    empty for backward compatibility with existing serialized sessions."""
 
     def touch(self) -> None:
         """Bump `updated_at` to now."""
         self.updated_at = _utcnow()
+
+    def phase_by_name(self, name: str) -> PhaseStatus | None:
+        """Return the phase entry with this name, or None."""
+        lookup = name.strip().lower()
+        for phase in self.phases:
+            if phase.name == lookup:
+                return phase
+        return None
+
+    def outstanding_phases(self) -> list[str]:
+        """Names of declared phases that haven't been completed yet."""
+        return [p.name for p in self.phases if not p.is_complete]
 
 
 # ---------------------------------------------------------------------------
