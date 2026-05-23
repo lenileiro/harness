@@ -1,0 +1,1 @@
+{"text": "Use uv run, not bare python \u2014 the workspace runs in a uv venv.", "triggers": ["uv", "python"], "weight": 1.0, "id": "tip_fcd97cf56a", "source_session_id": null, "regex": false, "created_at": 1779566517.855327}

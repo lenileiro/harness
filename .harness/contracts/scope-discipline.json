@@ -1,0 +1,10 @@
+{
+  "name": "scope-discipline",
+  "rules": [
+    "Change only what the user prompt asked for. Do not 'while I'm here' fix unrelated noise (typos, unused imports, comment styles).",
+    "Call verify_work and read its output before declaring a task done.",
+    "If tests fail, do not say they passed."
+  ],
+  "triggers": [],
+  "priority": 5
+}

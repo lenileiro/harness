@@ -123,6 +123,39 @@ PHASE_DECLARED = "phase.declared"
 PHASE_COMPLETED = "phase.completed"
 """Emitted when a phase is marked complete."""
 
+# LifeHarness layers — L1 (env contract), L2 (procedural skill), L3 (action
+# realization), L4 (trajectory regulation). Each layer emits a single kind
+# whenever it acts so the defense ledger and the eval can attribute
+# behavior to the right layer.
+ENV_CONTRACT_INJECTED = "env_contract.injected"
+"""L1 — a learned/authored environment contract was prepended to the run.
+
+Event data shape:
+    {"contracts": [{"name": str, "trigger": str|None}], "count": int}
+"""
+PROCEDURAL_TIP_INJECTED = "procedural_tip.injected"
+"""L2 — one or more reusable tips matched the current task and were injected.
+
+Event data shape:
+    {"tips": [{"id": str, "trigger": str|None, "weight": float}], "count": int}
+"""
+ACTION_CANONICALIZED = "action.canonicalized"
+"""L3 — the action realization layer rewrote a tool call before dispatch.
+
+Event data shape:
+    {"original_name": str, "canonical_name": str, "reason": str,
+     "tool_call_id": str}
+
+Recorded once per repair. The dispatched tool name is the canonical one;
+the original is preserved here so audits can spot how often L3 fires."""
+TRAJECTORY_REGULATED = "trajectory.regulated"
+"""L4 — the loop detector intervened (e.g., repeated identical tool call).
+
+Event data shape:
+    {"pattern": "tool_repeat"|"no_progress", "tool": str|None,
+     "repeats": int, "directive": str}
+"""
+
 # Inter-agent messaging (coordination primitive for MultiAgentOrchestrator)
 INTER_AGENT_MESSAGE = "inter_agent.message"
 """Emitted when an agent sends a broadcast message to the rest of its job.
@@ -146,6 +179,7 @@ WORK_ITEM_COMPLETED = "work_item.completed"
 
 
 __all__ = [
+    "ACTION_CANONICALIZED",
     "AGENT_RUN_CANCELLED",
     "AGENT_RUN_COMPLETED",
     "AGENT_RUN_FAILED",
@@ -158,6 +192,7 @@ __all__ = [
     "APPROVAL_REQUESTED",
     "CALIBRATION_UPDATED",
     "CONTEXT_PRUNED",
+    "ENV_CONTRACT_INJECTED",
     "INTER_AGENT_MESSAGE",
     "ORCHESTRATOR_JOB_COMPLETED",
     "ORCHESTRATOR_JOB_STARTED",
@@ -165,6 +200,7 @@ __all__ = [
     "ORCHESTRATOR_PHASE_STARTED",
     "PHASE_COMPLETED",
     "PHASE_DECLARED",
+    "PROCEDURAL_TIP_INJECTED",
     "REPAIR_DIRECTIVE_ISSUED",
     "STEP_COMPLETED",
     "STEP_STARTED",
@@ -172,6 +208,7 @@ __all__ = [
     "TOOL_CALL_DISPATCHED",
     "TOOL_CALL_PREDICTED",
     "TOOL_CALL_PREDICTION_ERROR",
+    "TRAJECTORY_REGULATED",
     "VERIFICATION_COMPLETED",
     "WORK_ITEM_CLAIMED",
     "WORK_ITEM_COMPLETED",

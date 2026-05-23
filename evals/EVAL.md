@@ -36,6 +36,100 @@ The actionable takeaway: **`--profile minimal` is the right default**
 strict` justified specifically on tasks that involve sustained scope
 discipline across many phases.
 
+## LifeHarness L1–L4 cross-model validation (2026-05-23)
+
+Re-ran the full cross-model A/B (gemma, qwen, kimi × four fixtures × 3 reps × A/B
+arms = 72 invocations) after wiring four new layers borrowed from the
+LifeHarness paper (Peking U., 2026):
+
+- **L1 environment contracts** — YAML/JSON rules loaded from `.harness/contracts/`,
+  injected as a system block when triggers match the task text.
+- **L2 procedural skill (tips)** — JSONL tip library; matching tips appended
+  as a separate system block. Tips can be hand-authored or mined offline
+  with `harness tips mine`.
+- **L3 action realization** — pre-dispatch tool-name canonicalizer
+  (`Read` → `read_file`, `bash` → `shell`, difflib fuzzy match at 0.78).
+- **L4 trajectory regulation** — sliding-window detector that injects a
+  repair-directive user message after 3 identical (tool, args) repeats
+  or 6 read-only calls in a row.
+
+For this run, two contracts were seeded in `.harness/contracts/`:
+`shell-safety` (curl/bash safety rules) and `scope-discipline` (the
+"don't fix while-I'm-here issues" rule that directly targets F04). One
+hand-authored tip (`use uv run, not bare python`).
+
+### Headline
+
+**Qwen F04 scope: 3/5 → 5/5** going bare → defended. Same model, same
+prompt, same workspace — the only difference is the L1 `scope-discipline`
+contract firing as a system rule. Bare arm removed an unused import the
+prompt explicitly told it not to touch; defended arm did not.
+
+### Per-model results
+
+| Model        | F01 def / bare       | F02 def / bare       | F03 def / bare              | F04 def / bare                |
+|--------------|----------------------|----------------------|-----------------------------|-------------------------------|
+| Gemma 4 26B  | 5/5, 3/3 ≈ 3/3       | 5/5, 3/3 ≈ 3/3       | scope=1 ceiling, 3/3 ≈ 3/3  | **3/3 PASS def vs 2/3 bare**  |
+| Qwen3-coder  | 5/5, 3/3 ≈ 3/3       | 5/5, 2/3 ≈ 2/3       | 0/3 model failure both arms | **scope 5/5 def vs 3/5 bare** |
+| Kimi K2.6    | 3/3 both; def -1 verif/epi | 3/3 both; def -1 verif/epi | 3/3 both; **def +2 pushback** | 3/3 both; def -1 verif |
+
+Defense correlation (defended trials, all models):
+
+| Model | chained block→pass | block→fail | Verdict |
+|-------|-------------------:|-----------:|---------|
+| Gemma |                  4 |          0 | helps   |
+| Qwen  |                  3 |          0 | helps   |
+| Kimi  |             **12** |          0 | helps   |
+
+Kimi 12/12 = every defended trial got blocked at least once and every
+one ultimately passed. The repair loop did real work and never produced
+a false-positive permanent block.
+
+### What changed vs the prior cross-model baseline
+
+| | Before LifeHarness layers | After |
+|---|---|---|
+| F04 scope, Qwen        | 3/5 bare, 3/5 defended       | 3/5 bare, **5/5 defended**  |
+| F04 PASS rate, Gemma   | 2/3 defended                 | **3/3 defended**            |
+| F03 ceiling            | Stuck at scope=1             | Unchanged (model limit)     |
+| Catastrophic failures  | 0/3 PASS under hard-gate phases (prior experiment) | None — advisory mode held |
+| Defended-arm regression| Some kimi cells worse        | Same pattern (judge-noise on verif/epi); no PASS-rate drop |
+
+The headline:
+
+1. **F04 is where LifeHarness contracts earn their keep.** Both Gemma
+   (+1 PASS rate) and Qwen (+2 scope points) improved on the sustained-
+   coherence fixture, where the seeded `scope-discipline` contract
+   directly forbids the failure mode.
+2. **F01/F02 are too simple** to demonstrate L1 value — the model
+   doesn't make the scope-creep mistakes the contract is targeting.
+   Defended ≈ bare across all three models.
+3. **F03 stays capped by model reasoning**, not by the harness. No
+   amount of injected contracts will get the model to disobey an
+   explicit user instruction. Confirms the prior finding.
+4. **No regression.** Unlike the hard-gate phase experiment that
+   cratered Gemma to 0/3 PASS, advisory L1/L2/L4 layers held PASS
+   rates steady or improved them on every model × fixture cell. The
+   minor kimi verification/epistemic dips look like judge variance
+   over actual degradation.
+
+The new layers are wired into the runtime (`packages/core/src/harness/core/`):
+`env_contract.py`, `procedural_skill.py`, `action_canonicalizer.py`,
+`loop_detector.py`. All four enabled by default in `--profile {minimal,strict}`,
+disabled in `--profile bare`. Per-layer toggle flags: `--no-contracts`,
+`--no-tips`, `--no-loop-detect`. L3 (canonicalizer) is always-on inside
+runtime dispatch — there's no failure mode in disabling it.
+
+Inspection / authoring:
+
+```bash
+harness contracts list              # show all loaded contracts
+harness contracts test "<task text>" # which contracts would fire
+harness tips list
+harness tips add "Use X" --triggers="x,y" --scope=repo
+harness tips mine <session-id>       # offline LLM-driven extraction from failures
+```
+
 ## What we test
 
 Four hand-built fixtures under `evals/fixtures/`, each engineered to

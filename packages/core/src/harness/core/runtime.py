@@ -40,6 +40,7 @@ from harness.core.budget import ContextBudget, count_tokens, prune
 from harness.core.calibration import OutcomeCalibration
 from harness.core.compactor import ContextCompactor
 from harness.core.critic import Critic
+from harness.core.env_contract import ContractRegistry
 from harness.core.errors import (
     CancelledError,
     ConfigurationError,
@@ -67,9 +68,11 @@ from harness.core.events import (
 )
 from harness.core.failover import FailoverPolicy, classify
 from harness.core.guardrails import Guardrail
+from harness.core.loop_detector import LoopDetector
 from harness.core.memory import MemoryStore
 from harness.core.planner import NoOpPlanner, PlanContext, Planner
 from harness.core.prediction import ConsequencePredictor, ToolPrediction, compare_prediction
+from harness.core.procedural_skill import TipsProvider
 from harness.core.repair import RepairOrchestrator
 from harness.core.schemas import Message, RunRequest, Session, ToolCall, ToolResult
 from harness.core.storage import Storage
@@ -139,6 +142,9 @@ class Agent:
         system_prompt: str | None = None,
         compactor: ContextCompactor | None = None,
         guardrails: list[Guardrail] | None = None,
+        loop_detector: LoopDetector | None = None,
+        contracts: ContractRegistry | None = None,
+        tips_provider: TipsProvider | None = None,
     ) -> None:
         if not adapters:
             raise ConfigurationError("at least one adapter is required")
@@ -190,6 +196,19 @@ class Agent:
         self._compactor = compactor
         self.guardrails: list[Guardrail] = guardrails or []
         self._tool_cache: dict[str, ToolResult] = {}
+        self._loop_detector = loop_detector
+        """L4 — trajectory regulation. When set, the runtime observes every
+        tool call and appends a synthetic user-role message with a repair
+        directive if a degenerate pattern (repeat / no-progress) trips.
+        None disables the layer entirely."""
+        self._contracts = contracts
+        """L1 — environment contracts. A ContractRegistry whose matching
+        contracts are rendered into a system message and injected at run
+        start. None disables L1; an empty registry is a no-op."""
+        self._tips_provider = tips_provider
+        """L2 — procedural skill (tips). When set, the runtime queries the
+        provider with the task text at run start and prepends matching
+        tips to the system message. None disables L2."""
 
     # ------------------------------------------------------------------ #
     # Approval replay                                                     #
@@ -339,6 +358,11 @@ class Agent:
     async def _run(self, request: RunRequest) -> AsyncIterator[Event]:
         session = await self._get_or_create_session(request)
 
+        # Fresh window for the loop detector — resumes shouldn't carry
+        # signatures from a prior run.
+        if self._loop_detector is not None:
+            self._loop_detector.reset()
+
         # Before appending the new user turn, replay any approvals the user
         # has granted out-of-band. This mutates the queued-for-approval tool
         # results in-place so the model sees real outcomes when it resumes.
@@ -353,6 +377,56 @@ class Agent:
                 memory_prefix = [Message(role="system", content=f"Remembered context:\n{text}")]
         if self.system_prompt:
             memory_prefix.append(Message(role="system", content=self.system_prompt))
+
+        # L1 — environment contracts. Matched contracts become a single
+        # system block prepended to the run. The block is high-priority
+        # context: it lists hard rules the model is expected to obey for
+        # this specific environment/task.
+        if self._contracts is not None:
+            rendered = self._contracts.render(request.prompt)
+            if rendered:
+                matched = self._contracts.match(request.prompt)
+                memory_prefix.append(Message(role="system", content=rendered))
+                await self._emit(
+                    session,
+                    activity_kinds.ENV_CONTRACT_INJECTED,
+                    {
+                        "contracts": [{"name": c.name, "priority": c.priority} for c in matched],
+                        "count": len(matched),
+                    },
+                )
+
+        # L2 — procedural tips. Distilled lessons from prior failed runs;
+        # whichever match the task text get injected as a separate system
+        # block (kept distinct from contracts so the model treats them as
+        # advisory rather than as hard rules).
+        if self._tips_provider is not None:
+            try:
+                tips = self._tips_provider.query(request.prompt, top_k=3)
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.warning("agent.tips.query_failed", error=str(exc))
+                tips = []
+            if tips:
+                tip_block = "\n".join(
+                    ["[harness:L2 procedural tips] lessons from prior runs:"]
+                    + [f"  • {t.text}" for t in tips]
+                )
+                memory_prefix.append(Message(role="system", content=tip_block))
+                await self._emit(
+                    session,
+                    activity_kinds.PROCEDURAL_TIP_INJECTED,
+                    {
+                        "tips": [
+                            {
+                                "id": t.id,
+                                "weight": t.weight,
+                                "source_session_id": t.source_session_id,
+                            }
+                            for t in tips
+                        ],
+                        "count": len(tips),
+                    },
+                )
 
         if request.result_type is not None:
             import json as _json_schema
@@ -1025,6 +1099,26 @@ class Agent:
                 async for phase_ev in self._apply_phase_transition(session, tool_call, result):
                     yield phase_ev
 
+                # L4 — trajectory regulation. The detector keeps its own
+                # sliding-window state; we feed it every call and act on
+                # any finding it returns. The directive is appended as a
+                # user message so the model sees it on the next turn.
+                if self._loop_detector is not None:
+                    finding = self._loop_detector.observe(tool_call, result)
+                    if finding is not None:
+                        await self._emit(
+                            session,
+                            activity_kinds.TRAJECTORY_REGULATED,
+                            finding.as_event_data(),
+                        )
+                        session.messages.append(
+                            Message(
+                                role="user",
+                                content=f"[harness:L4 loop-detector] {finding.directive}",
+                            )
+                        )
+                        session.touch()
+
         raise InternalError(f"exceeded max_steps={request.max_steps} without final answer")
 
     # ------------------------------------------------------------------ #
@@ -1057,6 +1151,32 @@ class Agent:
             activity_kinds.TOOL_CALL_DISPATCHED,
             {"tool_call_id": call.id, "name": call.name, "arguments": call.arguments},
         )
+
+        # L3 — action realization: rewrite obvious near-miss tool names
+        # (e.g. "Read" → "read_file", "bash" → "shell") to the registered
+        # canonical name before checking existence. Only fires when the
+        # original name is NOT registered, so it can't disturb the happy
+        # path. The activity event preserves the original for audit.
+        if not self.tools.has(call.name):
+            from harness.core.action_canonicalizer import canonicalize_tool_name
+
+            decision = canonicalize_tool_name(call.name, self.tools.names())
+            if decision.changed and self.tools.has(decision.canonical):
+                await self._emit(
+                    session,
+                    activity_kinds.ACTION_CANONICALIZED,
+                    {
+                        "original_name": decision.original,
+                        "canonical_name": decision.canonical,
+                        "reason": decision.reason,
+                        "confidence": decision.confidence,
+                        "tool_call_id": call.id,
+                    },
+                )
+                # Replace the call's name in place — both the dispatched
+                # event above and the new event above record the original
+                # for audit; downstream code sees the canonical name.
+                call = ToolCall(id=call.id, name=decision.canonical, arguments=call.arguments)
 
         if not self.tools.has(call.name):
             result = ToolResult(

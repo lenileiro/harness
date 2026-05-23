@@ -229,6 +229,28 @@ phase_app = typer.Typer(
 )
 app.add_typer(phase_app, name="phase")
 
+tips_app = typer.Typer(
+    name="tips",
+    help=(
+        "L2 procedural-skill tips. Lessons mined from past failure traces "
+        "and authored hints, injected into the system prompt when their "
+        "triggers match the task text."
+    ),
+    no_args_is_help=True,
+)
+app.add_typer(tips_app, name="tips")
+
+contracts_app = typer.Typer(
+    name="contracts",
+    help=(
+        "L1 environment contracts. Hard rules (YAML/JSON) loaded from "
+        ".harness/contracts/ and ~/.harness/contracts/ and prepended to "
+        "matching runs."
+    ),
+    no_args_is_help=True,
+)
+app.add_typer(contracts_app, name="contracts")
+
 console = Console()
 
 KNOWN_PROVIDERS: tuple[str, ...] = ("ollama", "openrouter")
@@ -649,6 +671,9 @@ def _build_agent(
     max_repair_attempts: int = 3,
     profile: str = "minimal",
     phases_enabled: bool = False,
+    loop_detector: Any | None = None,
+    contracts: Any | None = None,
+    tips_provider: Any | None = None,
 ) -> Agent:
     """Build an Agent over a provider chain. `chain[0]` is the primary.
 
@@ -806,6 +831,9 @@ def _build_agent(
         system_prompt=system_prompt,
         compactor=compactor,
         max_repair_attempts=max_repair_attempts,
+        loop_detector=loop_detector,
+        contracts=contracts,
+        tips_provider=tips_provider,
     )
 
 
@@ -1044,6 +1072,40 @@ def run(
             ),
         ),
     ] = None,
+    loop_detect: Annotated[
+        bool,
+        typer.Option(
+            "--loop-detect/--no-loop-detect",
+            help=(
+                "L4 trajectory regulation. Detects repeated identical tool "
+                "calls and read-only spinning, injecting a corrective user "
+                "message. Default on in minimal/strict profiles, off in bare."
+            ),
+        ),
+    ] = True,
+    contracts: Annotated[
+        bool,
+        typer.Option(
+            "--contracts/--no-contracts",
+            help=(
+                "L1 environment contracts. Loads YAML/JSON from "
+                ".harness/contracts/ and ~/.harness/contracts/ and prepends "
+                "matching contracts as system rules. Default on in "
+                "minimal/strict, off in bare."
+            ),
+        ),
+    ] = True,
+    tips: Annotated[
+        bool,
+        typer.Option(
+            "--tips/--no-tips",
+            help=(
+                "L2 procedural skill. Loads tips from .harness/tips.jsonl / "
+                "~/.harness/tips.jsonl and injects matching ones as system "
+                "context. Default on in minimal/strict, off in bare."
+            ),
+        ),
+    ] = True,
     verbose: Annotated[
         bool, typer.Option("--verbose", "-v", help="Enable DEBUG logging to stderr.")
     ] = False,
@@ -1101,6 +1163,9 @@ def run(
                 max_repair=max_repair,
                 profile=profile,
                 phases=phases,
+                loop_detect=loop_detect,
+                contracts=contracts,
+                tips=tips,
                 config=cfg,
             )
         )
@@ -1134,6 +1199,9 @@ async def _run_once(
     max_repair: int = 3,
     profile: str = "minimal",
     phases: str | None = None,
+    loop_detect: bool = True,
+    contracts: bool = True,
+    tips: bool = True,
     config: HarnessConfig,
 ) -> None:
     storage = _build_storage(db=db, in_memory=in_memory, cwd=cwd)
@@ -1163,6 +1231,42 @@ async def _run_once(
         if auto_compact:
             adapter = _build_adapter(chain[0], base_url=base_url, config=config)
             compactor = ContextCompactor(adapter=adapter, model=model)
+
+        # LifeHarness L1, L2, L4. All three disabled in the `bare` profile
+        # (kept as the A/B baseline arm). L3 is inside runtime dispatch and
+        # always-on; no flag needed.
+        from harness.core import (
+            ContractRegistry as _ContractRegistry,
+        )
+        from harness.core import (
+            LoopDetector as _LoopDetector,
+        )
+        from harness.core import (
+            TipLibrary as _TipLibrary,
+        )
+
+        loop_detector_obj = _LoopDetector() if (loop_detect and profile != "bare") else None
+        contracts_obj = None
+        if contracts and profile != "bare":
+            registry = _ContractRegistry.from_paths(
+                [
+                    cwd / ".harness" / "contracts",
+                    Path.home() / ".harness" / "contracts",
+                ]
+            )
+            if registry:
+                contracts_obj = registry
+        tips_obj = None
+        if tips and profile != "bare":
+            library = _TipLibrary.load(
+                [
+                    cwd / ".harness" / "tips.jsonl",
+                    Path.home() / ".harness" / "tips.jsonl",
+                ]
+            )
+            if library:
+                tips_obj = library
+
         agent = _build_agent(
             chain=chain,
             base_url=base_url,
@@ -1186,6 +1290,9 @@ async def _run_once(
             max_repair_attempts=max_repair,
             profile=profile,
             phases_enabled=bool(phases),
+            loop_detector=loop_detector_obj,
+            contracts=contracts_obj,
+            tips_provider=tips_obj,
         )
 
         request_kwargs: dict[str, object] = {
@@ -4280,6 +4387,257 @@ def eval_run(
             "often than when it passes. Manually consider disabling such "
             "defenses; this report is diagnostic only.[/dim]"
         )
+
+
+# ---------------------------------------------------------------------------
+# contracts subcommands — L1 environment contract inspection
+# ---------------------------------------------------------------------------
+
+
+@contracts_app.command("list")
+def contracts_list(
+    cwd: Annotated[
+        Path | None, typer.Option("--cwd", help="Working dir whose .harness/contracts/ to load.")
+    ] = None,
+) -> None:
+    """Show all loaded contracts and the paths they came from."""
+    from harness.core import ContractRegistry
+
+    working = (cwd or Path.cwd()).resolve()
+    registry = ContractRegistry.from_paths(
+        [working / ".harness" / "contracts", Path.home() / ".harness" / "contracts"]
+    )
+    if not registry:
+        console.print("[dim]No contracts loaded.[/dim]")
+        return
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("Name", no_wrap=True)
+    table.add_column("Priority", justify="right")
+    table.add_column("Triggers")
+    table.add_column("Rules", overflow="fold")
+    table.add_column("Source", style="dim", overflow="fold")
+    for c in sorted(registry.contracts, key=lambda x: (-x.priority, x.name)):
+        table.add_row(
+            c.name,
+            str(c.priority),
+            ", ".join(c.triggers) or "[dim](always)[/dim]",
+            "\n".join(f"- {r}" for r in c.rules),
+            c.source or "",
+        )
+    console.print(table)
+
+
+@contracts_app.command("test")
+def contracts_test(
+    task: Annotated[str, typer.Argument(help="Task text to match against contracts.")],
+    cwd: Annotated[Path | None, typer.Option("--cwd")] = None,
+) -> None:
+    """Show which contracts would fire for a given task string."""
+    from harness.core import ContractRegistry
+
+    working = (cwd or Path.cwd()).resolve()
+    registry = ContractRegistry.from_paths(
+        [working / ".harness" / "contracts", Path.home() / ".harness" / "contracts"]
+    )
+    rendered = registry.render(task)
+    if rendered is None:
+        console.print("[dim]No contracts match.[/dim]")
+        return
+    console.print(rendered)
+
+
+# ---------------------------------------------------------------------------
+# tips subcommands — L2 procedural skill library
+# ---------------------------------------------------------------------------
+
+
+@tips_app.command("list")
+def tips_list(
+    cwd: Annotated[Path | None, typer.Option("--cwd")] = None,
+) -> None:
+    """Show all loaded tips, ordered by weight desc."""
+    from harness.core import TipLibrary
+
+    working = (cwd or Path.cwd()).resolve()
+    library = TipLibrary.load(
+        [working / ".harness" / "tips.jsonl", Path.home() / ".harness" / "tips.jsonl"]
+    )
+    if not library:
+        console.print("[dim]No tips loaded.[/dim]")
+        return
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("ID", no_wrap=True, style="dim")
+    table.add_column("Weight", justify="right")
+    table.add_column("Triggers")
+    table.add_column("Tip", overflow="fold")
+    table.add_column("Source session", style="dim", no_wrap=True)
+    for tip in sorted(library.tips, key=lambda t: t.weight, reverse=True):
+        table.add_row(
+            tip.id,
+            f"{tip.weight:.1f}",
+            ", ".join(tip.triggers) or "[dim](always)[/dim]",
+            tip.text,
+            tip.source_session_id or "",
+        )
+    console.print(table)
+
+
+@tips_app.command("add")
+def tips_add(
+    text: Annotated[str, typer.Argument(help="The tip body (imperative one-liner).")],
+    triggers: Annotated[
+        str | None,
+        typer.Option(
+            "--triggers",
+            help="Comma-separated trigger substrings. Omit for an always-on tip.",
+        ),
+    ] = None,
+    weight: Annotated[float, typer.Option("--weight")] = 1.0,
+    scope: Annotated[
+        str,
+        typer.Option(
+            "--scope",
+            help="Where to write: 'repo' (.harness/tips.jsonl) or 'user' (~/.harness/tips.jsonl).",
+        ),
+    ] = "repo",
+) -> None:
+    """Append a tip to the library."""
+    from harness.core import Tip, TipLibrary
+
+    if scope not in ("repo", "user"):
+        console.print("[red]--scope must be 'repo' or 'user'.[/red]")
+        raise typer.Exit(2)
+    target = (
+        Path.cwd() / ".harness" / "tips.jsonl"
+        if scope == "repo"
+        else Path.home() / ".harness" / "tips.jsonl"
+    )
+    library = TipLibrary.load([target])
+    library.path = target
+    triggers_tuple = tuple(t.strip() for t in (triggers or "").split(",") if t.strip())
+    tip = Tip(text=text.strip(), triggers=triggers_tuple, weight=weight)
+    library.add(tip, persist=True)
+    console.print(f"[green]Added tip {tip.id}[/green] to {target}")
+
+
+@tips_app.command("test")
+def tips_test(
+    task: Annotated[str, typer.Argument(help="Task text to match against tips.")],
+    top_k: Annotated[int, typer.Option("--top-k")] = 3,
+    cwd: Annotated[Path | None, typer.Option("--cwd")] = None,
+) -> None:
+    """Show which tips would fire for a given task string."""
+    from harness.core import TipLibrary
+
+    working = (cwd or Path.cwd()).resolve()
+    library = TipLibrary.load(
+        [working / ".harness" / "tips.jsonl", Path.home() / ".harness" / "tips.jsonl"]
+    )
+    rendered = library.render(task, top_k=top_k)
+    if rendered is None:
+        console.print("[dim]No tips match.[/dim]")
+        return
+    console.print(rendered)
+
+
+@tips_app.command("mine")
+def tips_mine(
+    session_id: Annotated[
+        str,
+        typer.Argument(help="Session ID to mine for tips (must be a failed session)."),
+    ],
+    model: Annotated[
+        str | None, typer.Option("--model", "-m", help="Model for the extractor.")
+    ] = None,
+    provider: Annotated[str | None, typer.Option("--provider", "-p")] = None,
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+    scope: Annotated[str, typer.Option("--scope")] = "repo",
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Print the tips that would be added without writing."),
+    ] = False,
+    config_path: Annotated[Path | None, typer.Option("--config")] = None,
+) -> None:
+    """Mine a failed session's transcript for reusable tips via an LLM extractor.
+
+    Reads the session's task text + transcript tail, asks the configured
+    model for short procedural tips that would have prevented the failure,
+    and appends them to the tip library. Skipped tips (bad JSON, over-long
+    bodies) are logged but never crash the command.
+    """
+    import asyncio
+    import json
+
+    from harness.core import MiningInput, Tip, TipLibrary, parse_mined_tips, render_mining_prompt
+    from harness.storage.sqlite import SQLiteStorage
+
+    cfg = _load_cli_config(config_path)
+    chain = _resolve_chain(failover_flag=None, provider_flag=provider, config=cfg)
+    effective_model = model or cfg.default_model or "gemma2:2b"
+    adapter = _build_adapter(chain[0], base_url=None, config=cfg)
+
+    target = (
+        Path.cwd() / ".harness" / "tips.jsonl"
+        if scope == "repo"
+        else Path.home() / ".harness" / "tips.jsonl"
+    )
+
+    async def _go() -> list[Tip]:
+        storage = SQLiteStorage(path=db or default_db_path())
+        try:
+            session = await storage.get(session_id)
+            if session is None:
+                console.print(f"[red]Session {session_id} not found.[/red]")
+                raise typer.Exit(1)
+            user_msg = next((m for m in session.messages if m.role == "user"), None)
+            task_text = ((user_msg.content if user_msg else None) or "").strip()
+            transcript_tail = "\n".join(
+                f"[{m.role}] {(m.content or '')[:400]}" for m in session.messages[-12:]
+            )
+            failure_summary = f"Session ended with status={session.status}."
+
+            inp = MiningInput(
+                session_id=session_id,
+                task_text=task_text,
+                failure_summary=failure_summary,
+                transcript_excerpt=transcript_tail,
+            )
+            prompt = render_mining_prompt(inp)
+
+            response_parts: list[str] = []
+            from harness.core.events import Done as _Done
+            from harness.core.events import TextDelta as _TextDelta
+            from harness.core.schemas import Message as _Message
+
+            async for ev in adapter.stream(
+                model=effective_model,
+                messages=[_Message(role="user", content=prompt)],
+                temperature=0.0,
+                max_tokens=512,
+            ):
+                if isinstance(ev, _TextDelta):
+                    response_parts.append(ev.text)
+                elif isinstance(ev, _Done):
+                    break
+            response = "".join(response_parts)
+            return parse_mined_tips(response, source_session_id=session_id)
+        finally:
+            await storage.close()
+
+    tips = asyncio.run(_go())
+    if not tips:
+        console.print("[yellow]No tips extracted.[/yellow]")
+        return
+
+    if dry_run:
+        console.print(json.dumps([t.as_dict() for t in tips], indent=2))
+        return
+
+    library = TipLibrary.load([target])
+    library.path = target
+    for tip in tips:
+        library.add(tip, persist=True)
+    console.print(f"[green]Added {len(tips)} tip(s)[/green] to {target}")
 
 
 if __name__ == "__main__":

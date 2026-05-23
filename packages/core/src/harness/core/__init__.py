@@ -1,6 +1,10 @@
 """Harness core: protocols, schemas, and runtime."""
 
 from harness.core import activity
+from harness.core.action_canonicalizer import (
+    CanonicalizationResult,
+    canonicalize_tool_name,
+)
 from harness.core.activity import ActivityEvent, ActivityStore
 from harness.core.adapter import Adapter
 from harness.core.agent_iter import (
@@ -29,6 +33,7 @@ from harness.core.defense_ledger import (
     format_ledger,
     parse_ledger_text,
 )
+from harness.core.env_contract import ContractRegistry, EnvironmentContract
 from harness.core.errors import (
     ApprovalDeniedError,
     CancelledError,
@@ -73,6 +78,7 @@ from harness.core.flow_checkpoint import (
 )
 from harness.core.guardrails import Guardrail, GuardrailMode, GuardrailResult
 from harness.core.handoff import HandoffTool
+from harness.core.loop_detector import LoopDetector, LoopFinding, LoopPattern
 from harness.core.memory import MemoryEntry, MemoryKind, MemoryStore
 from harness.core.orchestrator import (
     AgentDoneEvent,
@@ -99,6 +105,15 @@ from harness.core.prediction import (
     PredictionOutcome,
     ToolPrediction,
     compare_prediction,
+)
+from harness.core.procedural_skill import (
+    MiningInput,
+    StaticTipsProvider,
+    Tip,
+    TipLibrary,
+    TipsProvider,
+    parse_mined_tips,
+    render_mining_prompt,
 )
 from harness.core.prompt_injection_probe import (
     InjectionFinding,
@@ -192,6 +207,7 @@ __all__ = [
     "AutoDeny",
     "CalibrationRecord",
     "CancelledError",
+    "CanonicalizationResult",
     "Capabilities",
     "ChainedVerifier",
     "CheckMessagesTool",
@@ -203,6 +219,7 @@ __all__ = [
     "ConsequencePredictor",
     "ContextBudget",
     "ContextCompactor",
+    "ContractRegistry",
     "CreateWorkItemTool",
     "Critic",
     "Critique",
@@ -211,6 +228,7 @@ __all__ = [
     "DiagnosisAlignmentVerifier",
     "Done",
     "EffectScope",
+    "EnvironmentContract",
     "ErrorEvent",
     "ErrorKind",
     "Event",
@@ -239,11 +257,15 @@ __all__ = [
     "LLMJudgeVerifier",
     "LLMPlanner",
     "ListWorkItemsTool",
+    "LoopDetector",
+    "LoopFinding",
+    "LoopPattern",
     "MemoryEntry",
     "MemoryKind",
     "MemoryStore",
     "Message",
     "MinimalFixVerifier",
+    "MiningInput",
     "MisdirectedSuggestionVerifier",
     "ModelRequestEvent",
     "ModelRequestStep",
@@ -285,12 +307,16 @@ __all__ = [
     "StallDetectedEvent",
     "StallError",
     "StateVerifier",
+    "StaticTipsProvider",
     "StepCompleted",
     "StepStarted",
     "Storage",
     "TestsBeforeEditVerifier",
     "TextDelta",
     "TimeoutError",
+    "Tip",
+    "TipLibrary",
+    "TipsProvider",
     "Tool",
     "ToolCall",
     "ToolCallEvent",
@@ -322,6 +348,7 @@ __all__ = [
     "activity",
     "annotate_if_suspicious",
     "build_ledger",
+    "canonicalize_tool_name",
     "check_dangerous_command",
     "classify",
     "compare_prediction",
@@ -336,9 +363,11 @@ __all__ = [
     "listen",
     "make_multi_critic",
     "parse_ledger_text",
+    "parse_mined_tips",
     "persist",
     "prune",
     "redact_secrets",
+    "render_mining_prompt",
     "router",
     "scan_text",
     "span",

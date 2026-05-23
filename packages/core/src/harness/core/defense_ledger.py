@@ -17,9 +17,13 @@ from collections import Counter
 from dataclasses import dataclass, field
 
 from harness.core.activity import (
+    ACTION_CANONICALIZED,
     AGENT_RUN_STALLED,
+    ENV_CONTRACT_INJECTED,
+    PROCEDURAL_TIP_INJECTED,
     REPAIR_DIRECTIVE_ISSUED,
     TOOL_CALL_COMPLETED,
+    TRAJECTORY_REGULATED,
     VERIFICATION_COMPLETED,
     ActivityEvent,
 )
@@ -36,6 +40,14 @@ class DefenseLedger:
     tool_calls: Counter[str] = field(default_factory=Counter)
     tool_errors: Counter[str] = field(default_factory=Counter)
     stalled: bool = False
+    # LifeHarness L1..L4 — counts how often each layer fired during the run.
+    # L1 (contracts injected at run start) and L2 (tips injected) typically
+    # show 0..1 because both only act once per run. L3 (action canonical
+    # rewrites) and L4 (trajectory regulation interventions) can climb.
+    contracts_injected: int = 0
+    tips_injected: int = 0
+    actions_canonicalized: int = 0
+    trajectory_regulations: int = 0
 
     def is_empty(self) -> bool:
         return (
@@ -45,6 +57,10 @@ class DefenseLedger:
             and self.critic_invocations == 0
             and not self.tool_calls
             and not self.stalled
+            and self.contracts_injected == 0
+            and self.tips_injected == 0
+            and self.actions_canonicalized == 0
+            and self.trajectory_regulations == 0
         )
 
     def to_dict(self) -> dict[str, object]:
@@ -56,6 +72,10 @@ class DefenseLedger:
             "tool_calls": dict(self.tool_calls),
             "tool_errors": dict(self.tool_errors),
             "stalled": self.stalled,
+            "contracts_injected": self.contracts_injected,
+            "tips_injected": self.tips_injected,
+            "actions_canonicalized": self.actions_canonicalized,
+            "trajectory_regulations": self.trajectory_regulations,
         }
 
 
@@ -80,6 +100,14 @@ def build_ledger(activity: list[ActivityEvent]) -> DefenseLedger:
                 ledger.tool_errors[tool_name] += 1
         elif ev.kind == AGENT_RUN_STALLED:
             ledger.stalled = True
+        elif ev.kind == ENV_CONTRACT_INJECTED:
+            ledger.contracts_injected += int(ev.data.get("count", 0) or 0)
+        elif ev.kind == PROCEDURAL_TIP_INJECTED:
+            ledger.tips_injected += int(ev.data.get("count", 0) or 0)
+        elif ev.kind == ACTION_CANONICALIZED:
+            ledger.actions_canonicalized += 1
+        elif ev.kind == TRAJECTORY_REGULATED:
+            ledger.trajectory_regulations += 1
     return ledger
 
 
@@ -113,6 +141,18 @@ def format_ledger(ledger: DefenseLedger) -> str:
         lines.append("  tools: " + ", ".join(rendered))
     if ledger.stalled:
         lines.append("  stalled: yes")
+    # LifeHarness layers — only list those that actually fired.
+    life_parts: list[str] = []
+    if ledger.contracts_injected:
+        life_parts.append(f"L1 contracts x{ledger.contracts_injected}")
+    if ledger.tips_injected:
+        life_parts.append(f"L2 tips x{ledger.tips_injected}")
+    if ledger.actions_canonicalized:
+        life_parts.append(f"L3 canonical x{ledger.actions_canonicalized}")
+    if ledger.trajectory_regulations:
+        life_parts.append(f"L4 regulate x{ledger.trajectory_regulations}")
+    if life_parts:
+        lines.append("  lifeharness: " + ", ".join(life_parts))
     return "\n".join(lines)
 
 
