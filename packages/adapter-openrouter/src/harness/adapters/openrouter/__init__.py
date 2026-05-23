@@ -90,7 +90,7 @@ class OpenRouterAdapter:
         tools: list[dict[str, Any]] | None = None,
         temperature: float | None = None,
         max_tokens: int | None = None,
-        **_kwargs: Any,
+        **kwargs: Any,
     ) -> AsyncIterator[Event]:
         return self._stream(
             model=model,
@@ -98,6 +98,8 @@ class OpenRouterAdapter:
             tools=tools,
             temperature=temperature,
             max_tokens=max_tokens,
+            response_format=kwargs.get("response_format"),
+            seed=kwargs.get("seed"),
         )
 
     async def capabilities(self) -> Capabilities:
@@ -120,6 +122,8 @@ class OpenRouterAdapter:
         tools: list[dict[str, Any]] | None,
         temperature: float | None,
         max_tokens: int | None,
+        response_format: dict[str, Any] | str | None = None,
+        seed: int | None = None,
     ) -> AsyncIterator[Event]:
         payload: dict[str, Any] = {
             "model": model,
@@ -132,6 +136,10 @@ class OpenRouterAdapter:
             payload["temperature"] = temperature
         if max_tokens is not None:
             payload["max_tokens"] = max_tokens
+        if response_format is not None:
+            payload["response_format"] = response_format
+        if seed is not None:
+            payload["seed"] = seed
 
         url = f"{self.base_url}/chat/completions"
         headers: dict[str, str] = {

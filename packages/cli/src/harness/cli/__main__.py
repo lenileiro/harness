@@ -76,14 +76,18 @@ from harness.core import (
     CreateWorkItemTool,
     Critic,
     Critique,
+    DiagnosisAlignmentVerifier,
     Done,
     ErrorEvent,
     FailoverPolicy,
+    FileScopeVerifier,
     InboxApprovalHandler,
     ListWorkItemsTool,
     LLMJudgeVerifier,
     LLMPlanner,
     MemoryEntry,
+    MinimalFixVerifier,
+    MisdirectedSuggestionVerifier,
     MultiAgentOrchestrator,
     PendingApproval,
     Planner,
@@ -100,6 +104,7 @@ from harness.core import (
     StepCompleted,
     StepStarted,
     Storage,
+    TestsBeforeEditVerifier,
     TextDelta,
     ToolCall,
     ToolCallEvent,
@@ -118,8 +123,10 @@ from harness.core import (
     WorkItemOrphanedEvent,
     WorkItemRejectedEvent,
     WorkItemVerifiedEvent,
+    build_ledger,
     configure_logging,
     fork_session,
+    format_ledger,
     make_multi_critic,
 )
 from harness.storage.memory import InMemoryStorage
@@ -602,6 +609,7 @@ def _build_agent(
     repair: RepairOrchestrator | None = None,
     system_prompt: str | None = None,
     compactor: Any | None = None,
+    max_repair_attempts: int = 3,
 ) -> Agent:
     """Build an Agent over a provider chain. `chain[0]` is the primary.
 
@@ -648,10 +656,33 @@ def _build_agent(
         )
     )
 
-    # Always enforce: if the agent modified files, it must call verify_work.
-    # Chain on top of whatever --verify verifier was passed (may be None).
+    # Always enforce six structural defenses:
+    #   1. If the prompt named specific files, the agent may only modify those.
+    #   2. If the prompt asked for a "minimal fix", the agent may not write a large diff.
+    #   3. If the agent edited, it must have run the tests first.
+    #   4. If the agent modified files, it must call verify_work.
+    #   5. If verify_work still shows failing tests, the agent's edits must
+    #      share vocabulary with those failing test names — otherwise it's
+    #      editing the wrong layer.
+    #   6. Once tests pass, every edit must share vocabulary with at least
+    #      one historical failing test — otherwise it's scope creep driven
+    #      by the prompt rather than the bug.
+    # All deterministic — no LLM, no false positives on no-op turns.
+    enforce_scope = FileScopeVerifier()
+    enforce_minimal = MinimalFixVerifier()
+    enforce_tests_first = TestsBeforeEditVerifier()
     enforce_verify = VerifyBeforeDoneVerifier()
-    verifier = ChainedVerifier(enforce_verify, verifier) if verifier is not None else enforce_verify
+    enforce_alignment = DiagnosisAlignmentVerifier()
+    enforce_no_scope_creep = MisdirectedSuggestionVerifier()
+    structural = ChainedVerifier(
+        enforce_scope,
+        enforce_minimal,
+        enforce_tests_first,
+        enforce_verify,
+        enforce_alignment,
+        enforce_no_scope_creep,
+    )
+    verifier = ChainedVerifier(structural, verifier) if verifier is not None else structural
 
     approval_policy = ApprovalPolicy(default="prompt", per_tool=dict(config.approval))
 
@@ -691,6 +722,7 @@ def _build_agent(
         repair=repair,
         system_prompt=system_prompt,
         compactor=compactor,
+        max_repair_attempts=max_repair_attempts,
     )
 
 
@@ -782,6 +814,16 @@ def run(
     max_steps: Annotated[
         int, typer.Option("--max-steps", help="Maximum ReAct turns before giving up.")
     ] = 25,
+    max_repair: Annotated[
+        int,
+        typer.Option(
+            "--max-repair",
+            help=(
+                "Max repair attempts after a verifier fails. Lower this for slow "
+                "local models — each attempt re-runs the agent + critic."
+            ),
+        ),
+    ] = 3,
     failover: Annotated[
         str | None,
         typer.Option(
@@ -928,6 +970,7 @@ def run(
                 max_context_tokens=max_context_tokens,
                 predict=predict,
                 auto_compact=auto_compact,
+                max_repair=max_repair,
                 config=cfg,
             )
         )
@@ -958,6 +1001,7 @@ async def _run_once(
     max_context_tokens: int | None = None,
     predict: bool = False,
     auto_compact: bool = False,
+    max_repair: int = 3,
     config: HarnessConfig,
 ) -> None:
     storage = _build_storage(db=db, in_memory=in_memory, cwd=cwd)
@@ -1001,6 +1045,7 @@ async def _run_once(
             repair=RepairOrchestrator() if predict else None,
             system_prompt=_DEFAULT_SYSTEM_PROMPT,
             compactor=compactor,
+            max_repair_attempts=max_repair,
         )
 
         request_kwargs: dict[str, object] = {
@@ -1015,15 +1060,27 @@ async def _run_once(
             request_kwargs["task_id"] = task_id
         request = RunRequest(**request_kwargs)  # type: ignore[arg-type]
 
+        last_verification: Verification | None = None
         try:
             async for event in agent.run(request):
                 _render(event)
+                if isinstance(event, Verification):
+                    last_verification = event
         except Exception as exc:
             console.print(f"\n[red]Unhandled error:[/red] {exc!s}")
             raise typer.Exit(1) from None
+        await _print_defense_ledger(storage, session_id)
     finally:
         if isinstance(storage, SQLiteStorage):
             await storage.close()
+
+    # Surface the final verifier verdict to the shell. The repair loop has
+    # already exhausted its retries by this point — a blocking final verdict
+    # means the harness ran out of budget while the work was still wrong.
+    # Eval tooling reads this exit code to distinguish "agent succeeded" from
+    # "agent gave up after every defense fired."
+    if last_verification is not None and not last_verification.result.can_finish:
+        raise typer.Exit(2)
 
 
 # ---------------------------------------------------------------------------
@@ -2505,6 +2562,33 @@ def _render(event: Any) -> None:
     _renderer.render(event)
 
 
+async def _print_defense_ledger(storage: Storage, session_id: str | None) -> None:
+    """List the activity ledger for the just-completed run and print a summary.
+
+    If `session_id` was supplied to the run, filter to that session. Otherwise
+    grab the most recent session from storage (the one we just created) and
+    filter to it. Failures here must not bubble up — the ledger is observability,
+    not control flow.
+    """
+    try:
+        target_session_id = session_id
+        if target_session_id is None:
+            sessions = await storage.list(limit=1)  # type: ignore[attr-defined]
+            if sessions:
+                target_session_id = sessions[0].id
+        activity_store: Any = storage
+        if target_session_id is not None:
+            events = await activity_store.list_activity(session_id=target_session_id, limit=500)
+        else:
+            events = await activity_store.list_activity(limit=500)
+        ledger = build_ledger(events)
+        if ledger.is_empty():
+            return
+        console.print(f"\n[dim]{format_ledger(ledger)}[/dim]")
+    except Exception as exc:
+        console.print(f"[dim]defense ledger unavailable: {exc!s}[/dim]")
+
+
 def _render_session_diff(activity: list[ActivityEvent], con: Console) -> None:
     file_events = [
         e
@@ -3657,6 +3741,17 @@ def eval_run(
         int,
         typer.Option("--timeout", help="Agent timeout per fixture in seconds."),
     ] = 300,
+    n_runs: Annotated[
+        int,
+        typer.Option(
+            "--n-runs",
+            help=(
+                "Run each fixture N times to measure variance. Reports median "
+                "score per dimension and (min..max) range in the final table. "
+                "Use 3+ on non-deterministic local models. Default 1."
+            ),
+        ),
+    ] = 1,
     config_path: Annotated[Path | None, typer.Option("--config")] = None,
 ) -> None:
     """Run one or all eval fixtures and display scored results."""
@@ -3690,70 +3785,18 @@ def eval_run(
 
     judge_adapter = _build_adapter(resolved_judge_provider, base_url=None, config=cfg)
 
-    results = []
-    for fx in fixtures:
-        console.print(f"\n[bold blue]▶ {fx.name}[/bold blue]")
-        agent_desc = (
-            resolved_provider
-            if resolved_provider == "claude"
-            else f"{resolved_provider}/{resolved_model}"
-        )
-        with console.status(f"[dim]running agent ({agent_desc})...[/dim]"):
-            try:
-                outcome = runner.run_fixture(
-                    fx,
-                    provider=resolved_provider,
-                    model=resolved_model,
-                    agent_timeout=agent_timeout,
-                )
-            except Exception as exc:
-                console.print(f"  [red]run failed:[/red] {exc}")
-                continue
-
-        exit_icon = "[green]✓[/green]" if outcome.agent_exit_code == 0 else "[yellow]![/yellow]"
-        test_icon = "[green]✓[/green]" if outcome.test_exit_code == 0 else "[red]✗[/red]"
-        console.print(
-            f"  agent {exit_icon} (exit {outcome.agent_exit_code})  "
-            f"tests {test_icon} (exit {outcome.test_exit_code})"
-        )
-
-        with console.status("[dim]scoring...[/dim]"):
-            try:
-                result = judge_mod.judge(
-                    adapter=judge_adapter,
-                    model=resolved_judge_model,
-                    fixture_name=fx.name,
-                    task_text=fx.task_text,
-                    eval_md=fx.eval_md,
-                    transcript=outcome.transcript,
-                    git_diff=outcome.git_diff,
-                    test_output=outcome.test_output,
-                )
-                results.append(result)
-            except Exception as exc:
-                console.print(f"  [red]judge failed:[/red] {exc}")
-                continue
-
-    if not results:
-        return
-
-    # Summary table.
-    console.print()
-    table = Table(show_header=True, header_style="bold", title="Eval Results")
-    table.add_column("Fixture", no_wrap=True)
-    table.add_column("Verif.", justify="center")
-    table.add_column("Scope", justify="center")
-    table.add_column("Decomp.", justify="center")
-    table.add_column("Correct.", justify="center")
-    table.add_column("Overall", justify="center")
-    table.add_column("Pass?", justify="center")
-
     def _score_cell(score: int) -> str:
         color = "green" if score >= 4 else ("yellow" if score == 3 else "red")
         return f"[{color}]{score}/5[/{color}]"
 
-    for r in results:
-        table.add_row(
+    def _print_per_fixture(r: Any) -> None:
+        """Print one fixture's scorecard + rationales immediately, so a
+        killed batch still leaves partial results in the transcript."""
+        row_table = Table(show_header=True, header_style="bold")
+        row_table.add_column("Fixture", no_wrap=True)
+        for col in ("Verif.", "Scope", "Decomp.", "Correct.", "Overall", "Pass?"):
+            row_table.add_column(col, justify="center")
+        row_table.add_row(
             r.fixture_name,
             _score_cell(r.verification.score),
             _score_cell(r.scope.score),
@@ -3762,11 +3805,7 @@ def eval_run(
             _score_cell(r.overall.score),
             "[green]PASS[/green]" if r.passed else "[red]FAIL[/red]",
         )
-    console.print(table)
-
-    # Per-fixture rationales.
-    for r in results:
-        console.print(f"\n[bold]{r.fixture_name}[/bold]")
+        console.print(row_table)
         for dim_name, dim in [
             ("verification", r.verification),
             ("scope", r.scope),
@@ -3778,6 +3817,93 @@ def eval_run(
             console.print(
                 f"  [{color}]{dim.score}/5[/{color}] [dim]{dim_name}[/dim]  {dim.rationale}"
             )
+
+    # Collect every per-run EvalResult, grouped by fixture name so we can
+    # report median + range across runs.
+    runs_by_fixture: dict[str, list[Any]] = {}
+    for fx in fixtures:
+        console.print(f"\n[bold blue]▶ {fx.name}[/bold blue]")
+        agent_desc = (
+            resolved_provider
+            if resolved_provider == "claude"
+            else f"{resolved_provider}/{resolved_model}"
+        )
+        fixture_runs: list[Any] = []
+        for run_idx in range(n_runs):
+            run_label = f" (run {run_idx + 1}/{n_runs})" if n_runs > 1 else ""
+            with console.status(f"[dim]running agent ({agent_desc}){run_label}...[/dim]"):
+                try:
+                    outcome = runner.run_fixture(
+                        fx,
+                        provider=resolved_provider,
+                        model=resolved_model,
+                        agent_timeout=agent_timeout,
+                    )
+                except Exception as exc:
+                    console.print(f"  [red]run failed{run_label}:[/red] {exc}")
+                    continue
+
+            exit_icon = "[green]✓[/green]" if outcome.agent_exit_code == 0 else "[yellow]![/yellow]"
+            test_icon = "[green]✓[/green]" if outcome.test_exit_code == 0 else "[red]✗[/red]"
+            console.print(
+                f"  agent {exit_icon} (exit {outcome.agent_exit_code})  "
+                f"tests {test_icon} (exit {outcome.test_exit_code}){run_label}"
+            )
+
+            with console.status(f"[dim]scoring{run_label}...[/dim]"):
+                try:
+                    result = judge_mod.judge(
+                        adapter=judge_adapter,
+                        model=resolved_judge_model,
+                        fixture_name=fx.name,
+                        task_text=fx.task_text,
+                        eval_md=fx.eval_md,
+                        transcript=outcome.transcript,
+                        git_diff=outcome.git_diff,
+                        test_output=outcome.test_output,
+                    )
+                    fixture_runs.append(result)
+                except Exception as exc:
+                    console.print(f"  [red]judge failed{run_label}:[/red] {exc}")
+                    continue
+
+            _print_per_fixture(result)
+        if fixture_runs:
+            runs_by_fixture[fx.name] = fixture_runs
+
+    if not runs_by_fixture:
+        return
+
+    # End-of-batch rollup: one row per fixture. With n_runs>1, each cell is
+    # "<median>/5 (min..max)" so you can see both center and spread.
+    def _cell_for_runs(runs: list[Any], dim_name: str) -> str:
+        scores = [getattr(r, dim_name).score for r in runs]
+        scores.sort()
+        median = scores[len(scores) // 2]
+        color = "green" if median >= 4 else ("yellow" if median == 3 else "red")
+        if len(scores) == 1:
+            return f"[{color}]{median}/5[/{color}]"
+        return f"[{color}]{median}/5[/{color}] [dim]({scores[0]}..{scores[-1]})[/dim]"
+
+    console.print()
+    title = "Eval Results" + (f" — {n_runs} runs each" if n_runs > 1 else "")
+    table = Table(show_header=True, header_style="bold", title=title)
+    table.add_column("Fixture", no_wrap=True)
+    for col in ("Verif.", "Scope", "Decomp.", "Correct.", "Overall", "Pass rate"):
+        table.add_column(col, justify="center")
+    for fx_name, runs in runs_by_fixture.items():
+        n_passed = sum(1 for r in runs if r.passed)
+        pass_color = "green" if n_passed == len(runs) else ("yellow" if n_passed > 0 else "red")
+        table.add_row(
+            fx_name,
+            _cell_for_runs(runs, "verification"),
+            _cell_for_runs(runs, "scope"),
+            _cell_for_runs(runs, "decomposition"),
+            _cell_for_runs(runs, "correctness"),
+            _cell_for_runs(runs, "overall"),
+            f"[{pass_color}]{n_passed}/{len(runs)}[/{pass_color}]",
+        )
+    console.print(table)
 
 
 if __name__ == "__main__":

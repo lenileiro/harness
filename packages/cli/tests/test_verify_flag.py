@@ -105,8 +105,13 @@ class TestVerifyFlag:
             ]
         )
         assert result.exit_code == 0
-        # Explicit --verify none suppresses verdict.
-        assert "verify" not in result.stdout
+        # --verify none disables the user-selectable verifier chain, but the
+        # always-on structural defenses (verify_before_done, file_scope) still
+        # fire — they're cheap, deterministic, and never raise false positives
+        # on a no-op turn. The user-selectable judges are what 'none' suppresses.
+        assert "rule" not in result.stdout
+        assert "claim_grounding" not in result.stdout
+        assert "llm_judge" not in result.stdout
 
     def test_rule_verifier_renders_verdict_on_clean_run(
         self, patch_adapter, db_path: Path, tmp_path: Path
@@ -135,7 +140,11 @@ class TestVerifyFlag:
     def test_rule_verifier_blocks_on_tool_error(
         self, patch_adapter, db_path: Path, tmp_path: Path
     ) -> None:
-        # Adapter calls read_file with a missing path → tool returns is_error=True
+        # Adapter calls read_file with a missing path → tool returns is_error=True.
+        # Use --max-repair 0 so the test asserts the verifier verdict in
+        # isolation. With the default repair budget, a blocked verifier would
+        # trigger another agent turn — which has nothing to do with whether
+        # the verifier is correctly detecting the failure.
         patch_adapter(
             [
                 tool_call_turn("c1", "read_file", {"path": "missing.txt"}),
@@ -153,9 +162,15 @@ class TestVerifyFlag:
                 "--yes",
                 "--verify",
                 "rule",
+                "--max-repair",
+                "0",
             ]
         )
-        assert result.exit_code == 0
+        # Exit code 2 — verifier blocked, repair budget exhausted (0).
+        # This is the new contract: CLI propagates verifier verdicts to the
+        # shell so eval tooling can distinguish "agent succeeded" from
+        # "agent gave up." See packages/cli/.../__main__.py near the end of run().
+        assert result.exit_code == 2, result.stdout
         # Verdict mentions the failing tool by name.
         assert "verify" in result.stdout
         assert "read_file" in result.stdout

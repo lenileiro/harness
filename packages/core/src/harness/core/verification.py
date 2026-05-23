@@ -1223,17 +1223,704 @@ class VerifyBeforeDoneVerifier:
         )
 
 
+# ---------------------------------------------------------------------------
+# MisdirectedSuggestionVerifier
+# ---------------------------------------------------------------------------
+
+
+class MisdirectedSuggestionVerifier:
+    """When tests now pass, flag edits that share no vocabulary with anything that ever failed.
+
+    Complement to ``DiagnosisAlignmentVerifier``. That one fires while tests
+    are still failing and the agent is editing the wrong layer. This one
+    fires once tests pass but the diff still contains edits that never
+    addressed a failing test — those edits were likely driven by literal
+    interpretation of the user's prompt rather than the actual bug.
+
+    Mechanics:
+      1. Find the most recent ``verify_work`` call. If it failed, do nothing
+         (the other verifier handles that case).
+      2. Walk ALL prior ``verify_work`` calls and collect every failing test
+         name that appeared at any point during the run.
+      3. Tokenize the historical failure names into keywords; subtract the
+         vocabulary the user's prompt already uses (only novel keywords are
+         signal — see DiagnosisAlignmentVerifier for the rationale).
+      4. Group write_file/edit_file events into "aligned" (content contains
+         at least one novel keyword) and "unaligned".
+      5. If aligned is non-empty AND unaligned is non-empty, surface the
+         unaligned edits as candidates for revert.
+
+    Soft signal: a false positive costs one repair turn where the agent can
+    confirm the suggested revert keeps tests passing — far cheaper than
+    leaving unnecessary edits in the diff.
+    """
+
+    name = "misdirected_suggestion"
+
+    async def verify(
+        self, *, session: Session, activity: list[ActivityEvent]
+    ) -> VerificationResult:
+        from harness.core.test_signals import (
+            extract_failing_test_names,
+            keywords_for_test_names,
+            text_overlap,
+        )
+
+        verify_events = [
+            e
+            for e in activity
+            if e.kind == "tool_call.completed" and e.data.get("name") == "verify_work"
+        ]
+        if not verify_events:
+            return VerificationResult(
+                can_finish=True,
+                reason="no verify_work calls — nothing to align edits against",
+                confidence=0.4,
+                verifier_name=self.name,
+            )
+
+        if verify_events[-1].data.get("is_error"):
+            return VerificationResult(
+                can_finish=True,
+                reason=("latest verify_work failed — deferring to diagnosis_alignment"),
+                confidence=0.4,
+                verifier_name=self.name,
+            )
+
+        # Historical failure vocabulary: every failing test seen across the run.
+        all_failing: list[str] = []
+        for ev in verify_events:
+            if not ev.data.get("is_error"):
+                continue
+            preview = str(ev.data.get("content_preview") or "")
+            for name in extract_failing_test_names(preview):
+                if name not in all_failing:
+                    all_failing.append(name)
+
+        if not all_failing:
+            return VerificationResult(
+                can_finish=True,
+                reason="no historical failing tests recorded — nothing to align against",
+                confidence=0.4,
+                verifier_name=self.name,
+            )
+
+        test_keywords = keywords_for_test_names(all_failing)
+        if not test_keywords:
+            return VerificationResult(
+                can_finish=True,
+                reason="historical test names yielded no significant keywords",
+                confidence=0.3,
+                verifier_name=self.name,
+            )
+
+        # Subtract prompt vocabulary — same rationale as DiagnosisAlignment.
+        user_prompt = _first_user_prompt(session)
+        prompt_keywords = text_overlap(user_prompt, test_keywords)
+        novel_test_keywords = test_keywords - prompt_keywords
+        if not novel_test_keywords:
+            return VerificationResult(
+                can_finish=True,
+                reason=(
+                    "prompt already covers all historical failing-test "
+                    "vocabulary — every edit is implicitly aligned"
+                ),
+                confidence=0.5,
+                verifier_name=self.name,
+            )
+
+        # Per-edit classification (NOT per-path — multiple edits can hit the
+        # same file, and we want to point at the specific snippet that's
+        # unaligned, not just say "src/foo.py").
+        aligned_count = 0
+        unaligned_snippets: list[str] = []
+        for ev in activity:
+            if ev.kind != "tool_call.completed":
+                continue
+            if ev.data.get("is_error"):
+                continue
+            name = ev.data.get("name")
+            if name not in ("write_file", "edit_file", "apply_diff", "patch"):
+                continue
+            args = ev.data.get("arguments") or {}
+            path = args.get("path")
+            if not isinstance(path, str):
+                continue
+            # Collect this edit's content (NOT the path — see DiagnosisAlignment).
+            parts: list[str] = []
+            for key in ("content", "new", "new_text", "diff"):
+                val = args.get(key)
+                if isinstance(val, str) and val:
+                    parts.append(val)
+            preview = ev.data.get("content_preview")
+            if isinstance(preview, str) and preview:
+                parts.append(preview)
+            combined = "\n".join(parts).strip()
+            if not combined:
+                continue
+            if text_overlap(combined, novel_test_keywords):
+                aligned_count += 1
+            else:
+                # Short snippet for the message — first line, capped.
+                snippet = combined.splitlines()[0][:80]
+                unaligned_snippets.append(f"{path}: {snippet!r}")
+
+        if not unaligned_snippets:
+            return VerificationResult(
+                can_finish=True,
+                reason="every edit aligns with at least one historical failing-test keyword",
+                confidence=0.85,
+                verifier_name=self.name,
+            )
+
+        if aligned_count == 0:
+            # No edit addresses the historical failures, yet tests now pass.
+            # Either the failures were flaky or the failing tests were
+            # deleted — either way, not the misdirection pattern.
+            return VerificationResult(
+                can_finish=True,
+                reason=(
+                    "tests pass but no edit addresses historical failure "
+                    "vocabulary — abstaining (unclear pattern)"
+                ),
+                confidence=0.3,
+                verifier_name=self.name,
+            )
+
+        # Mixed: at least one aligned edit AND at least one unaligned edit.
+        # This is the scope-creep pattern.
+        unaligned_block = "\n".join(f"  - {s}" for s in unaligned_snippets[:5])
+        return VerificationResult(
+            can_finish=False,
+            reason=(
+                f"STOP — the diff contains unnecessary changes that you MUST "
+                f"revert before finishing.\n\n"
+                f"PROOF this is wrong: the failing tests were "
+                f"{', '.join(all_failing[:3])}. "
+                f"Their names point at concepts "
+                f"{sorted(novel_test_keywords)[:5]} which appear nowhere in "
+                f"the user's prompt — that means the user's literal instruction "
+                f"was a MISDIAGNOSIS. The real bug is what the test names "
+                f"describe, and your {aligned_count} aligned edit(s) already "
+                f"fix it. Tests pass right now because of those aligned edits, "
+                f"NOT because of the unaligned ones below.\n\n"
+                f"REQUIRED ACTION: use edit_file to revert these unaligned "
+                f"changes to their ORIGINAL values:\n"
+                f"{unaligned_block}\n\n"
+                f"After reverting, call verify_work again. The tests will "
+                f"still pass — that is the proof these edits were unnecessary "
+                f"scope creep. Do NOT keep both fixes 'just in case'; the user "
+                f"prompt was wrong about the fix, and leaving the wrong fix in "
+                f"the diff is a real defect. Following the prompt literally is "
+                f"the wrong call here; the failing test names are the ground "
+                f"truth, not the prompt's suggested action."
+            ),
+            confidence=0.85,
+            verifier_name=self.name,
+        )
+
+
+# ---------------------------------------------------------------------------
+# DiagnosisAlignmentVerifier
+# ---------------------------------------------------------------------------
+
+
+class DiagnosisAlignmentVerifier:
+    """Block runs where the agent's edits don't share vocabulary with the failing tests.
+
+    Catches the wrong-diagnosis pattern: the user's prompt describes the bug
+    in one vocabulary (often a symptom), failing test names describe the bug
+    in different vocabulary (often the root cause), and the agent — taking
+    the prompt literally — edits the symptom's surface area without touching
+    code matching the test-name concepts.
+
+    Mechanics:
+      1. Find the most recent ``verify_work`` tool call.
+      2. If it succeeded, pass (alignment trivially satisfied).
+      3. Extract failing test names; tokenize into a keyword set.
+      4. Subtract keywords the user's prompt already contains — only the
+         "novel" test vocabulary counts as alignment signal, because the
+         agent will trivially "address" any prompt-vocabulary keyword by
+         following the prompt.
+      5. Scan all write_file/edit_file content (NOT file paths — those are
+         too generous a match) for stems of those novel keywords.
+      6. If no overlap → block with a directive naming the disagreement.
+
+    Deterministic, no LLM call. Pattern-based; not tailored to any specific
+    task. False positives produce a repair-loop turn, not a hard failure.
+    """
+
+    name = "diagnosis_alignment"
+
+    async def verify(
+        self, *, session: Session, activity: list[ActivityEvent]
+    ) -> VerificationResult:
+        # Local imports to avoid pulling test_signals into module-load if
+        # callers never use this verifier.
+        from harness.core.test_signals import (
+            extract_failing_test_names,
+            keywords_for_test_names,
+            text_overlap,
+        )
+
+        verify_events = [
+            e
+            for e in activity
+            if e.kind == "tool_call.completed" and e.data.get("name") == "verify_work"
+        ]
+        if not verify_events:
+            return VerificationResult(
+                can_finish=True,
+                reason="no verify_work calls — nothing to align edits against",
+                confidence=0.4,
+                verifier_name=self.name,
+            )
+
+        last_verify = verify_events[-1]
+        if not last_verify.data.get("is_error"):
+            return VerificationResult(
+                can_finish=True,
+                reason="latest verify_work succeeded — alignment trivially satisfied",
+                confidence=0.8,
+                verifier_name=self.name,
+            )
+
+        test_output = str(last_verify.data.get("content_preview") or "")
+        failing_tests = extract_failing_test_names(test_output)
+        if not failing_tests:
+            return VerificationResult(
+                can_finish=True,
+                reason="could not parse failing test names — abstaining",
+                confidence=0.3,
+                verifier_name=self.name,
+            )
+
+        test_keywords = keywords_for_test_names(failing_tests)
+        if not test_keywords:
+            return VerificationResult(
+                can_finish=True,
+                reason="failing test names had no significant keywords",
+                confidence=0.3,
+                verifier_name=self.name,
+            )
+
+        # Subtract keywords the user's prompt already mentions. The pattern
+        # we catch: prompt uses one vocabulary (e.g. a symptom), failing tests
+        # use a different one (e.g. the root cause), and the agent edits the
+        # prompt's vocabulary surface area without touching the test
+        # vocabulary. Keywords already present in the prompt are unhelpful as
+        # alignment signal because the agent will trivially "address" them by
+        # following the prompt literally.
+        user_prompt = _first_user_prompt(session)
+        prompt_keywords = text_overlap(user_prompt, test_keywords)
+        novel_test_keywords = test_keywords - prompt_keywords
+        if not novel_test_keywords:
+            return VerificationResult(
+                can_finish=True,
+                reason=(
+                    "user prompt already mentions every failing-test keyword "
+                    f"({sorted(test_keywords)[:4]}) — no novel-vocabulary "
+                    "alignment to enforce"
+                ),
+                confidence=0.5,
+                verifier_name=self.name,
+            )
+
+        edit_content_parts: list[str] = []
+        edit_paths: set[str] = set()
+        for ev in activity:
+            if ev.kind != "tool_call.completed":
+                continue
+            if ev.data.get("is_error"):
+                continue
+            name = ev.data.get("name")
+            if name not in ("write_file", "edit_file", "apply_diff", "patch"):
+                continue
+            args = ev.data.get("arguments") or {}
+            path = args.get("path")
+            if isinstance(path, str):
+                edit_paths.add(path)
+                # NOTE: the path itself is deliberately NOT counted as edit
+                # vocabulary. A path can match a test-name keyword without
+                # the edit actually addressing the concept — only the
+                # written content counts as alignment evidence.
+            for key in ("content", "new", "new_text", "diff"):
+                val = args.get(key)
+                if isinstance(val, str) and val:
+                    edit_content_parts.append(val)
+            preview = ev.data.get("content_preview")
+            if isinstance(preview, str) and preview:
+                edit_content_parts.append(preview)
+
+        if not edit_content_parts:
+            return VerificationResult(
+                can_finish=True,
+                reason="no edit content recorded — nothing to align",
+                confidence=0.4,
+                verifier_name=self.name,
+            )
+
+        combined = "\n".join(edit_content_parts)
+        overlap = text_overlap(combined, novel_test_keywords)
+
+        if overlap:
+            return VerificationResult(
+                can_finish=True,
+                reason=(
+                    f"edits address novel failing-test keywords (not in prompt): "
+                    f"{sorted(overlap)[:4]}"
+                ),
+                confidence=0.85,
+                verifier_name=self.name,
+            )
+
+        return VerificationResult(
+            can_finish=False,
+            reason=(
+                f"Tests are still failing: {', '.join(failing_tests[:3])}. "
+                f"Those test names point at concepts the user's prompt didn't "
+                f"mention: {sorted(novel_test_keywords)[:5]}. Your edits to "
+                f"{sorted(edit_paths)[:3]} don't contain any of those words. "
+                f"The prompt likely pointed at a symptom — re-read the failing "
+                f"test names, look at what they actually assert, and edit the "
+                f"code that implements (or fails to implement) those concepts. "
+                f"Don't just follow the prompt literally."
+            ),
+            confidence=0.85,
+            verifier_name=self.name,
+        )
+
+
+# ---------------------------------------------------------------------------
+# MinimalFixVerifier
+# ---------------------------------------------------------------------------
+
+
+_MINIMAL_HINTS_RE = re.compile(
+    r"\b(minimal fix|don't (refactor|tackle|fix anything else)|only fix|just fix|"
+    r"only modify|do not refactor|nothing else should change|no other changes|"
+    r"minimal change|smallest fix)\b",
+    re.IGNORECASE,
+)
+"""Phrases that signal the user wants the change scope tightly bounded."""
+
+
+def _minimal_hint(prompt: str) -> str | None:
+    m = _MINIMAL_HINTS_RE.search(prompt or "")
+    return m.group(0) if m else None
+
+
+class MinimalFixVerifier:
+    """Block large diffs when the prompt explicitly asks for a minimal change.
+
+    Looks for hint phrases like "minimal fix", "only modify", "don't refactor"
+    in the user prompt. If found, counts the lines actually written by
+    write_file/edit_file calls in the activity log; if total added/modified
+    lines exceed ``max_lines`` (default 8), returns ``can_finish=False``.
+
+    The line count is a coarse heuristic — write_file replaces the whole file
+    so the diff size isn't directly available here. We use the
+    ``content_preview`` byte counts as a proxy when content is truncated, and
+    count text size for short writes. For most "minimal fix" violations
+    (refactoring multiple functions) this catches the agent well.
+
+    Deterministic; no LLM. Pattern-based: any prompt with minimal-scope
+    language triggers the budget; otherwise the verifier is silent.
+    """
+
+    name = "minimal_fix"
+
+    def __init__(self, *, max_lines: int = 8) -> None:
+        self._max_lines = max_lines
+
+    async def verify(
+        self, *, session: Session, activity: list[ActivityEvent]
+    ) -> VerificationResult:
+        prompt = _first_user_prompt(session)
+        hint = _minimal_hint(prompt)
+        if hint is None:
+            return VerificationResult(
+                can_finish=True,
+                reason="no 'minimal fix' constraint in prompt",
+                confidence=0.4,
+                verifier_name=self.name,
+            )
+
+        written_lines = 0
+        written_files: set[str] = set()
+        for ev in activity:
+            if ev.kind != "tool_call.completed":
+                continue
+            if ev.data.get("is_error"):
+                continue
+            name = ev.data.get("name")
+            if name not in ("write_file", "edit_file", "apply_diff", "patch"):
+                continue
+            args = ev.data.get("arguments") or {}
+            path = args.get("path")
+            if isinstance(path, str):
+                written_files.add(path)
+            # Best-effort line count: prefer 'content' from arguments, fall
+            # back to content_preview which the tool may have truncated.
+            content = args.get("content") or args.get("new_text") or args.get("diff")
+            if not isinstance(content, str):
+                content = str(ev.data.get("content_preview") or "")
+            written_lines += content.count("\n") + (
+                1 if content and not content.endswith("\n") else 0
+            )
+
+        if written_lines == 0:
+            return VerificationResult(
+                can_finish=True,
+                reason=f"no writes recorded; minimal-fix hint {hint!r} satisfied vacuously",
+                verifier_name=self.name,
+            )
+
+        if written_lines <= self._max_lines:
+            return VerificationResult(
+                can_finish=True,
+                reason=(
+                    f"diff is {written_lines} lines across {len(written_files)} "
+                    f"file(s) — within the minimal-fix budget"
+                ),
+                confidence=0.85,
+                verifier_name=self.name,
+            )
+
+        return VerificationResult(
+            can_finish=False,
+            reason=(
+                f"Prompt requested a minimal fix ({hint!r}), but you wrote "
+                f"~{written_lines} lines across {sorted(written_files)[:3]}. "
+                f"Revert anything beyond the minimal change — leave cleanup, "
+                f"refactors, and unrelated improvements for a follow-up."
+            ),
+            confidence=0.8,
+            verifier_name=self.name,
+        )
+
+
+# ---------------------------------------------------------------------------
+# TestsBeforeEditVerifier
+# ---------------------------------------------------------------------------
+
+
+class TestsBeforeEditVerifier:
+    """Block runs that edited files without running tests first.
+
+    Inspects the activity ledger in temporal order. If any
+    ``edit_file``/``write_file`` call precedes the first successful
+    ``verify_work`` call, the verifier returns ``can_finish=False`` with an
+    instruction to run the test suite first.
+
+    Why: small models tend to follow the user's prompt literally. When the
+    prompt's suggested fix doesn't match the real bug, the model edits
+    immediately and misses the test signal. Forcing a test run first surfaces
+    the real failing test names — which often reveal the actual bug.
+
+    Args:
+        write_tool_names: which tool names count as "edits". Defaults to
+            ``_WRITE_TOOL_NAMES`` minus ``shell``/``bash``/``run_command``
+            since those are how the agent runs tests in the first place.
+    """
+
+    name = "tests_before_edit"
+
+    def __init__(self, write_tool_names: frozenset[str] | None = None) -> None:
+        if write_tool_names is None:
+            # Tests are typically invoked via shell; don't count shell as a
+            # write for this verifier or we'd block any run that started with
+            # 'shell pytest'.
+            write_tool_names = frozenset({"write_file", "edit_file", "apply_diff", "patch"})
+        self._writes = write_tool_names
+
+    async def verify(
+        self, *, session: Session, activity: list[ActivityEvent]
+    ) -> VerificationResult:
+        tool_events = [e for e in activity if e.kind == "tool_call.completed"]
+
+        first_edit_idx: int | None = None
+        first_verify_idx: int | None = None
+        for idx, ev in enumerate(tool_events):
+            name = ev.data.get("name")
+            if first_edit_idx is None and name in self._writes:
+                first_edit_idx = idx
+            if first_verify_idx is None and name == "verify_work":
+                first_verify_idx = idx
+            if first_edit_idx is not None and first_verify_idx is not None:
+                break
+
+        if first_edit_idx is None:
+            return VerificationResult(
+                can_finish=True,
+                reason="no edits — nothing to gate on prior tests",
+                verifier_name=self.name,
+            )
+
+        if first_verify_idx is not None and first_verify_idx < first_edit_idx:
+            return VerificationResult(
+                can_finish=True,
+                reason="verify_work ran before first edit — tests informed the fix",
+                verifier_name=self.name,
+            )
+
+        return VerificationResult(
+            can_finish=False,
+            reason=(
+                "You edited files without running the test suite first. "
+                "Before making changes, call verify_work to see which tests "
+                "actually fail — the failing test names often reveal the real "
+                "bug, which may differ from what the user's prompt suggests. "
+                "Run verify_work, read the failing test names, THEN decide what "
+                "to change."
+            ),
+            confidence=0.85,
+            verifier_name=self.name,
+        )
+
+
+# ---------------------------------------------------------------------------
+# FileScopeVerifier
+# ---------------------------------------------------------------------------
+
+
+_FILE_PATH_RE = re.compile(
+    # Backtick-quoted token that contains a slash OR ends with a code/config extension.
+    r"`([^`\n]+?\.(?:py|ts|tsx|js|jsx|go|rs|java|kt|rb|php|c|cc|cpp|h|hpp|md|json|toml|yaml|yml|sql|sh|cfg|ini|html|css|tf|hcl))`"
+    r"|"
+    r"`([^`\n]*?/[^`\n]+?)`"
+)
+"""Match a file path inside backticks. Either has a recognized extension or contains a slash."""
+
+
+def _extract_scope_paths(prompt: str) -> set[str]:
+    """Extract file paths the user mentioned in their prompt.
+
+    Looks at backtick-quoted tokens that look like file paths (have a slash or
+    end in a code/config file extension). Returns a deduplicated set of strings
+    — both the original path and its basename are included so write_file
+    comparisons match either form.
+    """
+    found: set[str] = set()
+    for m in _FILE_PATH_RE.finditer(prompt):
+        path = m.group(1) or m.group(2)
+        if not path:
+            continue
+        path = path.strip().lstrip("./")
+        if not path:
+            continue
+        found.add(path)
+        # Also store the basename so a write of 'src/cache.py' matches a
+        # prompt that said 'cache.py' (or vice-versa).
+        found.add(Path(path).name)
+    return found
+
+
+def _first_user_prompt(session: Session) -> str:
+    for msg in session.messages:
+        if getattr(msg, "role", None) == "user" and msg.content:
+            return msg.content
+    return ""
+
+
+def _touched_paths(activity: list[ActivityEvent]) -> set[str]:
+    touched: set[str] = set()
+    for e in activity:
+        if e.kind != "tool_call.completed":
+            continue
+        if e.data.get("is_error"):
+            continue
+        name = e.data.get("name")
+        if name not in ("write_file", "edit_file"):
+            continue
+        args = e.data.get("arguments") or {}
+        path = args.get("path")
+        if not isinstance(path, str) or not path:
+            continue
+        normalized = path.lstrip("./")
+        touched.add(normalized)
+        touched.add(Path(normalized).name)
+    return touched
+
+
+class FileScopeVerifier:
+    """Block runs that wrote to files outside the scope named in the prompt.
+
+    Reads the first user message of the session, extracts any backtick-quoted
+    file paths (e.g. ```src/cache.py```), and rejects the run if the
+    activity ledger shows write_file/edit_file calls to files outside that set.
+
+    If the prompt names no files, this verifier passes — it's a structural
+    check only fires when the user gave an explicit constraint.
+
+    Deterministic; no LLM call. Catches the scope-discipline pattern: prompt
+    names one file, agent refactors several.
+    """
+
+    name = "file_scope"
+
+    async def verify(
+        self, *, session: Session, activity: list[ActivityEvent]
+    ) -> VerificationResult:
+        prompt = _first_user_prompt(session)
+        allowed = _extract_scope_paths(prompt)
+        if not allowed:
+            return VerificationResult(
+                can_finish=True,
+                reason="no file-scope constraint detected in prompt",
+                confidence=0.4,
+                verifier_name=self.name,
+            )
+
+        touched = _touched_paths(activity)
+        if not touched:
+            return VerificationResult(
+                can_finish=True,
+                reason="no file writes recorded — nothing to enforce scope against",
+                confidence=0.4,
+                verifier_name=self.name,
+            )
+
+        extra = sorted(p for p in touched if p not in allowed and "/" in p)
+        # Filter further: only flag full-path violations (skip basename dupes
+        # that already matched a full path in the allowed set).
+        extra = [p for p in extra if Path(p).name not in allowed]
+        if not extra:
+            return VerificationResult(
+                can_finish=True,
+                reason=f"all modified files were in scope: {sorted(allowed)[:3]}",
+                confidence=0.85,
+                verifier_name=self.name,
+            )
+
+        return VerificationResult(
+            can_finish=False,
+            reason=(
+                f"Task named these files as in-scope: {sorted(allowed)[:5]}, "
+                f"but you also modified: {extra}. Revert the out-of-scope "
+                f"changes — the user explicitly asked for a minimal fix."
+            ),
+            confidence=0.9,
+            verifier_name=self.name,
+        )
+
+
 __all__ = [
     "ChainedVerifier",
     "ClaimGroundingVerifier",
     "ConsensusVerifier",
+    "DiagnosisAlignmentVerifier",
     "EvidenceCheckKind",
     "EvidenceContract",
     "EvidenceContractResult",
+    "FileScopeVerifier",
     "LLMJudgeVerifier",
+    "MinimalFixVerifier",
+    "MisdirectedSuggestionVerifier",
     "RuleVerifier",
     "ShellVerifier",
     "StateVerifier",
+    "TestsBeforeEditVerifier",
     "VerificationGateway",
     "VerificationResult",
     "Verifier",

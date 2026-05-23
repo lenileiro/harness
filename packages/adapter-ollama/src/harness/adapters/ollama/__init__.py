@@ -75,14 +75,15 @@ class OllamaAdapter:
         max_tokens: int | None = None,
         **kwargs: Any,
     ) -> AsyncIterator[Event]:
-        tool_choice = kwargs.get("tool_choice")
         return self._stream(
             model=model,
             messages=messages,
             tools=tools,
             temperature=temperature,
             max_tokens=max_tokens,
-            tool_choice=tool_choice,
+            tool_choice=kwargs.get("tool_choice"),
+            response_format=kwargs.get("response_format"),
+            seed=kwargs.get("seed"),
         )
 
     async def capabilities(self) -> Capabilities:
@@ -106,6 +107,8 @@ class OllamaAdapter:
         temperature: float | None,
         max_tokens: int | None,
         tool_choice: str | None = None,
+        response_format: dict[str, Any] | str | None = None,
+        seed: int | None = None,
     ) -> AsyncIterator[Event]:
         payload: dict[str, Any] = {
             "model": model,
@@ -120,6 +123,10 @@ class OllamaAdapter:
             payload["temperature"] = temperature
         if max_tokens is not None:
             payload["max_tokens"] = max_tokens
+        if response_format is not None:
+            payload["response_format"] = response_format
+        if seed is not None:
+            payload["seed"] = seed
 
         url = f"{self.base_url}/v1/chat/completions"
         headers = {

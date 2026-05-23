@@ -14,7 +14,6 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
-import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -126,6 +125,12 @@ def _agent_cmd(
         provider,
         "--model",
         model,
+        # 2 attempts: empirically the right budget for "minimal fix" style
+        # tasks. Raising it to 4 regressed fixture 02 because the extra
+        # turns gave the agent room to add unwanted "robustness" code,
+        # net-net worse on scope dimension. Keep tight.
+        "--max-repair",
+        "2",
     ]
     if verify_command:
         critic_mode = "llm+search" if os.environ.get("TAVILY_API_KEY") else "llm"
@@ -211,14 +216,18 @@ def run_fixture(
         )
         git_diff = diff_result.stdout
 
-        # Run the test suite to check correctness.
+        # Run the fixture's own verify_command to check correctness. We
+        # invoke whatever shell command the fixture declared (pytest, go
+        # test, cargo, jest, ...) rather than hardcoding pytest here — the
+        # harness eval framework is language-agnostic.
         test_result = subprocess.run(
-            [sys.executable, "-m", "pytest", "tests/", "-v", "--tb=short", "--no-header"],
+            fixture.verify_command,
             cwd=work,
             capture_output=True,
             text=True,
             timeout=test_timeout,
             env=os.environ.copy(),
+            shell=True,
         )
         test_output = test_result.stdout + test_result.stderr
 

@@ -74,6 +74,7 @@ from harness.core.repair import RepairOrchestrator
 from harness.core.schemas import Message, RunRequest, Session, ToolCall, ToolResult
 from harness.core.storage import Storage
 from harness.core.telemetry import get_logger, span
+from harness.core.test_signals import extract_failing_test_names as _extract_failing_test_names
 from harness.core.tools import (
     ApprovalHandler,
     ApprovalPolicy,
@@ -457,8 +458,15 @@ class Agent:
 
                 # Optionally call the critic to challenge the agent's hypothesis
                 # before assembling the repair directive.
+                #
+                # Defer the critic to attempt >= 2. Attempt 1 is just "re-read
+                # the failure and try again" — adding a devil's-advocate
+                # critique here causes small models to flip-flop on their own
+                # diagnosis before they've even attempted to act on the new
+                # information. Only invoke the critic once the model has
+                # already failed at least once after seeing the test output.
                 critique_text = ""
-                if self.critic is not None:
+                if self.critic is not None and _repair_attempt >= 1:
                     activity_for_critic: list[ActivityEvent] = []
                     if self.activity_store is not None:
                         activity_for_critic = await self.activity_store.list_activity(
@@ -477,15 +485,19 @@ class Agent:
                     f"Verification failed (attempt {_repair_attempt + 1} of "
                     f"{self._max_repair_attempts}).\n\n"
                 )
+                failing_tests = _extract_failing_test_names(last_verification.result.reason)
+                failing_header = (
+                    f"**Failing tests:** {', '.join(failing_tests)}\n\n" if failing_tests else ""
+                )
                 if critique_text:
                     repair_msg = (
-                        attempt_label + f"**Code Review:**\n{critique_text}\n\n"
+                        attempt_label + failing_header + f"**Code Review:**\n{critique_text}\n\n"
                         f"**Test Output:**\n{last_verification.result.reason}\n\n"
                         "Address the code review and fix the remaining failures."
                     )
                 else:
                     repair_msg = (
-                        attempt_label + f"{last_verification.result.reason}\n\n"
+                        attempt_label + failing_header + f"{last_verification.result.reason}\n\n"
                         "Fix the remaining failures and try again."
                     )
                 session.messages.append(Message(role="user", content=repair_msg))

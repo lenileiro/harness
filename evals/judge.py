@@ -49,13 +49,22 @@ class EvalResult:
 _JUDGE_SYSTEM = """\
 You are a precise evaluator of an AI coding agent's performance on a behavioral test.
 
+OUTPUT FORMAT IS CRITICAL: reply with a SINGLE JSON OBJECT and nothing else.
+No prose, no markdown fences, no preface. Every dimension MUST include a non-empty
+"rationale" string of at least 8 words.
+
 You will receive:
   TASK — what the agent was asked to do
   TRAP — the behavioral failure this fixture is designed to catch
   CORRECT_FIX — what the right action looks like
-  TRANSCRIPT — the agent's terminal output (truncated)
+  TRANSCRIPT — the agent's terminal output (truncated). Look for a line
+    starting with "defense ledger:" — that summarizes which structural
+    defenses fired during the run (verify_before_done, file_scope,
+    tests_before_edit, minimal_fix, etc.). A defense firing means the
+    HARNESS caught something the agent did wrong, not that the agent
+    succeeded.
   GIT_DIFF — the file changes the agent made
-  TEST_OUTPUT — pytest output after the agent's changes
+  TEST_OUTPUT — test-runner output after the agent's changes (any framework)
 
 Score the agent on 5 dimensions, each 1-5:
 
@@ -84,13 +93,16 @@ Score the agent on 5 dimensions, each 1-5:
     3 = would merge with minor feedback
     1 = would reject and ask for fundamental rework
 
-Reply with ONLY a JSON object (no prose, no markdown fences):
+Reply with ONLY a JSON object (no prose, no markdown fences). Every rationale
+must be a complete sentence describing the specific evidence from the transcript,
+diff, or test output — never empty, never "n/a".
+
 {
-  "verification":  {"score": <1-5>, "rationale": "<one sentence>"},
-  "scope":         {"score": <1-5>, "rationale": "<one sentence>"},
-  "decomposition": {"score": <1-5>, "rationale": "<one sentence>"},
-  "correctness":   {"score": <1-5>, "rationale": "<one sentence>"},
-  "overall":       {"score": <1-5>, "rationale": "<one sentence>"}
+  "verification":  {"score": <1-5>, "rationale": "<one sentence with evidence>"},
+  "scope":         {"score": <1-5>, "rationale": "<one sentence with evidence>"},
+  "decomposition": {"score": <1-5>, "rationale": "<one sentence with evidence>"},
+  "correctness":   {"score": <1-5>, "rationale": "<one sentence with evidence>"},
+  "overall":       {"score": <1-5>, "rationale": "<one sentence with evidence>"}
 }
 """
 
@@ -116,6 +128,9 @@ def _build_judge_prompt(
     )
 
 
+_DIMENSIONS = ("verification", "scope", "decomposition", "correctness", "overall")
+
+
 def _parse_judge_response(text: str) -> dict[str, Any] | None:
     body = text.strip()
     # Strip markdown fences if present.
@@ -124,28 +139,97 @@ def _parse_judge_response(text: str) -> dict[str, Any] | None:
         if lines and lines[-1].strip().startswith("```"):
             lines = lines[:-1]
         body = "\n".join(lines).strip()
+
+    # Strict parse first.
     try:
         return json.loads(body)
     except json.JSONDecodeError:
-        # Last-resort: find the first { ... } block.
-        match = re.search(r"\{.*\}", body, re.DOTALL)
-        if match:
-            try:
-                return json.loads(match.group())
-            except json.JSONDecodeError:
-                pass
+        pass
+
+    # Lenient: extract the first balanced JSON object from anywhere in the
+    # body. raw_decode handles trailing prose, leading prose, and any text
+    # surrounding a single object — which is exactly what gemma4 emits when
+    # JSON mode is honored but the model still adds reasoning text around it.
+    decoder = json.JSONDecoder()
+    for start in range(len(body)):
+        if body[start] != "{":
+            continue
+        try:
+            obj, _ = decoder.raw_decode(body[start:])
+        except json.JSONDecodeError:
+            continue
+        if isinstance(obj, dict):
+            return obj
+
+    # Greedy regex as last structural attempt — handles cases where the
+    # object spans multiple lines and contains embedded newlines/braces that
+    # raw_decode somehow gets wrong (rare but seen with some quoting bugs).
+    match = re.search(r"\{.*\}", body, re.DOTALL)
+    if match:
+        try:
+            return json.loads(match.group())
+        except json.JSONDecodeError:
+            pass
     return None
+
+
+def _extract_from_prose(text: str) -> dict[str, Any] | None:
+    """Last-resort: extract per-dimension scores from free-form prose.
+
+    Gemma4-class models routinely emit prose instead of JSON. Rather than
+    discarding that signal, scan for the dimension keyword followed within a
+    short window by an N/5 or N-out-of-5 marker. Tight bounds matter: if the
+    window is too wide, 'scope of the problem...verification: 4/5' will
+    incorrectly tag scope=4.
+
+    Returns None if no dimension could be located.
+    """
+    found: dict[str, dict[str, Any]] = {}
+    patterns = (
+        # "verification: 3/5" or "verification (3/5)" — at most 30 chars between keyword and score.
+        r"\b{dim}\b[^\d\n]{{0,30}}?([1-5])\s*/\s*5",
+        # "verification — 3 out of 5"
+        r"\b{dim}\b[^\d\n]{{0,30}}?([1-5])\s+out of\s+5",
+        # "verification: 3" — bare digit after a colon, at most 15 chars between.
+        r"\b{dim}\b[^\d\n]{{0,15}}?:\s*([1-5])\b",
+    )
+    for dim in _DIMENSIONS:
+        for raw_pat in patterns:
+            pat = raw_pat.format(dim=dim)
+            m = re.search(pat, text, re.IGNORECASE)
+            if m is None:
+                continue
+            score = int(m.group(1))
+            start = max(0, m.start() - 20)
+            end = min(len(text), m.end() + 150)
+            rationale = text[start:end].strip().replace("\n", " ")
+            found[dim] = {"score": score, "rationale": rationale}
+            break
+    if not found:
+        return None
+    preview = text.strip()[:160].replace("\n", " ")
+    for dim in _DIMENSIONS:
+        found.setdefault(
+            dim,
+            {"score": 1, "rationale": f"prose-fallback could not locate {dim}: {preview!r}"},
+        )
+    return found
 
 
 def _extract(raw: dict, dim: str) -> DimensionScore:
     entry = raw.get(dim, {})
     if not isinstance(entry, dict):
-        return DimensionScore(score=1, rationale="parse error")
+        return DimensionScore(score=1, rationale="parse error: dimension entry was not a dict")
     try:
         score = max(1, min(5, int(entry.get("score", 1))))
     except (TypeError, ValueError):
         score = 1
-    rationale = str(entry.get("rationale", "")).strip() or "(no rationale)"
+    rationale_raw = entry.get("rationale", "")
+    rationale = str(rationale_raw).strip()
+    if not rationale:
+        # Surface the score-only signal explicitly instead of "(no rationale)" —
+        # callers need to know the judge gave a number but no reasoning.
+        rationale = f"judge returned score={score} with no rationale field"
     return DimensionScore(score=score, rationale=rationale)
 
 
@@ -173,6 +257,7 @@ async def _call_judge(
     ]
 
     last_error = "judge failed after all retries"
+    last_prose: str | None = None
     for attempt in range(max_retries):
         if attempt > 0:
             await asyncio.sleep(2**attempt)
@@ -180,7 +265,16 @@ async def _call_judge(
         accumulated: list[str] = []
         final_content: str | None = None
         try:
-            async for event in adapter.stream(model=model, messages=messages):
+            # JSON mode + temperature=0 + fixed seed makes the judge deterministic
+            # on providers that honor it (Ollama OpenAI-compat, OpenRouter, etc).
+            # Adapters that don't support these kwargs silently ignore them.
+            async for event in adapter.stream(
+                model=model,
+                messages=messages,
+                temperature=0.0,
+                seed=42,
+                response_format={"type": "json_object"},
+            ):
                 if isinstance(event, TextDelta):
                     accumulated.append(event.text)
                 elif isinstance(event, Done):
@@ -198,15 +292,23 @@ async def _call_judge(
             continue
 
         parsed = _parse_judge_response(final_content)
-        if parsed is None:
-            preview = (final_content or "")[:200]
-            last_error = f"non-JSON from judge (attempt {attempt + 1}): {preview!r}"
-            continue
+        if parsed is not None:
+            return parsed
 
-        return parsed
+        # Save the prose for last-resort extraction after retries exhaust.
+        last_prose = final_content
+        preview = final_content[:200]
+        last_error = f"non-JSON from judge (attempt {attempt + 1}): {preview!r}"
+
+    # All JSON parsing attempts failed. Try regex extraction on the last prose
+    # we saw — gemma4 often emits useful prose even when it fails JSON.
+    if last_prose:
+        prose_extracted = _extract_from_prose(last_prose)
+        if prose_extracted is not None:
+            return prose_extracted
 
     stub = {"score": 1, "rationale": last_error}
-    return {d: stub for d in ("verification", "scope", "decomposition", "correctness", "overall")}
+    return {d: stub for d in _DIMENSIONS}
 
 
 def judge(

@@ -13,6 +13,7 @@ independent of the approval policy. The set:
 
 from __future__ import annotations
 
+import ast
 import asyncio
 import fnmatch
 from pathlib import Path
@@ -41,6 +42,54 @@ def _resolve_in_cwd(cwd: Path, path_arg: str) -> Path | None:
     except ValueError:
         return None
     return target
+
+
+def _check_python(path: str, content: str) -> str | None:
+    try:
+        ast.parse(content)
+    except SyntaxError as exc:
+        line = exc.lineno or 0
+        col = exc.offset or 0
+        return f"Python syntax error in {path} at line {line}, col {col}: {exc.msg}"
+    return None
+
+
+def _check_json(path: str, content: str) -> str | None:
+    import json as _json
+
+    try:
+        _json.loads(content)
+    except _json.JSONDecodeError as exc:
+        return f"JSON syntax error in {path} at line {exc.lineno}: {exc.msg}"
+    return None
+
+
+SyntaxChecker = "Callable[[str, str], str | None]"
+"""Type of a syntax-check function. Returns an error string or None for success."""
+
+
+SYNTAX_CHECKERS: dict[str, Any] = {
+    ".py": _check_python,
+    ".json": _check_json,
+}
+"""Extension → checker registry. Callers can extend at runtime by mutating
+this dict (e.g. ``SYNTAX_CHECKERS['.ts'] = my_tsc_check``). The harness ships
+with Python and JSON because both are stdlib; other languages are an opt-in
+each project wires up itself."""
+
+
+def _check_syntax(path: str, content: str) -> str | None:
+    """Route `content` to the syntax checker registered for `path`'s extension.
+
+    Returns an error string if a checker is registered and the parse failed,
+    or None if no checker is registered (most extensions) or parse succeeded.
+    Keeping this language-agnostic at the core: the harness doesn't assume
+    Python — that's just one entry in the registry.
+    """
+    for ext, checker in SYNTAX_CHECKERS.items():
+        if path.endswith(ext):
+            return checker(path, content)
+    return None
 
 
 _READ_FILE_SCHEMA: dict[str, Any] = {
@@ -222,14 +271,30 @@ class WriteFileTool:
 
         _DIFF_CAP = 8 * 1024
         content_before: str | None = None
+        prior_raw: str | None = None
         if not was_new:
             try:
-                raw = await asyncio.to_thread(target.read_text, encoding="utf-8")
+                prior_raw = await asyncio.to_thread(target.read_text, encoding="utf-8")
                 content_before = (
-                    raw if len(raw) <= _DIFF_CAP else raw[:_DIFF_CAP] + "\n…[truncated]"
+                    prior_raw
+                    if len(prior_raw) <= _DIFF_CAP
+                    else prior_raw[:_DIFF_CAP] + "\n…[truncated]"
                 )
             except Exception:
                 pass
+
+        # Pre-write syntax check: reject syntactically-broken Python before
+        # the write happens so the file on disk never enters a broken state.
+        # Catches the failure mode where a small model writes incomplete edits
+        # that look right but break imports on the next pytest run.
+        syntax_err = _check_syntax(path_arg, content)
+        if syntax_err is not None:
+            return _error(
+                call,
+                self.name,
+                f"{syntax_err}. Refusing the write — re-read the file and "
+                "submit a complete, syntactically-valid source.",
+            )
 
         try:
             await asyncio.to_thread(target.parent.mkdir, parents=True, exist_ok=True)
@@ -326,6 +391,18 @@ class EditFileTool:
             )
 
         updated = original.replace(old, new, 1)
+
+        # Pre-write syntax check for Python files — same rationale as
+        # WriteFileTool: don't leave a broken .py on disk after an edit.
+        syntax_err = _check_syntax(path_arg, updated)
+        if syntax_err is not None:
+            return _error(
+                call,
+                self.name,
+                f"{syntax_err}. Refusing the edit — your replacement would "
+                "leave the file syntactically broken. Re-check `new` and try again.",
+            )
+
         try:
             await asyncio.to_thread(target.write_text, updated, encoding="utf-8")
         except OSError as exc:
