@@ -19,7 +19,9 @@ TavilySearchTool notes:
 
 from __future__ import annotations
 
+import ipaddress
 import os
+import socket
 from typing import Any, Literal
 from urllib.parse import urlparse
 
@@ -58,6 +60,80 @@ DEFAULT_ALLOWED_MIME_PREFIXES: tuple[str, ...] = (
 def _mime_allowed(content_type: str, allowed: tuple[str, ...]) -> bool:
     primary = content_type.split(";", 1)[0].strip().lower()
     return any(primary.startswith(prefix) for prefix in allowed)
+
+
+_BLOCKED_HOSTNAMES: frozenset[str] = frozenset(
+    {
+        "localhost",
+        "ip6-localhost",
+        "ip6-loopback",
+        # Cloud metadata service hostnames — same IP risk via DNS.
+        "metadata.google.internal",
+        "metadata",
+        "instance-data",
+        "instance-data.ec2.internal",
+    }
+)
+
+
+def _is_blocked_address(addr: str) -> bool:
+    """Return True if an IP address is loopback, private, link-local, or
+    otherwise unsafe to fetch from a development machine.
+
+    Blocks: 127/8, ::1, 169.254/16 (link-local incl. AWS/Azure metadata),
+    10/8, 172.16/12, 192.168/16, multicast, reserved. Allows public IPs.
+    """
+    try:
+        ip = ipaddress.ip_address(addr)
+    except ValueError:
+        return False  # not an IP literal — caller handles via hostname check
+    return (
+        ip.is_loopback
+        or ip.is_link_local
+        or ip.is_private
+        or ip.is_multicast
+        or ip.is_reserved
+        or ip.is_unspecified
+    )
+
+
+def _is_blocked_host(host: str) -> str | None:
+    """Return a reason string if `host` should be refused, else None.
+
+    Handles three cases:
+      1. Hostname is on the blocklist (`localhost`, cloud-metadata aliases).
+      2. Host is an IP literal in a private/loopback/link-local range.
+      3. Hostname resolves (via DNS) to a blocked IP — defeats DNS rebinding
+         and the trick of pointing a public hostname at 127.0.0.1.
+
+    DNS lookups happen here, not in the request — so we fail closed before
+    any traffic leaves the box.
+    """
+    if not host:
+        return "missing host"
+    lowered = host.lower().strip("[]")
+    if lowered in _BLOCKED_HOSTNAMES:
+        return f"hostname {lowered!r} is blocked (loopback/metadata)"
+    if _is_blocked_address(lowered):
+        return f"address {lowered!r} is in a blocked range (loopback/private/link-local)"
+    # Best-effort DNS lookup — if it fails (no network, unresolvable), we let
+    # httpx handle it. If it succeeds and resolves to a blocked range, refuse.
+    try:
+        infos = socket.getaddrinfo(lowered, None)
+    except (socket.gaierror, OSError):
+        return None
+    for *_, sockaddr in infos:
+        # sockaddr is (host, port) for AF_INET and (host, port, flowinfo,
+        # scopeid) for AF_INET6 — index 0 is always the host string for
+        # both. The type union includes Unix-socket FDs which we never
+        # asked for; coerce to str for the IP-range check.
+        candidate = str(sockaddr[0])
+        if _is_blocked_address(candidate):
+            return (
+                f"hostname {lowered!r} resolves to {candidate!r}, which is in "
+                f"a blocked range (SSRF defense)"
+            )
+    return None
 
 
 def _error(call: ToolCall, name: str, message: str) -> ToolResult:
@@ -104,6 +180,13 @@ class FetchUrlTool:
             )
         if not parsed.netloc:
             return _error(call, self.name, "URL is missing a host")
+
+        # SSRF defense — block loopback, private, link-local addresses and
+        # cloud metadata hostnames. Resolves DNS once and refuses if any
+        # answer is in a blocked range.
+        block_reason = _is_blocked_host(parsed.hostname or "")
+        if block_reason is not None:
+            return _error(call, self.name, f"refused: {block_reason}")
 
         timeout_arg = call.arguments.get("timeout", self.default_timeout)
         try:

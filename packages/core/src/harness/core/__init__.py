@@ -98,6 +98,11 @@ from harness.core.prediction import (
     ToolPrediction,
     compare_prediction,
 )
+from harness.core.prompt_injection_probe import (
+    InjectionFinding,
+    annotate_if_suspicious,
+    scan_text,
+)
 from harness.core.repair import RepairDirective, RepairMode, RepairOrchestrator
 from harness.core.runtime import Agent, fork_session
 from harness.core.schemas import (
@@ -114,6 +119,7 @@ from harness.core.schemas import (
     Usage,
     VerificationResult,
 )
+from harness.core.shell_safety import check_dangerous_command
 from harness.core.storage import Storage
 from harness.core.telemetry import configure_logging, get_logger, span
 from harness.core.tools import (
@@ -219,6 +225,7 @@ __all__ = [
     "HarnessError",
     "InMemoryCheckpointStore",
     "InboxApprovalHandler",
+    "InjectionFinding",
     "InternalError",
     "LLMCritic",
     "LLMJudgeVerifier",
@@ -299,7 +306,9 @@ __all__ = [
     "WorkQueue",
     "__version__",
     "activity",
+    "annotate_if_suspicious",
     "build_ledger",
+    "check_dangerous_command",
     "classify",
     "compare_prediction",
     "configure_logging",
@@ -315,6 +324,7 @@ __all__ = [
     "persist",
     "prune",
     "router",
+    "scan_text",
     "span",
     "start",
     "tool_matches_phase",

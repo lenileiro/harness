@@ -878,12 +878,22 @@ class Agent:
                     return
                 for ev in extra_events:
                     yield ev
+                # Prompt-injection probe: scan tool output for hijack patterns
+                # before it enters the next agent turn's context. If the output
+                # contains text like "ignore previous instructions" or fake
+                # SYSTEM:/[INST] markers, prepend a notice telling the model
+                # to treat the content as data, not as instructions.
+                # Local import: prompt_injection_probe imports re-only, so
+                # this is effectively free at module-load time.
+                from harness.core.prompt_injection_probe import annotate_if_suspicious
+
+                annotated_content = annotate_if_suspicious(result.content or "")
                 session.messages.append(
                     Message(
                         role="tool",
                         tool_call_id=tool_call.id,
                         name=tool_call.name,
-                        content=result.content,
+                        content=annotated_content,
                     )
                 )
                 session.touch()

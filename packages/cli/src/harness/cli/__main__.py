@@ -297,12 +297,21 @@ class SpawnAgentsTool:
         cwd: Path,
         config: HarnessConfig,
         max_workers: int = 3,
+        approval_policy: ApprovalPolicy | None = None,
+        approval_handler: ApprovalHandler | None = None,
     ) -> None:
         self._provider = provider
         self._model = model
         self._cwd = cwd
         self._config = config
         self._max_workers = max_workers
+        # Inherit the parent's approval policy/handler. If the parent runs
+        # interactively (RichApprovalHandler), so do the children. If --yes,
+        # children get AutoApprove. Without this, sub-agents silently
+        # AutoApprove regardless of the parent's policy — letting a model
+        # bypass approval prompts by spawning a worker to run shell.
+        self._approval_policy = approval_policy or ApprovalPolicy(default="auto")
+        self._approval_handler = approval_handler or AutoApprove()
         self.parameters_schema = _SPAWN_SCHEMA
 
     async def __call__(self, call: ToolCall) -> ToolResult:
@@ -346,8 +355,8 @@ class SpawnAgentsTool:
                 tools=sub_tools,
                 storage=store,
                 failover=FailoverPolicy(chain=[self._provider]),
-                approval_policy=ApprovalPolicy(default="auto"),
-                approval_handler=AutoApprove(),
+                approval_policy=self._approval_policy,
+                approval_handler=self._approval_handler,
                 default_model=role.model or self._model,
                 default_cwd=str(self._cwd),
                 system_prompt=role.system_prompt,
@@ -641,14 +650,6 @@ def _build_agent(
         system_prompt = project_ctx
 
     tools = _build_tools(cwd)
-    tools.register(
-        SpawnAgentsTool(
-            provider=chain[0],
-            model=model,
-            cwd=cwd,
-            config=config,
-        )
-    )
     tools.register(VerifyWorkTool(cwd=cwd))
     primary_adapter = adapters[chain[0]]
     tools.register(
@@ -658,6 +659,10 @@ def _build_agent(
             search_fn=_build_search_fn(),
         )
     )
+
+    # SpawnAgentsTool registration is deferred until after we've built the
+    # parent's approval policy + handler, so we can pass them down to sub-
+    # agents. See the registration block lower in this function.
 
     # Always enforce six structural defenses (unless bare=True):
     #   1. If the prompt named specific files, the agent may only modify those.
@@ -700,6 +705,20 @@ def _build_agent(
         approval_handler = InboxApprovalHandler(approval_store=approval_store)
     else:
         approval_handler = RichApprovalHandler(console=console, session_overrides=session_overrides)
+
+    # Register SpawnAgentsTool now that we have the parent's approval policy
+    # and handler — sub-agents will inherit both, closing the previous
+    # silent-AutoApprove escape path.
+    tools.register(
+        SpawnAgentsTool(
+            provider=chain[0],
+            model=model,
+            cwd=cwd,
+            config=config,
+            approval_policy=approval_policy,
+            approval_handler=approval_handler,
+        )
+    )
 
     multi = len(chain) > 1
     return Agent(

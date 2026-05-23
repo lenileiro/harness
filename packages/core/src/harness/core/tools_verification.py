@@ -102,7 +102,14 @@ class VerifyWorkTool:
         "Repeat until all tests pass. Do NOT declare the task complete until "
         "verify_work returns PASSED."
     )
-    approval: ApprovalDecision = "auto"
+    # `verify_work` runs an arbitrary shell command — same blast radius as
+    # `shell`. Keep the approval level consistent so an agent can't bypass the
+    # shell approval gate by passing its command through here instead.
+    approval: ApprovalDecision = "prompt"
+    # NOTE: declared read_only because the typical use-case is "run the test
+    # suite," which is read-only. But the underlying mechanism is subprocess
+    # shell, so the structural denylist (check_dangerous_command) is applied
+    # below as a backstop regardless of the declared scope.
     effect_scope = "read_only"
 
     def __init__(self, cwd: Path, *, timeout: float = 120.0) -> None:
@@ -111,6 +118,8 @@ class VerifyWorkTool:
         self.parameters_schema = _VERIFY_SCHEMA
 
     async def __call__(self, call: ToolCall) -> ToolResult:
+        from harness.core.shell_safety import check_dangerous_command
+
         command = call.arguments.get("command", "")
         if not command or not command.strip():
             return ToolResult(
@@ -118,6 +127,21 @@ class VerifyWorkTool:
                 name=self.name,
                 content="command argument is required",
                 is_error=True,
+            )
+
+        denial = check_dangerous_command(command)
+        if denial is not None:
+            tier, reason = denial
+            return ToolResult(
+                tool_call_id=call.id,
+                name=self.name,
+                content=(
+                    f"refused [{tier} deny]: {reason}. verify_work is for "
+                    f"test commands (pytest, npm test, cargo test, etc.), "
+                    f"not arbitrary shell. Use a test runner."
+                ),
+                is_error=True,
+                metadata={"refused_reason": reason, "deny_tier": tier, "denied": True},
             )
 
         try:
