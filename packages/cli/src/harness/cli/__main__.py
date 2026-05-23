@@ -125,9 +125,11 @@ from harness.core import (
     WorkItemVerifiedEvent,
     build_ledger,
     configure_logging,
+    correlate_defenses,
     fork_session,
     format_ledger,
     make_multi_critic,
+    parse_ledger_text,
 )
 from harness.storage.memory import InMemoryStorage
 from harness.storage.sqlite import SQLiteStorage, default_db_path
@@ -3863,6 +3865,8 @@ def eval_run(
 
     # Collect every per-run EvalResult, keyed by (fixture, variant).
     runs_by_pair: dict[tuple[str, str], list[Any]] = {}
+    # Per-trial (defense ledger, passed, variant, fixture) for correlation.
+    defense_trials: list[tuple[Any, bool, str, str]] = []
     for fx in fixtures:
         console.print(f"\n[bold blue]▶ {fx.name}[/bold blue]")
         agent_desc = (
@@ -3917,6 +3921,14 @@ def eval_run(
                         console.print(f"  [red]judge failed{run_label}:[/red] {exc}")
                         continue
 
+                # Capture the defense ledger from this trial's transcript so we
+                # can correlate which defenses fired with PASS/FAIL outcomes.
+                # Bare-variant trials never emit a ledger (no structural chain
+                # → nothing to log) but we still record (None, passed) so the
+                # report distinguishes "defense was silent" from "no data."
+                ledger = parse_ledger_text(outcome.transcript)
+                defense_trials.append((ledger, result.passed, variant, fx.name))
+
                 _print_per_fixture(result)
 
     if not runs_by_pair:
@@ -3925,13 +3937,20 @@ def eval_run(
     # End-of-batch rollup. With n_runs>1, each cell is "<median>/5 (min..max)".
     # With --ab, the fixture column carries the variant label too.
     def _cell_for_runs(runs: list[Any], dim_name: str) -> str:
-        scores = [getattr(r, dim_name).score for r in runs]
-        scores.sort()
-        median = scores[len(scores) // 2]
-        color = "green" if median >= 4 else ("yellow" if median == 3 else "red")
+        scores = sorted(getattr(r, dim_name).score for r in runs)
+        # statistics.median averages the two middle values for even-N lists,
+        # which is what we want — picking scores[N//2] silently biased high
+        # on N=2 (e.g. median of [1, 5] became 5 instead of 3).
+        import statistics
+
+        median = statistics.median(scores)
+        median_round = round(median)
+        color = "green" if median_round >= 4 else ("yellow" if median_round == 3 else "red")
+        # Render as int when whole, single decimal otherwise.
+        median_str = f"{median:g}" if median != int(median) else str(int(median))
         if len(scores) == 1:
-            return f"[{color}]{median}/5[/{color}]"
-        return f"[{color}]{median}/5[/{color}] [dim]({scores[0]}..{scores[-1]})[/dim]"
+            return f"[{color}]{median_str}/5[/{color}]"
+        return f"[{color}]{median_str}/5[/{color}] [dim]({scores[0]}..{scores[-1]})[/dim]"
 
     console.print()
     title_pieces = ["Eval Results"]
@@ -3955,6 +3974,51 @@ def eval_run(
             f"[{pass_color}]{n_passed}/{len(runs)}[/{pass_color}]",
         )
     console.print(table)
+
+    # Defense correlation report: which defenses fired correlate with PASS or
+    # FAIL? Only meaningful when we have multiple defended trials — bare
+    # trials always have empty ledgers (no structural chain), so a pure-bare
+    # run produces no signal here.
+    defended_trials = [
+        (ledger, passed) for ledger, passed, variant, _ in defense_trials if variant == "defended"
+    ]
+    if len(defended_trials) >= 3:
+        stats = correlate_defenses(defended_trials)
+        console.print()
+        defense_table = Table(
+            show_header=True,
+            header_style="bold",
+            title=f"Defense correlation ({len(defended_trials)} defended trials)",
+        )
+        defense_table.add_column("Defense", no_wrap=True)
+        defense_table.add_column("block→pass", justify="center")
+        defense_table.add_column("block→fail", justify="center")
+        defense_table.add_column("silent→pass", justify="center")
+        defense_table.add_column("silent→fail", justify="center")
+        defense_table.add_column("Verdict", justify="left")
+        verdict_color = {
+            "helps": "green",
+            "neutral": "yellow",
+            "hurts": "red",
+            "n/a": "dim",
+            "n/a (small N)": "dim",
+        }
+        for s in stats:
+            color = verdict_color.get(s.verdict(), "white")
+            defense_table.add_row(
+                s.name,
+                str(s.block_pass),
+                str(s.block_fail),
+                str(s.silent_pass),
+                str(s.silent_fail),
+                f"[{color}]{s.verdict()}[/{color}]",
+            )
+        console.print(defense_table)
+        console.print(
+            "[dim]Read: a defense that 'hurts' fires when a trial fails more "
+            "often than when it passes. Manually consider disabling such "
+            "defenses; this report is diagnostic only.[/dim]"
+        )
 
 
 if __name__ == "__main__":

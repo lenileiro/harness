@@ -21,7 +21,14 @@ from harness.core.budget import ContextBudget, count_tokens, prune
 from harness.core.calibration import CalibrationRecord, OutcomeCalibration
 from harness.core.compactor import ContextCompactor
 from harness.core.critic import Critic, LLMCritic, MultiCritic, make_multi_critic
-from harness.core.defense_ledger import DefenseLedger, build_ledger, format_ledger
+from harness.core.defense_ledger import (
+    DefenseLedger,
+    DefenseStat,
+    build_ledger,
+    correlate_defenses,
+    format_ledger,
+    parse_ledger_text,
+)
 from harness.core.errors import (
     ApprovalDeniedError,
     CancelledError,
@@ -186,6 +193,7 @@ __all__ = [
     "Critic",
     "Critique",
     "DefenseLedger",
+    "DefenseStat",
     "DiagnosisAlignmentVerifier",
     "Done",
     "EffectScope",
@@ -295,6 +303,7 @@ __all__ = [
     "classify",
     "compare_prediction",
     "configure_logging",
+    "correlate_defenses",
     "count_tokens",
     "evaluate_evidence",
     "fork_session",
@@ -302,6 +311,7 @@ __all__ = [
     "get_logger",
     "listen",
     "make_multi_critic",
+    "parse_ledger_text",
     "persist",
     "prune",
     "router",

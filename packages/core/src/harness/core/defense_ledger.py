@@ -12,6 +12,7 @@ never crash the run.
 
 from __future__ import annotations
 
+import re
 from collections import Counter
 from dataclasses import dataclass, field
 
@@ -115,4 +116,164 @@ def format_ledger(ledger: DefenseLedger) -> str:
     return "\n".join(lines)
 
 
-__all__ = ["DefenseLedger", "build_ledger", "format_ledger"]
+# ---------------------------------------------------------------------------
+# Parsing & correlation
+# ---------------------------------------------------------------------------
+
+
+_VERIFIER_RE = re.compile(r"(\w+)=(\d+)✓/(\d+)✗")
+_REPAIR_RE = re.compile(r"repair attempts:\s*(\d+)(?:\s*\(critic in (\d+)/\d+\))?")
+_STALLED_RE = re.compile(r"stalled:\s*yes", re.IGNORECASE)
+
+
+def parse_ledger_text(text: str) -> DefenseLedger | None:
+    """Reverse of ``format_ledger`` — extract structured form from a transcript.
+
+    The defense ledger is printed at end-of-run by the CLI. Tools that consume
+    captured transcripts (e.g. the eval framework) parse it back into a
+    ``DefenseLedger`` to correlate firings with downstream outcomes.
+
+    Returns None if no ledger block is found.
+    """
+    if not text or "defense ledger:" not in text:
+        return None
+    # Slice from the marker to a blank line / end-of-block.
+    start = text.index("defense ledger:")
+    block = text[start:]
+    # Stop at the first non-indented non-empty line that isn't the header,
+    # or 8 lines down — whichever first.
+    lines = block.splitlines()[:8]
+
+    ledger = DefenseLedger()
+    for line in lines[1:]:
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if not (line.startswith(" ") or line.startswith("\t")):
+            break  # left the indented block
+        if stripped.startswith("verifiers:"):
+            for m in _VERIFIER_RE.finditer(stripped):
+                name = m.group(1)
+                passes = int(m.group(2))
+                blocks = int(m.group(3))
+                if passes:
+                    ledger.verifier_passes[name] = passes
+                if blocks:
+                    ledger.verifier_blocks[name] = blocks
+        elif stripped.startswith("repair attempts:"):
+            rm = _REPAIR_RE.search(stripped)
+            if rm:
+                ledger.repair_attempts = int(rm.group(1))
+                if rm.group(2):
+                    ledger.critic_invocations = int(rm.group(2))
+        elif _STALLED_RE.search(stripped):
+            ledger.stalled = True
+        # tools: line is parsed below if needed — skipping for the correlation
+        # use-case since we already track defenses, not raw tool calls, there.
+
+    return None if ledger.is_empty() else ledger
+
+
+@dataclass
+class DefenseStat:
+    """How a single defense correlates with PASS/FAIL outcomes."""
+
+    name: str
+    block_pass: int = 0  # blocked AND trial passed (defense helped or was OK)
+    block_fail: int = 0  # blocked AND trial failed (defense fired but didn't save)
+    silent_pass: int = 0  # never blocked AND trial passed (defense not needed)
+    silent_fail: int = 0  # never blocked AND trial failed (defense missed the problem)
+
+    @property
+    def total(self) -> int:
+        return self.block_pass + self.block_fail + self.silent_pass + self.silent_fail
+
+    @property
+    def block_pass_rate(self) -> float | None:
+        fires = self.block_pass + self.block_fail
+        return None if fires == 0 else self.block_pass / fires
+
+    def verdict(self) -> str:
+        """Human-readable categorical verdict.
+
+        - "helps": when it fires, the trial mostly still passes (defense
+          caught something correctable AND agent recovered).
+        - "hurts": when it fires, the trial mostly fails (defense correlated
+          with failure — either firing wrongly or pushing the agent into a
+          worse state via repair).
+        - "neutral": between the two.
+        - "n/a": never fired.
+        """
+        rate = self.block_pass_rate
+        if rate is None:
+            return "n/a"
+        fires = self.block_pass + self.block_fail
+        if fires < 3:
+            return "n/a (small N)"
+        if rate >= 0.66:
+            return "helps"
+        if rate <= 0.33:
+            return "hurts"
+        return "neutral"
+
+
+def correlate_defenses(
+    trials: list[tuple[DefenseLedger | None, bool]],
+) -> list[DefenseStat]:
+    """For each defense seen across trials, tally block/silent vs pass/fail.
+
+    ``trials`` is a list of (ledger, trial_passed). Ledger may be None for
+    trials where parsing failed; those count as "silent" for every defense.
+    """
+    all_names: set[str] = set()
+    for ledger, _ in trials:
+        if ledger is None:
+            continue
+        all_names |= set(ledger.verifier_passes)
+        all_names |= set(ledger.verifier_blocks)
+    # Always include critic as a "defense" so we can see whether it correlates.
+    has_critic_data = any(
+        ledger is not None and ledger.critic_invocations > 0 for ledger, _ in trials
+    )
+    if has_critic_data:
+        all_names.add("critic")
+
+    stats: dict[str, DefenseStat] = {n: DefenseStat(name=n) for n in all_names}
+    for ledger, passed in trials:
+        for name in all_names:
+            if ledger is None:
+                # Trial happened but ledger unparseable — treat as silent for everything.
+                if passed:
+                    stats[name].silent_pass += 1
+                else:
+                    stats[name].silent_fail += 1
+                continue
+            if name == "critic":
+                fired = ledger.critic_invocations > 0
+            else:
+                fired = ledger.verifier_blocks.get(name, 0) > 0
+            if fired and passed:
+                stats[name].block_pass += 1
+            elif fired and not passed:
+                stats[name].block_fail += 1
+            elif not fired and passed:
+                stats[name].silent_pass += 1
+            else:
+                stats[name].silent_fail += 1
+
+    # Sort: hurts first (highest priority to investigate), then by name.
+    order = {"hurts": 0, "neutral": 1, "helps": 2, "n/a (small N)": 3, "n/a": 4}
+    return sorted(
+        stats.values(),
+        key=lambda s: (order.get(s.verdict(), 5), s.name),
+    )
+
+
+__all__ = [
+    "DefenseLedger",
+    "DefenseStat",
+    "build_ledger",
+    "correlate_defenses",
+    "format_ledger",
+    "parse_ledger_text",
+]
