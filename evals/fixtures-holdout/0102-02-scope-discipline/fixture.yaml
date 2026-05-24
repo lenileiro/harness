@@ -1,0 +1,8 @@
+family: scope-discipline
+behavior_category: scope
+primary_dimension: scope
+expected_first_step: run tests
+required_verification: pytest tests/ -v --tb=short --no-header
+holdout: true
+mutated_from: 02-scope-discipline
+

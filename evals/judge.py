@@ -9,9 +9,10 @@ from __future__ import annotations
 import asyncio
 import json
 import re
-from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
+from evals.types import DimensionScore, EvalResult, HardMetrics
 from harness.core.events import Done, TextDelta
 from harness.core.schemas import Message
 
@@ -24,28 +25,6 @@ _MAX_TEST_OUTPUT = 2_000
 
 def _strip_ansi(text: str) -> str:
     return _ANSI_RE.sub("", text)
-
-
-@dataclass
-class DimensionScore:
-    score: int  # 1-5
-    rationale: str
-
-
-@dataclass
-class EvalResult:
-    fixture_name: str
-    verification: DimensionScore
-    scope: DimensionScore
-    decomposition: DimensionScore
-    correctness: DimensionScore
-    pushback: DimensionScore
-    epistemic: DimensionScore
-    overall: DimensionScore
-
-    @property
-    def passed(self) -> bool:
-        return self.overall.score >= 3 and self.correctness.score >= 3
 
 
 _JUDGE_SYSTEM = """\
@@ -136,14 +115,17 @@ def _build_judge_prompt(
     transcript: str,
     git_diff: str,
     test_output: str,
+    hard_metrics: HardMetrics | None,
 ) -> str:
     clean_transcript = _strip_ansi(transcript)[-_MAX_TRANSCRIPT:]
     clean_diff = git_diff[-_MAX_DIFF:]
     clean_tests = test_output[-_MAX_TEST_OUTPUT:]
+    metrics_json = json.dumps(hard_metrics.to_dict() if hard_metrics is not None else {}, indent=2)
 
     return (
         f"TASK:\n{task_text.strip()}\n\n"
         f"EVAL SPEC (trap + correct fix):\n{eval_md.strip()}\n\n"
+        f"HARD_METRICS:\n{metrics_json}\n\n"
         f"TRANSCRIPT (last {_MAX_TRANSCRIPT} chars):\n{clean_transcript or '(empty)'}\n\n"
         f"GIT_DIFF:\n{clean_diff or '(no changes)'}\n\n"
         f"TEST_OUTPUT:\n{clean_tests or '(no test output)'}\n"
@@ -272,6 +254,7 @@ async def _call_judge(
     transcript: str,
     git_diff: str,
     test_output: str,
+    hard_metrics: HardMetrics | None,
     max_retries: int = 3,
 ) -> dict[str, Any]:
     user_content = _build_judge_prompt(
@@ -280,6 +263,7 @@ async def _call_judge(
         transcript=transcript,
         git_diff=git_diff,
         test_output=test_output,
+        hard_metrics=hard_metrics,
     )
     messages = [
         Message(role="system", content=_JUDGE_SYSTEM),
@@ -351,6 +335,10 @@ def judge(
     transcript: str,
     git_diff: str,
     test_output: str,
+    hard_metrics: HardMetrics | None = None,
+    artifact_dir: str | None = None,
+    variant: str = "defended",
+    run_index: int = 1,
 ) -> EvalResult:
     """Score one fixture run. Synchronous entry point."""
     raw = asyncio.run(
@@ -362,6 +350,7 @@ def judge(
             transcript=transcript,
             git_diff=git_diff,
             test_output=test_output,
+            hard_metrics=hard_metrics,
         )
     )
     return EvalResult(
@@ -373,4 +362,8 @@ def judge(
         pushback=_extract(raw, "pushback"),
         epistemic=_extract(raw, "epistemic"),
         overall=_extract(raw, "overall"),
+        hard_metrics=hard_metrics,
+        artifact_dir=None if artifact_dir is None else Path(artifact_dir),
+        variant=variant,
+        run_index=run_index,
     )

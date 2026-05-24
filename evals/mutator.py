@@ -28,6 +28,7 @@ on both arms.
 
 from __future__ import annotations
 
+import json
 import re
 import shutil
 from dataclasses import dataclass, field
@@ -165,6 +166,21 @@ class MutationResult:
     touched_files: list[Path]
 
 
+@dataclass
+class FixtureSetMaterialization:
+    mode: str
+    dest_root: Path
+    fixture_dirs: list[Path]
+    mutation_results: list[MutationResult]
+
+    @property
+    def mutation_coverage(self) -> float:
+        if not self.fixture_dirs:
+            return 0.0
+        mutated = sum(1 for result in self.mutation_results if result.renames)
+        return mutated / len(self.fixture_dirs)
+
+
 def mutate_fixture(
     src_fixture_dir: Path,
     *,
@@ -205,10 +221,110 @@ def mutate_fixture(
     )
 
 
+def materialize_fixture_set(
+    src_root: Path,
+    *,
+    dest_root: Path,
+    mode: str,
+    seeds: list[int],
+) -> FixtureSetMaterialization:
+    """Create an eval-ready fixture set for original/mutated/mixed modes.
+
+    The output layout is ``dest_root/fixtures/<fixture>/...`` so the runner can
+    call ``discover_fixtures(..., fixtures_subdir="fixtures")`` against the
+    returned root.
+    """
+    if mode not in {"original", "mutated", "mixed"}:
+        raise ValueError(f"unsupported mutation mode: {mode}")
+    if not src_root.is_dir():
+        raise ValueError(f"fixture root not found: {src_root}")
+    fixture_dirs = [path for path in sorted(src_root.iterdir()) if path.is_dir()]
+    generated_root = dest_root / "fixtures"
+    if generated_root.exists():
+        shutil.rmtree(generated_root)
+    generated_root.mkdir(parents=True, exist_ok=True)
+
+    mutation_results: list[MutationResult] = []
+    materialized_dirs: list[Path] = []
+    seeds = seeds or [1]
+
+    for index, fixture_dir in enumerate(fixture_dirs):
+        chosen_seed = seeds[index % len(seeds)]
+        if mode == "original":
+            target_dir = generated_root / fixture_dir.name
+            shutil.copytree(fixture_dir, target_dir)
+            materialized_dirs.append(target_dir)
+            continue
+
+        use_mutation = mode == "mutated" or (index % 2 == 1)
+        if use_mutation:
+            result = mutate_fixture(fixture_dir, seed=chosen_seed, dest_root=generated_root)
+            target_dir = generated_root / fixture_dir.name
+            if target_dir.exists():
+                shutil.rmtree(target_dir)
+            shutil.move(str(result.dest_dir), str(target_dir))
+            _write_mutation_metadata(
+                target_dir / "fixture.yaml",
+                source_name=fixture_dir.name,
+                seed=chosen_seed,
+                mode=mode,
+            )
+            materialized_dirs.append(target_dir)
+            mutation_results.append(
+                MutationResult(
+                    fixture_name=fixture_dir.name,
+                    seed=chosen_seed,
+                    dest_dir=target_dir,
+                    renames=result.renames,
+                    touched_files=result.touched_files,
+                )
+            )
+            continue
+
+        target_dir = generated_root / fixture_dir.name
+        shutil.copytree(fixture_dir, target_dir)
+        materialized_dirs.append(target_dir)
+
+    manifest = {
+        "mode": mode,
+        "seeds": seeds,
+        "mutation_coverage": (
+            sum(1 for result in mutation_results if result.renames) / len(materialized_dirs)
+            if materialized_dirs
+            else 0.0
+        ),
+        "fixtures": [
+            {
+                "name": path.name,
+                "mutated": any(result.dest_dir == path for result in mutation_results),
+            }
+            for path in materialized_dirs
+        ],
+    }
+    (dest_root / "mutation_manifest.json").write_text(
+        json.dumps(manifest, indent=2),
+        encoding="utf-8",
+    )
+    return FixtureSetMaterialization(
+        mode=mode,
+        dest_root=dest_root,
+        fixture_dirs=materialized_dirs,
+        mutation_results=mutation_results,
+    )
+
+
+def _write_mutation_metadata(path: Path, *, source_name: str, seed: int, mode: str) -> None:
+    existing = path.read_text(encoding="utf-8") if path.exists() else ""
+    suffix = f"\nmutated_from: {source_name}\nmutation_seed: {seed}\nmutation_mode: {mode}\n"
+    path.write_text(existing.rstrip() + suffix, encoding="utf-8")
+
+
 __all__ = [
+    "FixtureSetMaterialization",
     "Mutation",
     "MutationResult",
     "apply_mutation",
+    "materialize_fixture_set",
     "mutate_fixture",
     "plan_mutation",
 ]

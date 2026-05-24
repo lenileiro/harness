@@ -176,3 +176,66 @@ class TestTestsBeforeEditBypass:
         ]
         result = await verifier.verify(session=session, activity=activity)
         assert not result.can_finish
+
+    async def test_shell_pytest_before_edit_counts_as_pre_edit_test_run(self) -> None:
+        verifier = _TestsBeforeEditVerifier()
+        session = Session(provider="x", model="y", cwd=Path("/tmp"))
+        session.messages.append(
+            Message(role="user", content="# Fix the format bug\n\nformat_price(None) fails.")
+        )
+        from harness.core.activity import ActivityEvent
+
+        activity = [
+            ActivityEvent(
+                kind="tool_call.completed",
+                data={
+                    "name": "shell",
+                    "is_error": True,
+                    "arguments": {"command": "pytest tests/test_format.py -q"},
+                    "content_preview": (
+                        "FAILED tests/test_format.py::test_format_price_none - TypeError"
+                    ),
+                },
+            ),
+            ActivityEvent(
+                kind="tool_call.completed",
+                data={"name": "edit_file", "is_error": False, "content_preview": "edited"},
+            ),
+            ActivityEvent(
+                kind="tool_call.completed",
+                data={"name": "verify_work", "is_error": False, "content_preview": "tests pass"},
+            ),
+        ]
+        result = await verifier.verify(session=session, activity=activity)
+        assert result.can_finish
+        assert "before the first edit" in result.reason
+
+    async def test_non_test_shell_before_edit_does_not_bypass(self) -> None:
+        verifier = _TestsBeforeEditVerifier()
+        session = Session(provider="x", model="y", cwd=Path("/tmp"))
+        session.messages.append(
+            Message(role="user", content="# Fix the format bug\n\nformat_price(None) fails.")
+        )
+        from harness.core.activity import ActivityEvent
+
+        activity = [
+            ActivityEvent(
+                kind="tool_call.completed",
+                data={
+                    "name": "shell",
+                    "is_error": False,
+                    "arguments": {"command": "find . -maxdepth 2"},
+                    "content_preview": "./src\n./tests",
+                },
+            ),
+            ActivityEvent(
+                kind="tool_call.completed",
+                data={"name": "edit_file", "is_error": False, "content_preview": "edited"},
+            ),
+            ActivityEvent(
+                kind="tool_call.completed",
+                data={"name": "verify_work", "is_error": False, "content_preview": "tests pass"},
+            ),
+        ]
+        result = await verifier.verify(session=session, activity=activity)
+        assert not result.can_finish

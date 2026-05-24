@@ -1,200 +1,374 @@
 # Harness
 
-> Python runtime/orchestration harness for LLM agents over **OpenRouter** and **Ollama**, with a ReAct tool-use loop, pluggable storage, per-tool approval, policy-driven provider failover, persistent memory, session forking, and post-run verification.
+Harness is a Python agent runtime and benchmark harness for tool-using LLMs.
+It is built as a `uv` workspace with a Typer CLI, pluggable model adapters,
+durable sessions and tasks, layered runtime defenses, and an execution-backed
+eval stack for coding-agent behavior.
 
-**Status:** functional. Install with `uv sync`, then run `harness --help`.
+At a high level, Harness gives you:
 
-## What it is
+- a resumable agent runtime with tools, approvals, and storage
+- a CLI for running, chatting with, and inspecting agents
+- structural defenses around the base model/tool loop
+- persistent workspace memory, contracts, tips, and resume state
+- a behavioral eval harness for defended-vs-bare A/B testing
 
-A Python equivalent of [`jido_harness`](https://github.com/agentjido/jido_harness)'s adapter contract, extended with a runtime layer that handles:
+## What Harness Is For
 
-- Long-running sessions persisted across CLI invocations
-- ReAct-style agent loop (think → tool call → observe → repeat)
-- Streaming responses from any OpenAI-compatible provider
-- Per-tool approval policies (`auto` / `prompt` / `deny`)
-- Configurable failover chains across providers
-- Persistent memory injected into every run
-- Workspace-local storage via `harness init`
-- Session forking to branch from a prior conversation
-- Post-run verification that catches agents lying about work done
-- Multi-step goal planning via LLM before the ReAct loop
+Harness is designed for the part of agent systems that lives outside the model:
+session management, tool orchestration, approval policy, verification, failure
+recovery, and evals.
 
-## Layout
+That means the project is useful in two modes:
 
-This is a [uv](https://docs.astral.sh/uv/) workspace with nine packages:
+1. As a runtime for real agent tasks in a workspace.
+2. As an experimentation surface for improving the code around the model, not
+   just swapping the model itself.
 
-```
+The repo currently includes adapters for OpenRouter, Ollama, and Anthropic, a
+shared runtime core, storage backends, built-in tools, and a CLI that ties the
+system together.
+
+## Workspace Layout
+
+This repository is a `uv` workspace. The root package depends on every
+workspace member so `uv sync` installs the whole stack in editable mode.
+
+```text
 packages/
-├── core/                  # Protocols, schemas, runtime, ReAct loop
-├── storage-memory/        # In-memory Session storage
-├── storage-sqlite/        # SQLite (aiosqlite) Session storage
-├── adapter-openrouter/    # OpenRouter HTTP/SSE adapter
-├── adapter-ollama/        # Ollama HTTP/SSE adapter
-├── tools-fs/              # read / write / edit / list / glob
-├── tools-shell/           # subprocess exec
-├── tools-web/             # http fetch
-└── cli/                   # Typer + Rich CLI (installs `harness` binary)
+├── adapter-anthropic/    # Anthropic adapter
+├── adapter-ollama/       # Ollama adapter
+├── adapter-openrouter/   # OpenRouter adapter
+├── cli/                  # Typer + Rich CLI, installs `harness`
+├── core/                 # Runtime loop, verifiers, critics, contracts, tips
+├── storage-memory/       # In-memory storage backend
+├── storage-sqlite/       # SQLite storage backend
+├── tasks/                # Durable task model and activity log
+├── tools-fs/             # Filesystem tools
+├── tools-shell/          # Shell execution tools
+└── tools-web/            # HTTP/web tools
 ```
 
-All packages share the `harness.*` namespace at the import level (e.g. `from harness.core import Agent`).
-
----
+Supporting benchmark assets live under `evals/`.
 
 ## Installation
 
+Harness targets Python 3.11+.
+
 ```bash
-# 1. Install workspace dependencies
 uv sync
-
-# 2. Install git hooks (runs format, lint, and type checks before commit/push)
-uv run pre-commit install --hook-type pre-commit --hook-type pre-push
-
-# 3. Install the harness binary globally (accessible without activating the venv)
-uv tool install --editable packages/cli
-
-# Confirm it works
-harness version
 ```
 
-Or if you prefer not to install globally, prefix every command with `uv run`:
+If you want the `harness` command on your path outside `uv run`, install the
+CLI package as an editable tool:
 
 ```bash
-uv run harness version
+uv tool install --editable packages/cli
+```
+
+Otherwise use:
+
+```bash
 uv run harness --help
 ```
 
----
-
-## Usage
-
-### Run a one-shot prompt
+To install local Git hooks:
 
 ```bash
-# Against Ollama (local)
-harness run --provider ollama --model gemma4:latest --yes "list the files in /tmp"
-
-# Against OpenRouter
-harness run --provider openrouter --model openai/gpt-4o --yes "summarize this project"
-
-# With a named session (resumable later)
-harness run --provider ollama --model gemma4:latest --session my-session --yes "start a task"
+uv run pre-commit install --hook-type pre-commit --hook-type pre-push
 ```
 
-### Interactive chat
+The configured hooks run format, lint, and type checks before commit/push.
+
+## Quick Start
+
+### Run a one-shot task
 
 ```bash
-harness chat --provider ollama --model gemma4:latest
+uv run harness run \
+  --provider openrouter \
+  --model google/gemma-4-26b-a4b-it \
+  --yes \
+  "summarize the repository layout"
 ```
 
-Keeps a session alive across turns. `Ctrl+D` to exit; resume later with `harness sessions resume`.
-
-### Multi-step goal planning
+### Start a resumable chat session
 
 ```bash
-# The LLM generates a plan first, then executes each step
-harness goal --provider ollama --model gemma4:latest --yes \
-  "refactor the approval handler to support batch approvals"
-
-# Equivalent using --goal flag on run
-harness run --provider ollama --model gemma4:latest --yes --goal \
-  "refactor the approval handler to support batch approvals"
+uv run harness chat \
+  --provider ollama \
+  --model gemma4:latest
 ```
 
-### Workspace-local storage
+### Initialize workspace-local state
 
 ```bash
-# Initialise a .harness/harness.db in the current directory
-harness init
-
-# All subsequent harness commands in this directory auto-use .harness/harness.db
-harness run --provider ollama --model gemma4:latest --yes "hello"
-harness sessions list
+uv run harness init
 ```
 
-### Session management
+This creates `.harness/harness.db` in the current workspace so later commands
+can reuse local sessions, memory, tasks, and related state.
+
+### Ask the agent to plan before acting
 
 ```bash
-# List all saved sessions
-harness sessions list
-
-# Show full transcript of a session
-harness sessions show <session-id>
-
-# Resume a session with a new prompt
-harness sessions resume <session-id> --yes "continue where we left off"
-
-# Fork a session — branch from a prior conversation's message history
-harness sessions fork <session-id>
-
-# Fork and immediately run a new prompt in the fork
-harness sessions fork <session-id> --yes "try a different approach"
-
-# Delete a session
-harness sessions rm <session-id>
+uv run harness run \
+  --provider openrouter \
+  --model google/gemma-4-26b-a4b-it \
+  --goal \
+  --yes \
+  "refactor the approval flow and update the tests"
 ```
 
-### Persistent memory
+## Core CLI Surface
 
-Memory entries are injected as a system message at the start of every run. The agent always knows what you've told it.
+The main entrypoint is:
 
 ```bash
-# Save facts the agent should always know
-harness memory save --kind project_fact "this project uses uv, not pip"
-harness memory save --kind user_preference "prefer concise responses"
-harness memory save --kind project_context "we are refactoring the auth module"
-
-# Memory kinds: user_preference | user_fact | project_fact | project_context
-harness memory list
-harness memory list --kind project_fact
-harness memory search "uv"
-harness memory rm mem_<id>
+uv run harness --help
 ```
 
-### Post-run verification
+Current top-level commands include:
 
-Harness can verify whether the agent actually accomplished the goal — catching cases where an LLM verbally claims work is done without calling any tools.
+- `run`: single prompt execution
+- `chat`: interactive REPL
+- `goal`: planner-first execution
+- `init`: create workspace-local storage
+- `sessions`: inspect and resume saved sessions
+- `providers`: inspect provider configuration
+- `tools`: inspect built-in tools
+- `tasks`: durable task management
+- `approvals`: inspect and resolve queued tool approvals
+- `evidence`: inspect the tool-call evidence ledger
+- `lab`: planner/worker/reporter multi-agent workflow
+- `memory`: persistent workspace memory
+- `eval`: run and inspect behavioral evals
+- `phase`: external phase tracking for multi-step tasks
+- `tips`: procedural skill tips
+- `tune`: prompt-tuning support for verifiers and critics
+- `resume`: cross-session roadmap contract
+- `contracts`: environment contracts loaded into runs
+
+The CLI help is the source of truth for exact arguments and subcommands.
+
+## Runtime Model
+
+Harness runs a tool-using agent loop with durable state around it. The runtime
+is not just “model + tools”; it also layers policy and verification around the
+loop.
+
+Important runtime concepts:
+
+- Sessions: saved transcripts and activity that can be resumed later.
+- Tasks: durable work items that can be linked to sessions.
+- Approvals: per-tool approval policy, with optional durable inboxing.
+- Evidence: a ledger of what tools ran and what happened.
+- Memory: persistent facts injected into later runs.
+- Contracts: hard environment rules loaded from `.harness/contracts/`.
+- Tips: soft procedural hints loaded from `.harness/tips.jsonl`.
+- Resume state: a workspace roadmap file injected at run start.
+
+## Running Agents
+
+The most important command is `harness run`.
 
 ```bash
-# Rule-based: fast, checks tool errors only — blind to verbal lies
-harness run --provider ollama --model gemma4:latest --yes --verify rule \
-  "create a file called output.txt"
-
-# LLM judge: one extra adapter call to evaluate the outcome
-harness run --provider ollama --model gemma4:latest --yes --verify llm \
-  "create a file called output.txt"
-
-# Auto (recommended): routes based on what tools were called
-#   - no tools / mutating tools (write_file, edit_file, shell) → LLM judge
-#   - read-only tools only → rule verifier (fast, no extra cost)
-harness run --provider ollama --model gemma4:latest --yes --verify auto \
-  "create a file called output.txt"
+uv run harness run --help
 ```
 
-The LLM judge retries up to 3 times on transient failures (network errors, malformed JSON) with exponential backoff before giving up.
+Key options:
 
-Verification output appears as `✓ verify` or `✗ verify` with a reason and confidence score.
+- `--provider`, `--model`, `--base-url`: model routing
+- `--cwd`: tool working directory
+- `--session`: reuse or create a named session
+- `--task`: attach the run to a durable task
+- `--yes`: auto-approve tools
+- `--inbox`: queue approval requests instead of prompting
+- `--max-steps`, `--max-output-tokens`, `--max-repair`: execution limits
+- `--goal`: plan first, then execute
+- `--require-tools`: forbid answer-only responses
+- `--auto-compact`: summarize old history when context is tight
+- `--predict`: record consequence predictions before tool execution
 
----
+## Defense Profiles
 
-## Testing
+Harness can run the same model/tool loop with different levels of structural
+defense.
 
-### Unit and integration tests
+Current `--profile` values:
+
+- `bare`: no defense chain, no critic; closest to raw model + tools
+- `adaptive`: default; chooses a lighter or stricter path from task shape
+- `diagnostic`: emphasizes diagnosis-alignment and repair quality
+- `minimal`: light structural checks
+- `strict`: the full verifier chain
+
+These profiles are what the eval harness compares in defended-vs-bare A/B runs.
+
+## Verification and Critics
+
+Harness can verify whether the agent actually did the work it claims to have
+done.
+
+Verification modes include:
+
+- `grounding`
+- `state`
+- `rule`
+- `shell`
+- `llm`
+- `auto`
+- `none`
+
+Example:
 
 ```bash
-# Full test suite (451+ tests, ~9s)
-uv run pytest
-
-# A single package
-uv run pytest packages/core/
-
-# Specific test file
-uv run pytest packages/core/tests/test_verifier_routing.py -v
-
-# With coverage
-uv run pytest --cov=harness --cov-report=term-missing
+uv run harness run \
+  --provider ollama \
+  --model gemma4:latest \
+  --verify auto \
+  --yes \
+  "fix the failing test and leave the rest alone"
 ```
 
-### Full quality gate
+You can also attach a critic:
+
+- `--critic llm`
+- `--critic llm+search`
+- `--critic none`
+
+The verifier layer is where much of the harness behavior lives: tests-first,
+verify-before-done, file-scope checks, diagnosis alignment, prompt-surface
+revert logic, loop detection, and related safeguards.
+
+## Sessions, Tasks, and Memory
+
+### Sessions
+
+Use sessions when you want continuity across invocations.
+
+```bash
+uv run harness sessions --help
+```
+
+Typical use:
+
+```bash
+uv run harness run --session fix-auth --yes "start debugging auth failures"
+uv run harness sessions list
+uv run harness resume --help
+```
+
+### Tasks
+
+Tasks are durable work items with their own activity log.
+
+```bash
+uv run harness tasks --help
+```
+
+The task CLI supports creation, listing, inspection, updates, linking, and
+deletion.
+
+### Memory
+
+Workspace memories are injected into every run.
+
+```bash
+uv run harness memory save --kind project_fact "use uv, not pip"
+uv run harness memory list
+uv run harness memory search "uv"
+```
+
+Supported memory operations:
+
+- `save`
+- `list`
+- `search`
+- `rm`
+
+## Contracts, Tips, and Resume State
+
+Harness separates hard and soft context:
+
+- Contracts are hard rules loaded from `.harness/contracts/` and
+  `~/.harness/contracts/`.
+- Tips are procedural hints loaded from `.harness/tips.jsonl` and
+  `~/.harness/tips.jsonl`.
+- Resume state is a structured roadmap file at `.harness/resume.json`.
+
+These layers are intended to make the outer runtime more informative and more
+stable without modifying the base model itself.
+
+Useful commands:
+
+```bash
+uv run harness contracts --help
+uv run harness tips --help
+uv run harness resume --help
+```
+
+The tips CLI currently supports:
+
+- `list`
+- `add`
+- `test`
+- `mine`
+
+## Evals
+
+Harness includes a behavioral eval stack under `evals/`.
+
+Use it to compare defended and bare agent behavior, generate mutated fixtures,
+calibrate judge outputs, and track saved benchmark runs.
+
+```bash
+uv run harness eval --help
+```
+
+Current subcommands:
+
+- `list`
+- `mutate`
+- `calibrate`
+- `history`
+- `validate`
+- `run`
+
+### Example eval runs
+
+```bash
+# Run the smoke suite with defended-vs-bare A/B and save artifacts
+uv run harness eval run --suite smoke --ab --n-runs 3
+
+# Run with JSON output
+uv run harness eval run --suite smoke --ab --json-out
+
+# Run mutation-based variants
+uv run harness eval run --suite smoke --benchmark-mode mutated --mutation-seeds 7,8
+
+# Validate fixtures, suites, and gold labels
+uv run harness eval validate
+```
+
+### How eval scoring works
+
+The eval harness uses two layers of scoring:
+
+1. Hard metrics from execution evidence and fixture-specific behavior contracts.
+2. Optional LLM-judge scores for qualities like scope discipline, decomposition,
+   pushback, and epistemic grounding.
+
+The hard layer is behavior-first, not exact patch-text matching. A correct fix
+should not fail just because of harmless whitespace noise; the contracts are
+intended to check what changed and why, not only whether a diff matches a
+single string shape.
+
+For benchmark rules and asset layout, see [evals/BENCHMARK.md](evals/BENCHMARK.md).
+
+## Development Workflow
+
+### Format, lint, type check, test
 
 ```bash
 uv run ruff format --check .
@@ -210,72 +384,26 @@ uv run ruff format .
 uv run ruff check --fix .
 ```
 
-### Live testing against Ollama
-
-Requires [Ollama](https://ollama.com) running locally with a model pulled (e.g. `ollama pull gemma4:latest`).
+### Run a focused test slice
 
 ```bash
-# Basic smoke test
-harness run --provider ollama --model gemma4:latest --in-memory --yes "What is 2+2?"
-
-# Filesystem tools
-harness run --provider ollama --model gemma4:latest --in-memory --yes \
-  "Use the shell tool to run: echo hello > /tmp/test.txt, then confirm it worked"
-
-# Verify the agent actually did the work (not just claimed to)
-harness run --provider ollama --model gemma4:latest --in-memory --yes --verify auto \
-  "Use the shell tool to write 'hello' into /tmp/harness-test.txt"
-
-# Memory smoke test
-harness memory save --kind project_fact "uses uv workspace" --in-memory
-harness run --provider ollama --model gemma4:latest --in-memory --yes \
-  "what do you remember about this project?"
-
-# Workspace init smoke test
-mkdir /tmp/test-workspace && cd /tmp/test-workspace
-harness init
-harness run --provider ollama --model gemma4:latest --yes "hello"
-harness sessions list   # shows session in .harness/harness.db
-
-# Session fork smoke test
-harness run --provider ollama --model gemma4:latest --session base-sess --yes "remember the number 42"
-harness sessions fork base-sess --yes "what number did we discuss?"
-
-# Goal mode smoke test
-harness goal --provider ollama --model gemma4:latest --in-memory --yes \
-  "summarize this project in 3 sentences"   # emits 2-5 StepStarted events
+uv run pytest packages/core/tests/test_verification.py -q
+uv run pytest evals/tests/test_runner.py -q
 ```
 
----
+## Design Principles
 
-## Provider failover
+This repo is increasingly oriented around a simple claim:
 
-```bash
-# Try Ollama first, fall back to OpenRouter if it fails
-harness run --failover ollama,openrouter --model gemma4:latest --yes "hello"
-```
+> The code around the model matters.
 
----
+That means Harness focuses on:
 
-## Approval policies
+- explicit runtime state instead of opaque conversations
+- execution evidence instead of answer-only scoring
+- defended-vs-bare comparisons instead of ungrounded claims
+- reproducible artifacts instead of benchmark anecdotes
+- environment-layer improvements, not only model swaps
 
-By default, high-risk tools like `shell` require interactive approval. Use `--yes` to auto-approve all tools, or `--inbox` to queue approvals for later review:
-
-```bash
-# Approve all interactively (prompted per tool call)
-harness run --provider ollama --model gemma4:latest "do something risky"
-
-# Auto-approve everything
-harness run --provider ollama --model gemma4:latest --yes "do something"
-
-# Queue approvals in the durable inbox (non-interactive, human-in-the-loop later)
-harness run --provider ollama --model gemma4:latest --inbox "do something"
-harness approvals list
-harness approvals approve <approval-id>
-```
-
----
-
-## License
-
-Private / unlicensed. Name and license TBD before any publication.
+If you are working on coding agents, evals, or runtime defenses, that is the
+part of the stack this repository is trying to make concrete.

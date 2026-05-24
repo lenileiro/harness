@@ -8,7 +8,13 @@ from pathlib import Path
 # Add evals/ to sys.path so we can import the mutator module by name.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from mutator import Mutation, apply_mutation, mutate_fixture, plan_mutation
+from mutator import (
+    Mutation,
+    apply_mutation,
+    materialize_fixture_set,
+    mutate_fixture,
+    plan_mutation,
+)
 
 
 class TestPlanMutation:
@@ -105,3 +111,29 @@ class TestMutateFixture:
         assert result.renames == {}
         # Dest still exists with verbatim copy
         assert (result.dest_dir / "src.py").exists()
+
+
+class TestMaterializeFixtureSet:
+    def test_materializes_mixed_fixture_set(self, tmp_path: Path) -> None:
+        fixture_root = tmp_path / "fixtures"
+        first = fixture_root / "01-one"
+        second = fixture_root / "02-two"
+        for path in (first, second):
+            path.mkdir(parents=True)
+            (path / "TASK.md").write_text("Use Calculator power.\n")
+            (path / "EVAL.md").write_text("trap: >\n  avoid drift\n")
+            (path / "fixture.yaml").write_text("family: demo\n")
+            (path / "src.py").write_text("class Calculator:\n    def power(self): pass\n")
+
+        result = materialize_fixture_set(
+            fixture_root,
+            dest_root=tmp_path / "generated",
+            mode="mixed",
+            seeds=[7],
+        )
+
+        assert len(result.fixture_dirs) == 2
+        assert (result.dest_root / "mutation_manifest.json").exists()
+        assert result.mutation_coverage == 0.5
+        mutated_yaml = (result.fixture_dirs[1] / "fixture.yaml").read_text()
+        assert "mutated_from: 02-two" in mutated_yaml

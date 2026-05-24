@@ -24,6 +24,7 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+import subprocess
 from pathlib import Path
 from typing import Any, Literal, Protocol, runtime_checkable
 
@@ -239,6 +240,65 @@ def _looks_like_feature_add(prompt: str) -> bool:
     starts_with_feature = any(header.startswith(v) for v in feature_verbs)
     starts_with_bug = any(header.startswith(v) for v in bug_verbs)
     return starts_with_feature and not starts_with_bug
+
+
+_TEST_COMMAND_HINTS: tuple[str, ...] = (
+    "pytest",
+    "python -m pytest",
+    "uv run pytest",
+    "npm test",
+    "pnpm test",
+    "yarn test",
+    "bun test",
+    "cargo test",
+    "go test",
+    "jest",
+    "vitest",
+)
+"""Command snippets that strongly suggest a real test invocation."""
+
+
+_TEST_OUTPUT_HINTS: tuple[str, ...] = (
+    "test session starts",
+    "collected ",
+    " passed",
+    " failed",
+    "error:",
+    "assertionerror",
+)
+"""Output fragments that look like genuine test-run results."""
+
+
+def _looks_like_test_invocation(event: ActivityEvent) -> bool:
+    """Return True when a completed tool call plausibly executed tests.
+
+    `verify_work` is always a test signal. For shell-like tools, accept either
+    an obvious test command in the arguments or unmistakable test-run output in
+    the content preview. This prevents false negatives when a model uses
+    `shell pytest ...` before editing instead of the higher-level `verify_work`
+    tool.
+    """
+    if event.kind != "tool_call.completed":
+        return False
+
+    name = str(event.data.get("name") or "")
+    if name == "verify_work":
+        return True
+    if name not in {"shell", "bash", "run_command"}:
+        return False
+
+    arguments = event.data.get("arguments")
+    command = ""
+    if isinstance(arguments, dict):
+        command = str(
+            arguments.get("command") or arguments.get("cmd") or arguments.get("text") or ""
+        )
+    command_lower = command.lower()
+    if any(hint in command_lower for hint in _TEST_COMMAND_HINTS):
+        return True
+
+    preview = str(event.data.get("content_preview") or "").lower()
+    return any(hint in preview for hint in _TEST_OUTPUT_HINTS)
 
 
 def _last_assistant_text(session: Session) -> str:
@@ -1190,6 +1250,9 @@ _WRITE_TOOL_NAMES = frozenset(
     }
 )
 
+_PROMPT_TOKEN_RE = re.compile(r"\b[A-Za-z_][A-Za-z0-9_]{3,}\b")
+_BACKTICK_IDENTIFIER_RE = re.compile(r"`([A-Za-z_][A-Za-z0-9_]*)`")
+
 
 class VerifyBeforeDoneVerifier:
     """Block Done unless the agent called verify_work at least once after making changes.
@@ -1442,6 +1505,373 @@ class MisdirectedSuggestionVerifier:
                 f"truth, not the prompt's suggested action."
             ),
             confidence=0.85,
+            verifier_name=self.name,
+        )
+
+
+def _prompt_signal_tokens(prompt: str) -> set[str]:
+    """Return concrete prompt-surface identifiers that can drive literal edits."""
+    tokens: set[str] = set()
+    for raw in _BACKTICK_IDENTIFIER_RE.findall(prompt or ""):
+        candidate = raw.strip()
+        if not candidate:
+            continue
+        # Function-call examples like `format_price(None)` should contribute the
+        # callable symbol, not generic argument literals such as `None`.
+        if "(" in candidate:
+            candidate = candidate.split("(", 1)[0].strip()
+        if not candidate:
+            continue
+        if "/" in candidate or "." in candidate:
+            tokens.add(candidate.lower())
+            continue
+        if candidate.isupper():
+            tokens.add(candidate.lower())
+            continue
+        # Keep snake_case / dunder-ish identifiers, but skip generic camel-case
+        # exception names and prose fragments such as `TypeError` or `None`.
+        if "_" in candidate:
+            tokens.add(candidate.lower())
+    # Plain prompt prose is too noisy here: words like "timeout" or "seconds"
+    # frequently describe the symptom while also appearing legitimately in the
+    # real fix. Only admit identifier-shaped free-text tokens that look like
+    # concrete code symbols.
+    for raw in _PROMPT_TOKEN_RE.findall(prompt or ""):
+        if raw.isupper() or "_" in raw:
+            lower = raw.lower()
+            if len(raw) >= 4:
+                tokens.add(lower)
+    return tokens
+
+
+def _git_diff_unified_zero(cwd: Path) -> str:
+    """Return changed lines only from the current git worktree, or empty on failure."""
+    try:
+        result = subprocess.run(
+            ["git", "diff", "--unified=0", "--no-ext-diff", "--"],
+            cwd=str(cwd),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError:
+        return ""
+    if result.returncode not in (0, 1):
+        return ""
+    return result.stdout
+
+
+def _diff_changed_lines(diff_text: str) -> list[str]:
+    return [
+        line
+        for line in diff_text.splitlines()
+        if line.startswith(("+", "-")) and not line.startswith(("+++", "---"))
+    ]
+
+
+class PromptSurfaceRevertVerifier:
+    """Revert prompt-driven symptom edits once tests prove a different root cause.
+
+    ``MisdirectedSuggestionVerifier`` classifies whole write events. That misses
+    the pattern where an agent first makes the prompt's requested edit, later
+    fixes the real bug, and rewrites the whole file in one shot. The final
+    write then contains both the root-cause fix and the stale prompt-driven
+    edit, so event-level classification is too coarse.
+
+    This verifier checks the current git diff after tests pass. If the diff
+    still changes prompt-only vocabulary while also changing failing-test
+    vocabulary, and the prompt-only edit was already disproven by an earlier
+    failing ``verify_work``, the agent must revert that stale prompt-surface
+    change.
+    """
+
+    name = "prompt_surface_revert"
+
+    async def verify(
+        self, *, session: Session, activity: list[ActivityEvent]
+    ) -> VerificationResult:
+        from harness.core.test_signals import text_overlap
+
+        verify_events = [
+            e
+            for e in activity
+            if e.kind == "tool_call.completed" and e.data.get("name") == "verify_work"
+        ]
+        if not verify_events:
+            return VerificationResult(
+                can_finish=True,
+                reason="no verify_work calls — nothing to validate against prompt drift",
+                confidence=0.4,
+                verifier_name=self.name,
+            )
+
+        if verify_events[-1].data.get("is_error"):
+            return VerificationResult(
+                can_finish=True,
+                reason="latest verify_work failed — prompt-surface revert not applicable yet",
+                confidence=0.4,
+                verifier_name=self.name,
+            )
+
+        historical_failures = [e for e in verify_events if e.data.get("is_error")]
+        if not historical_failures:
+            return VerificationResult(
+                can_finish=True,
+                reason="tests never failed during the run — no disproven prompt fix to revert",
+                confidence=0.5,
+                verifier_name=self.name,
+            )
+
+        user_prompt = _first_user_prompt(session)
+        prompt_surface_keywords = _prompt_signal_tokens(user_prompt)
+        if not prompt_surface_keywords:
+            return VerificationResult(
+                can_finish=True,
+                reason="prompt names no concrete surface identifiers to protect",
+                confidence=0.5,
+                verifier_name=self.name,
+            )
+
+        first_failed_verify_idx = next(
+            (
+                idx
+                for idx, ev in enumerate(activity)
+                if ev.kind == "tool_call.completed"
+                and ev.data.get("name") == "verify_work"
+                and ev.data.get("is_error")
+            ),
+            None,
+        )
+
+        later_writes = 0
+        if first_failed_verify_idx is not None:
+            for ev in activity[first_failed_verify_idx + 1 :]:
+                if ev.kind != "tool_call.completed" or ev.data.get("is_error"):
+                    continue
+                if ev.data.get("name") in ("write_file", "edit_file", "apply_diff", "patch"):
+                    later_writes += 1
+        if later_writes == 0:
+            return VerificationResult(
+                can_finish=True,
+                reason="prompt-surface edit was not followed by any later repair writes",
+                confidence=0.6,
+                verifier_name=self.name,
+            )
+
+        diff_text = await asyncio.to_thread(_git_diff_unified_zero, session.cwd)
+        if not diff_text.strip():
+            return VerificationResult(
+                can_finish=True,
+                reason="git diff is empty — no lingering prompt-surface edits remain",
+                confidence=0.8,
+                verifier_name=self.name,
+            )
+
+        changed_lines = "\n".join(
+            line[1:]
+            for line in diff_text.splitlines()
+            if line.startswith(("+", "-")) and not line.startswith(("+++", "---"))
+        )
+        if not changed_lines.strip():
+            return VerificationResult(
+                can_finish=True,
+                reason="git diff contained no changed lines after filtering headers",
+                confidence=0.5,
+                verifier_name=self.name,
+            )
+
+        lingering_prompt_keywords = text_overlap(changed_lines, prompt_surface_keywords)
+        if not lingering_prompt_keywords:
+            return VerificationResult(
+                can_finish=True,
+                reason="current diff no longer contains the prompt-surface edit",
+                confidence=0.85,
+                verifier_name=self.name,
+            )
+
+        return VerificationResult(
+            can_finish=False,
+            reason=(
+                "STOP — tests now pass, but the current diff still contains the "
+                "prompt's disproven symptom edit alongside later repair work. "
+                f"There were {len(historical_failures)} failing verify_work run(s) before success, "
+                f"and you made {later_writes} additional write(s) after the first failure. "
+                "That means the literal prompt edit did not solve the problem on its own. "
+                "The current diff still changes concrete prompt-surface identifiers "
+                f"{sorted(lingering_prompt_keywords)[:5]}. "
+                "That means you kept the user's suggested fix even after the test run "
+                "proved it was the wrong layer. Revert the prompt-surface edit, keep "
+                "the root-cause fix, and run verify_work again."
+            ),
+            confidence=0.9,
+            verifier_name=self.name,
+        )
+
+
+class NegativeConstraintVerifier:
+    """Enforce explicit "do not fix X" constraints from the prompt.
+
+    This verifier focuses on negative constraints that are cheap to detect in a
+    git diff after tests pass:
+    - formatting / comment-style cleanup
+    - unused import cleanup
+
+    It only activates when the prompt explicitly mentions those categories as
+    unrelated pre-existing issues. That keeps it narrow and avoids turning
+    ordinary code edits into false positives.
+    """
+
+    name = "negative_constraint"
+
+    async def verify(
+        self, *, session: Session, activity: list[ActivityEvent]
+    ) -> VerificationResult:
+        verify_events = [
+            e
+            for e in activity
+            if e.kind == "tool_call.completed" and e.data.get("name") == "verify_work"
+        ]
+        if not verify_events or verify_events[-1].data.get("is_error"):
+            return VerificationResult(
+                can_finish=True,
+                reason="negative constraints deferred until verify_work passes",
+                confidence=0.4,
+                verifier_name=self.name,
+            )
+
+        prompt = _first_user_prompt(session).lower()
+        guard_formatting = "inconsistent formatting" in prompt or "comment style" in prompt
+        guard_imports = "unused import" in prompt or "unused imports" in prompt
+        if not guard_formatting and not guard_imports:
+            return VerificationResult(
+                can_finish=True,
+                reason="no explicit formatting/import negative constraints in prompt",
+                confidence=0.5,
+                verifier_name=self.name,
+            )
+
+        diff_text = await asyncio.to_thread(_git_diff_unified_zero, session.cwd)
+        if not diff_text.strip():
+            return VerificationResult(
+                can_finish=True,
+                reason="git diff is empty — no negative-constraint violations remain",
+                confidence=0.8,
+                verifier_name=self.name,
+            )
+
+        changed_lines = _diff_changed_lines(diff_text)
+        violations: list[str] = []
+        if guard_formatting:
+            comment_changes = [
+                line[1:].strip() for line in changed_lines if line[1:].lstrip().startswith("#")
+            ]
+            if comment_changes:
+                preview = ", ".join(repr(line[:60]) for line in comment_changes[:3])
+                violations.append(f"comment-style changes: {preview}")
+
+        if guard_imports:
+            import_changes = [
+                line[1:].strip()
+                for line in changed_lines
+                if line[1:].lstrip().startswith(("import ", "from "))
+            ]
+            if import_changes:
+                preview = ", ".join(repr(line[:60]) for line in import_changes[:3])
+                violations.append(f"import cleanup: {preview}")
+
+        if not violations:
+            return VerificationResult(
+                can_finish=True,
+                reason="no explicit negative-constraint violations detected in diff",
+                confidence=0.85,
+                verifier_name=self.name,
+            )
+
+        return VerificationResult(
+            can_finish=False,
+            reason=(
+                "STOP — the prompt explicitly said not to fix pre-existing cleanup "
+                "issues, but the current diff still includes unrelated cleanup "
+                f"changes ({'; '.join(violations)}). "
+                "If the added lines are test comment banners, delete only those new `# ...` "
+                "lines and keep the code/test body you added. Revert those comment/import "
+                "edits, keep only the requested task changes, and run verify_work again."
+            ),
+            confidence=0.9,
+            verifier_name=self.name,
+        )
+
+
+class BugfixCommentRewriteVerifier:
+    """Block new source-comment additions on narrow bugfix prompts."""
+
+    name = "bugfix_comment_rewrite"
+
+    async def verify(
+        self, *, session: Session, activity: list[ActivityEvent]
+    ) -> VerificationResult:
+        first_line = next(
+            (line.strip() for line in _first_user_prompt(session).splitlines() if line.strip()),
+            "",
+        )
+        if not _BUGFIX_LEAD_RE.match(first_line):
+            return VerificationResult(
+                can_finish=True,
+                reason="prompt is not a narrow bugfix request",
+                confidence=0.4,
+                verifier_name=self.name,
+            )
+        prompt_lower = _first_user_prompt(session).lower()
+        if any(token in prompt_lower for token in ("readme", "docstring", "docs", "comment")):
+            return VerificationResult(
+                can_finish=True,
+                reason="prompt explicitly mentions docs/comments; skipping comment rewrite guard",
+                confidence=0.4,
+                verifier_name=self.name,
+            )
+        diff_text = await asyncio.to_thread(_git_diff_unified_zero, session.cwd)
+        if not diff_text.strip():
+            return VerificationResult(
+                can_finish=True,
+                reason="git diff is empty — no comment rewrite detected",
+                confidence=0.8,
+                verifier_name=self.name,
+            )
+        offending: list[str] = []
+        current_file: str | None = None
+        for line in diff_text.splitlines():
+            if line.startswith("diff --git "):
+                parts = line.split()
+                if len(parts) >= 4 and parts[3].startswith("b/"):
+                    current_file = parts[3][2:]
+                else:
+                    current_file = None
+                continue
+            if line.startswith("+++ b/"):
+                current_file = line[6:]
+                continue
+            if not current_file or not current_file.startswith("src/"):
+                continue
+            if line.startswith("+") and not line.startswith("+++"):
+                content = line[1:].lstrip()
+                if content.startswith("#"):
+                    offending.append(f"{current_file}: {content[:80]}")
+        if not offending:
+            return VerificationResult(
+                can_finish=True,
+                reason="no new source comment lines added for this bugfix",
+                confidence=0.8,
+                verifier_name=self.name,
+            )
+        preview = ", ".join(offending[:3])
+        return VerificationResult(
+            can_finish=False,
+            reason=(
+                "STOP — this bugfix prompt did not ask for source comment updates, "
+                f"but the current diff adds new source comment lines ({preview}). "
+                "Remove the explanatory comment rewrite and keep only the code change."
+            ),
+            confidence=0.9,
             verifier_name=self.name,
         )
 
@@ -1826,14 +2256,14 @@ class TestsBeforeEditVerifier:
         tool_events = [e for e in activity if e.kind == "tool_call.completed"]
 
         first_edit_idx: int | None = None
-        first_verify_idx: int | None = None
+        first_test_idx: int | None = None
         for idx, ev in enumerate(tool_events):
             name = ev.data.get("name")
             if first_edit_idx is None and name in self._writes:
                 first_edit_idx = idx
-            if first_verify_idx is None and name == "verify_work":
-                first_verify_idx = idx
-            if first_edit_idx is not None and first_verify_idx is not None:
+            if first_test_idx is None and _looks_like_test_invocation(ev):
+                first_test_idx = idx
+            if first_edit_idx is not None and first_test_idx is not None:
                 break
 
         if first_edit_idx is None:
@@ -1843,10 +2273,10 @@ class TestsBeforeEditVerifier:
                 verifier_name=self.name,
             )
 
-        if first_verify_idx is not None and first_verify_idx < first_edit_idx:
+        if first_test_idx is not None and first_test_idx < first_edit_idx:
             return VerificationResult(
                 can_finish=True,
-                reason="verify_work ran before first edit — tests informed the fix",
+                reason="a test run happened before the first edit — tests informed the fix",
                 verifier_name=self.name,
             )
 
@@ -1892,6 +2322,9 @@ _FILE_PATH_RE = re.compile(
 )
 """Match a file path inside backticks. Either has a recognized extension or contains a slash."""
 
+_FUNCTION_CALL_RE = re.compile(r"`[A-Za-z_][A-Za-z0-9_]*\([^`\n]*\)`")
+_BUGFIX_LEAD_RE = re.compile(r"^(?:#\s*)?(fix|debug|handle|correct)\b", re.IGNORECASE)
+
 
 def _extract_scope_paths(prompt: str) -> set[str]:
     """Extract file paths the user mentioned in their prompt.
@@ -1913,6 +2346,16 @@ def _extract_scope_paths(prompt: str) -> set[str]:
         # Also store the basename so a write of 'src/cache.py' matches a
         # prompt that said 'cache.py' (or vice-versa).
         found.add(Path(path).name)
+    full_paths = {path for path in found if "/" in path}
+    first_line = next((line.strip().lower() for line in prompt.splitlines() if line.strip()), "")
+    normalized_first_line = first_line.lstrip("#").strip()
+    if (
+        full_paths
+        and all(path.startswith("tests/") for path in full_paths)
+        and _FUNCTION_CALL_RE.search(prompt)
+        and normalized_first_line.startswith(("fix ", "debug ", "handle ", "correct "))
+    ):
+        return set()
     return found
 
 
@@ -2017,7 +2460,9 @@ __all__ = [
     "LLMJudgeVerifier",
     "MinimalFixVerifier",
     "MisdirectedSuggestionVerifier",
+    "NegativeConstraintVerifier",
     "PhaseGateVerifier",
+    "PromptSurfaceRevertVerifier",
     "RuleVerifier",
     "ShellVerifier",
     "StateVerifier",

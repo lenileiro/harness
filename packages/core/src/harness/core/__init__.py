@@ -107,6 +107,8 @@ from harness.core.prediction import (
     compare_prediction,
 )
 from harness.core.procedural_skill import (
+    ArtifactTipProvider,
+    CompositeTipsProvider,
     MiningInput,
     StaticTipsProvider,
     Tip,
@@ -171,6 +173,7 @@ from harness.core.tools_orchestration import (
 from harness.core.tools_phases import PhaseTool
 from harness.core.tools_verification import RequestCritiqueTool, VerifyWorkTool
 from harness.core.verification import (
+    BugfixCommentRewriteVerifier,
     ChainedVerifier,
     ClaimGroundingVerifier,
     ConsensusVerifier,
@@ -181,7 +184,9 @@ from harness.core.verification import (
     LLMJudgeVerifier,
     MinimalFixVerifier,
     MisdirectedSuggestionVerifier,
+    NegativeConstraintVerifier,
     PhaseGateVerifier,
+    PromptSurfaceRevertVerifier,
     RuleVerifier,
     ShellVerifier,
     StateVerifier,
@@ -215,9 +220,11 @@ __all__ = [
     "ApprovalPolicy",
     "ApprovalStatus",
     "ApprovalStore",
+    "ArtifactTipProvider",
     "Authority",
     "AutoApprove",
     "AutoDeny",
+    "BugfixCommentRewriteVerifier",
     "CalibrationRecord",
     "CancelledError",
     "CanonicalizationResult",
@@ -227,6 +234,7 @@ __all__ = [
     "CheckpointStore",
     "ClaimGroundingVerifier",
     "CompleteWorkItemTool",
+    "CompositeTipsProvider",
     "ConfigurationError",
     "ConsensusVerifier",
     "ConsequencePredictor",
@@ -287,6 +295,7 @@ __all__ = [
     "ModelUnavailableError",
     "MultiAgentOrchestrator",
     "MultiCritic",
+    "NegativeConstraintVerifier",
     "NetworkError",
     "NoOpPlanner",
     "Note",
@@ -309,6 +318,7 @@ __all__ = [
     "PredictionMismatchEvent",
     "PredictionOutcome",
     "ProgressLedger",
+    "PromptSurfaceRevertVerifier",
     "PruneLedgerTool",
     "RateLimitError",
     "RepairDirective",

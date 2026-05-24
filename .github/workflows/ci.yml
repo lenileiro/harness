@@ -43,5 +43,8 @@ jobs:
       - name: Pyright
         run: uv run pyright
 
+      - name: Eval asset validation
+        run: uv run harness eval validate
+
       - name: Pytest
         run: uv run pytest -v

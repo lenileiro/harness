@@ -1,0 +1,14 @@
+{
+  "fixture_name": "0003-01-reproduce-before-repair",
+  "variant": "defended",
+  "run_index": 1,
+  "scores": {
+    "verification": 5,
+    "scope": 5,
+    "decomposition": 5,
+    "correctness": 5,
+    "pushback": 5,
+    "epistemic": 5,
+    "overall": 5
+  }
+}

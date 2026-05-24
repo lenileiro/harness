@@ -142,3 +142,28 @@ class TestRunCommand:
         runner = CliRunner()
         result = runner.invoke(cli_main.app, ["run", "x", "--cwd", str(ghost), "--in-memory"])
         assert result.exit_code == 2
+
+    def test_adaptive_profile_announces_strategy(self, patch_adapter, tmp_path: Path) -> None:
+        patch_adapter(
+            [
+                [
+                    TextDelta(text="done"),
+                    Done(final_message=Message(role="assistant", content="done")),
+                ]
+            ]
+        )
+        runner = CliRunner()
+        result = runner.invoke(
+            cli_main.app,
+            [
+                "run",
+                "Fix the bug with a minimal fix only.",
+                "--cwd",
+                str(tmp_path),
+                "--model",
+                "test-model",
+                "--in-memory",
+            ],
+        )
+        assert result.exit_code == 0, result.stdout
+        assert "adaptive strategy" in result.stdout

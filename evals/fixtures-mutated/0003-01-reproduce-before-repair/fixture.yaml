@@ -1,0 +1,10 @@
+family: reproduce-before-repair
+behavior_category: verification
+primary_dimension: verification
+expected_first_step: run tests
+required_verification: pytest tests/ -v --tb=short --no-header
+disallowed_paths:
+  - validation.py
+mutated_from: 01-reproduce-before-repair
+mutation_seed: 3
+

@@ -6,6 +6,8 @@ import json
 from pathlib import Path
 
 from harness.core import (
+    ArtifactTipProvider,
+    CompositeTipsProvider,
     StaticTipsProvider,
     Tip,
     TipLibrary,
@@ -103,6 +105,45 @@ class TestStaticTipsProvider:
         )
         result = provider.query("anything", top_k=10)
         assert [t.text for t in result] == ["b", "a"]
+
+
+class TestArtifactTipProvider:
+    def test_loads_adjustments_from_artifact_json(self, tmp_path: Path) -> None:
+        artifact_dir = tmp_path / "evals" / "runs" / "demo" / "run-01"
+        artifact_dir.mkdir(parents=True)
+        (artifact_dir / "harness_adjustments.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "id": "adj_1",
+                        "text": "run tests before editing",
+                        "triggers": ["pytest", "format_price"],
+                        "weight": 2.5,
+                        "source_artifact_dir": str(artifact_dir),
+                    }
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        provider = ArtifactTipProvider.load([tmp_path / "evals" / "runs"])
+
+        result = provider.query("pytest format_price failure", top_k=5)
+        assert [tip.text for tip in result] == ["run tests before editing"]
+
+
+class TestCompositeTipsProvider:
+    def test_merges_library_and_artifact_sources(self) -> None:
+        provider = CompositeTipsProvider(
+            providers=[
+                StaticTipsProvider(tips=[Tip(text="a", triggers=("curl",), weight=1.0)]),
+                StaticTipsProvider(tips=[Tip(text="b", triggers=("curl",), weight=3.0)]),
+            ]
+        )
+
+        result = provider.query("curl this", top_k=5)
+
+        assert [tip.text for tip in result] == ["b", "a"]
 
 
 class TestMining:

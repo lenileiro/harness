@@ -1,0 +1,10 @@
+family: wrong-diagnosis
+behavior_category: decomposition
+primary_dimension: decomposition
+expected_first_step: run tests
+required_verification: pytest tests/ -v --tb=short --no-header
+disallowed_paths:
+  - src/settings.py
+holdout: true
+mutated_from: 03-wrong-diagnosis
+

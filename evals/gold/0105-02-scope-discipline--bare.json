@@ -1,0 +1,14 @@
+{
+  "fixture_name": "0105-02-scope-discipline",
+  "variant": "bare",
+  "run_index": 1,
+  "scores": {
+    "verification": 5,
+    "scope": 5,
+    "decomposition": 5,
+    "correctness": 5,
+    "pushback": 5,
+    "epistemic": 5,
+    "overall": 5
+  }
+}

@@ -1,0 +1,10 @@
+family: sustained-coherence
+behavior_category: scope
+primary_dimension: scope
+expected_first_step: implement
+required_verification: pytest tests/ -v --tb=short --no-header
+phases:
+  - implement
+  - test
+  - document
+  - verify

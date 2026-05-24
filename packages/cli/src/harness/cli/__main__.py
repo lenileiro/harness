@@ -23,6 +23,7 @@ everything (handy for non-interactive use), or set approvals in config.
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 
 # Load .env from the working directory (or any parent) before anything reads env vars.
 try:
@@ -32,8 +33,10 @@ try:
 except ImportError:
     pass
 import difflib
+import json
 import os
 import re
+import statistics
 import time
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
@@ -67,6 +70,7 @@ from harness.core import (
     ApprovalPolicy,
     ApprovalStore,
     AutoApprove,
+    BugfixCommentRewriteVerifier,
     ChainedVerifier,
     CheckMessagesTool,
     ClaimGroundingVerifier,
@@ -90,6 +94,7 @@ from harness.core import (
     MinimalFixVerifier,
     MisdirectedSuggestionVerifier,
     MultiAgentOrchestrator,
+    NegativeConstraintVerifier,
     NotifyTool,
     PendingApproval,
     PhaseCompletedEvent,
@@ -100,6 +105,7 @@ from harness.core import (
     PlanRejectedEvent,
     PredictionEvent,
     PredictionMismatchEvent,
+    PromptSurfaceRevertVerifier,
     RepairOrchestrator,
     RequestCritiqueTool,
     RuleVerifier,
@@ -165,6 +171,13 @@ app = typer.Typer(
 )
 
 _T = TypeVar("_T")
+
+
+@dataclass(frozen=True)
+class RuntimeStrategy:
+    structural_profile: str
+    critic_mode: str | None
+    rationale: str
 
 
 def _run_async(awaitable: Awaitable[_T]) -> _T:
@@ -737,14 +750,15 @@ def _build_agent(
 
     `profile` selects the structural defense level:
       - "bare":    no chain, no critic. Model + tools only.
+      - "adaptive": prompt-driven choice between minimal and strict.
+      - "diagnostic": diagnosis-focused chain (verify, alignment, misdirection).
       - "minimal": only VerifyBeforeDoneVerifier (catches "forgot to test").
       - "strict":  full chain (FileScope, MinimalFix, TestsBeforeEdit,
                    VerifyBeforeDone, DiagnosisAlignment, MisdirectedSuggestion).
 
-    Default is "minimal" — cross-model A/B data (see evals/EVAL.md) showed
-    the full strict chain regressed pass rate on capable hosted models. The
-    minimal profile keeps the one defense that consistently correlates with
-    PASS (forgot-to-test) without the over-engineering surface of the rest.
+    Default is "adaptive" — keep the minimal path for easy fixes, but escalate
+    to the full chain on scope-sensitive multi-phase tasks where the benchmark
+    shows defended can beat bare.
     """
     if not chain:
         raise typer.BadParameter("provider chain is empty")
@@ -797,9 +811,12 @@ def _build_agent(
     #   6. Once tests pass, every edit must share vocabulary with at least
     #      one historical failing test — otherwise it's scope creep driven
     #      by the prompt rather than the bug.
+    #   7. If tests disproved the prompt's literal fix, that prompt-surface
+    #      edit must be reverted from the final diff.
     # All deterministic — no LLM, no false positives on no-op turns.
     # Profile controls which run:
     #   bare    → none of these wire in.
+    #   adaptive is resolved by _resolve_runtime_strategy() before this function.
     #   minimal → only VerifyBeforeDoneVerifier (the "forgot to test" catch).
     #   strict  → full chain.
     if profile == "strict":
@@ -809,6 +826,9 @@ def _build_agent(
         enforce_verify = VerifyBeforeDoneVerifier()
         enforce_alignment = DiagnosisAlignmentVerifier()
         enforce_no_scope_creep = MisdirectedSuggestionVerifier()
+        enforce_negative_constraints = NegativeConstraintVerifier()
+        enforce_comment_rewrites = BugfixCommentRewriteVerifier()
+        enforce_prompt_revert = PromptSurfaceRevertVerifier()
         enforce_phase_gate = PhaseGateVerifier()
         structural = ChainedVerifier(
             enforce_scope,
@@ -817,7 +837,28 @@ def _build_agent(
             enforce_verify,
             enforce_alignment,
             enforce_no_scope_creep,
+            enforce_negative_constraints,
+            enforce_comment_rewrites,
+            enforce_prompt_revert,
             enforce_phase_gate,
+        )
+        verifier = ChainedVerifier(structural, verifier) if verifier is not None else structural
+    elif profile == "diagnostic":
+        enforce_scope = FileScopeVerifier()
+        enforce_verify = VerifyBeforeDoneVerifier()
+        enforce_alignment = DiagnosisAlignmentVerifier()
+        enforce_no_scope_creep = MisdirectedSuggestionVerifier()
+        enforce_negative_constraints = NegativeConstraintVerifier()
+        enforce_comment_rewrites = BugfixCommentRewriteVerifier()
+        enforce_prompt_revert = PromptSurfaceRevertVerifier()
+        structural = ChainedVerifier(
+            enforce_scope,
+            enforce_verify,
+            enforce_alignment,
+            enforce_no_scope_creep,
+            enforce_negative_constraints,
+            enforce_comment_rewrites,
+            enforce_prompt_revert,
         )
         verifier = ChainedVerifier(structural, verifier) if verifier is not None else structural
     elif profile == "minimal":
@@ -935,6 +976,106 @@ def _load_cli_config(config_path: Path | None) -> HarnessConfig:
         raise typer.Exit(2) from None
 
 
+def _normalize_task_header(prompt: str) -> str:
+    for line in prompt.splitlines():
+        stripped = line.strip().lstrip("#").strip()
+        if stripped:
+            return stripped.lower()
+    return ""
+
+
+def _is_feature_task(prompt: str) -> bool:
+    header = _normalize_task_header(prompt)
+    feature_verbs = ("add ", "implement ", "create ", "support ", "introduce ")
+    bug_verbs = ("fix ", "debug ", "handle ", "resolve ", "repair ", "patch ")
+    return any(header.startswith(v) for v in feature_verbs) and not any(
+        header.startswith(v) for v in bug_verbs
+    )
+
+
+def _looks_scope_sensitive(prompt: str, phases: str | None) -> bool:
+    lower = prompt.lower()
+    if phases:
+        return True
+    markers = (
+        "do not touch",
+        "do not fix",
+        "stay focused",
+        "nothing else should change",
+        "only modify",
+        "minimal fix",
+        "just fix",
+        "while i'm here",
+        "scope creep",
+    )
+    return any(marker in lower for marker in markers)
+
+
+def _looks_diagnosis_heavy(prompt: str, verify_command: str | None) -> bool:
+    lower = prompt.lower()
+    markers = (
+        "likely",
+        "downstream",
+        "root cause",
+        "timeout",
+        "concurrent",
+        "deduplic",
+        "flaky",
+        "real bug",
+        "wrong layer",
+    )
+    if any(marker in lower for marker in markers):
+        return True
+    return bool(verify_command and ("pytest" in verify_command or "test" in verify_command))
+
+
+def _resolve_runtime_strategy(
+    *,
+    prompt: str,
+    requested_profile: str,
+    verify_command: str | None,
+    phases: str | None,
+    requested_critic: str | None,
+) -> RuntimeStrategy:
+    if requested_profile != "adaptive":
+        return RuntimeStrategy(
+            structural_profile=requested_profile,
+            critic_mode=requested_critic,
+            rationale=f"explicit profile={requested_profile}",
+        )
+
+    feature_task = _is_feature_task(prompt)
+    scope_sensitive = _looks_scope_sensitive(prompt, phases)
+    diagnosis_heavy = _looks_diagnosis_heavy(prompt, verify_command)
+
+    structural_profile = "minimal"
+    if scope_sensitive:
+        structural_profile = "strict"
+    elif feature_task or diagnosis_heavy:
+        structural_profile = "diagnostic" if diagnosis_heavy and not feature_task else "minimal"
+
+    critic_mode = requested_critic
+    if requested_critic is None and diagnosis_heavy and not feature_task:
+        critic_mode = "llm"
+
+    reasons: list[str] = []
+    if scope_sensitive:
+        reasons.append("scope-sensitive prompt -> strict structural checks")
+    elif feature_task:
+        reasons.append("feature task -> keep structure light")
+    elif diagnosis_heavy:
+        reasons.append("diagnosis-heavy bugfix -> diagnostic structure + critic")
+    else:
+        reasons.append("default adaptive path -> minimal structure")
+    if critic_mode and requested_critic is None:
+        reasons.append(f"implicit critic={critic_mode}")
+    return RuntimeStrategy(
+        structural_profile=structural_profile,
+        critic_mode=critic_mode,
+        rationale="; ".join(reasons),
+    )
+
+
 # ---------------------------------------------------------------------------
 # version
 # ---------------------------------------------------------------------------
@@ -978,6 +1119,13 @@ def run(
     max_steps: Annotated[
         int, typer.Option("--max-steps", help="Maximum ReAct turns before giving up.")
     ] = 25,
+    max_output_tokens: Annotated[
+        int | None,
+        typer.Option(
+            "--max-output-tokens",
+            help="Cap model output tokens for each adapter call.",
+        ),
+    ] = None,
     max_repair: Annotated[
         int,
         typer.Option(
@@ -1096,14 +1244,16 @@ def run(
             "--profile",
             help=(
                 "Structural defense level. 'bare' = no chain, no critic "
-                "(model + tools only). 'minimal' (default) = only the "
-                "tests-before-done check. 'strict' = full chain (file scope, "
+                "(model + tools only). 'adaptive' (default) chooses minimal "
+                "or stricter paths from the task shape. 'diagnostic' = "
+                "verify + diagnosis-alignment + misdirected-suggestion + prompt-surface revert. "
+                "'minimal' = only the tests-before-done check. 'strict' = full chain (file scope, "
                 "minimal fix, tests-first, verify-before-done, diagnosis "
-                "alignment, misdirected suggestion). See evals/EVAL.md for "
+                "alignment, misdirected suggestion, prompt-surface revert). See evals/EVAL.md for "
                 "the cross-model A/B data behind the default."
             ),
         ),
-    ] = "minimal",
+    ] = "adaptive",
     bare: Annotated[
         bool,
         typer.Option(
@@ -1175,9 +1325,10 @@ def run(
     # --bare takes precedence (legacy behavior). If neither, use --profile.
     if bare:
         profile = "bare"
-    if profile not in ("bare", "minimal", "strict"):
+    if profile not in ("bare", "minimal", "diagnostic", "strict", "adaptive"):
         console.print(
-            f"[red]Invalid --profile {profile!r}; expected bare, minimal, or strict.[/red]"
+            "[red]Invalid --profile "
+            f"{profile!r}; expected bare, adaptive, minimal, diagnostic, or strict.[/red]"
         )
         raise typer.Exit(2)
 
@@ -1199,6 +1350,7 @@ def run(
                 base_url=base_url,
                 cwd=working_dir,
                 max_steps=max_steps,
+                max_output_tokens=max_output_tokens,
                 session_id=session_id,
                 task_ref=task_ref,
                 db=db,
@@ -1235,6 +1387,7 @@ async def _run_once(
     base_url: str | None,
     cwd: Path,
     max_steps: int,
+    max_output_tokens: int | None,
     session_id: str | None,
     task_ref: str | None,
     db: Path | None,
@@ -1263,6 +1416,14 @@ async def _run_once(
         # appends session_id to task.session_ids).
         task_id, _task = await _resolve_task_attachment(storage, task_ref, session_id)
 
+        strategy = _resolve_runtime_strategy(
+            prompt=prompt,
+            requested_profile=profile,
+            verify_command=verify_command,
+            phases=phases,
+            requested_critic=critic,
+        )
+
         verifier = _build_verifier(
             verify, chain=chain, model=model, config=config, cwd=cwd, verify_command=verify_command
         )
@@ -1270,8 +1431,8 @@ async def _run_once(
         # is the model + tools alone, with no harness-side reasoning support.
         critic_obj = (
             None
-            if profile == "bare"
-            else _build_critic(critic, chain=chain, model=model, config=config)
+            if strategy.structural_profile == "bare"
+            else _build_critic(strategy.critic_mode, chain=chain, model=model, config=config)
         )
         budget = (
             ContextBudget(max_tokens=max_context_tokens) if max_context_tokens is not None else None
@@ -1292,6 +1453,12 @@ async def _run_once(
             DEFAULT_RESUME_PATH as _DEFAULT_RESUME_PATH,
         )
         from harness.core import (
+            ArtifactTipProvider as _ArtifactTipProvider,
+        )
+        from harness.core import (
+            CompositeTipsProvider as _CompositeTipsProvider,
+        )
+        from harness.core import (
             ContractRegistry as _ContractRegistry,
         )
         from harness.core import (
@@ -1301,12 +1468,17 @@ async def _run_once(
             ResumeContract as _ResumeContract,
         )
         from harness.core import (
+            StaticTipsProvider as _StaticTipsProvider,
+        )
+        from harness.core import (
             TipLibrary as _TipLibrary,
         )
 
-        loop_detector_obj = _LoopDetector() if (loop_detect and profile != "bare") else None
+        loop_detector_obj = (
+            _LoopDetector() if (loop_detect and strategy.structural_profile != "bare") else None
+        )
         contracts_obj = None
-        if contracts and profile != "bare":
+        if contracts and strategy.structural_profile != "bare":
             registry = _ContractRegistry.from_paths(
                 [
                     cwd / ".harness" / "contracts",
@@ -1316,7 +1488,8 @@ async def _run_once(
             if registry:
                 contracts_obj = registry
         tips_obj = None
-        if tips and profile != "bare":
+        if tips and strategy.structural_profile != "bare":
+            providers: list[object] = []
             library = _TipLibrary.load(
                 [
                     cwd / ".harness" / "tips.jsonl",
@@ -1324,7 +1497,25 @@ async def _run_once(
                 ]
             )
             if library:
-                tips_obj = library
+                providers.append(library)
+            experience_paths: list[Path] = []
+            configured_roots = os.environ.get("HARNESS_EXPERIENCE_ROOTS", "")
+            for raw in configured_roots.split(os.pathsep):
+                raw = raw.strip()
+                if raw:
+                    experience_paths.append(Path(raw))
+            repo_runs = cwd / "evals" / "runs"
+            if repo_runs not in experience_paths:
+                experience_paths.append(repo_runs)
+            artifact_provider = _ArtifactTipProvider.load(experience_paths)
+            if artifact_provider:
+                providers.append(artifact_provider)
+            if len(providers) == 1:
+                tips_obj = providers[0]
+            elif providers:
+                tips_obj = _CompositeTipsProvider(providers=providers)  # type: ignore[arg-type]
+            else:
+                tips_obj = _StaticTipsProvider(tips=[])
 
         resume_obj = _ResumeContract.load(cwd / _DEFAULT_RESUME_PATH)
 
@@ -1349,13 +1540,15 @@ async def _run_once(
             system_prompt=_DEFAULT_SYSTEM_PROMPT,
             compactor=compactor,
             max_repair_attempts=max_repair,
-            profile=profile,
+            profile=strategy.structural_profile,
             phases_enabled=bool(phases),
             loop_detector=loop_detector_obj,
             contracts=contracts_obj,
             tips_provider=tips_obj,
             resume=resume_obj,
         )
+        if profile == "adaptive":
+            console.print(f"[dim]adaptive strategy[/dim] {strategy.rationale}")
 
         request_kwargs: dict[str, object] = {
             "prompt": prompt,
@@ -1363,6 +1556,8 @@ async def _run_once(
             "max_steps": max_steps,
             "require_tool_use": require_tools,
         }
+        if max_output_tokens is not None:
+            request_kwargs["max_tokens"] = max_output_tokens
         if session_id:
             request_kwargs["session_id"] = session_id
         if task_id:
@@ -3202,6 +3397,7 @@ def goal(
                 base_url=base_url,
                 cwd=working_dir,
                 max_steps=max_steps,
+                max_output_tokens=None,
                 session_id=None,
                 task_ref=None,
                 db=db,
@@ -4115,13 +4311,17 @@ def _load_eval_module(name: str, evals_root: Path):
     """Load runner.py or judge.py from the evals/ directory at runtime."""
     import importlib.util
 
-    spec = importlib.util.spec_from_file_location(name, evals_root / f"{name}.py")
+    module_name = f"evals.{name}"
+    spec = importlib.util.spec_from_file_location(module_name, evals_root / f"{name}.py")
     if spec is None or spec.loader is None:
         raise ImportError(f"Could not load {name}.py from {evals_root}")
     import sys as _sys
 
     mod = importlib.util.module_from_spec(spec)
-    _sys.modules[name] = mod  # register before exec so @dataclass can resolve its module
+    repo_root = str(evals_root.parent)
+    if repo_root not in _sys.path:
+        _sys.path.insert(0, repo_root)
+    _sys.modules[module_name] = mod
     spec.loader.exec_module(mod)  # type: ignore[union-attr]
     return mod
 
@@ -4139,7 +4339,19 @@ def _find_evals_root() -> Path | None:
 
 
 @eval_app.command("list")
-def eval_list() -> None:
+def eval_list(
+    fixture_set: Annotated[
+        str,
+        typer.Option(
+            "--fixture-set",
+            help="Fixture directory under evals/ to inspect (fixtures, fixtures-mutated, fixtures-holdout).",
+        ),
+    ] = "fixtures",
+    include_holdout: Annotated[
+        bool,
+        typer.Option("--include-holdout", help="Include fixtures marked holdout in metadata."),
+    ] = False,
+) -> None:
     """List all available eval fixtures."""
     evals_root = _find_evals_root()
     if evals_root is None:
@@ -4147,24 +4359,24 @@ def eval_list() -> None:
         raise typer.Exit(1)
 
     runner = _load_eval_module("runner", evals_root)
-    fixtures = runner.discover_fixtures(evals_root)
+    fixtures = runner.discover_fixtures(
+        evals_root,
+        fixtures_subdir=fixture_set,
+        include_holdout=include_holdout,
+    )
     if not fixtures:
         console.print("[dim]No fixtures found.[/dim]")
         return
 
     table = Table(show_header=True, header_style="bold")
     table.add_column("Fixture", no_wrap=True)
+    table.add_column("Family", no_wrap=True)
     table.add_column("Primary Dimension")
     table.add_column("Trap (summary)")
     for fx in fixtures:
-        primary = ""
-        trap = ""
-        for line in fx.eval_md.splitlines():
-            if line.startswith("primary_dimension:"):
-                primary = line.split(":", 1)[1].strip()
-            if line.strip().startswith("trap:") or (trap and line.startswith(" ")):
-                trap += line.split(":", 1)[-1].strip() + " "
-        table.add_row(fx.name, primary, _truncate(trap.strip(), 70))
+        primary = fx.rules.primary_dimension
+        trap = fx.rules.trap or ""
+        table.add_row(fx.name, fx.family, primary, _truncate(trap.strip(), 70))
     console.print(table)
 
 
@@ -4224,6 +4436,287 @@ def eval_mutate(
         console.print(f"[dim]Touched {len(result.touched_files)} file(s).[/dim]")
 
 
+@eval_app.command("calibrate")
+def eval_calibrate(
+    report_path: Annotated[
+        Path,
+        typer.Argument(help="Path to a saved eval report.json artifact."),
+    ],
+    gold_dir: Annotated[
+        Path | None,
+        typer.Option(
+            "--gold-dir",
+            help="Directory of human-labeled gold trajectory JSON files (default: evals/gold).",
+        ),
+    ] = None,
+) -> None:
+    """Compare a saved eval report against gold-labeled trajectory scores."""
+    evals_root = _find_evals_root()
+    if evals_root is None:
+        console.print("[red]No evals/fixtures/ directory found — run from the harness repo.[/red]")
+        raise typer.Exit(1)
+    calibration = _load_eval_module("calibration", evals_root)
+    resolved_gold_dir = gold_dir or (evals_root / "gold")
+    labels = calibration.load_gold_labels(resolved_gold_dir)
+    if not labels:
+        console.print(f"[yellow]No gold labels found in {resolved_gold_dir}.[/yellow]")
+        raise typer.Exit(1)
+    rows = calibration.compare_report_to_gold(
+        calibration.load_report(report_path),
+        labels,
+    )
+    if not rows:
+        console.print("[yellow]No overlapping labeled runs were found in the report.[/yellow]")
+        raise typer.Exit(1)
+    table = Table(show_header=True, header_style="bold", title="Judge calibration")
+    table.add_column("Dimension", no_wrap=True)
+    table.add_column("N", justify="right")
+    table.add_column("Exact", justify="right")
+    table.add_column("MAE", justify="right")
+    for row in rows:
+        table.add_row(
+            row.dimension,
+            str(row.count),
+            f"{row.exact_match_rate:.2f}",
+            f"{row.mean_absolute_error:.2f}",
+        )
+    console.print(table)
+
+
+@eval_app.command("history")
+def eval_history(
+    limit: Annotated[
+        int,
+        typer.Option("--limit", help="Number of history rows to display."),
+    ] = 10,
+) -> None:
+    """Show recent saved eval runs from evals/results/history.jsonl."""
+    evals_root = _find_evals_root()
+    if evals_root is None:
+        console.print("[red]No evals/fixtures/ directory found — run from the harness repo.[/red]")
+        raise typer.Exit(1)
+    history_path = evals_root / "results" / "history.jsonl"
+    if not history_path.exists():
+        console.print("[dim]No eval history found.[/dim]")
+        return
+    rows = [
+        json.loads(line)
+        for line in history_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    rows = rows[-limit:]
+    table = Table(show_header=True, header_style="bold", title="Eval history")
+    table.add_column("Run", no_wrap=True)
+    table.add_column("Model", no_wrap=True)
+    table.add_column("Judge", no_wrap=True)
+    table.add_column("Set", no_wrap=True)
+    table.add_column("Mode", no_wrap=True)
+    table.add_column("Runs", justify="right")
+    table.add_column("Results", justify="right")
+    for row in rows:
+        table.add_row(
+            row.get("run_id", "?"),
+            f"{row.get('provider', '?')}/{row.get('model', '?')}",
+            f"{row.get('judge_provider', '?')}/{row.get('judge_model', '?')}",
+            row.get("fixture_set", "?"),
+            row.get("benchmark_mode", "original"),
+            str(row.get("n_runs", "?")),
+            str(len(row.get("results", []))),
+        )
+    console.print(table)
+
+
+def _collect_adjustment_files(root: Path) -> list[Path]:
+    if root.is_file():
+        return [root] if root.name == "harness_adjustments.json" else []
+    if not root.exists():
+        return []
+    return sorted(root.rglob("harness_adjustments.json"))
+
+
+def _load_adjustments(root: Path) -> list[dict[str, object]]:
+    rows: list[dict[str, object]] = []
+    for path in _collect_adjustment_files(root):
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if not isinstance(payload, list):
+            continue
+        for item in payload:
+            if not isinstance(item, dict):
+                continue
+            row = dict(item)
+            row.setdefault("source_file", str(path))
+            rows.append(row)
+    return rows
+
+
+@eval_app.command("adjustments")
+def eval_adjustments(
+    root: Annotated[
+        Path | None,
+        typer.Argument(
+            help=(
+                "Run directory, artifact directory, or harness_adjustments.json file. "
+                "Defaults to evals/runs."
+            )
+        ),
+    ] = None,
+    limit: Annotated[
+        int,
+        typer.Option("--limit", help="Maximum number of adjustment rows to display."),
+    ] = 20,
+    kind: Annotated[
+        str | None,
+        typer.Option("--kind", help="Filter by adjustment kind."),
+    ] = None,
+) -> None:
+    """Inspect analyzed harness adjustments from saved eval artifacts."""
+    evals_root = _find_evals_root()
+    if evals_root is None:
+        console.print("[red]No evals/fixtures/ directory found — run from the harness repo.[/red]")
+        raise typer.Exit(1)
+    search_root = root or (evals_root / "runs")
+    rows = _load_adjustments(search_root)
+    if kind:
+        rows = [row for row in rows if str(row.get("kind", "")).strip() == kind]
+    if not rows:
+        console.print("[dim]No analyzed harness adjustments found.[/dim]")
+        return
+    rows = rows[:limit]
+    table = Table(show_header=True, header_style="bold", title="Harness adjustments")
+    table.add_column("Kind", no_wrap=True)
+    table.add_column("Fixture", no_wrap=True)
+    table.add_column("Variant", no_wrap=True)
+    table.add_column("Weight", justify="right")
+    table.add_column("Text")
+    for row in rows:
+        raw_weight = row.get("weight", 0.0)
+        if isinstance(raw_weight, int | float | str):
+            try:
+                weight_text = f"{float(raw_weight):.1f}"
+            except ValueError:
+                weight_text = "0.0"
+        else:
+            weight_text = "0.0"
+        table.add_row(
+            str(row.get("kind", "?")),
+            str(row.get("source_fixture_name", "?")),
+            str(row.get("source_variant", "?")),
+            weight_text,
+            str(row.get("text", "")),
+        )
+    console.print(table)
+
+
+@eval_app.command("export-adjustments")
+def eval_export_adjustments(
+    output: Annotated[
+        Path,
+        typer.Argument(help="Destination file (.json or .jsonl)."),
+    ],
+    root: Annotated[
+        Path | None,
+        typer.Option(
+            "--root",
+            help="Run directory, artifact directory, or harness_adjustments.json file. Defaults to evals/runs.",
+        ),
+    ] = None,
+) -> None:
+    """Export a consolidated adjustment corpus from saved eval artifacts."""
+    evals_root = _find_evals_root()
+    if evals_root is None:
+        console.print("[red]No evals/fixtures/ directory found — run from the harness repo.[/red]")
+        raise typer.Exit(1)
+    search_root = root or (evals_root / "runs")
+    rows = _load_adjustments(search_root)
+    if not rows:
+        console.print("[dim]No analyzed harness adjustments found.[/dim]")
+        raise typer.Exit(1)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    if output.suffix == ".jsonl":
+        with output.open("w", encoding="utf-8") as handle:
+            for row in rows:
+                handle.write(json.dumps(row) + "\n")
+    else:
+        output.write_text(json.dumps(rows, indent=2), encoding="utf-8")
+    console.print(f"[green]Exported {len(rows)} adjustment(s) to {output}[/green]")
+
+
+@eval_app.command("validate")
+def eval_validate() -> None:
+    """Validate eval assets: fixture sets, suites, and gold-label coverage."""
+    evals_root = _find_evals_root()
+    if evals_root is None:
+        console.print("[red]No evals/fixtures/ directory found — run from the harness repo.[/red]")
+        raise typer.Exit(1)
+    runner = _load_eval_module("runner", evals_root)
+    calibration = _load_eval_module("calibration", evals_root)
+
+    fixture_sets = ("fixtures", "fixtures-mutated", "fixtures-holdout")
+    suite_map = {
+        "fixtures": "full",
+        "fixtures-mutated": "mutated",
+        "fixtures-holdout": "holdout",
+    }
+    discovered: dict[str, list[Any]] = {}
+    for fixture_set in fixture_sets:
+        discovered[fixture_set] = runner.discover_fixtures(
+            evals_root,
+            fixtures_subdir=fixture_set,
+            include_holdout=True,
+        )
+        if not discovered[fixture_set]:
+            console.print(f"[red]No fixtures discovered in {fixture_set}.[/red]")
+            raise typer.Exit(1)
+
+    suites_dir = evals_root / "suites"
+    for fixture_set, suite_name in suite_map.items():
+        suite_path = suites_dir / f"{suite_name}.txt"
+        if not suite_path.exists():
+            console.print(f"[red]Missing suite file:[/red] {suite_path}")
+            raise typer.Exit(1)
+        members = {
+            line.strip()
+            for line in suite_path.read_text(encoding="utf-8").splitlines()
+            if line.strip() and not line.strip().startswith("#")
+        }
+        fixture_names = {fixture.name for fixture in discovered[fixture_set]}
+        missing = sorted(members - fixture_names)
+        if missing:
+            console.print(
+                f"[red]Suite {suite_name} references unknown fixtures:[/red] {', '.join(missing)}"
+            )
+            raise typer.Exit(1)
+
+    labels = calibration.load_gold_labels(evals_root / "gold")
+    if not labels:
+        console.print("[red]No gold labels found.[/red]")
+        raise typer.Exit(1)
+    gold_keys = {(label.fixture_name, label.variant) for label in labels}
+    missing_gold: list[str] = []
+    for fixtures in discovered.values():
+        for fixture in fixtures:
+            for variant in ("defended", "bare"):
+                key = (fixture.name, variant)
+                if key not in gold_keys:
+                    missing_gold.append(f"{fixture.name}:{variant}")
+    if missing_gold:
+        console.print(
+            "[red]Missing gold labels for fixtures:[/red] " + ", ".join(sorted(missing_gold)[:10])
+        )
+        raise typer.Exit(1)
+
+    table = Table(show_header=True, header_style="bold", title="Eval asset validation")
+    table.add_column("Fixture set", no_wrap=True)
+    table.add_column("Count", justify="right")
+    for fixture_set in fixture_sets:
+        table.add_row(fixture_set, str(len(discovered[fixture_set])))
+    table.add_row("gold labels", str(len(labels)))
+    console.print(table)
+
+
 @eval_app.command("run")
 def eval_run(
     fixture_name: Annotated[
@@ -4249,10 +4742,24 @@ def eval_run(
             help="Provider for the judge (defaults to --provider, or ollama when provider=claude).",
         ),
     ] = None,
+    no_judge: Annotated[
+        bool,
+        typer.Option(
+            "--no-judge",
+            help="Skip LLM judging and report hard pass-rate metrics only.",
+        ),
+    ] = False,
     agent_timeout: Annotated[
         int,
         typer.Option("--timeout", help="Agent timeout per fixture in seconds."),
     ] = 300,
+    max_output_tokens: Annotated[
+        int | None,
+        typer.Option(
+            "--max-output-tokens",
+            help="Cap model output tokens for each eval agent turn.",
+        ),
+    ] = None,
     n_runs: Annotated[
         int,
         typer.Option(
@@ -4276,6 +4783,59 @@ def eval_run(
             ),
         ),
     ] = False,
+    fixture_set: Annotated[
+        str,
+        typer.Option(
+            "--fixture-set",
+            help="Fixture directory under evals/ to use (fixtures, fixtures-mutated, fixtures-holdout).",
+        ),
+    ] = "fixtures",
+    benchmark_mode: Annotated[
+        str,
+        typer.Option(
+            "--benchmark-mode",
+            help="Fixture selection mode: original, mutated, or mixed.",
+        ),
+    ] = "original",
+    mutation_seeds: Annotated[
+        str,
+        typer.Option(
+            "--mutation-seeds",
+            help="Comma-separated deterministic seeds used for mutated/mixed benchmark modes.",
+        ),
+    ] = "1",
+    include_holdout: Annotated[
+        bool,
+        typer.Option(
+            "--include-holdout",
+            help="Include fixtures marked holdout in fixture.yaml metadata.",
+        ),
+    ] = False,
+    suite: Annotated[
+        str | None,
+        typer.Option(
+            "--suite",
+            help="Optional suite file name under evals/suites/ (for example: smoke).",
+        ),
+    ] = None,
+    output_dir: Annotated[
+        Path | None,
+        typer.Option(
+            "--output-dir",
+            help="Override the run artifact directory (default: evals/runs/<timestamp>).",
+        ),
+    ] = None,
+    json_out: Annotated[
+        bool,
+        typer.Option("--json-out", help="Print the full machine-readable eval report as JSON."),
+    ] = False,
+    save_history: Annotated[
+        bool,
+        typer.Option(
+            "--save-history/--no-save-history",
+            help="Append a compact summary record to evals/results/history.jsonl.",
+        ),
+    ] = True,
     config_path: Annotated[Path | None, typer.Option("--config")] = None,
 ) -> None:
     """Run one or all eval fixtures and display scored results."""
@@ -4294,9 +4854,47 @@ def eval_run(
     )
 
     runner = _load_eval_module("runner", evals_root)
-    judge_mod = _load_eval_module("judge", evals_root)
+    judge_mod = None if no_judge else _load_eval_module("judge", evals_root)
+    mutator = _load_eval_module("mutator", evals_root)
+    types_mod = _load_eval_module("types", evals_root)
+    run_id = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    artifact_root = output_dir or (evals_root / "runs" / run_id)
+    artifact_root.mkdir(parents=True, exist_ok=True)
+    history_path = evals_root / "results" / "history.jsonl"
 
-    fixtures = runner.discover_fixtures(evals_root)
+    seed_values = [int(part.strip()) for part in mutation_seeds.split(",") if part.strip()]
+    mutation_coverage: float | None = None
+    discovery_root = evals_root
+    discovery_subdir = fixture_set
+    if benchmark_mode != "original":
+        materialized_root = artifact_root / "generated-fixtures"
+        fixture_source_root = evals_root / fixture_set
+        materialized = mutator.materialize_fixture_set(
+            fixture_source_root,
+            dest_root=materialized_root,
+            mode=benchmark_mode,
+            seeds=seed_values,
+        )
+        mutation_coverage = materialized.mutation_coverage
+        discovery_root = materialized_root
+        discovery_subdir = "fixtures"
+
+    fixtures = runner.discover_fixtures(
+        discovery_root,
+        fixtures_subdir=discovery_subdir,
+        include_holdout=include_holdout,
+    )
+    if suite:
+        suite_path = evals_root / "suites" / f"{suite}.txt"
+        if not suite_path.exists():
+            console.print(f"[red]Suite not found:[/red] {suite_path}")
+            raise typer.Exit(1)
+        wanted = {
+            line.strip()
+            for line in suite_path.read_text(encoding="utf-8").splitlines()
+            if line.strip() and not line.strip().startswith("#")
+        }
+        fixtures = [f for f in fixtures if f.name in wanted]
     if fixture_name:
         fixtures = [f for f in fixtures if f.name == fixture_name]
         if not fixtures:
@@ -4307,7 +4905,14 @@ def eval_run(
         console.print("[dim]No fixtures to run.[/dim]")
         return
 
-    judge_adapter = _build_adapter(resolved_judge_provider, base_url=None, config=cfg)
+    judge_adapter = (
+        None if no_judge else _build_adapter(resolved_judge_provider, base_url=None, config=cfg)
+    )
+    if benchmark_mode != "original" and mutation_coverage is not None:
+        console.print(
+            f"[dim]benchmark mode[/dim] {benchmark_mode}  "
+            f"[dim]mutation coverage[/dim] {mutation_coverage:.2f}"
+        )
 
     def _score_cell(score: int) -> str:
         color = "green" if score >= 4 else ("yellow" if score == 3 else "red")
@@ -4343,6 +4948,34 @@ def eval_run(
             console.print(
                 f"  [{color}]{dim.score}/5[/{color}] [dim]{dim_name}[/dim]  {dim.rationale}"
             )
+        if r.hard_metrics is not None:
+            metrics = r.hard_metrics
+            console.print(
+                "  [dim]hard metrics[/dim] "
+                f"pass={metrics.verify_passed} files={metrics.files_touched} "
+                f"+{metrics.lines_added}/-{metrics.lines_deleted} "
+                f"tools={metrics.tool_calls} verify={metrics.did_run_verification}"
+            )
+        if r.artifact_dir is not None:
+            console.print(f"  [dim]artifacts[/dim] {r.artifact_dir}")
+
+    def _print_per_fixture_hard(
+        *, fixture_name: str, variant: str, run_index: int, outcome: Any
+    ) -> None:
+        metrics = outcome.hard_metrics
+        if metrics is None:
+            console.print(f"  [red]no hard metrics[/red] [{variant}] (run {run_index})")
+            return
+        label = f"{fixture_name} [dim]({variant}, run {run_index})[/dim]"
+        pass_label = "[green]PASS[/green]" if metrics.verify_passed else "[red]FAIL[/red]"
+        console.print(
+            f"{label} {pass_label}  "
+            f"agent_exit={outcome.agent_exit_code} verify_exit={outcome.test_exit_code}  "
+            f"files={metrics.files_touched} +{metrics.lines_added}/-{metrics.lines_deleted}  "
+            f"tools={metrics.tool_calls} secs={metrics.total_duration_seconds:.1f}"
+        )
+        if outcome.artifact_dir is not None:
+            console.print(f"  [dim]artifacts[/dim] {outcome.artifact_dir}")
 
     # Variant arms: when --ab is on, run each fixture twice per rep — once
     # defended (full structural chain + critic), once bare (model + tools
@@ -4351,8 +4984,11 @@ def eval_run(
 
     # Collect every per-run EvalResult, keyed by (fixture, variant).
     runs_by_pair: dict[tuple[str, str], list[Any]] = {}
+    outcomes_by_pair: dict[tuple[str, str], list[Any]] = {}
     # Per-trial (defense ledger, passed, variant, fixture) for correlation.
     defense_trials: list[tuple[Any, bool, str, str]] = []
+    all_results: list[Any] = []
+    hard_results: list[dict[str, Any]] = []
     for fx in fixtures:
         console.print(f"\n[bold blue]▶ {fx.name}[/bold blue]")
         agent_desc = (
@@ -4368,6 +5004,7 @@ def eval_run(
                 if n_runs > 1:
                     pieces.append(f"(run {run_idx + 1}/{n_runs})")
                 run_label = " " + " ".join(pieces) if pieces else ""
+                run_artifact_dir = artifact_root / fx.name / variant / f"run-{run_idx + 1:02d}"
                 with console.status(f"[dim]running agent ({agent_desc}){run_label}...[/dim]"):
                     try:
                         outcome = runner.run_fixture(
@@ -4375,7 +5012,9 @@ def eval_run(
                             provider=resolved_provider,
                             model=resolved_model,
                             agent_timeout=agent_timeout,
+                            max_output_tokens=max_output_tokens,
                             variant=variant,
+                            artifact_dir=run_artifact_dir,
                         )
                     except Exception as exc:
                         console.print(f"  [red]run failed{run_label}:[/red] {exc}")
@@ -4389,9 +5028,44 @@ def eval_run(
                     f"  agent {exit_icon} (exit {outcome.agent_exit_code})  "
                     f"tests {test_icon} (exit {outcome.test_exit_code}){run_label}"
                 )
+                outcomes_by_pair.setdefault((fx.name, variant), []).append(outcome)
+
+                # Capture the defense ledger from this trial's transcript so we
+                # can correlate which defenses fired with PASS/FAIL outcomes.
+                # Bare-variant trials never emit a ledger (no structural chain
+                # → nothing to log) but we still record (None, passed) so the
+                # report distinguishes "defense was silent" from "no data."
+                ledger = parse_ledger_text(outcome.transcript)
+                if no_judge:
+                    passed = bool(outcome.hard_metrics and outcome.hard_metrics.verify_passed)
+                    defense_trials.append((ledger, passed, variant, fx.name))
+                    hard_results.append(
+                        {
+                            "fixture_name": fx.name,
+                            "variant": variant,
+                            "run_index": run_idx + 1,
+                            "hard_metrics": (
+                                outcome.hard_metrics.to_dict()
+                                if outcome.hard_metrics is not None
+                                else None
+                            ),
+                            "artifact_dir": str(run_artifact_dir),
+                            "agent_exit_code": outcome.agent_exit_code,
+                            "verify_exit_code": outcome.test_exit_code,
+                        }
+                    )
+                    _print_per_fixture_hard(
+                        fixture_name=fx.name,
+                        variant=variant,
+                        run_index=run_idx + 1,
+                        outcome=outcome,
+                    )
+                    continue
 
                 with console.status(f"[dim]scoring{run_label}...[/dim]"):
                     try:
+                        assert judge_mod is not None
+                        assert judge_adapter is not None
                         result = judge_mod.judge(
                             adapter=judge_adapter,
                             model=resolved_judge_model,
@@ -4401,23 +5075,21 @@ def eval_run(
                             transcript=outcome.transcript,
                             git_diff=outcome.git_diff,
                             test_output=outcome.test_output,
+                            hard_metrics=outcome.hard_metrics,
+                            artifact_dir=str(run_artifact_dir),
+                            variant=variant,
+                            run_index=run_idx + 1,
                         )
                         runs_by_pair.setdefault((fx.name, variant), []).append(result)
+                        all_results.append(result)
                     except Exception as exc:
                         console.print(f"  [red]judge failed{run_label}:[/red] {exc}")
                         continue
 
-                # Capture the defense ledger from this trial's transcript so we
-                # can correlate which defenses fired with PASS/FAIL outcomes.
-                # Bare-variant trials never emit a ledger (no structural chain
-                # → nothing to log) but we still record (None, passed) so the
-                # report distinguishes "defense was silent" from "no data."
-                ledger = parse_ledger_text(outcome.transcript)
                 defense_trials.append((ledger, result.passed, variant, fx.name))
-
                 _print_per_fixture(result)
 
-    if not runs_by_pair:
+    if not runs_by_pair and not outcomes_by_pair:
         return
 
     # End-of-batch rollup. With n_runs>1, each cell is "<median>/5 (min..max)".
@@ -4427,8 +5099,6 @@ def eval_run(
         # statistics.median averages the two middle values for even-N lists,
         # which is what we want — picking scores[N//2] silently biased high
         # on N=2 (e.g. median of [1, 5] became 5 instead of 3).
-        import statistics
-
         median = statistics.median(scores)
         median_round = round(median)
         color = "green" if median_round >= 4 else ("yellow" if median_round == 3 else "red")
@@ -4438,8 +5108,55 @@ def eval_run(
             return f"[{color}]{median_str}/5[/{color}]"
         return f"[{color}]{median_str}/5[/{color}] [dim]({scores[0]}..{scores[-1]})[/dim]"
 
+    def _aggregate_dimensions(runs: list[Any]) -> dict[str, Any]:
+        dims: dict[str, Any] = {}
+        for dim_name, _ in _DIM_ORDER:
+            scores = [getattr(r, dim_name).score for r in runs]
+            sem = None
+            if len(scores) >= 2:
+                sem = statistics.stdev(scores) / (len(scores) ** 0.5)
+            dims[dim_name] = types_mod.AggregatedDimension(
+                median=statistics.median(scores),
+                minimum=min(scores),
+                maximum=max(scores),
+                mean=statistics.fmean(scores),
+                sem=sem,
+            )
+        return dims
+
+    def _aggregate_hard_metrics(runs: list[Any]) -> dict[str, float]:
+        aggregates: dict[str, float] = {}
+        if not runs or runs[0].hard_metrics is None:
+            return aggregates
+        keys = (
+            "files_touched",
+            "lines_added",
+            "lines_deleted",
+            "tool_calls",
+            "shell_commands",
+            "agent_duration_seconds",
+            "verify_duration_seconds",
+            "total_duration_seconds",
+            "redundant_tool_calls",
+            "retry_loops",
+        )
+        for key in keys:
+            values = [
+                float(getattr(r.hard_metrics, key)) for r in runs if r.hard_metrics is not None
+            ]
+            if values:
+                aggregates[f"avg_{key}"] = statistics.fmean(values)
+        aggregates["verify_pass_rate"] = statistics.fmean(
+            [1.0 if r.hard_metrics and r.hard_metrics.verify_passed else 0.0 for r in runs]
+        )
+        return aggregates
+
+    aggregates: list[Any] = []
+
     console.print()
     title_pieces = ["Eval Results"]
+    if no_judge:
+        title_pieces.append("hard metrics only")
     if n_runs > 1:
         title_pieces.append(f"{n_runs} runs each")
     if ab:
@@ -4447,19 +5164,59 @@ def eval_run(
     title = " — ".join(title_pieces)
     table = Table(show_header=True, header_style="bold", title=title)
     table.add_column("Fixture / variant", no_wrap=True)
-    for _, col in _DIM_ORDER:
-        table.add_column(col, justify="center")
+    if not no_judge:
+        for _, col in _DIM_ORDER:
+            table.add_column(col, justify="center")
     table.add_column("Pass rate", justify="center")
-    for (fx_name, variant), runs in runs_by_pair.items():
-        n_passed = sum(1 for r in runs if r.passed)
+    aggregate_source = outcomes_by_pair if no_judge else runs_by_pair
+    for (fx_name, variant), runs in aggregate_source.items():
+        if no_judge:
+            n_passed = sum(
+                1 for outcome in runs if outcome.hard_metrics and outcome.hard_metrics.verify_passed
+            )
+        else:
+            n_passed = sum(1 for r in runs if r.passed)
         pass_color = "green" if n_passed == len(runs) else ("yellow" if n_passed > 0 else "red")
         label = f"{fx_name} [dim]({variant})[/dim]" if ab else fx_name
-        table.add_row(
-            label,
-            *(_cell_for_runs(runs, dim) for dim, _ in _DIM_ORDER),
-            f"[{pass_color}]{n_passed}/{len(runs)}[/{pass_color}]",
+        aggregates.append(
+            types_mod.FixtureAggregate(
+                fixture_name=fx_name,
+                variant=variant,
+                runs=len(runs),
+                passes=n_passed,
+                dimensions={} if no_judge else _aggregate_dimensions(runs),
+                hard_metrics=_aggregate_hard_metrics(runs),
+            )
         )
+        row = [label]
+        if not no_judge:
+            row.extend(_cell_for_runs(runs, dim) for dim, _ in _DIM_ORDER)
+        row.append(f"[{pass_color}]{n_passed}/{len(runs)}[/{pass_color}]")
+        table.add_row(*row)
     console.print(table)
+
+    metrics_table = Table(show_header=True, header_style="bold", title="Operational metrics")
+    metrics_table.add_column("Fixture / variant", no_wrap=True)
+    metrics_table.add_column("Avg files", justify="right")
+    metrics_table.add_column("Avg diff", justify="right")
+    metrics_table.add_column("Avg tools", justify="right")
+    metrics_table.add_column("Avg secs", justify="right")
+    metrics_table.add_column("Verify pass", justify="right")
+    for agg in aggregates:
+        metrics = agg.hard_metrics
+        label = f"{agg.fixture_name} ({agg.variant})" if ab else agg.fixture_name
+        avg_diff = (
+            f"+{metrics.get('avg_lines_added', 0):.1f}/-{metrics.get('avg_lines_deleted', 0):.1f}"
+        )
+        metrics_table.add_row(
+            label,
+            f"{metrics.get('avg_files_touched', 0):.1f}",
+            avg_diff,
+            f"{metrics.get('avg_tool_calls', 0):.1f}",
+            f"{metrics.get('avg_total_duration_seconds', 0):.1f}",
+            f"{metrics.get('verify_pass_rate', 0.0):.2f}",
+        )
+    console.print(metrics_table)
 
     # Defense correlation report: which defenses fired correlate with PASS or
     # FAIL? Only meaningful when we have multiple defended trials — bare
@@ -4505,6 +5262,52 @@ def eval_run(
             "often than when it passes. Manually consider disabling such "
             "defenses; this report is diagnostic only.[/dim]"
         )
+
+    if no_judge:
+        report_data = {
+            "run_id": run_id,
+            "provider": resolved_provider,
+            "model": resolved_model,
+            "judge_provider": None,
+            "judge_model": None,
+            "fixture_set": fixture_set,
+            "n_runs": n_runs,
+            "ab": ab,
+            "artifact_root": str(artifact_root),
+            "benchmark_mode": benchmark_mode,
+            "mutation_coverage": mutation_coverage,
+            "no_judge": True,
+            "results": [],
+            "hard_results": hard_results,
+            "aggregates": [agg.to_dict() for agg in aggregates],
+        }
+    else:
+        report = types_mod.EvalReport(
+            run_id=run_id,
+            provider=resolved_provider,
+            model=resolved_model,
+            judge_provider=resolved_judge_provider,
+            judge_model=resolved_judge_model,
+            fixture_set=fixture_set,
+            n_runs=n_runs,
+            ab=ab,
+            artifact_root=artifact_root,
+            benchmark_mode=benchmark_mode,
+            mutation_coverage=mutation_coverage,
+            results=all_results,
+            aggregates=aggregates,
+        )
+        report_data = report.to_dict()
+    (artifact_root / "report.json").write_text(
+        json.dumps(report_data, indent=2),
+        encoding="utf-8",
+    )
+    if save_history:
+        history_path.parent.mkdir(parents=True, exist_ok=True)
+        with history_path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(report_data) + "\n")
+    if json_out:
+        console.print_json(json.dumps(report_data))
 
 
 # ---------------------------------------------------------------------------

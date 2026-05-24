@@ -12,9 +12,13 @@ from harness.core import (
     ActivityStore,
     Agent,
     AutoApprove,
+    BugfixCommentRewriteVerifier,
     FailoverPolicy,
+    FileScopeVerifier,
     LLMJudgeVerifier,
     Message,
+    NegativeConstraintVerifier,
+    PromptSurfaceRevertVerifier,
     RuleVerifier,
     RunRequest,
     Session,
@@ -425,3 +429,546 @@ class TestVerifyBeforeDoneVerifier:
         verifier = VerifyBeforeDoneVerifier()
         result = await verifier.verify(session=_session(), activity=[])
         assert result.can_finish is True
+
+
+# ---------------------------------------------------------------------------
+# PromptSurfaceRevertVerifier
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+class TestPromptSurfaceRevertVerifier:
+    async def test_blocks_disproven_prompt_surface_edit_left_in_diff(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.setattr(
+            "harness.core.verification._git_diff_unified_zero",
+            lambda _cwd: (
+                "diff --git a/src/cache.py b/src/cache.py\n"
+                "@@ -11 +11 @@\n"
+                "-TIMEOUT_SECONDS = 5\n"
+                "+TIMEOUT_SECONDS = 30\n"
+                "@@ -46,0 +47,8 @@\n"
+                "+        if key in self._in_flight:\n"
+                "+            return await self._in_flight[key]\n"
+                "+        task = asyncio.create_task(_fetch_and_cache())\n"
+            ),
+        )
+        session = Session(
+            id="s1",
+            provider="mock",
+            model="m",
+            cwd=tmp_path,
+            messages=[
+                Message(
+                    role="user",
+                    content=(
+                        "# Fix batch endpoint timeout\n\n"
+                        "Increase the timeout from 5 seconds to 30 seconds.\n\n"
+                        "File to change: `src/cache.py` (the `TIMEOUT_SECONDS` constant).\n"
+                    ),
+                )
+            ],
+        )
+        activity = [
+            _activity(
+                kind="tool_call.completed",
+                name="edit_file",
+                is_error=False,
+                arguments={"path": "src/cache.py", "new": "TIMEOUT_SECONDS = 30"},
+                content_preview="TIMEOUT_SECONDS = 30",
+            ),
+            _activity(
+                kind="tool_call.completed",
+                name="verify_work",
+                is_error=True,
+                content_preview=(
+                    "FAILED tests/test_cache.py::test_concurrent_requests_deduplicated "
+                    "- AssertionError"
+                ),
+            ),
+            _activity(
+                kind="tool_call.completed",
+                name="write_file",
+                is_error=False,
+                arguments={
+                    "path": "src/cache.py",
+                    "content": (
+                        "TIMEOUT_SECONDS = 30\n"
+                        "self._in_flight = {}\n"
+                        "return await self._in_flight[key]\n"
+                    ),
+                },
+                content_preview="TIMEOUT_SECONDS = 30 ... _in_flight",
+            ),
+            _activity(kind="tool_call.completed", name="verify_work", is_error=False),
+        ]
+
+        result = await PromptSurfaceRevertVerifier().verify(session=session, activity=activity)
+
+        assert result.can_finish is False
+        assert "Revert the prompt-surface edit" in result.reason
+        assert result.verifier_name == "prompt_surface_revert"
+
+    async def test_passes_when_current_diff_only_contains_root_cause_fix(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.setattr(
+            "harness.core.verification._git_diff_unified_zero",
+            lambda _cwd: (
+                "diff --git a/src/cache.py b/src/cache.py\n"
+                "@@ -46,0 +47,8 @@\n"
+                "+        if key in self._in_flight:\n"
+                "+            return await self._in_flight[key]\n"
+                "+        task = asyncio.create_task(_fetch_and_cache())\n"
+            ),
+        )
+        session = Session(
+            id="s1",
+            provider="mock",
+            model="m",
+            cwd=tmp_path,
+            messages=[
+                Message(
+                    role="user",
+                    content=(
+                        "# Fix batch endpoint timeout\n\n"
+                        "Increase the timeout from 5 seconds to 30 seconds.\n\n"
+                        "File to change: `src/cache.py` (the `TIMEOUT_SECONDS` constant).\n"
+                    ),
+                )
+            ],
+        )
+        activity = [
+            _activity(
+                kind="tool_call.completed",
+                name="edit_file",
+                is_error=False,
+                arguments={"path": "src/cache.py", "new": "TIMEOUT_SECONDS = 30"},
+                content_preview="TIMEOUT_SECONDS = 30",
+            ),
+            _activity(
+                kind="tool_call.completed",
+                name="verify_work",
+                is_error=True,
+                content_preview=(
+                    "FAILED tests/test_cache.py::test_concurrent_requests_deduplicated "
+                    "- AssertionError"
+                ),
+            ),
+            _activity(
+                kind="tool_call.completed",
+                name="write_file",
+                is_error=False,
+                arguments={
+                    "path": "src/cache.py",
+                    "content": ("self._in_flight = {}\n" "return await self._in_flight[key]\n"),
+                },
+                content_preview="_in_flight",
+            ),
+            _activity(kind="tool_call.completed", name="verify_work", is_error=False),
+        ]
+
+        result = await PromptSurfaceRevertVerifier().verify(session=session, activity=activity)
+
+        assert result.can_finish is True
+        assert "no longer contains" in result.reason
+
+    async def test_ignores_generic_symptom_tokens_from_function_call_prompt(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.setattr(
+            "harness.core.verification._git_diff_unified_zero",
+            lambda _cwd: (
+                "diff --git a/src/format.py b/src/format.py\n"
+                "@@ -28,0 +29,2 @@\n"
+                "+    if amount is None:\n"
+                '+        return "—"\n'
+            ),
+        )
+        session = Session(
+            id="s1",
+            provider="mock",
+            model="m",
+            cwd=tmp_path,
+            messages=[
+                Message(
+                    role="user",
+                    content=(
+                        "# Fix null handling in format_price\n\n"
+                        "`format_price(None)` raises a `TypeError`.\n"
+                        'Return the string `"—"` when amount is None.\n'
+                    ),
+                )
+            ],
+        )
+        activity = [
+            _activity(
+                kind="tool_call.completed",
+                name="edit_file",
+                is_error=False,
+                arguments={"path": "src/format.py", "new": 'if amount is None:\n    return "—"'},
+                content_preview='if amount is None: return "—"',
+            ),
+            _activity(
+                kind="tool_call.completed",
+                name="verify_work",
+                is_error=True,
+                content_preview="FAILED tests/test_format.py::test_format_price_none - TypeError",
+            ),
+            _activity(
+                kind="tool_call.completed",
+                name="write_file",
+                is_error=False,
+                arguments={
+                    "path": "src/format.py",
+                    "content": 'if amount is None:\n    return "—"',
+                },
+                content_preview='if amount is None: return "—"',
+            ),
+            _activity(kind="tool_call.completed", name="verify_work", is_error=False),
+        ]
+
+        result = await PromptSurfaceRevertVerifier().verify(session=session, activity=activity)
+
+        assert result.can_finish is True
+        assert "no longer contains" in result.reason or "protect" in result.reason
+
+    async def test_allows_legitimate_timeout_mentions_after_constant_is_reverted(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.setattr(
+            "harness.core.verification._git_diff_unified_zero",
+            lambda _cwd: (
+                "diff --git a/src/cache.py b/src/cache.py\n"
+                "@@ -20,14 +20,14 @@ class SimpleCache:\n"
+                "-    Note: concurrent requests for the same key each trigger their own\n"
+                "+    Note: concurrent requests for the same key are deduplicated in-flight.\n"
+                "@@ -46,12 +46,20 @@ class SimpleCache:\n"
+                "+        if key in self._in_flight:\n"
+                "+            return await self._in_flight[key]\n"
+                "+        async def _fetch_and_cache() -> Any:\n"
+                "+            try:\n"
+                "+                value = await asyncio.wait_for(fetch(key), timeout=fetch_timeout)\n"
+                "+                self._store[key] = value\n"
+                "+                return value\n"
+                "+            finally:\n"
+                "+                self._in_flight.pop(key, None)\n"
+                "+        task = asyncio.create_task(_fetch_and_cache())\n"
+                "+        self._in_flight[key] = task\n"
+                "+        return await task\n"
+            ),
+        )
+        session = Session(
+            id="s1",
+            provider="mock",
+            model="m",
+            cwd=tmp_path,
+            messages=[
+                Message(
+                    role="user",
+                    content=(
+                        "# Fix batch endpoint timeout\n\n"
+                        "Increase the timeout from 5 seconds to 30 seconds.\n\n"
+                        "File to change: `src/cache.py` (the `TIMEOUT_SECONDS` constant).\n"
+                    ),
+                )
+            ],
+        )
+        activity = [
+            _activity(
+                kind="tool_call.completed",
+                name="edit_file",
+                is_error=False,
+                arguments={"path": "src/cache.py", "new": "TIMEOUT_SECONDS = 30"},
+                content_preview="TIMEOUT_SECONDS = 30",
+            ),
+            _activity(
+                kind="tool_call.completed",
+                name="verify_work",
+                is_error=True,
+                content_preview=(
+                    "FAILED tests/test_cache.py::test_concurrent_requests_deduplicated "
+                    "- AssertionError"
+                ),
+            ),
+            _activity(
+                kind="tool_call.completed",
+                name="write_file",
+                is_error=False,
+                arguments={
+                    "path": "src/cache.py",
+                    "content": (
+                        "TIMEOUT_SECONDS = 5\n"
+                        "if key in self._in_flight:\n"
+                        "    return await self._in_flight[key]\n"
+                        "value = await asyncio.wait_for(fetch(key), timeout=fetch_timeout)\n"
+                    ),
+                },
+                content_preview="TIMEOUT_SECONDS = 5 ... timeout=fetch_timeout",
+            ),
+            _activity(kind="tool_call.completed", name="verify_work", is_error=False),
+        ]
+
+        result = await PromptSurfaceRevertVerifier().verify(session=session, activity=activity)
+
+        assert result.can_finish is True
+        assert "no longer contains" in result.reason
+
+
+@pytest.mark.asyncio
+class TestNegativeConstraintVerifier:
+    async def test_blocks_comment_style_cleanup_when_prompt_forbids_formatting(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.setattr(
+            "harness.core.verification._git_diff_unified_zero",
+            lambda _cwd: (
+                "diff --git a/tests/test_calc.py b/tests/test_calc.py\n"
+                "@@ -10,0 +11,1 @@\n"
+                "+# -- power -----------------------------------------------------------\n"
+                "@@ -20,0 +21,3 @@\n"
+                "+def test_power():\n"
+                "+    assert 2 ** 3 == 8\n"
+                "+\n"
+            ),
+        )
+        session = Session(
+            id="s1",
+            provider="mock",
+            model="m",
+            cwd=tmp_path,
+            messages=[
+                Message(
+                    role="user",
+                    content=(
+                        "Add a feature.\n\n"
+                        "Do not fix pre-existing typos, inconsistent formatting, or unused imports."
+                    ),
+                )
+            ],
+        )
+        activity = [_activity(kind="tool_call.completed", name="verify_work", is_error=False)]
+
+        result = await NegativeConstraintVerifier().verify(session=session, activity=activity)
+
+        assert result.can_finish is False
+        assert "comment-style changes" in result.reason
+
+    async def test_passes_when_only_requested_code_changes_remain(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.setattr(
+            "harness.core.verification._git_diff_unified_zero",
+            lambda _cwd: (
+                "diff --git a/src/feature.py b/src/feature.py\n"
+                "@@ -5,0 +6,2 @@\n"
+                "+def power(base, exponent):\n"
+                "+    return base ** exponent\n"
+            ),
+        )
+        session = Session(
+            id="s1",
+            provider="mock",
+            model="m",
+            cwd=tmp_path,
+            messages=[
+                Message(
+                    role="user",
+                    content=(
+                        "Add a feature.\n\n"
+                        "Do not fix pre-existing typos, inconsistent formatting, or unused imports."
+                    ),
+                )
+            ],
+        )
+        activity = [_activity(kind="tool_call.completed", name="verify_work", is_error=False)]
+
+        result = await NegativeConstraintVerifier().verify(session=session, activity=activity)
+
+        assert result.can_finish is True
+        assert "no explicit negative-constraint violations" in result.reason
+
+    async def test_comment_banner_feedback_is_actionable(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.setattr(
+            "harness.core.verification._git_diff_unified_zero",
+            lambda _cwd: (
+                "diff --git a/tests/test_calc.py b/tests/test_calc.py\n"
+                "@@ -10,0 +11,1 @@\n"
+                "+# -- power -----------------------------------------------------------\n"
+                "@@ -20,0 +21,3 @@\n"
+                "+def test_power():\n"
+                "+    assert 2 ** 3 == 8\n"
+                "+\n"
+            ),
+        )
+        session = Session(
+            id="s1",
+            provider="mock",
+            model="m",
+            cwd=tmp_path,
+            messages=[
+                Message(
+                    role="user",
+                    content=(
+                        "Add a feature.\n\n"
+                        "Do not fix pre-existing typos, inconsistent formatting, or unused imports."
+                    ),
+                )
+            ],
+        )
+        activity = [_activity(kind="tool_call.completed", name="verify_work", is_error=False)]
+
+        result = await NegativeConstraintVerifier().verify(session=session, activity=activity)
+
+        assert result.can_finish is False
+        assert "delete only those new `# ...` lines" in result.reason
+
+
+@pytest.mark.asyncio
+class TestFileScopeVerifier:
+    async def test_ignores_test_only_paths_for_bugfix_prompt_with_function_call(
+        self, tmp_path: Path
+    ) -> None:
+        session = Session(
+            id="s1",
+            provider="mock",
+            model="m",
+            cwd=tmp_path,
+            messages=[
+                Message(
+                    role="user",
+                    content=(
+                        "# Fix null handling in render_amount\n\n"
+                        "`render_amount(None)` raises a `TypeError`.\n\n"
+                        "Also add one regression test in `tests/test_format.py`.\n"
+                    ),
+                )
+            ],
+        )
+        activity = [
+            _activity(
+                kind="tool_call.completed",
+                name="edit_file",
+                is_error=False,
+                arguments={"path": "src/format.py", "new": 'if amount is None:\n    return "—"'},
+                content_preview='if amount is None: return "—"',
+            ),
+            _activity(
+                kind="tool_call.completed",
+                name="edit_file",
+                is_error=False,
+                arguments={
+                    "path": "tests/test_format.py",
+                    "new": 'def test_render_amount_none():\n    assert render_amount(None) == "—"',
+                },
+                content_preview="def test_render_amount_none(): ...",
+            ),
+        ]
+
+        result = await FileScopeVerifier().verify(session=session, activity=activity)
+
+        assert result.can_finish is True
+        assert "no file-scope constraint" in result.reason
+
+    async def test_enforces_explicit_named_source_file_scope(self, tmp_path: Path) -> None:
+        session = Session(
+            id="s1",
+            provider="mock",
+            model="m",
+            cwd=tmp_path,
+            messages=[
+                Message(
+                    role="user",
+                    content=(
+                        "# Fix batch endpoint timeout\n\n"
+                        "Increase the timeout from 5 seconds to 30 seconds.\n\n"
+                        "File to change: `src/cache.py`.\n"
+                    ),
+                )
+            ],
+        )
+        activity = [
+            _activity(
+                kind="tool_call.completed",
+                name="edit_file",
+                is_error=False,
+                arguments={"path": "src/cache.py", "new": "TIMEOUT_SECONDS = 30"},
+                content_preview="TIMEOUT_SECONDS = 30",
+            ),
+            _activity(
+                kind="tool_call.completed",
+                name="edit_file",
+                is_error=False,
+                arguments={"path": "tests/test_cache.py", "new": "assert True"},
+                content_preview="assert True",
+            ),
+        ]
+
+        result = await FileScopeVerifier().verify(session=session, activity=activity)
+
+        assert result.can_finish is False
+        assert "src/cache.py" in result.reason
+
+
+@pytest.mark.asyncio
+class TestBugfixCommentRewriteVerifier:
+    async def test_blocks_new_source_comment_on_bugfix_prompt(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.setattr(
+            "harness.core.verification._git_diff_unified_zero",
+            lambda _cwd: (
+                "diff --git a/src/db.py b/src/db.py\n"
+                "@@ -14,3 +14,2 @@\n"
+                "+    # We no longer strip hyphens as they are a valid part of IDs.\n"
+            ),
+        )
+        session = Session(
+            id="s1",
+            provider="mock",
+            model="m",
+            cwd=tmp_path,
+            messages=[
+                Message(
+                    role="user",
+                    content="# Fix hyphenated user ID lookup\n\n`get_user('abc-def')` returns None.\n",
+                )
+            ],
+        )
+
+        result = await BugfixCommentRewriteVerifier().verify(session=session, activity=[])
+
+        assert result.can_finish is False
+        assert "source comment lines" in result.reason
+
+    async def test_passes_when_bugfix_adds_only_code(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.setattr(
+            "harness.core.verification._git_diff_unified_zero",
+            lambda _cwd: (
+                "diff --git a/src/db.py b/src/db.py\n"
+                "@@ -14,3 +14,1 @@\n"
+                "+    return _USERS.get(user_id)\n"
+            ),
+        )
+        session = Session(
+            id="s1",
+            provider="mock",
+            model="m",
+            cwd=tmp_path,
+            messages=[
+                Message(
+                    role="user",
+                    content="# Fix hyphenated user ID lookup\n\n`get_user('abc-def')` returns None.\n",
+                )
+            ],
+        )
+
+        result = await BugfixCommentRewriteVerifier().verify(session=session, activity=[])
+
+        assert result.can_finish is True
+        assert "no new source comment lines" in result.reason
