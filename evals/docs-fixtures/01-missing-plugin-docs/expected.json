@@ -1,0 +1,14 @@
+{
+  "summary_contains": "plugin",
+  "min_findings": 1,
+  "required_findings": [
+    {
+      "path": "README.md",
+      "severity": "medium",
+      "issue_substring": "plugin"
+    }
+  ],
+  "missing_topics": [
+    "plugin setup"
+  ]
+}

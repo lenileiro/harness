@@ -1,0 +1,11 @@
+{
+  "summary_contains": "review",
+  "min_findings": 1,
+  "required_findings": [
+    {
+      "file": "src/profile.py",
+      "severity": "high",
+      "issue_substring": "None"
+    }
+  ]
+}

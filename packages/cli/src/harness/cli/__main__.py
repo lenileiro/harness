@@ -66,8 +66,10 @@ from harness.cli.common import (
     _args_preview as _common_args_preview,
 )
 from harness.cli.config import HarnessConfig, default_config_path
+from harness.cli.docs_commands import docs_audit_command as _docs_audit_command
 from harness.cli.evals import eval_app
-from harness.cli.introspection import providers_app, tools_app
+from harness.cli.experience_commands import experience_app
+from harness.cli.introspection import plugins_app, providers_app, tools_app
 from harness.cli.lab_commands import lab_list_command as _lab_list_command
 from harness.cli.lab_commands import lab_resume_command as _lab_resume_command
 from harness.cli.lab_commands import lab_run_command as _lab_run_command
@@ -101,6 +103,8 @@ from harness.cli.render import (
     _status_style,
     _task_status_style,
 )
+from harness.cli.research_commands import research_command as _research_command
+from harness.cli.review_commands import review_command as _review_command
 from harness.cli.run_commands import run_command as _run_command
 from harness.cli.run_commands import run_once as _run_once_impl
 from harness.cli.runtime_agent import (
@@ -238,6 +242,7 @@ sessions_app = typer.Typer(
 app.add_typer(sessions_app, name="sessions")
 app.add_typer(providers_app, name="providers")
 app.add_typer(tools_app, name="tools")
+app.add_typer(plugins_app, name="plugins")
 
 tasks_app = typer.Typer(
     name="tasks", help="Create, list, and update durable tasks.", no_args_is_help=True
@@ -273,6 +278,7 @@ memory_app = typer.Typer(
 app.add_typer(memory_app, name="memory")
 
 app.add_typer(eval_app, name="eval")
+app.add_typer(experience_app, name="experience")
 
 phase_app = typer.Typer(
     name="phase",
@@ -442,6 +448,7 @@ def _build_agent(
     contracts: Any | None = None,
     tips_provider: Any | None = None,
     resume: Any | None = None,
+    build_tools: Any = _build_tools,
 ) -> Agent:
     return _build_agent_impl(
         chain=chain,
@@ -452,7 +459,7 @@ def _build_agent(
         config=config,
         yes=yes,
         build_adapter=_build_adapter,
-        build_tools=_build_tools,
+        build_tools=build_tools,
         build_search_fn=_build_search_fn,
         console=console,
         inbox=inbox,
@@ -678,6 +685,13 @@ def run(
             ),
         ),
     ] = "adaptive",
+    domain: Annotated[
+        str,
+        typer.Option(
+            "--domain",
+            help="Task domain profile. Currently: coding, code-review, research, docs-audit.",
+        ),
+    ] = "coding",
     bare: Annotated[
         bool,
         typer.Option(
@@ -762,6 +776,7 @@ def run(
         auto_compact=auto_compact,
         max_repair=max_repair,
         profile=profile,
+        domain=domain,
         bare=bare,
         phases=phases,
         loop_detect=loop_detect,
@@ -777,8 +792,143 @@ def run(
     )
 
 
-async def _run_once(**kwargs: Any) -> None:
-    await _run_once_impl(
+@app.command("review")
+def review(
+    base: Annotated[
+        str,
+        typer.Option("--base", help="Base git ref to diff against."),
+    ] = "HEAD~1",
+    model: Annotated[str | None, typer.Option("--model", "-m")] = None,
+    provider: Annotated[str | None, typer.Option("--provider", "-p")] = None,
+    failover: Annotated[str | None, typer.Option("--failover")] = None,
+    base_url: Annotated[str | None, typer.Option("--base-url")] = None,
+    cwd: Annotated[Path | None, typer.Option("--cwd")] = None,
+    max_steps: Annotated[int, typer.Option("--max-steps")] = 20,
+    max_output_tokens: Annotated[int | None, typer.Option("--max-output-tokens")] = None,
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+    in_memory: Annotated[bool, typer.Option("--in-memory")] = False,
+    yes: Annotated[bool, typer.Option("--yes", "-y")] = False,
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+    verbose: Annotated[bool, typer.Option("--verbose", "-v")] = False,
+    config_path: Annotated[
+        Path | None,
+        typer.Option("--config", help=f"Override config path (default: {default_config_path()})."),
+    ] = None,
+) -> None:
+    _review_command(
+        base=base,
+        model=model,
+        provider=provider,
+        failover=failover,
+        base_url=base_url,
+        cwd=cwd,
+        max_steps=max_steps,
+        max_output_tokens=max_output_tokens,
+        db=db,
+        in_memory=in_memory,
+        yes=yes,
+        verbose=verbose,
+        json_output=json_output,
+        config_path=config_path,
+        console=console,
+        load_cli_config=_load_cli_config,
+        resolve_chain=_resolve_chain,
+        run_async=_run_async,
+        run_once=_run_once,
+    )
+
+
+@app.command("research")
+def research(
+    topic: Annotated[str, typer.Argument(help="Research topic or question.")],
+    model: Annotated[str | None, typer.Option("--model", "-m")] = None,
+    provider: Annotated[str | None, typer.Option("--provider", "-p")] = None,
+    failover: Annotated[str | None, typer.Option("--failover")] = None,
+    base_url: Annotated[str | None, typer.Option("--base-url")] = None,
+    cwd: Annotated[Path | None, typer.Option("--cwd")] = None,
+    max_steps: Annotated[int, typer.Option("--max-steps")] = 20,
+    max_output_tokens: Annotated[int | None, typer.Option("--max-output-tokens")] = None,
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+    in_memory: Annotated[bool, typer.Option("--in-memory")] = False,
+    yes: Annotated[bool, typer.Option("--yes", "-y")] = False,
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+    verbose: Annotated[bool, typer.Option("--verbose", "-v")] = False,
+    config_path: Annotated[
+        Path | None,
+        typer.Option("--config", help=f"Override config path (default: {default_config_path()})."),
+    ] = None,
+) -> None:
+    _research_command(
+        topic=topic,
+        model=model,
+        provider=provider,
+        failover=failover,
+        base_url=base_url,
+        cwd=cwd,
+        max_steps=max_steps,
+        max_output_tokens=max_output_tokens,
+        db=db,
+        in_memory=in_memory,
+        yes=yes,
+        verbose=verbose,
+        json_output=json_output,
+        config_path=config_path,
+        console=console,
+        load_cli_config=_load_cli_config,
+        resolve_chain=_resolve_chain,
+        run_async=_run_async,
+        run_once=_run_once,
+    )
+
+
+@app.command("docs-audit")
+def docs_audit(
+    focus: Annotated[
+        str | None,
+        typer.Argument(help="Optional documentation area or question to focus on."),
+    ] = None,
+    model: Annotated[str | None, typer.Option("--model", "-m")] = None,
+    provider: Annotated[str | None, typer.Option("--provider", "-p")] = None,
+    failover: Annotated[str | None, typer.Option("--failover")] = None,
+    base_url: Annotated[str | None, typer.Option("--base-url")] = None,
+    cwd: Annotated[Path | None, typer.Option("--cwd")] = None,
+    max_steps: Annotated[int, typer.Option("--max-steps")] = 20,
+    max_output_tokens: Annotated[int | None, typer.Option("--max-output-tokens")] = None,
+    db: Annotated[Path | None, typer.Option("--db")] = None,
+    in_memory: Annotated[bool, typer.Option("--in-memory")] = False,
+    yes: Annotated[bool, typer.Option("--yes", "-y")] = False,
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+    verbose: Annotated[bool, typer.Option("--verbose", "-v")] = False,
+    config_path: Annotated[
+        Path | None,
+        typer.Option("--config", help=f"Override config path (default: {default_config_path()})."),
+    ] = None,
+) -> None:
+    _docs_audit_command(
+        focus=focus,
+        model=model,
+        provider=provider,
+        failover=failover,
+        base_url=base_url,
+        cwd=cwd,
+        max_steps=max_steps,
+        max_output_tokens=max_output_tokens,
+        db=db,
+        in_memory=in_memory,
+        yes=yes,
+        verbose=verbose,
+        json_output=json_output,
+        config_path=config_path,
+        console=console,
+        load_cli_config=_load_cli_config,
+        resolve_chain=_resolve_chain,
+        run_async=_run_async,
+        run_once=_run_once,
+    )
+
+
+async def _run_once(**kwargs: Any) -> str | None:
+    return await _run_once_impl(
         **kwargs,
         build_storage=_build_storage,
         resolve_task_attachment=_resolve_task_attachment,
@@ -786,6 +936,7 @@ async def _run_once(**kwargs: Any) -> None:
         build_verifier=_build_verifier,
         build_critic=_build_critic,
         build_adapter=_build_adapter,
+        build_tools=_build_tools,
         build_agent=_build_agent,
         print_defense_ledger=_print_defense_ledger,
         render=_render,

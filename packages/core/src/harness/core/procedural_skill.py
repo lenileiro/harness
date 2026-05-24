@@ -15,7 +15,6 @@ from harness.core.tips_mining import MiningInput, parse_mined_tips, render_minin
 from harness.core.tips_models import (
     Tip,
     TipLibrary,
-    default_experience_paths,
     default_tip_paths,
     keywords_from_text,
 )
@@ -24,6 +23,8 @@ from harness.core.tips_providers import (
     CompositeTipsProvider,
     StaticTipsProvider,
     TipsProvider,
+    default_experience_roots,
+    load_default_experience_provider,
 )
 
 __all__ = [
@@ -34,9 +35,10 @@ __all__ = [
     "Tip",
     "TipLibrary",
     "TipsProvider",
-    "default_experience_paths",
+    "default_experience_roots",
     "default_tip_paths",
     "keywords_from_text",
+    "load_default_experience_provider",
     "parse_mined_tips",
     "render_mining_prompt",
 ]

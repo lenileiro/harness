@@ -33,6 +33,7 @@ from harness.core.defense_ledger import (
     format_ledger,
     parse_ledger_text,
 )
+from harness.core.domain_profiles import DomainProfile, domain_profile_names, get_domain_profile
 from harness.core.env_contract import ContractRegistry, EnvironmentContract
 from harness.core.errors import (
     ApprovalDeniedError,
@@ -68,6 +69,18 @@ from harness.core.events import (
     ToolResultEvent,
     Verification,
 )
+from harness.core.experience import (
+    ArtifactExperienceProvider,
+    CompositeExperienceProvider,
+    CuratorAction,
+    CuratorReport,
+    ExperienceProvider,
+    StaticExperienceProvider,
+    curate_procedures,
+    default_experience_roots,
+    load_default_experience_provider,
+)
+from harness.core.extensions import ToolProvider
 from harness.core.failover import ErrorKind, FailoverPolicy, classify
 from harness.core.flow import Flow, FlowRunner, listen, persist, router, start
 from harness.core.flow_checkpoint import (
@@ -117,12 +130,24 @@ from harness.core.procedural_skill import (
     parse_mined_tips,
     render_mining_prompt,
 )
+from harness.core.procedures import Procedure, ProcedureLibrary, default_procedure_paths
 from harness.core.prompt_injection_probe import (
     InjectionFinding,
     annotate_if_suspicious,
     scan_text,
 )
 from harness.core.repair import RepairDirective, RepairMode, RepairOrchestrator
+from harness.core.result_schemas import (
+    DocsAuditFinding,
+    DocsAuditReport,
+    ResearchMemo,
+    ResearchSource,
+    ReviewFinding,
+    ReviewReport,
+    parse_docs_audit_report,
+    parse_research_memo,
+    parse_review_report,
+)
 from harness.core.resume import DEFAULT_RESUME_PATH, FeatureItem, ResumeContract
 from harness.core.role_contract import (
     Authority,
@@ -153,6 +178,7 @@ from harness.core.secret_redaction import has_secrets, redact_secrets
 from harness.core.shell_safety import check_dangerous_command
 from harness.core.storage import Storage
 from harness.core.telemetry import configure_logging, get_logger, span
+from harness.core.tool_entry import ToolBuildContext, ToolSpec
 from harness.core.tools import (
     ApprovalHandler,
     ApprovalPolicy,
@@ -220,6 +246,7 @@ __all__ = [
     "ApprovalPolicy",
     "ApprovalStatus",
     "ApprovalStore",
+    "ArtifactExperienceProvider",
     "ArtifactTipProvider",
     "Authority",
     "AutoApprove",
@@ -234,6 +261,7 @@ __all__ = [
     "CheckpointStore",
     "ClaimGroundingVerifier",
     "CompleteWorkItemTool",
+    "CompositeExperienceProvider",
     "CompositeTipsProvider",
     "ConfigurationError",
     "ConsensusVerifier",
@@ -245,9 +273,14 @@ __all__ = [
     "CreateWorkItemTool",
     "Critic",
     "Critique",
+    "CuratorAction",
+    "CuratorReport",
     "DefenseLedger",
     "DefenseStat",
     "DiagnosisAlignmentVerifier",
+    "DocsAuditFinding",
+    "DocsAuditReport",
+    "DomainProfile",
     "Done",
     "EffectScope",
     "EnvironmentContract",
@@ -256,6 +289,7 @@ __all__ = [
     "Event",
     "EvidenceContract",
     "EvidenceContractResult",
+    "ExperienceProvider",
     "FailoverPolicy",
     "FeatureItem",
     "FileCheckpointStore",
@@ -317,6 +351,8 @@ __all__ = [
     "PredictionEvent",
     "PredictionMismatchEvent",
     "PredictionOutcome",
+    "Procedure",
+    "ProcedureLibrary",
     "ProgressLedger",
     "PromptSurfaceRevertVerifier",
     "PruneLedgerTool",
@@ -326,7 +362,11 @@ __all__ = [
     "RepairOrchestrator",
     "ReplanRequestedEvent",
     "RequestCritiqueTool",
+    "ResearchMemo",
+    "ResearchSource",
     "ResumeContract",
+    "ReviewFinding",
+    "ReviewReport",
     "Role",
     "RoleContract",
     "RuleVerifier",
@@ -337,6 +377,7 @@ __all__ = [
     "StallDetectedEvent",
     "StallError",
     "StateVerifier",
+    "StaticExperienceProvider",
     "StaticTipsProvider",
     "StepCompleted",
     "StepStarted",
@@ -348,16 +389,19 @@ __all__ = [
     "TipLibrary",
     "TipsProvider",
     "Tool",
+    "ToolBuildContext",
     "ToolCall",
     "ToolCallEvent",
     "ToolCallStep",
     "ToolError",
     "ToolPrediction",
+    "ToolProvider",
     "ToolRegistry",
     "ToolResult",
     "ToolResultEvent",
     "ToolResultStep",
     "ToolRetry",
+    "ToolSpec",
     "Usage",
     "Verification",
     "VerificationGateway",
@@ -385,16 +429,25 @@ __all__ = [
     "configure_logging",
     "correlate_defenses",
     "count_tokens",
+    "curate_procedures",
+    "default_experience_roots",
+    "default_procedure_paths",
+    "domain_profile_names",
     "evaluate_evidence",
     "filter_tools_by_authority",
     "fork_session",
     "format_ledger",
+    "get_domain_profile",
     "get_logger",
     "has_secrets",
     "listen",
+    "load_default_experience_provider",
     "make_multi_critic",
+    "parse_docs_audit_report",
     "parse_ledger_text",
     "parse_mined_tips",
+    "parse_research_memo",
+    "parse_review_report",
     "persist",
     "prune",
     "redact_secrets",

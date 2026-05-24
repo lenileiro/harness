@@ -64,6 +64,24 @@ def build_verifier(
 ) -> Verifier | None:
     if not verify or verify == "none":
         return None
+    if verify.startswith("plugin:"):
+        from harness.cli.plugins import discover_cli_verifier_plugins, load_cli_verifier_providers
+
+        plugin_name = verify.split(":", 1)[1].strip()
+        providers = load_cli_verifier_providers(cwd or Path.cwd(), config=config)
+        plugins = discover_cli_verifier_plugins(cwd or Path.cwd(), config=config)
+        provider_map = {
+            plugin.name: provider for plugin, provider in zip(plugins, providers, strict=False)
+        }
+        provider = provider_map.get(plugin_name)
+        if provider is None:
+            raise typer.BadParameter(f"unknown verifier plugin: {plugin_name!r}")
+        verifiers = provider.verifiers()
+        if len(verifiers) != 1:
+            raise typer.BadParameter(
+                f"verifier plugin {plugin_name!r} must provide exactly one verifier"
+            )
+        return verifiers[0]
     if verify == "grounding":
         return ClaimGroundingVerifier()
     if verify == "state":
@@ -121,11 +139,31 @@ def build_critic(
 ) -> Critic | None:
     if not critic or critic == "none":
         return None
+    if critic.startswith("plugin:"):
+        from harness.cli.plugins import discover_cli_critic_plugins, load_cli_critic_providers
+
+        plugin_name = critic.split(":", 1)[1].strip()
+        providers = load_cli_critic_providers(Path.cwd(), config=config)
+        plugins = discover_cli_critic_plugins(Path.cwd(), config=config)
+        provider_map = {
+            plugin.name: provider for plugin, provider in zip(plugins, providers, strict=False)
+        }
+        provider = provider_map.get(plugin_name)
+        if provider is None:
+            raise typer.BadParameter(f"unknown critic plugin: {plugin_name!r}")
+        critics = provider.critics()
+        if len(critics) != 1:
+            raise typer.BadParameter(
+                f"critic plugin {plugin_name!r} must provide exactly one critic"
+            )
+        return critics[0]
     if critic in ("llm", "llm+search"):
         adapter = build_adapter(chain[0], base_url=None, config=config)
         search_fn = build_search_fn() if critic == "llm+search" else None
         return make_multi_critic(adapter=adapter, model=model, search_fn=search_fn)
-    raise typer.BadParameter(f"unknown --critic value: {critic!r} (use llm|llm+search|none)")
+    raise typer.BadParameter(
+        f"unknown --critic value: {critic!r} (use llm|llm+search|plugin:<name>|none)"
+    )
 
 
 def normalize_task_header(prompt: str) -> str:

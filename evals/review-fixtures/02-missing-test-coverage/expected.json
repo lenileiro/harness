@@ -1,0 +1,11 @@
+{
+  "summary_contains": "review",
+  "min_findings": 1,
+  "required_findings": [
+    {
+      "file": "src/format.py",
+      "severity": "medium",
+      "issue_substring": "test"
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "summary_contains": "review",
+  "min_findings": 2,
+  "min_sources": 1,
+  "required_findings": [
+    "read-only",
+    "structured"
+  ],
+  "required_sources": [
+    {
+      "url_substring": "docs/review.md"
+    }
+  ]
+}

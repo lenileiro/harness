@@ -354,6 +354,9 @@ def eval_validate() -> None:
         console.print("[red]No evals/fixtures/ directory found — run from the harness repo.[/red]")
         raise typer.Exit(1)
     runner = _load_eval_module("runner", evals_root)
+    review_runner = _load_eval_module("review_runner", evals_root)
+    research_runner = _load_eval_module("research_runner", evals_root)
+    docs_runner = _load_eval_module("docs_runner", evals_root)
     calibration = _load_eval_module("calibration", evals_root)
 
     fixture_sets = ("fixtures", "fixtures-mutated", "fixtures-holdout")
@@ -392,6 +395,69 @@ def eval_validate() -> None:
             )
             raise typer.Exit(1)
 
+    review_fixtures = review_runner.discover_review_fixtures(evals_root)
+    if not review_fixtures:
+        console.print("[red]No review fixtures discovered in review-fixtures.[/red]")
+        raise typer.Exit(1)
+    review_suite_path = suites_dir / "review-smoke.txt"
+    if not review_suite_path.exists():
+        console.print(f"[red]Missing suite file:[/red] {review_suite_path}")
+        raise typer.Exit(1)
+    review_members = {
+        line.strip()
+        for line in review_suite_path.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.strip().startswith("#")
+    }
+    review_names = {fixture.name for fixture in review_fixtures}
+    missing_review = sorted(review_members - review_names)
+    if missing_review:
+        console.print(
+            "[red]Review suite references unknown fixtures:[/red] " + ", ".join(missing_review)
+        )
+        raise typer.Exit(1)
+
+    research_fixtures = research_runner.discover_research_fixtures(evals_root)
+    if not research_fixtures:
+        console.print("[red]No research fixtures discovered in research-fixtures.[/red]")
+        raise typer.Exit(1)
+    research_suite_path = suites_dir / "research-smoke.txt"
+    if not research_suite_path.exists():
+        console.print(f"[red]Missing suite file:[/red] {research_suite_path}")
+        raise typer.Exit(1)
+    research_members = {
+        line.strip()
+        for line in research_suite_path.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.strip().startswith("#")
+    }
+    research_names = {fixture.name for fixture in research_fixtures}
+    missing_research = sorted(research_members - research_names)
+    if missing_research:
+        console.print(
+            "[red]Research suite references unknown fixtures:[/red] " + ", ".join(missing_research)
+        )
+        raise typer.Exit(1)
+
+    docs_fixtures = docs_runner.discover_docs_fixtures(evals_root)
+    if not docs_fixtures:
+        console.print("[red]No docs fixtures discovered in docs-fixtures.[/red]")
+        raise typer.Exit(1)
+    docs_suite_path = suites_dir / "docs-smoke.txt"
+    if not docs_suite_path.exists():
+        console.print(f"[red]Missing suite file:[/red] {docs_suite_path}")
+        raise typer.Exit(1)
+    docs_members = {
+        line.strip()
+        for line in docs_suite_path.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.strip().startswith("#")
+    }
+    docs_names = {fixture.name for fixture in docs_fixtures}
+    missing_docs = sorted(docs_members - docs_names)
+    if missing_docs:
+        console.print(
+            "[red]Docs suite references unknown fixtures:[/red] " + ", ".join(missing_docs)
+        )
+        raise typer.Exit(1)
+
     labels = calibration.load_gold_labels(evals_root / "gold")
     if not labels:
         console.print("[red]No gold labels found.[/red]")
@@ -415,8 +481,417 @@ def eval_validate() -> None:
     table.add_column("Count", justify="right")
     for fixture_set in fixture_sets:
         table.add_row(fixture_set, str(len(discovered[fixture_set])))
+    table.add_row("review-fixtures", str(len(review_fixtures)))
+    table.add_row("research-fixtures", str(len(research_fixtures)))
+    table.add_row("docs-fixtures", str(len(docs_fixtures)))
     table.add_row("gold labels", str(len(labels)))
     console.print(table)
+
+
+@eval_app.command("review")
+def eval_review(
+    fixture_name: Annotated[
+        str | None,
+        typer.Argument(help="Review fixture to run (e.g. 01-missing-none-guard). Omit to run all."),
+    ] = None,
+    provider: Annotated[
+        str | None,
+        typer.Option("--provider", "-p", help="Provider for the review agent."),
+    ] = None,
+    model: Annotated[
+        str | None,
+        typer.Option("--model", "-m", help="Model for the review agent."),
+    ] = None,
+    suite: Annotated[
+        str | None,
+        typer.Option(
+            "--suite",
+            help="Optional review suite file under evals/suites/ (for example: review-smoke).",
+        ),
+    ] = None,
+    output_dir: Annotated[
+        Path | None,
+        typer.Option(
+            "--output-dir",
+            help="Override the run artifact directory (default: evals/runs/<timestamp>-review).",
+        ),
+    ] = None,
+    timeout: Annotated[
+        int,
+        typer.Option("--timeout", help="Review command timeout per fixture in seconds."),
+    ] = 180,
+    max_output_tokens: Annotated[
+        int | None,
+        typer.Option("--max-output-tokens", help="Cap review output tokens."),
+    ] = None,
+    json_out: Annotated[
+        bool,
+        typer.Option("--json-out", help="Print the full machine-readable review eval report."),
+    ] = False,
+    config_path: Annotated[Path | None, typer.Option("--config")] = None,
+) -> None:
+    """Run code-review eval fixtures against `harness review`."""
+    evals_root = _find_evals_root()
+    if evals_root is None:
+        console.print("[red]No evals/fixtures/ directory found — run from the harness repo.[/red]")
+        raise typer.Exit(1)
+
+    cfg = _load_cli_config(config_path)
+    resolved_provider = provider or cfg.default_provider or "ollama"
+    resolved_model = model or cfg.default_model or "llama3.2"
+    review_runner = _load_eval_module("review_runner", evals_root)
+
+    fixtures = review_runner.discover_review_fixtures(evals_root)
+    if suite:
+        suite_path = evals_root / "suites" / f"{suite}.txt"
+        if not suite_path.exists():
+            console.print(f"[red]Suite not found:[/red] {suite_path}")
+            raise typer.Exit(1)
+        wanted = {
+            line.strip()
+            for line in suite_path.read_text(encoding="utf-8").splitlines()
+            if line.strip() and not line.strip().startswith("#")
+        }
+        fixtures = [fixture for fixture in fixtures if fixture.name in wanted]
+    if fixture_name:
+        fixtures = [fixture for fixture in fixtures if fixture.name == fixture_name]
+        if not fixtures:
+            console.print(f"[red]Review fixture not found:[/red] {fixture_name}")
+            raise typer.Exit(1)
+    if not fixtures:
+        console.print("[dim]No review fixtures to run.[/dim]")
+        return
+
+    run_id = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ") + "-review"
+    artifact_root = output_dir or (evals_root / "runs" / run_id)
+    artifact_root.mkdir(parents=True, exist_ok=True)
+
+    results: list[Any] = []
+    for fixture in fixtures:
+        console.print(f"\n[bold blue]▶ review {fixture.name}[/bold blue]")
+        result = review_runner.run_review_fixture(
+            fixture,
+            provider=resolved_provider,
+            model=resolved_model,
+            artifact_dir=artifact_root / fixture.name,
+            max_output_tokens=max_output_tokens,
+            timeout=timeout,
+        )
+        results.append(result)
+        pass_label = "[green]PASS[/green]" if result.passed else "[red]FAIL[/red]"
+        console.print(
+            f"  {pass_label} findings={result.findings_count} matched={result.matched_expectations} "
+            f"secs={result.duration_seconds:.1f}"
+        )
+        if result.missing_expectations:
+            console.print("  [dim]missing[/dim] " + ", ".join(result.missing_expectations))
+        if result.artifact_dir is not None:
+            console.print(f"  [dim]artifacts[/dim] {result.artifact_dir}")
+
+    report = review_runner.ReviewEvalReport(
+        run_id=run_id,
+        provider=resolved_provider,
+        model=resolved_model,
+        artifact_root=artifact_root,
+        results=results,
+    )
+    report_path = artifact_root / "report.json"
+    report_path.write_text(json.dumps(report.to_dict(), indent=2), encoding="utf-8")
+
+    if json_out:
+        console.print(json.dumps(report.to_dict(), indent=2))
+        return
+
+    table = Table(show_header=True, header_style="bold", title="Review eval")
+    table.add_column("Fixture", no_wrap=True)
+    table.add_column("Pass?", justify="center")
+    table.add_column("Findings", justify="right")
+    table.add_column("Matched", justify="right")
+    table.add_column("Seconds", justify="right")
+    for result in results:
+        table.add_row(
+            result.fixture_name,
+            "[green]PASS[/green]" if result.passed else "[red]FAIL[/red]",
+            str(result.findings_count),
+            str(result.matched_expectations),
+            f"{result.duration_seconds:.1f}",
+        )
+    console.print(table)
+    console.print(f"[dim]report[/dim] {report_path}")
+
+
+@eval_app.command("research")
+def eval_research(
+    fixture_name: Annotated[
+        str | None,
+        typer.Argument(
+            help="Research fixture to run (e.g. 01-persistence-tradeoffs). Omit to run all."
+        ),
+    ] = None,
+    provider: Annotated[
+        str | None,
+        typer.Option("--provider", "-p", help="Provider for the research agent."),
+    ] = None,
+    model: Annotated[
+        str | None,
+        typer.Option("--model", "-m", help="Model for the research agent."),
+    ] = None,
+    suite: Annotated[
+        str | None,
+        typer.Option(
+            "--suite",
+            help="Optional research suite file under evals/suites/ (for example: research-smoke).",
+        ),
+    ] = None,
+    output_dir: Annotated[
+        Path | None,
+        typer.Option(
+            "--output-dir",
+            help="Override the run artifact directory (default: evals/runs/<timestamp>-research).",
+        ),
+    ] = None,
+    timeout: Annotated[
+        int,
+        typer.Option("--timeout", help="Research command timeout per fixture in seconds."),
+    ] = 180,
+    max_steps: Annotated[
+        int,
+        typer.Option("--max-steps", help="Research command step budget per fixture."),
+    ] = 40,
+    max_output_tokens: Annotated[
+        int | None,
+        typer.Option("--max-output-tokens", help="Cap research output tokens."),
+    ] = None,
+    json_out: Annotated[
+        bool,
+        typer.Option("--json-out", help="Print the full machine-readable research eval report."),
+    ] = False,
+    config_path: Annotated[Path | None, typer.Option("--config")] = None,
+) -> None:
+    """Run research eval fixtures against `harness research`."""
+    evals_root = _find_evals_root()
+    if evals_root is None:
+        console.print("[red]No evals/fixtures/ directory found — run from the harness repo.[/red]")
+        raise typer.Exit(1)
+
+    cfg = _load_cli_config(config_path)
+    resolved_provider = provider or cfg.default_provider or "ollama"
+    resolved_model = model or cfg.default_model or "llama3.2"
+    research_runner = _load_eval_module("research_runner", evals_root)
+
+    fixtures = research_runner.discover_research_fixtures(evals_root)
+    if suite:
+        suite_path = evals_root / "suites" / f"{suite}.txt"
+        if not suite_path.exists():
+            console.print(f"[red]Suite not found:[/red] {suite_path}")
+            raise typer.Exit(1)
+        wanted = {
+            line.strip()
+            for line in suite_path.read_text(encoding="utf-8").splitlines()
+            if line.strip() and not line.strip().startswith("#")
+        }
+        fixtures = [fixture for fixture in fixtures if fixture.name in wanted]
+    if fixture_name:
+        fixtures = [fixture for fixture in fixtures if fixture.name == fixture_name]
+        if not fixtures:
+            console.print(f"[red]Research fixture not found:[/red] {fixture_name}")
+            raise typer.Exit(1)
+    if not fixtures:
+        console.print("[dim]No research fixtures to run.[/dim]")
+        return
+
+    run_id = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ") + "-research"
+    artifact_root = output_dir or (evals_root / "runs" / run_id)
+    artifact_root.mkdir(parents=True, exist_ok=True)
+
+    results: list[Any] = []
+    for fixture in fixtures:
+        console.print(f"\n[bold blue]▶ research {fixture.name}[/bold blue]")
+        result = research_runner.run_research_fixture(
+            fixture,
+            provider=resolved_provider,
+            model=resolved_model,
+            artifact_dir=artifact_root / fixture.name,
+            max_output_tokens=max_output_tokens,
+            timeout=timeout,
+            max_steps=max_steps,
+        )
+        results.append(result)
+        pass_label = "[green]PASS[/green]" if result.passed else "[red]FAIL[/red]"
+        console.print(
+            f"  {pass_label} findings={result.findings_count} sources={result.source_count} "
+            f"matched={result.matched_findings}/{result.matched_sources} "
+            f"secs={result.duration_seconds:.1f}"
+        )
+        if result.missing_expectations:
+            console.print("  [dim]missing[/dim] " + ", ".join(result.missing_expectations))
+        if result.artifact_dir is not None:
+            console.print(f"  [dim]artifacts[/dim] {result.artifact_dir}")
+
+    report = research_runner.ResearchEvalReport(
+        run_id=run_id,
+        provider=resolved_provider,
+        model=resolved_model,
+        artifact_root=artifact_root,
+        results=results,
+    )
+    report_path = artifact_root / "report.json"
+    report_path.write_text(json.dumps(report.to_dict(), indent=2), encoding="utf-8")
+
+    if json_out:
+        console.print(json.dumps(report.to_dict(), indent=2))
+        return
+
+    table = Table(show_header=True, header_style="bold", title="Research eval")
+    table.add_column("Fixture", no_wrap=True)
+    table.add_column("Pass?", justify="center")
+    table.add_column("Findings", justify="right")
+    table.add_column("Sources", justify="right")
+    table.add_column("Seconds", justify="right")
+    for result in results:
+        table.add_row(
+            result.fixture_name,
+            "[green]PASS[/green]" if result.passed else "[red]FAIL[/red]",
+            str(result.findings_count),
+            str(result.source_count),
+            f"{result.duration_seconds:.1f}",
+        )
+    console.print(table)
+    console.print(f"[dim]report[/dim] {report_path}")
+
+
+@eval_app.command("docs-audit")
+def eval_docs_audit(
+    fixture_name: Annotated[
+        str | None,
+        typer.Argument(help="Docs fixture to run (e.g. 01-missing-plugin-docs). Omit to run all."),
+    ] = None,
+    provider: Annotated[
+        str | None,
+        typer.Option("--provider", "-p", help="Provider for the docs-audit agent."),
+    ] = None,
+    model: Annotated[
+        str | None,
+        typer.Option("--model", "-m", help="Model for the docs-audit agent."),
+    ] = None,
+    suite: Annotated[
+        str | None,
+        typer.Option(
+            "--suite",
+            help="Optional docs suite file under evals/suites/ (for example: docs-smoke).",
+        ),
+    ] = None,
+    output_dir: Annotated[
+        Path | None,
+        typer.Option(
+            "--output-dir",
+            help="Override the run artifact directory (default: evals/runs/<timestamp>-docs).",
+        ),
+    ] = None,
+    timeout: Annotated[
+        int,
+        typer.Option("--timeout", help="Docs-audit command timeout per fixture in seconds."),
+    ] = 180,
+    max_output_tokens: Annotated[
+        int | None,
+        typer.Option("--max-output-tokens", help="Cap docs-audit output tokens."),
+    ] = None,
+    json_out: Annotated[
+        bool,
+        typer.Option("--json-out", help="Print the full machine-readable docs eval report."),
+    ] = False,
+    config_path: Annotated[Path | None, typer.Option("--config")] = None,
+) -> None:
+    """Run docs-audit eval fixtures against `harness docs-audit`."""
+    evals_root = _find_evals_root()
+    if evals_root is None:
+        console.print("[red]No evals/fixtures/ directory found — run from the harness repo.[/red]")
+        raise typer.Exit(1)
+
+    cfg = _load_cli_config(config_path)
+    resolved_provider = provider or cfg.default_provider or "ollama"
+    resolved_model = model or cfg.default_model or "llama3.2"
+    docs_runner = _load_eval_module("docs_runner", evals_root)
+
+    fixtures = docs_runner.discover_docs_fixtures(evals_root)
+    if suite:
+        suite_path = evals_root / "suites" / f"{suite}.txt"
+        if not suite_path.exists():
+            console.print(f"[red]Suite not found:[/red] {suite_path}")
+            raise typer.Exit(1)
+        wanted = {
+            line.strip()
+            for line in suite_path.read_text(encoding="utf-8").splitlines()
+            if line.strip() and not line.strip().startswith("#")
+        }
+        fixtures = [fixture for fixture in fixtures if fixture.name in wanted]
+    if fixture_name:
+        fixtures = [fixture for fixture in fixtures if fixture.name == fixture_name]
+        if not fixtures:
+            console.print(f"[red]Docs fixture not found:[/red] {fixture_name}")
+            raise typer.Exit(1)
+    if not fixtures:
+        console.print("[dim]No docs fixtures to run.[/dim]")
+        return
+
+    run_id = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ") + "-docs"
+    artifact_root = output_dir or (evals_root / "runs" / run_id)
+    artifact_root.mkdir(parents=True, exist_ok=True)
+
+    results: list[Any] = []
+    for fixture in fixtures:
+        console.print(f"\n[bold blue]▶ docs {fixture.name}[/bold blue]")
+        result = docs_runner.run_docs_fixture(
+            fixture,
+            provider=resolved_provider,
+            model=resolved_model,
+            artifact_dir=artifact_root / fixture.name,
+            max_output_tokens=max_output_tokens,
+            timeout=timeout,
+        )
+        results.append(result)
+        pass_label = "[green]PASS[/green]" if result.passed else "[red]FAIL[/red]"
+        console.print(
+            f"  {pass_label} findings={result.findings_count} matched={result.matched_expectations} "
+            f"topics={result.matched_topics} secs={result.duration_seconds:.1f}"
+        )
+        if result.missing_expectations:
+            console.print("  [dim]missing[/dim] " + ", ".join(result.missing_expectations))
+        if result.artifact_dir is not None:
+            console.print(f"  [dim]artifacts[/dim] {result.artifact_dir}")
+
+    report = docs_runner.DocsEvalReport(
+        run_id=run_id,
+        provider=resolved_provider,
+        model=resolved_model,
+        artifact_root=artifact_root,
+        results=results,
+    )
+    report_path = artifact_root / "report.json"
+    report_path.write_text(json.dumps(report.to_dict(), indent=2), encoding="utf-8")
+
+    if json_out:
+        console.print(json.dumps(report.to_dict(), indent=2))
+        return
+
+    table = Table(show_header=True, header_style="bold", title="Docs eval")
+    table.add_column("Fixture", no_wrap=True)
+    table.add_column("Pass?", justify="center")
+    table.add_column("Findings", justify="right")
+    table.add_column("Matched", justify="right")
+    table.add_column("Topics", justify="right")
+    table.add_column("Seconds", justify="right")
+    for result in results:
+        table.add_row(
+            result.fixture_name,
+            "[green]PASS[/green]" if result.passed else "[red]FAIL[/red]",
+            str(result.findings_count),
+            str(result.matched_expectations),
+            str(result.matched_topics),
+            f"{result.duration_seconds:.1f}",
+        )
+    console.print(table)
+    console.print(f"[dim]report[/dim] {report_path}")
 
 
 @eval_app.command("run")

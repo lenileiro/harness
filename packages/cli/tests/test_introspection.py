@@ -1,7 +1,8 @@
-"""Tests for `harness providers` and `harness tools` introspection commands."""
+"""Tests for `harness providers`, `tools`, and `plugins` introspection commands."""
 
 from __future__ import annotations
 
+import textwrap
 from pathlib import Path
 
 import pytest
@@ -77,3 +78,150 @@ class TestToolsList:
         assert result.exit_code == 0
         # `deny` appears for shell now.
         assert "deny" in result.stdout
+
+    def test_workspace_plugin_tools_are_included(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        (tmp_path / "tools_demo_provider.py").write_text(
+            textwrap.dedent(
+                """
+                from harness.core.tool_entry import ToolSpec
+
+
+                class DemoTool:
+                    name = "demo_tool"
+                    description = "Tool from workspace plugin"
+                    parameters_schema = {"type": "object", "properties": {}}
+                    approval = "auto"
+
+                    async def __call__(self, call):
+                        raise NotImplementedError
+
+
+                class DemoProvider:
+                    def specs(self):
+                        return [ToolSpec(name="demo_tool", factory=lambda ctx: DemoTool())]
+                """
+            ),
+            encoding="utf-8",
+        )
+        plugin_dir = tmp_path / ".harness" / "plugins"
+        plugin_dir.mkdir(parents=True)
+        (plugin_dir / "demo.toml").write_text(
+            'name = "workspace-demo"\nprovider = "tools_demo_provider:DemoProvider"\n',
+            encoding="utf-8",
+        )
+        monkeypatch.syspath_prepend(str(tmp_path))
+
+        result = _run(["tools", "list", "--cwd", str(tmp_path)])
+        assert result.exit_code == 0
+        assert "demo_tool" in result.stdout
+
+
+class TestPluginsList:
+    def test_lists_builtin_and_workspace_plugins(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        (tmp_path / "plugins_demo_provider.py").write_text(
+            "class DemoProvider:\n    def specs(self):\n        return []\n",
+            encoding="utf-8",
+        )
+        plugin_dir = tmp_path / ".harness" / "plugins"
+        plugin_dir.mkdir(parents=True)
+        (plugin_dir / "demo.toml").write_text(
+            textwrap.dedent(
+                """
+                name = "workspace-demo"
+                provider = "plugins_demo_provider:DemoProvider"
+                description = "Workspace plugin"
+                """
+            ),
+            encoding="utf-8",
+        )
+        monkeypatch.syspath_prepend(str(tmp_path))
+
+        result = _run(["plugins", "list", "--cwd", str(tmp_path)])
+        assert result.exit_code == 0
+        assert "builtin" in result.stdout
+        assert "workspace-demo" in result.stdout
+        assert "tool" in result.stdout
+        assert "workspace" in result.stdout
+
+    def test_filters_plugins_by_kind(self, tmp_path: Path) -> None:
+        plugin_dir = tmp_path / ".harness" / "plugins"
+        plugin_dir.mkdir(parents=True)
+        (plugin_dir / "exp.toml").write_text(
+            textwrap.dedent(
+                """
+                name = "experience-demo"
+                kind = "experience"
+                provider = "experience_demo:Provider"
+                """
+            ),
+            encoding="utf-8",
+        )
+        (plugin_dir / "domain.toml").write_text(
+            textwrap.dedent(
+                """
+                name = "domain-demo"
+                kind = "domain_profile"
+                provider = "domain_demo:Provider"
+                """
+            ),
+            encoding="utf-8",
+        )
+
+        result = _run(["plugins", "list", "--cwd", str(tmp_path), "--kind", "experience"])
+        assert result.exit_code == 0
+        assert "experience-demo" in result.stdout
+        assert "domain-demo" not in result.stdout
+
+    def test_invalid_plugin_kind_exits_2(self, tmp_path: Path) -> None:
+        result = _run(["plugins", "list", "--cwd", str(tmp_path), "--kind", "nope"])
+        assert result.exit_code == 2
+
+
+class TestPluginsValidate:
+    def test_validates_workspace_plugins(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        (tmp_path / "plugins_demo_provider.py").write_text(
+            "class DemoProvider:\n    def specs(self):\n        return []\n",
+            encoding="utf-8",
+        )
+        plugin_dir = tmp_path / ".harness" / "plugins"
+        plugin_dir.mkdir(parents=True)
+        (plugin_dir / "demo.toml").write_text(
+            textwrap.dedent(
+                """
+                name = "workspace-demo"
+                provider = "plugins_demo_provider:DemoProvider"
+                description = "Workspace plugin"
+                """
+            ),
+            encoding="utf-8",
+        )
+        monkeypatch.syspath_prepend(str(tmp_path))
+
+        result = _run(["plugins", "validate", "--cwd", str(tmp_path)])
+        assert result.exit_code == 0
+        assert "workspace-demo" in result.stdout
+        assert "ok" in result.stdout
+
+    def test_validate_exits_1_for_broken_plugin(self, tmp_path: Path) -> None:
+        plugin_dir = tmp_path / ".harness" / "plugins"
+        plugin_dir.mkdir(parents=True)
+        (plugin_dir / "broken.toml").write_text(
+            textwrap.dedent(
+                """
+                name = "broken-demo"
+                provider = "missing_plugin_module:DemoProvider"
+                """
+            ),
+            encoding="utf-8",
+        )
+
+        result = _run(["plugins", "validate", "--cwd", str(tmp_path), "--kind", "tool"])
+        assert result.exit_code == 1
+        assert "broken-demo" in result.stdout
+        assert "error" in result.stdout

@@ -13,10 +13,8 @@ from harness.adapters.anthropic import AnthropicAdapter
 from harness.adapters.ollama import OllamaAdapter
 from harness.adapters.openrouter import OpenRouterAdapter
 from harness.cli.config import HarnessConfig, load_config
+from harness.cli.plugins import load_cli_tool_providers
 from harness.core import Adapter, ToolRegistry
-from harness.tools.fs import EditFileTool, GlobTool, ListDirTool, ReadFileTool, WriteFileTool
-from harness.tools.shell import ShellTool
-from harness.tools.web import FetchUrlTool, TavilySearchTool
 
 console = Console()
 
@@ -63,17 +61,23 @@ def _build_adapter(provider: str, *, base_url: str | None, config: HarnessConfig
     raise typer.BadParameter(f"unknown provider: {provider!r}")
 
 
-def _build_tools(cwd: Path) -> ToolRegistry:
+def _build_tools(
+    cwd: Path,
+    *,
+    config: HarnessConfig | None = None,
+    include: set[str] | None = None,
+) -> ToolRegistry:
     registry = ToolRegistry()
-    registry.register(ReadFileTool(cwd=cwd))
-    registry.register(WriteFileTool(cwd=cwd))
-    registry.register(EditFileTool(cwd=cwd))
-    registry.register(ListDirTool(cwd=cwd))
-    registry.register(GlobTool(cwd=cwd))
-    registry.register(ShellTool(cwd=cwd))
-    registry.register(TavilySearchTool())
-    registry.register(FetchUrlTool())
-    return registry
+    for provider in load_cli_tool_providers(cwd, config=config):
+        registry.register_provider(provider)
+    built = registry.materialize_specs(cwd=cwd)
+    if include is None:
+        return built
+    filtered = ToolRegistry()
+    for name in sorted(include):
+        if built.has(name):
+            filtered.register(built.get(name))
+    return filtered
 
 
 def _resolve_chain(

@@ -19,12 +19,17 @@ The attribute is optional — tools that don't declare it default to
 
 from __future__ import annotations
 
-from typing import Any, Protocol, runtime_checkable
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from harness.core.approval import ApprovalOutcome, ApprovalStore, PendingApproval
 from harness.core.schemas import ApprovalDecision, EffectScope, Session, ToolCall, ToolResult
+from harness.core.tool_entry import ToolBuildContext, ToolSpec
+
+if TYPE_CHECKING:
+    from harness.core.extensions import ToolProvider
 
 WILDCARD_PHASE = "*"
 _DEFAULT_PHASES: tuple[str, ...] = (WILDCARD_PHASE,)
@@ -94,11 +99,28 @@ class ToolRegistry:
 
     def __init__(self) -> None:
         self._tools: dict[str, Tool] = {}
+        self._specs: dict[str, ToolSpec] = {}
+        self._generation = 0
 
     def register(self, tool: Tool) -> None:
         if tool.name in self._tools:
             raise ValueError(f"tool {tool.name!r} already registered")
         self._tools[tool.name] = tool
+        self._generation += 1
+
+    def register_spec(self, spec: ToolSpec) -> None:
+        if spec.name in self._specs:
+            raise ValueError(f"tool spec {spec.name!r} already registered")
+        self._specs[spec.name] = spec
+        self._generation += 1
+
+    def register_provider(self, provider: ToolProvider) -> None:
+        for spec in provider.specs():
+            self.register_spec(spec)
+
+    @property
+    def generation(self) -> int:
+        return self._generation
 
     def get(self, name: str) -> Tool:
         try:
@@ -106,14 +128,29 @@ class ToolRegistry:
         except KeyError as exc:
             raise KeyError(f"tool {name!r} not registered") from exc
 
+    def get_spec(self, name: str) -> ToolSpec:
+        try:
+            return self._specs[name]
+        except KeyError as exc:
+            raise KeyError(f"tool spec {name!r} not registered") from exc
+
     def has(self, name: str) -> bool:
         return name in self._tools
+
+    def has_spec(self, name: str) -> bool:
+        return name in self._specs
 
     def names(self) -> list[str]:
         return sorted(self._tools)
 
+    def spec_names(self) -> list[str]:
+        return sorted(self._specs)
+
     def all(self) -> list[Tool]:
         return list(self._tools.values())
+
+    def all_specs(self) -> list[ToolSpec]:
+        return list(self._specs.values())
 
     def for_phase(self, phase: str | None) -> list[Tool]:
         """Tools available in the given phase. `None` returns everything."""
@@ -137,6 +174,34 @@ class ToolRegistry:
             }
             for t in self.for_phase(phase)
         ]
+
+    def materialize_specs(
+        self,
+        *,
+        cwd: Path,
+        extras: dict[str, Any] | None = None,
+    ) -> ToolRegistry:
+        """Build every available registered spec into a concrete registry."""
+
+        ctx = ToolBuildContext(cwd=cwd, extras=dict(extras or {}))
+        built = ToolRegistry()
+        for spec in self._specs.values():
+            if spec.available(ctx):
+                built.register(spec.build(ctx))
+        return built
+
+    @classmethod
+    def from_specs(
+        cls,
+        specs: list[ToolSpec],
+        *,
+        cwd: Path,
+        extras: dict[str, Any] | None = None,
+    ) -> ToolRegistry:
+        registry = cls()
+        for spec in specs:
+            registry.register_spec(spec)
+        return registry.materialize_specs(cwd=cwd, extras=extras)
 
 
 # ---------------------------------------------------------------------------

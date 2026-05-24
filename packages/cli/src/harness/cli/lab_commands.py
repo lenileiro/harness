@@ -6,6 +6,7 @@ from typing import Any
 import typer
 from rich.console import Console
 
+from harness.cli.builtin_tools import BuiltinToolProvider
 from harness.core import (
     Agent,
     AgentDoneEvent,
@@ -38,9 +39,6 @@ from harness.core import (
 )
 from harness.storage.memory import InMemoryStorage
 from harness.storage.sqlite import SQLiteStorage
-from harness.tools.fs import EditFileTool, GlobTool, ListDirTool, ReadFileTool, WriteFileTool
-from harness.tools.shell import ShellTool
-from harness.tools.web import FetchUrlTool, TavilySearchTool
 
 
 def role_color(role: str) -> str:
@@ -168,26 +166,33 @@ def lab_run_command(
         def agent_factory(role: AgentRole) -> Agent:
             job_id = role.job_id or "_job_"
             item_id = role.item_id or "_item_"
-            tools = ToolRegistry()
+            provider = BuiltinToolProvider()
 
             if role.name == "planner":
+                tools = ToolRegistry()
                 tools.register(CreateWorkItemTool(storage, parent_id=job_id, cwd=working_dir))
                 tools.register(ListWorkItemsTool(storage, job_id))
             elif role.name.startswith("worker"):
-                tools.register(ReadFileTool(cwd=working_dir))
-                tools.register(ListDirTool(cwd=working_dir))
-                tools.register(GlobTool(cwd=working_dir))
-                tools.register(WriteFileTool(cwd=working_dir))
-                tools.register(EditFileTool(cwd=working_dir))
-                tools.register(ShellTool(cwd=working_dir))
-                tools.register(TavilySearchTool())
-                tools.register(FetchUrlTool())
+                tools = provider.build_registry(
+                    cwd=working_dir,
+                    include={
+                        "read_file",
+                        "list_dir",
+                        "glob",
+                        "write_file",
+                        "edit_file",
+                        "shell",
+                        "web_search",
+                        "fetch_url",
+                    },
+                )
                 tools.register(ListWorkItemsTool(storage, job_id))
                 tools.register(CompleteWorkItemTool(storage, item_id))
             else:
-                tools.register(ReadFileTool(cwd=working_dir))
-                tools.register(ListDirTool(cwd=working_dir))
-                tools.register(GlobTool(cwd=working_dir))
+                tools = provider.build_registry(
+                    cwd=working_dir,
+                    include={"read_file", "list_dir", "glob"},
+                )
                 tools.register(ListWorkItemsTool(storage, job_id))
 
             adapters = {
@@ -410,23 +415,29 @@ def lab_resume_command(
         def agent_factory(role: AgentRole) -> Agent:
             job = role.job_id or "_job_"
             item = role.item_id or "_item_"
-            tools = ToolRegistry()
+            provider = BuiltinToolProvider()
 
             if role.name.startswith("worker"):
-                tools.register(ReadFileTool(cwd=working_dir))
-                tools.register(ListDirTool(cwd=working_dir))
-                tools.register(GlobTool(cwd=working_dir))
-                tools.register(WriteFileTool(cwd=working_dir))
-                tools.register(EditFileTool(cwd=working_dir))
-                tools.register(ShellTool(cwd=working_dir))
-                tools.register(TavilySearchTool())
-                tools.register(FetchUrlTool())
+                tools = provider.build_registry(
+                    cwd=working_dir,
+                    include={
+                        "read_file",
+                        "list_dir",
+                        "glob",
+                        "write_file",
+                        "edit_file",
+                        "shell",
+                        "web_search",
+                        "fetch_url",
+                    },
+                )
                 tools.register(ListWorkItemsTool(storage, job))
                 tools.register(CompleteWorkItemTool(storage, item))
             else:
-                tools.register(ReadFileTool(cwd=working_dir))
-                tools.register(ListDirTool(cwd=working_dir))
-                tools.register(GlobTool(cwd=working_dir))
+                tools = provider.build_registry(
+                    cwd=working_dir,
+                    include={"read_file", "list_dir", "glob"},
+                )
                 tools.register(ListWorkItemsTool(storage, job))
 
             adapters = {

@@ -1,0 +1,14 @@
+{
+  "summary_contains": "SQLite",
+  "min_findings": 2,
+  "min_sources": 1,
+  "required_findings": [
+    "zero-setup",
+    "concurrent writes"
+  ],
+  "required_sources": [
+    {
+      "url_substring": "docs/persistence.md"
+    }
+  ]
+}

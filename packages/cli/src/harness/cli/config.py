@@ -62,6 +62,9 @@ class HarnessConfig:
     default_model: str | None = None
     provider_settings: dict[str, dict[str, Any]] = field(default_factory=dict)
     approval: dict[str, ApprovalDecision] = field(default_factory=dict)
+    plugins_enabled: tuple[str, ...] = ()
+    plugins_disabled: tuple[str, ...] = ()
+    include_plugin_entry_points: bool = False
 
     def provider(self, name: str) -> dict[str, Any]:
         """Return the per-provider settings dict (empty if unset)."""
@@ -117,11 +120,28 @@ def load_config(path: Path | None = None) -> HarnessConfig:
             )
         approval[tool_name] = decision
 
+    plugins_section = raw.get("plugins", {})
+    if not isinstance(plugins_section, dict):
+        raise ConfigError("`[plugins]` must be a table")
+
+    def _string_list(name: str) -> tuple[str, ...]:
+        value = plugins_section.get(name, [])
+        if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+            raise ConfigError(f"`plugins.{name}` must be an array of strings")
+        return tuple(value)
+
+    include_plugin_entry_points = plugins_section.get("include_entry_points", False)
+    if not isinstance(include_plugin_entry_points, bool):
+        raise ConfigError("`plugins.include_entry_points` must be a boolean")
+
     return HarnessConfig(
         default_provider=default_provider,
         default_model=default_model,
         provider_settings=provider_settings,
         approval=approval,
+        plugins_enabled=_string_list("enabled"),
+        plugins_disabled=_string_list("disabled"),
+        include_plugin_entry_points=include_plugin_entry_points,
     )
 
 

@@ -57,14 +57,19 @@ Key internal module boundaries after the reorg:
 packages/cli/src/harness/cli/
 ├── __main__.py                    # CLI bootstrap and command registration
 ├── approvals_evidence_commands.py # approvals + evidence command family
+├── builtin_tools.py               # built-in tool provider registration
 ├── chat_commands.py               # interactive chat / REPL flow
 ├── common.py                      # shared CLI helpers
+├── config.py                      # CLI config loading and models
 ├── evals.py                       # eval command family
+├── experience_commands.py         # procedures + curator commands
 ├── introspection.py               # providers + tools command family
 ├── lab_commands.py                # multi-agent lab command family
 ├── lifecycle_commands.py          # phase / contracts / tips / resume
 ├── markdown_render.py             # markdown + mermaid rendering
+├── plugins.py                     # plugin discovery and precedence
 ├── render.py                      # Rich rendering helpers
+├── review_commands.py             # diff-aware review entrypoint
 ├── run_commands.py                # one-shot run flow
 ├── runtime_agent.py               # runtime agent assembly
 ├── runtime_helpers.py             # verifier / critic / storage helpers
@@ -84,10 +89,19 @@ evals/
 └── types.py                       # shared eval schemas
 
 packages/core/src/harness/core/
+├── domain_profiles.py             # task/domain policy presets
+├── experience.py                  # public experience compatibility surface
+├── experience_curator.py          # archival maintenance for procedures
+├── experience_providers.py        # static + artifact + procedure retrieval
+├── extensions.py                  # provider/plugin extension protocols
+├── plugin_loader.py               # plugin manifest and loader
 ├── procedural_skill.py            # thin compatibility entrypoint
+├── procedures.py                  # writable procedure artifacts
+├── result_schemas.py              # typed machine-readable outputs
+├── tool_entry.py                  # declarative tool entry model
 ├── tips_mining.py                 # tip extraction from failures
 ├── tips_models.py                 # tip and experience data models
-├── tips_providers.py              # static + artifact-backed tip retrieval
+├── tips_providers.py              # compatibility shim over experience
 ├── verification.py                # compatibility surface
 ├── verification_behavioral.py     # prompt/diff-sensitive verifiers
 ├── verification_guards.py         # guardrail helpers
@@ -176,9 +190,11 @@ Current top-level commands include:
 
 - `run`: single prompt execution
 - `chat`: interactive REPL
+- `review`: diff-aware read-only code review
 - `goal`: planner-first execution
 - `init`: create workspace-local storage
 - `sessions`: inspect and resume saved sessions
+- `plugins`: inspect discovered plugin providers
 - `providers`: inspect provider configuration
 - `tools`: inspect built-in tools
 - `tasks`: durable task management
@@ -186,6 +202,7 @@ Current top-level commands include:
 - `evidence`: inspect the tool-call evidence ledger
 - `lab`: planner/worker/reporter multi-agent workflow
 - `memory`: persistent workspace memory
+- `experience`: manage writable procedures and curation
 - `eval`: run and inspect behavioral evals
 - `phase`: external phase tracking for multi-step tasks
 - `tips`: procedural skill tips
@@ -211,6 +228,7 @@ Important runtime concepts:
 - Contracts: hard environment rules loaded from `.harness/contracts/`.
 - Tips: soft procedural hints loaded from `.harness/tips.jsonl`.
 - Experience: artifact-backed lessons recovered from prior eval runs.
+- Procedures: reusable writable guidance stored under `.harness/procedures/`.
 - Resume state: a workspace roadmap file injected at run start.
 
 ## Running Agents
@@ -231,9 +249,53 @@ Key options:
 - `--inbox`: queue approval requests instead of prompting
 - `--max-steps`, `--max-output-tokens`, `--max-repair`: execution limits
 - `--goal`: plan first, then execute
+- `--domain`: task/use-case policy preset such as `coding` or `code-review`
 - `--require-tools`: forbid answer-only responses
 - `--auto-compact`: summarize old history when context is tight
 - `--predict`: record consequence predictions before tool execution
+
+## Code Review
+
+Harness also supports a read-only review flow over the current git diff.
+
+```bash
+uv run harness review \
+  --provider openrouter \
+  --model google/gemma-4-26b-a4b-it \
+  --base origin/main
+```
+
+This command:
+
+- loads the current `git diff`
+- runs the agent in the `code-review` domain profile
+- restricts the tool set to read-oriented inspection tools
+- asks for structured review findings instead of a freeform essay
+
+Use `--json` when you want machine-readable output for CI or downstream tools.
+
+### GitHub Actions example
+
+A reference workflow lives at:
+
+```text
+examples/github-actions/review-pr.yml
+```
+
+It shows how to:
+
+- run `harness review` on pull requests
+- upload the raw JSON and rendered markdown as artifacts
+- post or update a sticky pull request comment
+
+Expected repository configuration:
+
+- `OPENROUTER_API_KEY` or `ANTHROPIC_API_KEY` in repository secrets
+- optional `HARNESS_PROVIDER` and `HARNESS_MODEL` in repository variables
+
+The reference workflow intentionally skips forked PRs. Secrets are typically
+not available there, and `code-review` should not silently fall back to an
+unauthenticated run.
 
 ## Defense Profiles
 
@@ -354,6 +416,7 @@ Useful commands:
 uv run harness contracts --help
 uv run harness tips --help
 uv run harness resume --help
+uv run harness experience --help
 ```
 
 The tips CLI currently supports:
@@ -362,6 +425,12 @@ The tips CLI currently supports:
 - `add`
 - `test`
 - `mine`
+
+The experience CLI supports writable procedure artifacts and curation:
+
+- `procedures add`
+- `procedures list`
+- `curate`
 
 ## Evals
 

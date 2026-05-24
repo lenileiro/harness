@@ -33,6 +33,9 @@ class TestLoadConfig:
         assert cfg.default_model is None
         assert cfg.provider_settings == {}
         assert cfg.approval == {}
+        assert cfg.plugins_enabled == ()
+        assert cfg.plugins_disabled == ()
+        assert cfg.include_plugin_entry_points is False
 
     def test_full_config(self, tmp_path: Path) -> None:
         target = tmp_path / "config.toml"
@@ -53,6 +56,11 @@ class TestLoadConfig:
             shell = "prompt"
             write_file = "prompt"
             read_file = "auto"
+
+            [plugins]
+            enabled = ["workspace-demo"]
+            disabled = ["legacy-tools"]
+            include_entry_points = true
             """,
             encoding="utf-8",
         )
@@ -66,6 +74,9 @@ class TestLoadConfig:
             "write_file": "prompt",
             "read_file": "auto",
         }
+        assert cfg.plugins_enabled == ("workspace-demo",)
+        assert cfg.plugins_disabled == ("legacy-tools",)
+        assert cfg.include_plugin_entry_points is True
 
     def test_invalid_approval_value_raises(self, tmp_path: Path) -> None:
         target = tmp_path / "config.toml"
@@ -89,4 +100,16 @@ class TestLoadConfig:
         target = tmp_path / "config.toml"
         target.write_text('[provider]\nollama = "not-a-table"\n', encoding="utf-8")
         with pytest.raises(ConfigError, match=r"provider\.ollama"):
+            load_config(target)
+
+    def test_plugins_section_validates_types(self, tmp_path: Path) -> None:
+        target = tmp_path / "config.toml"
+        target.write_text(
+            """
+            [plugins]
+            enabled = "demo"
+            """,
+            encoding="utf-8",
+        )
+        with pytest.raises(ConfigError, match=r"plugins\.enabled"):
             load_config(target)

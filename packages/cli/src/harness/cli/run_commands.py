@@ -12,10 +12,12 @@ from harness.core import (
     ConsequencePredictor,
     ContextBudget,
     ContextCompactor,
+    Done,
     LLMPlanner,
     Planner,
     RepairOrchestrator,
     RunRequest,
+    TextDelta,
     Verification,
     configure_logging,
 )
@@ -48,6 +50,7 @@ def run_command(
     auto_compact: bool,
     max_repair: int,
     profile: str,
+    domain: str,
     bare: bool,
     phases: str | None,
     loop_detect: bool,
@@ -111,6 +114,7 @@ def run_command(
                 auto_compact=auto_compact,
                 max_repair=max_repair,
                 profile=profile,
+                domain=domain,
                 phases=phases,
                 loop_detect=loop_detect,
                 contracts=contracts,
@@ -148,10 +152,12 @@ async def run_once(
     auto_compact: bool = False,
     max_repair: int = 3,
     profile: str = "minimal",
+    domain: str = "coding",
     phases: str | None = None,
     loop_detect: bool = True,
     contracts: bool = True,
     tips: bool = True,
+    silent: bool = False,
     config: HarnessConfig,
     build_storage: Any,
     resolve_task_attachment: Any,
@@ -159,15 +165,28 @@ async def run_once(
     build_verifier: Any,
     build_critic: Any,
     build_adapter: Any,
+    build_tools: Any,
     build_agent: Any,
     print_defense_ledger: Any,
     render: Any,
     default_system_prompt: str,
     console: Console,
-) -> None:
+) -> str | None:
     storage = build_storage(db=db, in_memory=in_memory, cwd=cwd)
     try:
         task_id, _task = await resolve_task_attachment(storage, task_ref, session_id)
+        from harness.cli.plugins import (
+            load_cli_domain_profile_providers as _load_cli_domain_profile_providers,
+        )
+        from harness.cli.plugins import (
+            load_cli_experience_providers as _load_cli_experience_providers,
+        )
+        from harness.core import get_domain_profile as _get_domain_profile
+
+        domain_profile = _get_domain_profile(
+            domain,
+            providers=_load_cli_domain_profile_providers(cwd, config=config),
+        )
 
         strategy = resolve_runtime_strategy(
             prompt=prompt,
@@ -210,13 +229,12 @@ async def run_once(
             compactor = ContextCompactor(adapter=adapter, model=model)
 
         from harness.core import DEFAULT_RESUME_PATH as _DEFAULT_RESUME_PATH
-        from harness.core import ArtifactTipProvider as _ArtifactTipProvider
-        from harness.core import CompositeTipsProvider as _CompositeTipsProvider
         from harness.core import ContractRegistry as _ContractRegistry
         from harness.core import LoopDetector as _LoopDetector
         from harness.core import ResumeContract as _ResumeContract
-        from harness.core import StaticTipsProvider as _StaticTipsProvider
-        from harness.core import TipLibrary as _TipLibrary
+        from harness.core import (
+            load_default_experience_provider as _load_default_experience_provider,
+        )
 
         loop_detector_obj = (
             _LoopDetector() if (loop_detect and strategy.structural_profile != "bare") else None
@@ -233,35 +251,25 @@ async def run_once(
                 contracts_obj = registry
         tips_obj = None
         if tips and strategy.structural_profile != "bare":
-            providers: list[object] = []
-            library = _TipLibrary.load(
-                [
-                    cwd / ".harness" / "tips.jsonl",
-                    Path.home() / ".harness" / "tips.jsonl",
-                ]
-            )
-            if library:
-                providers.append(library)
-            experience_paths: list[Path] = []
-            configured_roots = os.environ.get("HARNESS_EXPERIENCE_ROOTS", "")
-            for raw in configured_roots.split(os.pathsep):
-                raw = raw.strip()
-                if raw:
-                    experience_paths.append(Path(raw))
-            repo_runs = cwd / "evals" / "runs"
-            if repo_runs not in experience_paths:
-                experience_paths.append(repo_runs)
-            artifact_provider = _ArtifactTipProvider.load(experience_paths)
-            if artifact_provider:
-                providers.append(artifact_provider)
-            if len(providers) == 1:
-                tips_obj = providers[0]
-            elif providers:
-                tips_obj = _CompositeTipsProvider(providers=providers)  # type: ignore[arg-type]
-            else:
-                tips_obj = _StaticTipsProvider(tips=[])
+            extra_experience = _load_cli_experience_providers(cwd, config=config)
+            tips_obj = _load_default_experience_provider(cwd=cwd)
+            if extra_experience:
+                tips_obj = _load_default_experience_provider(
+                    cwd=cwd,
+                    extra_providers=extra_experience,
+                )
 
         resume_obj = _ResumeContract.load(cwd / _DEFAULT_RESUME_PATH)
+
+        allowed_tools = set(domain_profile.allowed_tools) if domain_profile.allowed_tools else None
+
+        # Use a domain-specific tool subset without forking the runtime path.
+        def scoped_build_tools(tool_cwd: Path) -> Any:
+            return build_tools(
+                tool_cwd,
+                config=config,
+                include=allowed_tools,
+            )
 
         agent = build_agent(
             chain=chain,
@@ -271,6 +279,7 @@ async def run_once(
             cwd=cwd,
             config=config,
             yes=yes,
+            build_tools=scoped_build_tools,
             inbox=inbox,
             activity_store=storage,  # type: ignore[arg-type]
             approval_store=storage,  # type: ignore[arg-type]
@@ -281,7 +290,7 @@ async def run_once(
             planner=planner,
             predictor=ConsequencePredictor() if predict else None,
             repair=RepairOrchestrator() if predict else None,
-            system_prompt=default_system_prompt,
+            system_prompt=domain_profile.system_prompt or default_system_prompt,
             compactor=compactor,
             max_repair_attempts=max_repair,
             profile=strategy.structural_profile,
@@ -291,7 +300,7 @@ async def run_once(
             tips_provider=tips_obj,
             resume=resume_obj,
         )
-        if profile == "adaptive":
+        if profile == "adaptive" and not silent:
             console.print(f"[dim]adaptive strategy[/dim] {strategy.rationale}")
 
         request_kwargs: dict[str, object] = {
@@ -313,18 +322,32 @@ async def run_once(
         request = RunRequest(**request_kwargs)  # type: ignore[arg-type]
 
         last_verification: Verification | None = None
+        final_text: str | None = None
+        streamed_parts: list[str] = []
         try:
             async for event in agent.run(request):
-                render(event)
+                if not silent:
+                    render(event)
+                if isinstance(event, TextDelta):
+                    streamed_parts.append(event.text)
+                elif (
+                    isinstance(event, Done)
+                    and event.final_message is not None
+                    and isinstance(event.final_message.content, str)
+                ):
+                    final_text = event.final_message.content
                 if isinstance(event, Verification):
                     last_verification = event
         except Exception as exc:
-            console.print(f"\n[red]Unhandled error:[/red] {exc!s}")
+            if not silent:
+                console.print(f"\n[red]Unhandled error:[/red] {exc!s}")
             raise typer.Exit(1) from None
-        await print_defense_ledger(storage, session_id, console=console)
+        if not silent:
+            await print_defense_ledger(storage, session_id, console=console)
     finally:
         if isinstance(storage, SQLiteStorage):
             await storage.close()
 
     if last_verification is not None and not last_verification.result.can_finish:
         raise typer.Exit(2)
+    return final_text or ("".join(streamed_parts).strip() or None)

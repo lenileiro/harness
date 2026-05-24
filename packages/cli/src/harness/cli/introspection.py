@@ -16,13 +16,16 @@ from harness.cli.common import (
     _truncate,
     console,
 )
+from harness.cli.plugins import discover_cli_plugins
 from harness.core import ApprovalPolicy
+from harness.core.plugin_loader import validate_provider_plugin
 
 providers_app = typer.Typer(
     name="providers", help="Inspect available providers.", no_args_is_help=True
 )
 
 tools_app = typer.Typer(name="tools", help="Inspect the built-in tools.", no_args_is_help=True)
+plugins_app = typer.Typer(name="plugins", help="Inspect discovered plugins.", no_args_is_help=True)
 
 
 @providers_app.command("list")
@@ -106,10 +109,10 @@ def tools_list_cmd(
     ] = None,
     config_path: Annotated[Path | None, typer.Option("--config")] = None,
 ) -> None:
-    """List built-in tools with their effective approval levels."""
+    """List available tools with their effective approval levels."""
     cfg = _load_cli_config(config_path)
     working_dir = (cwd or Path.cwd()).resolve()
-    registry = _build_tools(working_dir)
+    registry = _build_tools(working_dir, config=cfg)
     policy = ApprovalPolicy(default="prompt", per_tool=dict(cfg.approval))
 
     table = Table(show_header=True, header_style="bold")
@@ -125,3 +128,112 @@ def tools_list_cmd(
             _truncate(tool.description, 80),
         )
     console.print(table)
+
+
+@plugins_app.command("list")
+def plugins_list_cmd(
+    cwd: Annotated[
+        Path | None,
+        typer.Option("--cwd", help="Workspace used to resolve .harness/plugins."),
+    ] = None,
+    kind: Annotated[
+        str,
+        typer.Option(
+            "--kind",
+            help="Plugin kind to list: all, tool, experience, domain-profile, verifier, or critic.",
+        ),
+    ] = "all",
+    config_path: Annotated[Path | None, typer.Option("--config")] = None,
+) -> None:
+    """List discovered provider plugins and their precedence-resolved sources."""
+    cfg = _load_cli_config(config_path)
+    working_dir = (cwd or Path.cwd()).resolve()
+    kind_map = {
+        "all": None,
+        "tool": "tool",
+        "experience": "experience",
+        "domain-profile": "domain_profile",
+        "verifier": "verifier",
+        "critic": "critic",
+    }
+    resolved_kind = kind_map.get(kind)
+    if kind not in kind_map:
+        console.print(
+            "[red]Invalid --kind; expected all, tool, experience, domain-profile, verifier, or critic.[/red]"
+        )
+        raise typer.Exit(2)
+    plugins = discover_cli_plugins(working_dir, config=cfg, kind=resolved_kind)
+
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("Plugin", no_wrap=True)
+    table.add_column("Kind", no_wrap=True)
+    table.add_column("Source", no_wrap=True)
+    table.add_column("Provider", overflow="fold")
+    table.add_column("Path")
+    table.add_column("Description")
+    for plugin in plugins:
+        table.add_row(
+            plugin.name,
+            plugin.kind,
+            plugin.source,
+            plugin.provider_ref,
+            str(plugin.path) if plugin.path else "—",
+            plugin.description or "—",
+        )
+    console.print(table)
+
+
+@plugins_app.command("validate")
+def plugins_validate_cmd(
+    cwd: Annotated[
+        Path | None,
+        typer.Option("--cwd", help="Workspace used to resolve .harness/plugins."),
+    ] = None,
+    kind: Annotated[
+        str,
+        typer.Option(
+            "--kind",
+            help="Plugin kind to validate: all, tool, experience, domain-profile, verifier, or critic.",
+        ),
+    ] = "all",
+    config_path: Annotated[Path | None, typer.Option("--config")] = None,
+) -> None:
+    """Attempt to load discovered plugins and report readiness."""
+    cfg = _load_cli_config(config_path)
+    working_dir = (cwd or Path.cwd()).resolve()
+    kind_map = {
+        "all": None,
+        "tool": "tool",
+        "experience": "experience",
+        "domain-profile": "domain_profile",
+        "verifier": "verifier",
+        "critic": "critic",
+    }
+    resolved_kind = kind_map.get(kind)
+    if kind not in kind_map:
+        console.print(
+            "[red]Invalid --kind; expected all, tool, experience, domain-profile, verifier, or critic.[/red]"
+        )
+        raise typer.Exit(2)
+    plugins = discover_cli_plugins(working_dir, config=cfg, kind=resolved_kind)
+
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("Plugin", no_wrap=True)
+    table.add_column("Kind", no_wrap=True)
+    table.add_column("Source", no_wrap=True)
+    table.add_column("Status", no_wrap=True)
+    table.add_column("Detail")
+    failed = False
+    for plugin in plugins:
+        ok, detail = validate_provider_plugin(plugin)
+        failed = failed or not ok
+        table.add_row(
+            plugin.name,
+            plugin.kind,
+            plugin.source,
+            "[green]ok[/green]" if ok else "[red]error[/red]",
+            _truncate(detail, 120),
+        )
+    console.print(table)
+    if failed:
+        raise typer.Exit(1)
