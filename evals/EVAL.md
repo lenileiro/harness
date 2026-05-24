@@ -130,6 +130,81 @@ harness tips add "Use X" --triggers="x,y" --scope=repo
 harness tips mine <session-id>       # offline LLM-driven extraction from failures
 ```
 
+## Research-borrow validation + bug fixes (2026-05-24)
+
+After landing seven research-borrow features (commit `30a97ac`: prompt-
+cache ordering, resume contract, MultiCritic aggregators, ACON tuner,
+Memory-as-Action tools, RoleContract, fixture mutation), the cross-
+model A/B surfaced a **qwen-specific F04 regression**: defended scope
+dropped from 5/5 (prior run) to 1/5, PASS rate 3/3 → 2/3.
+
+Investigation traced this to two latent bugs that compounded:
+
+1. **`PhaseTool._derive_state` returned empty when `session_id=None`.**
+   The CLI registers PhaseTool at agent-build time, before any session
+   exists. Every call to `_derive_state` filtered the activity store
+   by `session_id=None` and got back `[]`. The tool emitted a spurious
+   `[WARNING] no phase was in flight when you marked X complete`
+   warning on every transition. Qwen3-coder, being heavily trained on
+   agent tasks, reads warnings as actionable errors and tries to "fix"
+   them by re-declaring + re-completing — producing the same warnings
+   — until `max_steps=25` is exhausted. Gemma/Kimi ignore the warnings
+   and march on, which is why the bug only surfaced as qwen-specific.
+
+   Fix: PhaseTool maintains its own in-memory mirror of declared/
+   completed phases. Activity log still gets durable writes for the
+   verifier and CLI render; `_derive_state` reads the in-memory mirror.
+
+2. **`TestsBeforeEditVerifier` fired on feature-add tasks.** The verifier
+   was designed for the bug-fix pattern (reproduce → fix → verify), but
+   F04 ("Add power to the calculator") has no failing test to
+   reproduce. Running `verify_work` first would just print "5 tests
+   pass" with no signal. The verifier was blocking every well-behaved
+   F04 run; the agent's repair response confused the model further.
+
+   Fix: feature-add bypass driven by a first-heading-line verb check.
+   "Add..." / "Implement..." / "Create..." / "Support..." → bypass.
+   "Fix..." / "Debug..." / "Handle..." → keep enforcing. Body text
+   like "Do not fix them" doesn't flip the classification because only
+   the first non-empty line is consulted.
+
+12 regression tests in `test_phase_tool_state.py`. Both bugs were
+*pre-existing*; the research-borrow layers (cache reordering, new
+memory tools) made them more likely to surface for qwen on F04
+specifically.
+
+### Post-fix cross-model A/B (2026-05-24)
+
+| Model | F01 | F02 | F03 | F04 |
+|---|---|---|---|---|
+| Gemma 4 26B  | tied perfect          | tied perfect          | def +2 pushback (scope=1 ceiling) | **def scope=5, 3/3 PASS** |
+| Qwen3-coder  | tied perfect          | tied 3/3 each         | 0/3 model ceiling (both arms)     | **def 3/3 PASS, scope=3** (recovered) |
+| Kimi K2.6    | tied 3/3 each         | def 3/3 (verif=1 vs 3 — judge noise) | def 2/3 (scope=1 ceiling) | ⚠ judge errored — unmeasurable |
+
+Defense correlation, defended trials:
+
+| Model | chained block→pass | block→fail | Verdict |
+|---|---:|---:|---|
+| Gemma |  4 | 0 | helps |
+| Qwen  |  2 | 1 | helps (down from 5/2 pre-fix) |
+| Kimi  |  8 | 1 | helps |
+
+Headlines:
+
+1. **F04 recovered on Qwen**: scope=1, 2/3 PASS → scope=3, 3/3 PASS.
+   The remaining scope-3 (vs gemma's scope-5) is normal scope-creep on
+   the seeded typo, not the bug loop.
+2. **Gemma F04 still 5/5 across all dimensions** — fix didn't disturb
+   the well-behaved path.
+3. **Kimi F04 unmeasurable** this run — the judge (same model judging
+   itself) failed with `[Errno 2]` errors on the latter half of the
+   fixtures. Manual qwen F04 reproduction already confirmed the fix
+   works at the runtime layer; kimi's prior F04 results showed no
+   regression, so no reason to suspect kimi behavior changed.
+4. **Qwen defense correlation improved** from 5 block→pass / 2 block→fail
+   pre-fix to 2/1 post-fix. Half the chain blocks were the phase-loop
+   bug masquerading as a real defense firing.
+
 ## What we test
 
 Four hand-built fixtures under `evals/fixtures/`, each engineered to
