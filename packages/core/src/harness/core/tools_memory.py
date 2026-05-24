@@ -49,7 +49,7 @@ _NOTES_SCHEMA: dict[str, Any] = {
             "type": "string",
             "enum": ["add", "list", "delete"],
             "description": (
-                "What to do: 'add' a new note, 'list' all notes, " "'delete' a note by its id."
+                "What to do: 'add' a new note, 'list' all notes, 'delete' a note by its id."
             ),
         },
         "text": {

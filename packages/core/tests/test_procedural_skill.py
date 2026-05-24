@@ -82,7 +82,7 @@ class TestTipLibraryPersistence:
 
     def test_load_skips_blank_and_comment_lines(self, tmp_path: Path) -> None:
         path = tmp_path / "tips.jsonl"
-        path.write_text("# header comment\n" "\n" + json.dumps(Tip(text="real").as_dict()) + "\n")
+        path.write_text("# header comment\n\n" + json.dumps(Tip(text="real").as_dict()) + "\n")
         lib = TipLibrary.load([path])
         assert len(lib.tips) == 1
         assert lib.tips[0].text == "real"

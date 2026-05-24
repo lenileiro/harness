@@ -14,7 +14,9 @@ def _outcome(*, matched: bool, severity: str = "none") -> PredictionOutcome:
         tool_call_id="call_001",
         matched=matched,
         severity=severity,  # type: ignore[arg-type]
-        lesson="prediction_matched" if matched else "future_plans_should_model_action_failure_before_retry",
+        lesson="prediction_matched"
+        if matched
+        else "future_plans_should_model_action_failure_before_retry",
         actual_status="ok" if matched else "error",
     )
 
@@ -27,23 +29,31 @@ class TestOutcomeCalibration:
 
     def test_low_mismatch_decreases_confidence(self) -> None:
         cal = OutcomeCalibration()
-        adjusted = cal.calibrate(base_confidence=0.74, outcome=_outcome(matched=False, severity="low"))
+        adjusted = cal.calibrate(
+            base_confidence=0.74, outcome=_outcome(matched=False, severity="low")
+        )
         assert adjusted == pytest.approx(0.66)
 
     def test_medium_mismatch_decreases_confidence(self) -> None:
         cal = OutcomeCalibration()
-        adjusted = cal.calibrate(base_confidence=0.74, outcome=_outcome(matched=False, severity="medium"))
+        adjusted = cal.calibrate(
+            base_confidence=0.74, outcome=_outcome(matched=False, severity="medium")
+        )
         assert adjusted == pytest.approx(0.60)
 
     def test_high_mismatch_decreases_confidence(self) -> None:
         cal = OutcomeCalibration()
-        adjusted = cal.calibrate(base_confidence=0.74, outcome=_outcome(matched=False, severity="high"))
+        adjusted = cal.calibrate(
+            base_confidence=0.74, outcome=_outcome(matched=False, severity="high")
+        )
         assert adjusted == pytest.approx(0.52)
 
     def test_critical_mismatch_hard_floor(self) -> None:
         cal = OutcomeCalibration()
         # 0.20 - 0.30 = -0.10, should floor at 0.1
-        adjusted = cal.calibrate(base_confidence=0.20, outcome=_outcome(matched=False, severity="critical"))
+        adjusted = cal.calibrate(
+            base_confidence=0.20, outcome=_outcome(matched=False, severity="critical")
+        )
         assert adjusted == pytest.approx(0.1)
 
     def test_match_ceiling_at_0_99(self) -> None:
@@ -71,15 +81,23 @@ class TestOutcomeCalibration:
     def test_record_pattern_key_is_stable(self) -> None:
         cal = OutcomeCalibration()
         outcome = _outcome(matched=False, severity="low")
-        r1 = cal.record(tool_name="read_file", effect_scope="read_only", base_confidence=0.88, outcome=outcome)
-        r2 = cal.record(tool_name="read_file", effect_scope="read_only", base_confidence=0.88, outcome=outcome)
+        r1 = cal.record(
+            tool_name="read_file", effect_scope="read_only", base_confidence=0.88, outcome=outcome
+        )
+        r2 = cal.record(
+            tool_name="read_file", effect_scope="read_only", base_confidence=0.88, outcome=outcome
+        )
         assert r1.pattern_key == r2.pattern_key
 
     def test_record_pattern_key_differs_by_tool(self) -> None:
         cal = OutcomeCalibration()
         outcome = _outcome(matched=True)
-        r1 = cal.record(tool_name="read_file", effect_scope="read_only", base_confidence=0.88, outcome=outcome)
-        r2 = cal.record(tool_name="write_file", effect_scope="read_only", base_confidence=0.88, outcome=outcome)
+        r1 = cal.record(
+            tool_name="read_file", effect_scope="read_only", base_confidence=0.88, outcome=outcome
+        )
+        r2 = cal.record(
+            tool_name="write_file", effect_scope="read_only", base_confidence=0.88, outcome=outcome
+        )
         assert r1.pattern_key != r2.pattern_key
 
     def test_none_severity_on_matched_outcome(self) -> None:

@@ -1,10 +1,14 @@
+default_install_hook_types: [pre-commit, pre-push]
+
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.7.4
     hooks:
       - id: ruff-format
+        stages: [pre-commit, pre-push]
       - id: ruff
         args: [--fix]
+        stages: [pre-commit]
 
   - repo: https://github.com/RobertCraigie/pyright-python
     rev: v1.1.388
@@ -14,3 +18,4 @@ repos:
         entry: uv run pyright
         language: system
         pass_filenames: false
+        stages: [pre-commit]

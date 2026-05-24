@@ -158,7 +158,7 @@ class PhaseTool:
             if not in_flight:
                 if name in completed_names:
                     warnings.append(
-                        f"[INFO] phase {name!r} was already completed; " f"re-complete is a no-op."
+                        f"[INFO] phase {name!r} was already completed; re-complete is a no-op."
                     )
                     skip_primary_event = True
                 else:

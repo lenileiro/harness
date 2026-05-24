@@ -5019,7 +5019,7 @@ def resume_set_current(
         raise typer.Exit(1)
     if contract.feature(feature_name) is None:
         console.print(
-            f"[red]Feature {feature_name!r} not on the roadmap. " f"Edit {path} to add it.[/red]"
+            f"[red]Feature {feature_name!r} not on the roadmap. Edit {path} to add it.[/red]"
         )
         raise typer.Exit(1)
     contract.current = feature_name

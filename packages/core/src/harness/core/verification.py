@@ -1001,7 +1001,7 @@ class ConsensusVerifier:
                 verifier_name=self.name,
             )
 
-        prompt = f"ORIGINAL TASK:\n{goal}\n\n" f"FIRST MODEL'S ANSWER:\n{answer}\n"
+        prompt = f"ORIGINAL TASK:\n{goal}\n\nFIRST MODEL'S ANSWER:\n{answer}\n"
         messages = [
             Message(role="system", content=_CONSENSUS_SYSTEM_PROMPT),
             Message(role="user", content=prompt),
@@ -1159,7 +1159,7 @@ class ShellVerifier:
             return VerificationResult(
                 can_finish=False,
                 reason=(
-                    f"Command `{self._command}` exited with code {proc.returncode}.\n\n" f"{output}"
+                    f"Command `{self._command}` exited with code {proc.returncode}.\n\n{output}"
                 ),
                 verifier_name=self.name,
             )

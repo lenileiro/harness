@@ -102,9 +102,7 @@ class CompleteWorkItemTool:
     """Mark the current work item as completed with a result summary."""
 
     name = "complete_work_item"
-    description = (
-        "Mark this work item as done. " "Provide 'summary' describing what was accomplished."
-    )
+    description = "Mark this work item as done. Provide 'summary' describing what was accomplished."
     effect_scope: EffectScope = "task_durable"
     approval: ApprovalDecision = "auto"
     phases: tuple[str, ...] = ("*",)

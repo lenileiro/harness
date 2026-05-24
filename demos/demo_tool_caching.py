@@ -26,7 +26,7 @@ class GeoLookupTool:
 
     name = "geo_lookup"
     description = (
-        "Look up the latitude and longitude of a city. " "Returns a JSON string with lat/lon."
+        "Look up the latitude and longitude of a city. Returns a JSON string with lat/lon."
     )
     parameters_schema: ClassVar[dict[str, Any]] = {
         "type": "object",
@@ -97,7 +97,7 @@ async def main() -> None:
     print(f"\nTool body executed {GeoLookupTool.call_count} time(s)")
     print(f"Cities called (in order): {GeoLookupTool.cities_called}")
     print(f"Total elapsed: {elapsed:.2f}s")
-    print("\n✓ Sydney was looked up once (second call was a cache hit — " "no extra 0.5s sleep).")
+    print("\n✓ Sydney was looked up once (second call was a cache hit — no extra 0.5s sleep).")
 
 
 if __name__ == "__main__":

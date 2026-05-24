@@ -117,21 +117,22 @@ class InMemoryStorage(MemoryStore):
     ) -> Task | None:
         async with self._claim_lock:
             candidates = [
-                t for t in self._tasks.values()
-                if t.parent_id == parent_id and t.status == "todo"
+                t for t in self._tasks.values() if t.parent_id == parent_id and t.status == "todo"
             ]
             if not candidates:
                 return None
             oldest = min(candidates, key=lambda t: t.created_at)
-            updated = oldest.model_copy(update={
-                "status": "in_progress",
-                "metadata": {
-                    **oldest.metadata,
-                    "claimed_by": claimed_by,
-                    "worker_session_id": worker_session_id,
-                },
-                "updated_at": datetime.now(UTC),
-            })
+            updated = oldest.model_copy(
+                update={
+                    "status": "in_progress",
+                    "metadata": {
+                        **oldest.metadata,
+                        "claimed_by": claimed_by,
+                        "worker_session_id": worker_session_id,
+                    },
+                    "updated_at": datetime.now(UTC),
+                }
+            )
             self._tasks[updated.id] = updated.model_copy(deep=True)
             return updated.model_copy(deep=True)
 

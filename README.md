@@ -46,7 +46,10 @@ All packages share the `harness.*` namespace at the import level (e.g. `from har
 # 1. Install workspace dependencies
 uv sync
 
-# 2. Install the harness binary globally (accessible without activating the venv)
+# 2. Install git hooks (runs format checks before commit/push)
+uv run pre-commit install --hook-type pre-commit --hook-type pre-push
+
+# 3. Install the harness binary globally (accessible without activating the venv)
 uv tool install --editable packages/cli
 
 # Confirm it works
