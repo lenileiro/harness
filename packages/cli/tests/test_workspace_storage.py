@@ -7,7 +7,8 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from harness.cli import __main__ as cli_main
-from harness.cli.__main__ import _build_storage, _workspace_db
+from harness.cli.runtime_helpers import build_storage
+from harness.cli.runtime_helpers import workspace_db as _workspace_db
 from harness.storage.sqlite import SQLiteStorage, default_db_path
 
 
@@ -36,7 +37,7 @@ class TestBuildStorage:
     def test_in_memory_ignores_everything(self, tmp_path: Path) -> None:
         from harness.storage.memory import InMemoryStorage
 
-        storage = _build_storage(db=None, in_memory=True, cwd=tmp_path)
+        storage = build_storage(db=None, in_memory=True, cwd=tmp_path)
         assert isinstance(storage, InMemoryStorage)
 
     def test_explicit_db_overrides_workspace(self, tmp_path: Path) -> None:
@@ -45,7 +46,7 @@ class TestBuildStorage:
         (harness_dir / "harness.db").touch()
 
         explicit = tmp_path / "explicit.db"
-        storage = _build_storage(db=explicit, in_memory=False, cwd=tmp_path)
+        storage = build_storage(db=explicit, in_memory=False, cwd=tmp_path)
         assert isinstance(storage, SQLiteStorage)
         assert storage.path == explicit
 
@@ -55,12 +56,12 @@ class TestBuildStorage:
         workspace_db = harness_dir / "harness.db"
         workspace_db.touch()
 
-        storage = _build_storage(db=None, in_memory=False, cwd=tmp_path)
+        storage = build_storage(db=None, in_memory=False, cwd=tmp_path)
         assert isinstance(storage, SQLiteStorage)
         assert storage.path == workspace_db
 
     def test_falls_back_to_xdg_default(self, tmp_path: Path) -> None:
-        storage = _build_storage(db=None, in_memory=False, cwd=tmp_path)
+        storage = build_storage(db=None, in_memory=False, cwd=tmp_path)
         assert isinstance(storage, SQLiteStorage)
         assert storage.path == default_db_path()
 
@@ -81,6 +82,6 @@ class TestHarnessInit:
     def test_workspace_db_auto_used_after_init(self, tmp_path: Path) -> None:
         _run(["init", "--cwd", str(tmp_path)])
         assert (tmp_path / ".harness" / "harness.db").exists()
-        storage = _build_storage(db=None, in_memory=False, cwd=tmp_path)
+        storage = build_storage(db=None, in_memory=False, cwd=tmp_path)
         assert isinstance(storage, SQLiteStorage)
         assert storage.path == tmp_path / ".harness" / "harness.db"

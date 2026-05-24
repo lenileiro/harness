@@ -7,7 +7,7 @@ from io import StringIO
 import unicodeitplus
 from rich.console import Console
 
-from harness.cli.__main__ import Renderer, _preprocess_markdown, _render_mermaid
+from harness.cli.markdown_render import Renderer, _preprocess_markdown, _render_mermaid
 from harness.core import (
     Done,
     ErrorEvent,

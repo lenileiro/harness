@@ -8,7 +8,8 @@ from unittest.mock import AsyncMock, patch
 from rich.console import Console
 from typer.testing import CliRunner
 
-from harness.cli.__main__ import _render_session_diff, app
+from harness.cli.__main__ import app
+from harness.cli.render import _render_session_diff
 from harness.tasks import ActivityEvent
 
 

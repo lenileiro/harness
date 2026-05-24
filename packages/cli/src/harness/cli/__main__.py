@@ -22,9 +22,6 @@ everything (handy for non-interactive use), or set approvals in config.
 
 from __future__ import annotations
 
-import asyncio
-from dataclasses import dataclass
-
 # Load .env from the working directory (or any parent) before anything reads env vars.
 try:
     from dotenv import load_dotenv as _load_dotenv
@@ -32,136 +29,200 @@ try:
     _load_dotenv(override=False)
 except ImportError:
     pass
-import difflib
-import json
-import os
-import re
-import statistics
-import time
-from collections.abc import Awaitable, Callable
-from datetime import UTC, datetime
 from pathlib import Path
-from typing import Annotated, Any, TypeVar
+from typing import Annotated, Any
 
 import typer
-import unicodeitplus as _unicodeit
-from rich.console import Console
-from rich.live import Live
-from rich.markdown import Markdown
-from rich.panel import Panel
-from rich.prompt import Confirm
-from rich.spinner import Spinner
-from rich.table import Table
 
 from harness.adapters.anthropic import AnthropicAdapter
 from harness.adapters.ollama import OllamaAdapter
 from harness.adapters.openrouter import OpenRouterAdapter
-from harness.cli.approval import RichApprovalHandler
-from harness.cli.config import HarnessConfig, default_config_path, load_config
+from harness.cli.approvals_evidence_commands import (
+    approvals_deny_command as _approvals_deny_command,
+)
+from harness.cli.approvals_evidence_commands import (
+    approvals_grant_command as _approvals_grant_command,
+)
+from harness.cli.approvals_evidence_commands import (
+    approvals_list_command as _approvals_list_command,
+)
+from harness.cli.approvals_evidence_commands import (
+    approvals_show_command as _approvals_show_command,
+)
+from harness.cli.approvals_evidence_commands import (
+    evidence_list_command as _evidence_list_command,
+)
+from harness.cli.chat_commands import run_chat_command as _run_chat_command
+from harness.cli.common import (
+    _ago,
+    _build_tools,
+    _load_cli_config,
+    _resolve_chain,
+    _run_async,
+    _truncate,
+    console,
+)
+from harness.cli.common import (
+    _args_preview as _common_args_preview,
+)
+from harness.cli.config import HarnessConfig, default_config_path
+from harness.cli.evals import eval_app
+from harness.cli.introspection import providers_app, tools_app
+from harness.cli.lab_commands import lab_list_command as _lab_list_command
+from harness.cli.lab_commands import lab_resume_command as _lab_resume_command
+from harness.cli.lab_commands import lab_run_command as _lab_run_command
+from harness.cli.lab_commands import lab_status_command as _lab_status_command
+from harness.cli.lifecycle_commands import contracts_list_command as _contracts_list_command
+from harness.cli.lifecycle_commands import contracts_test_command as _contracts_test_command
+from harness.cli.lifecycle_commands import phase_complete_command as _phase_complete_command
+from harness.cli.lifecycle_commands import phase_declare_command as _phase_declare_command
+from harness.cli.lifecycle_commands import phase_status_command as _phase_status_command
+from harness.cli.lifecycle_commands import resume_add_feature_command as _resume_add_feature_command
+from harness.cli.lifecycle_commands import resume_init_command as _resume_init_command
+from harness.cli.lifecycle_commands import resume_set_current_command as _resume_set_current_command
+from harness.cli.lifecycle_commands import resume_show_command as _resume_show_command
+from harness.cli.lifecycle_commands import tips_add_command as _tips_add_command
+from harness.cli.lifecycle_commands import tips_list_command as _tips_list_command
+from harness.cli.lifecycle_commands import tips_mine_command as _tips_mine_command
+from harness.cli.lifecycle_commands import tips_test_command as _tips_test_command
+from harness.cli.markdown_render import Renderer
+from harness.cli.markdown_render import (
+    _preprocess_markdown as _preprocess_markdown_impl,
+)
+from harness.cli.markdown_render import (
+    _render_mermaid as _render_mermaid_impl,
+)
+from harness.cli.render import (
+    _approval_status_style,
+    _render_approval,
+    _render_session,
+    _render_session_diff,
+    _render_task,
+    _status_style,
+    _task_status_style,
+)
+from harness.cli.run_commands import run_command as _run_command
+from harness.cli.run_commands import run_once as _run_once_impl
+from harness.cli.runtime_agent import (
+    _SPAWN_SCHEMA as _RUNTIME_SPAWN_SCHEMA,
+)
+from harness.cli.runtime_agent import (
+    SpawnAgentsTool as _RuntimeSpawnAgentsTool,
+)
+from harness.cli.runtime_agent import (
+    build_agent as _build_agent_impl,
+)
+from harness.cli.runtime_agent import (
+    load_project_context as _load_project_context_impl,
+)
+from harness.cli.runtime_helpers import (
+    build_critic as _build_critic,
+)
+from harness.cli.runtime_helpers import (
+    build_search_fn as _build_search_fn,
+)
+from harness.cli.runtime_helpers import (
+    build_storage as _build_storage,
+)
+from harness.cli.runtime_helpers import (
+    build_verifier as _build_verifier,
+)
+from harness.cli.runtime_helpers import (
+    print_defense_ledger as _print_defense_ledger,
+)
+from harness.cli.runtime_helpers import (
+    resolve_runtime_strategy as _resolve_runtime_strategy,
+)
+from harness.cli.runtime_helpers import workspace_db
+from harness.cli.sessions_commands import (
+    sessions_diff_command as _sessions_diff_command,
+)
+from harness.cli.sessions_commands import (
+    sessions_fork_command as _sessions_fork_command,
+)
+from harness.cli.sessions_commands import (
+    sessions_list_command as _sessions_list_command,
+)
+from harness.cli.sessions_commands import (
+    sessions_resume_command as _sessions_resume_command,
+)
+from harness.cli.sessions_commands import (
+    sessions_rm_command as _sessions_rm_command,
+)
+from harness.cli.sessions_commands import (
+    sessions_show_command as _sessions_show_command,
+)
+from harness.cli.tasks_commands import (
+    close_if_sqlite as _close_if_sqlite,
+)
+from harness.cli.tasks_commands import (
+    tasks_link_command as _tasks_link_command,
+)
+from harness.cli.tasks_commands import (
+    tasks_list_command as _tasks_list_command,
+)
+from harness.cli.tasks_commands import (
+    tasks_new_command as _tasks_new_command,
+)
+from harness.cli.tasks_commands import (
+    tasks_rm_command as _tasks_rm_command,
+)
+from harness.cli.tasks_commands import (
+    tasks_show_command as _tasks_show_command,
+)
+from harness.cli.tasks_commands import (
+    tasks_update_command as _tasks_update_command,
+)
+from harness.cli.tune_commands import tune_list_command as _tune_list_command
+from harness.cli.tune_commands import tune_propose_command as _tune_propose_command
+from harness.cli.tune_commands import tune_rollback_command as _tune_rollback_command
+from harness.cli.tune_commands import tune_show_command as _tune_show_command
+from harness.cli.workspace_commands import (
+    init_workspace as _init_workspace,
+)
+from harness.cli.workspace_commands import (
+    memory_list_command as _memory_list_command,
+)
+from harness.cli.workspace_commands import (
+    memory_rm_command as _memory_rm_command,
+)
+from harness.cli.workspace_commands import (
+    memory_save_command as _memory_save_command,
+)
+from harness.cli.workspace_commands import (
+    memory_search_command as _memory_search_command,
+)
+from harness.cli.workspace_commands import (
+    run_goal_command as _run_goal_command,
+)
 from harness.core import (
     Adapter,
     Agent,
-    AgentDoneEvent,
-    AgentEventWrapper,
-    AgentRole,
-    AgentStartedEvent,
     ApprovalDecision,
-    ApprovalHandler,
-    ApprovalPolicy,
     ApprovalStore,
-    AutoApprove,
-    BugfixCommentRewriteVerifier,
-    ChainedVerifier,
-    CheckMessagesTool,
-    ClaimGroundingVerifier,
-    CompleteWorkItemTool,
     ConsequencePredictor,
     ContextBudget,
-    ContextCompactor,
-    CreateWorkItemTool,
     Critic,
-    Critique,
-    DiagnosisAlignmentVerifier,
-    Done,
-    ErrorEvent,
-    FailoverPolicy,
-    FileScopeVerifier,
-    InboxApprovalHandler,
-    ListWorkItemsTool,
-    LLMJudgeVerifier,
-    LLMPlanner,
-    MemoryEntry,
-    MinimalFixVerifier,
-    MisdirectedSuggestionVerifier,
     MultiAgentOrchestrator,
-    NegativeConstraintVerifier,
-    NotifyTool,
-    PendingApproval,
-    PhaseCompletedEvent,
-    PhaseGateVerifier,
-    PhaseStartedEvent,
-    PhaseTool,
     Planner,
-    PlanRejectedEvent,
-    PredictionEvent,
-    PredictionMismatchEvent,
-    PromptSurfaceRevertVerifier,
     RepairOrchestrator,
-    RequestCritiqueTool,
-    RuleVerifier,
-    RunRequest,
-    Session,
-    ShellVerifier,
-    StateVerifier,
-    StepCompleted,
-    StepStarted,
     Storage,
-    TestsBeforeEditVerifier,
-    TextDelta,
-    ToolCall,
-    ToolCallEvent,
-    ToolRegistry,
-    ToolResult,
-    ToolResultEvent,
-    Verification,
     Verifier,
-    VerifierRouter,
-    VerifyBeforeDoneVerifier,
-    VerifyWorkTool,
-    WorkItemClaimedEvent,
-    WorkItemCompletedEvent,
-    WorkItemCreatedEvent,
     WorkItemJudge,
-    WorkItemOrphanedEvent,
-    WorkItemRejectedEvent,
-    WorkItemVerifiedEvent,
-    build_ledger,
     configure_logging,
-    correlate_defenses,
     fork_session,
-    format_ledger,
-    make_multi_critic,
-    parse_ledger_text,
 )
-from harness.storage.memory import InMemoryStorage
-from harness.storage.sqlite import SQLiteStorage, default_db_path
+from harness.storage.sqlite import default_db_path
 from harness.tasks import (
-    ActivityEvent,
     ActivityStore,
     Task,
-    TaskLink,
     TaskStore,
 )
-from harness.tasks import activity as task_activity
-from harness.tools.fs import (
-    EditFileTool,
-    GlobTool,
-    ListDirTool,
-    ReadFileTool,
-    WriteFileTool,
-)
-from harness.tools.shell import ShellTool
-from harness.tools.web import FetchUrlTool, TavilySearchTool
+
+_args_preview = _common_args_preview
+_preprocess_markdown = _preprocess_markdown_impl
+_render_mermaid = _render_mermaid_impl
+_workspace_db = workspace_db
 
 app = typer.Typer(
     name="harness",
@@ -170,51 +231,12 @@ app = typer.Typer(
     add_completion=False,
 )
 
-_T = TypeVar("_T")
-
-
-@dataclass(frozen=True)
-class RuntimeStrategy:
-    structural_profile: str
-    critic_mode: str | None
-    rationale: str
-
-
-def _run_async(awaitable: Awaitable[_T]) -> _T:
-    """Run a CLI coroutine in an explicitly managed event loop.
-
-    Under pytest, repeated sync CLI invocations after async tests can leave a
-    loop object pending finalization when using bare ``_run_async(...)``.
-    Managing the loop here keeps the CLI entrypoints deterministic across both
-    normal execution and mixed sync/async test processes.
-    """
-
-    loop = asyncio.new_event_loop()
-    try:
-        asyncio.set_event_loop(loop)
-        return loop.run_until_complete(awaitable)
-    finally:
-        try:
-            loop.run_until_complete(loop.shutdown_asyncgens())
-        finally:
-            try:
-                loop.run_until_complete(loop.shutdown_default_executor())
-            finally:
-                asyncio.set_event_loop(None)
-                loop.close()
-
 
 sessions_app = typer.Typer(
     name="sessions", help="Inspect, resume, and remove saved sessions.", no_args_is_help=True
 )
 app.add_typer(sessions_app, name="sessions")
-
-providers_app = typer.Typer(
-    name="providers", help="Inspect available providers.", no_args_is_help=True
-)
 app.add_typer(providers_app, name="providers")
-
-tools_app = typer.Typer(name="tools", help="Inspect the built-in tools.", no_args_is_help=True)
 app.add_typer(tools_app, name="tools")
 
 tasks_app = typer.Typer(
@@ -250,11 +272,6 @@ memory_app = typer.Typer(
 )
 app.add_typer(memory_app, name="memory")
 
-eval_app = typer.Typer(
-    name="eval",
-    help="Behavioral eval harness: run fixtures and score agent output.",
-    no_args_is_help=True,
-)
 app.add_typer(eval_app, name="eval")
 
 phase_app = typer.Typer(
@@ -314,10 +331,6 @@ contracts_app = typer.Typer(
 )
 app.add_typer(contracts_app, name="contracts")
 
-console = Console()
-
-KNOWN_PROVIDERS: tuple[str, ...] = ("ollama", "openrouter")
-
 _DEFAULT_SYSTEM_PROMPT = (
     "You are a helpful AI agent with access to filesystem and shell tools. "
     "Complete the task fully before responding — do not stop mid-task to ask "
@@ -362,173 +375,11 @@ _DEFAULT_SYSTEM_PROMPT = (
     "data flow found in the code. Fence it with ```mermaid ... ```."
 )
 
-_SPAWN_SCHEMA: dict[str, Any] = {
-    "type": "object",
-    "properties": {
-        "goal": {
-            "type": "string",
-            "description": (
-                "Clear description of what to analyze or produce. "
-                "Include which files or directories to read, what output format "
-                "you need, and any constraints."
-            ),
-        },
-    },
-    "required": ["goal"],
-}
+_SPAWN_SCHEMA: dict[str, Any] = _RUNTIME_SPAWN_SCHEMA
 
 
-class SpawnAgentsTool:
-    """Spawn a multi-agent job to analyze files that would overflow the context window."""
-
-    name = "spawn_agents"
-    description = (
-        "Spawn a multi-agent analysis job when you need to read and synthesize many large "
-        "files that would overflow the context window. A Planner breaks the goal into "
-        "independent work items, Workers read and analyze their assigned files, and a "
-        "Reporter synthesizes the results. Use this when total file content exceeds ~200 KB."
-    )
-    effect_scope = "task_durable"
-    approval: ApprovalDecision = "auto"
-    phases: tuple[str, ...] = ("*",)
-
-    def __init__(
-        self,
-        *,
-        provider: str,
-        model: str,
-        cwd: Path,
-        config: HarnessConfig,
-        max_workers: int = 3,
-        approval_policy: ApprovalPolicy | None = None,
-        approval_handler: ApprovalHandler | None = None,
-    ) -> None:
-        self._provider = provider
-        self._model = model
-        self._cwd = cwd
-        self._config = config
-        self._max_workers = max_workers
-        # Inherit the parent's approval policy/handler. If the parent runs
-        # interactively (RichApprovalHandler), so do the children. If --yes,
-        # children get AutoApprove. Without this, sub-agents silently
-        # AutoApprove regardless of the parent's policy — letting a model
-        # bypass approval prompts by spawning a worker to run shell.
-        self._approval_policy = approval_policy or ApprovalPolicy(default="auto")
-        self._approval_handler = approval_handler or AutoApprove()
-        self.parameters_schema = _SPAWN_SCHEMA
-
-    async def __call__(self, call: ToolCall) -> ToolResult:
-        args: dict[str, Any] = call.arguments if isinstance(call.arguments, dict) else {}
-        goal = args.get("goal", "").strip()
-        if not goal:
-            return ToolResult(
-                tool_call_id=call.id,
-                name=self.name,
-                content="'goal' is required",
-                is_error=True,
-            )
-
-        store = InMemoryStorage()
-
-        def agent_factory(role: AgentRole) -> Agent:
-            job_id = role.job_id or "_job_"
-            item_id = role.item_id or "_item_"
-            sub_tools = ToolRegistry()
-
-            # Inter-agent messaging — every sub-agent gets notify + check
-            # scoped to the job_id, so peers can broadcast progress and
-            # blockers without waiting for the parent to harvest results.
-            sub_tools.register(NotifyTool(role=role.name, task_id=job_id, activity_store=store))
-            sub_tools.register(
-                CheckMessagesTool(role=role.name, task_id=job_id, activity_store=store)
-            )
-
-            if role.name == "planner":
-                sub_tools.register(ListDirTool(cwd=self._cwd))
-                sub_tools.register(CreateWorkItemTool(store, parent_id=job_id, cwd=self._cwd))
-                sub_tools.register(ListWorkItemsTool(store, job_id))
-            elif role.name.startswith("worker"):
-                sub_tools.register(ReadFileTool(cwd=self._cwd))
-                sub_tools.register(ListDirTool(cwd=self._cwd))
-                sub_tools.register(GlobTool(cwd=self._cwd))
-                sub_tools.register(ShellTool(cwd=self._cwd))
-                sub_tools.register(ListWorkItemsTool(store, job_id))
-                sub_tools.register(CompleteWorkItemTool(store, item_id))
-            else:  # reporter
-                sub_tools.register(ReadFileTool(cwd=self._cwd))
-                sub_tools.register(ListDirTool(cwd=self._cwd))
-                sub_tools.register(GlobTool(cwd=self._cwd))
-                sub_tools.register(ListWorkItemsTool(store, job_id))
-
-            adapter = _build_adapter(self._provider, base_url=None, config=self._config)
-            return Agent(
-                adapters={self._provider: adapter},
-                tools=sub_tools,
-                storage=store,
-                failover=FailoverPolicy(chain=[self._provider]),
-                approval_policy=self._approval_policy,
-                approval_handler=self._approval_handler,
-                default_model=role.model or self._model,
-                default_cwd=str(self._cwd),
-                system_prompt=role.system_prompt,
-            )
-
-        planner_role = AgentRole(
-            name="planner",
-            system_prompt=(
-                "You are a Planner. Read the goal carefully and decompose it into "
-                "independent work items — one per distinct area the goal explicitly "
-                "asks about. Do NOT explore the whole project. Use list_dir or glob "
-                "only when you need to confirm which specific paths exist for a part "
-                "of the goal. Create as few items as needed. Stop immediately after "
-                "calling create_work_item for each part."
-            ),
-        )
-        worker_role = AgentRole(
-            name="worker",
-            max_steps=15,
-            system_prompt=(
-                "You are a Worker. Read the assigned files, perform the analysis, "
-                "and write a clear result summary. "
-                "CRITICAL: Call complete_work_item as a tool call when done — "
-                "do not write it as plain text."
-            ),
-        )
-        reporter_role = AgentRole(
-            name="reporter",
-            system_prompt=(
-                "You are a Reporter. Read the completed work item summaries and "
-                "synthesize a clear, structured final answer for the user."
-            ),
-        )
-
-        orchestrator = MultiAgentOrchestrator(
-            agent_factory=agent_factory,
-            store=store,
-            planner_role=planner_role,
-            worker_role=worker_role,
-            reporter_role=reporter_role,
-            max_workers=self._max_workers,
-            job_cwd=self._cwd,
-            provider=self._provider,
-            model=self._model,
-        )
-
-        reporter_text: list[str] = []
-        async for event in orchestrator.run(goal):
-            if (
-                isinstance(event, AgentEventWrapper)
-                and event.role == "reporter"
-                and isinstance(event.event, TextDelta)
-            ):
-                reporter_text.append(event.event.text)
-
-        result = "".join(reporter_text).strip()
-        return ToolResult(
-            tool_call_id=call.id,
-            name=self.name,
-            content=result or "No output from agents.",
-        )
+class SpawnAgentsTool(_RuntimeSpawnAgentsTool):
+    """CLI compatibility shim for the extracted runtime-agent module."""
 
 
 # ---------------------------------------------------------------------------
@@ -536,20 +387,8 @@ class SpawnAgentsTool:
 # ---------------------------------------------------------------------------
 
 
-def _workspace_db(cwd: Path) -> Path | None:
-    """Return `.harness/harness.db` in cwd if it exists, else None."""
-    candidate = cwd / ".harness" / "harness.db"
-    return candidate if candidate.exists() else None
-
-
-def _build_storage(*, db: Path | None, in_memory: bool, cwd: Path | None = None) -> Storage:
-    if in_memory:
-        return InMemoryStorage()
-    resolved = db or (cwd and _workspace_db(cwd)) or default_db_path()
-    return SQLiteStorage(path=resolved)
-
-
 def _build_adapter(provider: str, *, base_url: str | None, config: HarnessConfig) -> Adapter:
+    """CLI-local adapter factory kept for monkeypatch-friendly test compatibility."""
     settings = config.provider(provider)
     effective_base_url = base_url or settings.get("base_url")
     if provider == "ollama":
@@ -570,143 +409,8 @@ def _build_adapter(provider: str, *, base_url: str | None, config: HarnessConfig
     raise typer.BadParameter(f"unknown provider: {provider!r}")
 
 
-def _build_tools(cwd: Path) -> ToolRegistry:
-    registry = ToolRegistry()
-    registry.register(ReadFileTool(cwd=cwd))
-    registry.register(WriteFileTool(cwd=cwd))
-    registry.register(EditFileTool(cwd=cwd))
-    registry.register(ListDirTool(cwd=cwd))
-    registry.register(GlobTool(cwd=cwd))
-    registry.register(ShellTool(cwd=cwd))
-    registry.register(TavilySearchTool())
-    registry.register(FetchUrlTool())
-    return registry
-
-
-def _build_verifier(
-    verify: str | None,
-    *,
-    chain: list[str],
-    model: str,
-    config: HarnessConfig,
-    cwd: Path | None = None,
-    verify_command: str | None = None,
-) -> Verifier | None:
-    """Resolve --verify value to a Verifier instance (or None).
-
-    Options:
-      grounding  — ClaimGroundingVerifier only (free, no LLM call)
-      state      — StateVerifier only (filesystem + shell re-run checks)
-      rule       — RuleVerifier only (heuristic: stalls, refusals, tool errors)
-      shell      — ShellVerifier: runs --verify-command and checks exit code
-      llm        — LLMJudgeVerifier only (one extra adapter call)
-      auto       — ChainedVerifier: grounding → state → rule/llm router
-      none       — disabled
-    """
-    if not verify or verify == "none":
-        return None
-    if verify == "grounding":
-        return ClaimGroundingVerifier()
-    if verify == "state":
-        return StateVerifier(cwd=cwd or Path.cwd())
-    if verify == "rule":
-        return RuleVerifier()
-    if verify == "shell":
-        if not verify_command:
-            raise typer.BadParameter("--verify shell requires --verify-command <cmd>")
-        return ShellVerifier(verify_command, cwd=cwd)
-    if verify == "llm":
-        adapter = _build_adapter(chain[0], base_url=None, config=config)
-        return LLMJudgeVerifier(adapter=adapter, model=model)
-    if verify == "auto":
-        adapter = _build_adapter(chain[0], base_url=None, config=config)
-        return ChainedVerifier(
-            ClaimGroundingVerifier(),
-            StateVerifier(cwd=cwd or Path.cwd()),
-            VerifierRouter(
-                rule=RuleVerifier(),
-                llm=LLMJudgeVerifier(adapter=adapter, model=model),
-            ),
-        )
-    raise typer.BadParameter(
-        f"unknown --verify value: {verify!r} (use grounding|state|rule|shell|llm|auto|none)"
-    )
-
-
-def _build_search_fn() -> Any:
-    """Return a TavilySearchTool wrapper if TAVILY_API_KEY is set, else None."""
-    if not os.environ.get("TAVILY_API_KEY"):
-        return None
-    try:
-        from harness.tools.web import TavilySearchTool
-
-        _searcher = TavilySearchTool()
-
-        async def _search(query: str) -> str:
-            call = ToolCall(id=f"s_{query[:8]}", name="web_search", arguments={"query": query})
-            result: ToolResult = await _searcher(call)
-            return result.content or ""
-
-        return _search
-    except Exception:
-        return None
-
-
-def _build_critic(
-    critic: str | None,
-    *,
-    chain: list[str],
-    model: str,
-    config: HarnessConfig,
-) -> Critic | None:
-    """Resolve --critic value to a Critic instance (or None).
-
-    Options:
-      llm        — MultiCritic without web search
-      llm+search — MultiCritic with Tavily web search (requires TAVILY_API_KEY)
-      none       — disabled (default)
-    """
-    if not critic or critic == "none":
-        return None
-    if critic in ("llm", "llm+search"):
-        adapter = _build_adapter(chain[0], base_url=None, config=config)
-        search_fn = _build_search_fn() if critic == "llm+search" else None
-        return make_multi_critic(adapter=adapter, model=model, search_fn=search_fn)
-    raise typer.BadParameter(f"unknown --critic value: {critic!r} (use llm|llm+search|none)")
-
-
 def _load_project_context(cwd: Path) -> str:
-    """Walk from cwd up to filesystem root, collecting CLAUDE.md and AGENTS.md files.
-
-    Returns an XML-tagged block suitable for injection into the system prompt, or an
-    empty string if no files are found.
-    """
-    target_names = {"CLAUDE.md", "AGENTS.md"}
-    collected: list[str] = []
-    current = cwd.resolve()
-    visited: set[Path] = set()
-    while True:
-        if current in visited:
-            break
-        visited.add(current)
-        for name in sorted(target_names):
-            candidate = current / name
-            if candidate.is_file():
-                try:
-                    text = candidate.read_text(encoding="utf-8", errors="replace").strip()
-                    if text:
-                        collected.append(f"# {candidate}\n{text}")
-                except OSError:
-                    pass
-        parent = current.parent
-        if parent == current:
-            break
-        current = parent
-
-    if not collected:
-        return ""
-    body = "\n\n---\n\n".join(reversed(collected))
-    return f"<project_instructions>\n{body}\n</project_instructions>"
+    return _load_project_context_impl(cwd)
 
 
 def _build_agent(
@@ -739,195 +443,38 @@ def _build_agent(
     tips_provider: Any | None = None,
     resume: Any | None = None,
 ) -> Agent:
-    """Build an Agent over a provider chain. `chain[0]` is the primary.
-
-    Pass `activity_store` / `approval_store` (typically the same storage
-    instance) to enable activity-ledger emission and approval-replay on
-    resume.
-
-    Handler precedence: `--yes` (AutoApprove) > `--inbox` (InboxApprovalHandler)
-    > default (RichApprovalHandler).
-
-    `profile` selects the structural defense level:
-      - "bare":    no chain, no critic. Model + tools only.
-      - "adaptive": prompt-driven choice between minimal and strict.
-      - "diagnostic": diagnosis-focused chain (verify, alignment, misdirection).
-      - "minimal": only VerifyBeforeDoneVerifier (catches "forgot to test").
-      - "strict":  full chain (FileScope, MinimalFix, TestsBeforeEdit,
-                   VerifyBeforeDone, DiagnosisAlignment, MisdirectedSuggestion).
-
-    Default is "adaptive" — keep the minimal path for easy fixes, but escalate
-    to the full chain on scope-sensitive multi-phase tasks where the benchmark
-    shows defended can beat bare.
-    """
-    if not chain:
-        raise typer.BadParameter("provider chain is empty")
-    if inbox and approval_store is None:
-        raise typer.BadParameter("--inbox requires an approval_store (passed by _build_agent)")
-
-    # --base-url applies to the primary provider only; others use their defaults.
-    adapters: dict[str, Adapter] = {}
-    for i, provider in enumerate(chain):
-        provider_base_url = base_url if i == 0 else None
-        adapters[provider] = _build_adapter(provider, base_url=provider_base_url, config=config)
-
-    project_ctx = _load_project_context(cwd)
-    if project_ctx and system_prompt:
-        system_prompt = f"{system_prompt}\n\n{project_ctx}"
-    elif project_ctx:
-        system_prompt = project_ctx
-
-    tools = _build_tools(cwd)
-    tools.register(VerifyWorkTool(cwd=cwd))
-    # PhaseTool is opt-in. The tool's docstring invites use on multi-step
-    # tasks, which means an LLM that sees it will reach for it any time the
-    # prompt enumerates steps — and then trip on the gates. Register it
-    # only when the caller has explicitly asked for phase tracking (via
-    # --phases / RunRequest.phases / the external `harness phase` CLI
-    # having seeded prior phase events).
-    if phases_enabled:
-        tools.register(PhaseTool(activity_store=activity_store))
-    primary_adapter = adapters[chain[0]]
-    tools.register(
-        RequestCritiqueTool(
-            adapter=primary_adapter,
-            model=model,
-            search_fn=_build_search_fn(),
-        )
-    )
-
-    # SpawnAgentsTool registration is deferred until after we've built the
-    # parent's approval policy + handler, so we can pass them down to sub-
-    # agents. See the registration block lower in this function.
-
-    # Always enforce six structural defenses (unless bare=True):
-    #   1. If the prompt named specific files, the agent may only modify those.
-    #   2. If the prompt asked for a "minimal fix", the agent may not write a large diff.
-    #   3. If the agent edited, it must have run the tests first.
-    #   4. If the agent modified files, it must call verify_work.
-    #   5. If verify_work still shows failing tests, the agent's edits must
-    #      share vocabulary with those failing test names — otherwise it's
-    #      editing the wrong layer.
-    #   6. Once tests pass, every edit must share vocabulary with at least
-    #      one historical failing test — otherwise it's scope creep driven
-    #      by the prompt rather than the bug.
-    #   7. If tests disproved the prompt's literal fix, that prompt-surface
-    #      edit must be reverted from the final diff.
-    # All deterministic — no LLM, no false positives on no-op turns.
-    # Profile controls which run:
-    #   bare    → none of these wire in.
-    #   adaptive is resolved by _resolve_runtime_strategy() before this function.
-    #   minimal → only VerifyBeforeDoneVerifier (the "forgot to test" catch).
-    #   strict  → full chain.
-    if profile == "strict":
-        enforce_scope = FileScopeVerifier()
-        enforce_minimal = MinimalFixVerifier()
-        enforce_tests_first = TestsBeforeEditVerifier()
-        enforce_verify = VerifyBeforeDoneVerifier()
-        enforce_alignment = DiagnosisAlignmentVerifier()
-        enforce_no_scope_creep = MisdirectedSuggestionVerifier()
-        enforce_negative_constraints = NegativeConstraintVerifier()
-        enforce_comment_rewrites = BugfixCommentRewriteVerifier()
-        enforce_prompt_revert = PromptSurfaceRevertVerifier()
-        enforce_phase_gate = PhaseGateVerifier()
-        structural = ChainedVerifier(
-            enforce_scope,
-            enforce_minimal,
-            enforce_tests_first,
-            enforce_verify,
-            enforce_alignment,
-            enforce_no_scope_creep,
-            enforce_negative_constraints,
-            enforce_comment_rewrites,
-            enforce_prompt_revert,
-            enforce_phase_gate,
-        )
-        verifier = ChainedVerifier(structural, verifier) if verifier is not None else structural
-    elif profile == "diagnostic":
-        enforce_scope = FileScopeVerifier()
-        enforce_verify = VerifyBeforeDoneVerifier()
-        enforce_alignment = DiagnosisAlignmentVerifier()
-        enforce_no_scope_creep = MisdirectedSuggestionVerifier()
-        enforce_negative_constraints = NegativeConstraintVerifier()
-        enforce_comment_rewrites = BugfixCommentRewriteVerifier()
-        enforce_prompt_revert = PromptSurfaceRevertVerifier()
-        structural = ChainedVerifier(
-            enforce_scope,
-            enforce_verify,
-            enforce_alignment,
-            enforce_no_scope_creep,
-            enforce_negative_constraints,
-            enforce_comment_rewrites,
-            enforce_prompt_revert,
-        )
-        verifier = ChainedVerifier(structural, verifier) if verifier is not None else structural
-    elif profile == "minimal":
-        # Just the catch for "agent edited but never ran tests" — the one
-        # defense that correlated with PASS in every A/B run so far.
-        enforce_verify = VerifyBeforeDoneVerifier()
-        verifier = (
-            ChainedVerifier(enforce_verify, verifier) if verifier is not None else enforce_verify
-        )
-    # else profile == "bare": nothing structural, just whatever user passed.
-
-    approval_policy = ApprovalPolicy(default="prompt", per_tool=dict(config.approval))
-
-    approval_handler: ApprovalHandler
-    if yes:
-        approval_handler = AutoApprove()
-    elif inbox:
-        assert approval_store is not None  # checked above
-        approval_handler = InboxApprovalHandler(approval_store=approval_store)
-    else:
-        approval_handler = RichApprovalHandler(console=console, session_overrides=session_overrides)
-
-    # Register SpawnAgentsTool now that we have the parent's approval policy
-    # and handler — sub-agents will inherit both, closing the previous
-    # silent-AutoApprove escape path.
-    tools.register(
-        SpawnAgentsTool(
-            provider=chain[0],
-            model=model,
-            cwd=cwd,
-            config=config,
-            approval_policy=approval_policy,
-            approval_handler=approval_handler,
-        )
-    )
-
-    multi = len(chain) > 1
-    return Agent(
-        adapters=adapters,
-        tools=tools,
+    return _build_agent_impl(
+        chain=chain,
+        base_url=base_url,
+        model=model,
         storage=storage,
-        failover=FailoverPolicy(
-            chain=chain,
-            max_attempts=max(len(chain), 1),
-            backoff_base=0.5 if multi else 0.0,
-            backoff_max=10.0,
-            backoff_jitter=0.2 if multi else 0.0,
-        ),
-        approval_policy=approval_policy,
-        approval_handler=approval_handler,
+        cwd=cwd,
+        config=config,
+        yes=yes,
+        build_adapter=_build_adapter,
+        build_tools=_build_tools,
+        build_search_fn=_build_search_fn,
+        console=console,
+        inbox=inbox,
         activity_store=activity_store,
         approval_store=approval_store,
         verifier=verifier,
         critic=critic,
         budget=budget,
-        default_model=model,
-        default_cwd=str(cwd),
         memory_store=memory_store,
         planner=planner,
+        session_overrides=session_overrides,
         predictor=predictor,
         repair=repair,
         system_prompt=system_prompt,
         compactor=compactor,
         max_repair_attempts=max_repair_attempts,
+        profile=profile,
+        phases_enabled=phases_enabled,
         loop_detector=loop_detector,
         contracts=contracts,
         tips_provider=tips_provider,
         resume=resume,
-        memory_tools_enabled=True,
     )
 
 
@@ -951,129 +498,6 @@ async def _resolve_task_attachment(
         task.touch()
         await store.update_task(task)
     return task.id, task
-
-
-def _resolve_chain(
-    *,
-    failover_flag: str | None,
-    provider_flag: str | None,
-    config: HarnessConfig,
-) -> list[str]:
-    """Resolve the provider chain from --failover > --provider > config > 'ollama'."""
-    if failover_flag:
-        chain = [p.strip() for p in failover_flag.split(",") if p.strip()]
-        if not chain:
-            raise typer.BadParameter("--failover chain is empty")
-        return chain
-    return [provider_flag or config.default_provider or "ollama"]
-
-
-def _load_cli_config(config_path: Path | None) -> HarnessConfig:
-    try:
-        return load_config(config_path)
-    except Exception as exc:
-        console.print(f"[red]Bad config:[/red] {exc}")
-        raise typer.Exit(2) from None
-
-
-def _normalize_task_header(prompt: str) -> str:
-    for line in prompt.splitlines():
-        stripped = line.strip().lstrip("#").strip()
-        if stripped:
-            return stripped.lower()
-    return ""
-
-
-def _is_feature_task(prompt: str) -> bool:
-    header = _normalize_task_header(prompt)
-    feature_verbs = ("add ", "implement ", "create ", "support ", "introduce ")
-    bug_verbs = ("fix ", "debug ", "handle ", "resolve ", "repair ", "patch ")
-    return any(header.startswith(v) for v in feature_verbs) and not any(
-        header.startswith(v) for v in bug_verbs
-    )
-
-
-def _looks_scope_sensitive(prompt: str, phases: str | None) -> bool:
-    lower = prompt.lower()
-    if phases:
-        return True
-    markers = (
-        "do not touch",
-        "do not fix",
-        "stay focused",
-        "nothing else should change",
-        "only modify",
-        "minimal fix",
-        "just fix",
-        "while i'm here",
-        "scope creep",
-    )
-    return any(marker in lower for marker in markers)
-
-
-def _looks_diagnosis_heavy(prompt: str, verify_command: str | None) -> bool:
-    lower = prompt.lower()
-    markers = (
-        "likely",
-        "downstream",
-        "root cause",
-        "timeout",
-        "concurrent",
-        "deduplic",
-        "flaky",
-        "real bug",
-        "wrong layer",
-    )
-    if any(marker in lower for marker in markers):
-        return True
-    return bool(verify_command and ("pytest" in verify_command or "test" in verify_command))
-
-
-def _resolve_runtime_strategy(
-    *,
-    prompt: str,
-    requested_profile: str,
-    verify_command: str | None,
-    phases: str | None,
-    requested_critic: str | None,
-) -> RuntimeStrategy:
-    if requested_profile != "adaptive":
-        return RuntimeStrategy(
-            structural_profile=requested_profile,
-            critic_mode=requested_critic,
-            rationale=f"explicit profile={requested_profile}",
-        )
-
-    feature_task = _is_feature_task(prompt)
-    scope_sensitive = _looks_scope_sensitive(prompt, phases)
-    diagnosis_heavy = _looks_diagnosis_heavy(prompt, verify_command)
-
-    structural_profile = "minimal"
-    if scope_sensitive:
-        structural_profile = "strict"
-    elif feature_task or diagnosis_heavy:
-        structural_profile = "diagnostic" if diagnosis_heavy and not feature_task else "minimal"
-
-    critic_mode = requested_critic
-    if requested_critic is None and diagnosis_heavy and not feature_task:
-        critic_mode = "llm"
-
-    reasons: list[str] = []
-    if scope_sensitive:
-        reasons.append("scope-sensitive prompt -> strict structural checks")
-    elif feature_task:
-        reasons.append("feature task -> keep structure light")
-    elif diagnosis_heavy:
-        reasons.append("diagnosis-heavy bugfix -> diagnostic structure + critic")
-    else:
-        reasons.append("default adaptive path -> minimal structure")
-    if critic_mode and requested_critic is None:
-        reasons.append(f"implicit critic={critic_mode}")
-    return RuntimeStrategy(
-        structural_profile=structural_profile,
-        critic_mode=critic_mode,
-        rationale="; ".join(reasons),
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -1313,282 +737,61 @@ def run(
         bool, typer.Option("--verbose", "-v", help="Enable DEBUG logging to stderr.")
     ] = False,
 ) -> None:
-    """Run a single prompt through the agent and stream the result to stdout."""
-    configure_logging(level="DEBUG" if verbose else "INFO")
-
-    # HARNESS_YES=1 in the environment is equivalent to --yes, making it easy
-    # to run the agent autonomously without repeating the flag every invocation.
-    if not yes and os.environ.get("HARNESS_YES"):
-        yes = True
-
-    # --bare is a deprecated alias for --profile bare. If both are given,
-    # --bare takes precedence (legacy behavior). If neither, use --profile.
-    if bare:
-        profile = "bare"
-    if profile not in ("bare", "minimal", "diagnostic", "strict", "adaptive"):
-        console.print(
-            "[red]Invalid --profile "
-            f"{profile!r}; expected bare, adaptive, minimal, diagnostic, or strict.[/red]"
-        )
-        raise typer.Exit(2)
-
-    cfg = _load_cli_config(config_path)
-    chain = _resolve_chain(failover_flag=failover, provider_flag=provider, config=cfg)
-    effective_model = model or cfg.default_model or "llama3.2"
-
-    working_dir = (cwd or Path.cwd()).resolve()
-    if not working_dir.exists() or not working_dir.is_dir():
-        console.print(f"[red]--cwd does not exist or is not a directory: {working_dir}[/red]")
-        raise typer.Exit(2)
-
-    try:
-        _run_async(
-            _run_once(
-                prompt=prompt,
-                model=effective_model,
-                chain=chain,
-                base_url=base_url,
-                cwd=working_dir,
-                max_steps=max_steps,
-                max_output_tokens=max_output_tokens,
-                session_id=session_id,
-                task_ref=task_ref,
-                db=db,
-                in_memory=in_memory,
-                yes=yes,
-                inbox=inbox,
-                verify=verify,
-                verify_command=verify_command,
-                critic=critic,
-                require_tools=require_tools,
-                goal=goal,
-                max_context_tokens=max_context_tokens,
-                predict=predict,
-                auto_compact=auto_compact,
-                max_repair=max_repair,
-                profile=profile,
-                phases=phases,
-                loop_detect=loop_detect,
-                contracts=contracts,
-                tips=tips,
-                config=cfg,
-            )
-        )
-    except KeyboardInterrupt:
-        console.print("\n[yellow]Cancelled by user.[/yellow]")
-        raise typer.Exit(130) from None
+    _run_command(
+        prompt=prompt,
+        model=model,
+        provider=provider,
+        failover=failover,
+        base_url=base_url,
+        cwd=cwd,
+        max_steps=max_steps,
+        max_output_tokens=max_output_tokens,
+        session_id=session_id,
+        task_ref=task_ref,
+        db=db,
+        in_memory=in_memory,
+        yes=yes,
+        inbox=inbox,
+        verify=verify,
+        verify_command=verify_command,
+        critic=critic,
+        require_tools=require_tools,
+        goal=goal,
+        max_context_tokens=max_context_tokens,
+        predict=predict,
+        auto_compact=auto_compact,
+        max_repair=max_repair,
+        profile=profile,
+        bare=bare,
+        phases=phases,
+        loop_detect=loop_detect,
+        contracts=contracts,
+        tips=tips,
+        verbose=verbose,
+        config_path=config_path,
+        console=console,
+        load_cli_config=_load_cli_config,
+        resolve_chain=_resolve_chain,
+        run_async=_run_async,
+        run_once=_run_once,
+    )
 
 
-async def _run_once(
-    *,
-    prompt: str,
-    model: str,
-    chain: list[str],
-    base_url: str | None,
-    cwd: Path,
-    max_steps: int,
-    max_output_tokens: int | None,
-    session_id: str | None,
-    task_ref: str | None,
-    db: Path | None,
-    in_memory: bool,
-    yes: bool,
-    inbox: bool,
-    verify: str | None,
-    verify_command: str | None = None,
-    critic: str | None = None,
-    require_tools: bool = False,
-    goal: bool = False,
-    max_context_tokens: int | None = None,
-    predict: bool = False,
-    auto_compact: bool = False,
-    max_repair: int = 3,
-    profile: str = "minimal",
-    phases: str | None = None,
-    loop_detect: bool = True,
-    contracts: bool = True,
-    tips: bool = True,
-    config: HarnessConfig,
-) -> None:
-    storage = _build_storage(db=db, in_memory=in_memory, cwd=cwd)
-    try:
-        # Resolve the optional task attachment first (validates ref exists and
-        # appends session_id to task.session_ids).
-        task_id, _task = await _resolve_task_attachment(storage, task_ref, session_id)
-
-        strategy = _resolve_runtime_strategy(
-            prompt=prompt,
-            requested_profile=profile,
-            verify_command=verify_command,
-            phases=phases,
-            requested_critic=critic,
-        )
-
-        verifier = _build_verifier(
-            verify, chain=chain, model=model, config=config, cwd=cwd, verify_command=verify_command
-        )
-        # The "bare" profile disables the critic too — the A/B baseline arm
-        # is the model + tools alone, with no harness-side reasoning support.
-        critic_obj = (
-            None
-            if strategy.structural_profile == "bare"
-            else _build_critic(strategy.critic_mode, chain=chain, model=model, config=config)
-        )
-        budget = (
-            ContextBudget(max_tokens=max_context_tokens) if max_context_tokens is not None else None
-        )
-        planner: Planner | None = None
-        if goal:
-            adapter = _build_adapter(chain[0], base_url=base_url, config=config)
-            planner = LLMPlanner(adapter=adapter, model=model)
-        compactor: ContextCompactor | None = None
-        if auto_compact:
-            adapter = _build_adapter(chain[0], base_url=base_url, config=config)
-            compactor = ContextCompactor(adapter=adapter, model=model)
-
-        # LifeHarness L1, L2, L4. All three disabled in the `bare` profile
-        # (kept as the A/B baseline arm). L3 is inside runtime dispatch and
-        # always-on; no flag needed.
-        from harness.core import (
-            DEFAULT_RESUME_PATH as _DEFAULT_RESUME_PATH,
-        )
-        from harness.core import (
-            ArtifactTipProvider as _ArtifactTipProvider,
-        )
-        from harness.core import (
-            CompositeTipsProvider as _CompositeTipsProvider,
-        )
-        from harness.core import (
-            ContractRegistry as _ContractRegistry,
-        )
-        from harness.core import (
-            LoopDetector as _LoopDetector,
-        )
-        from harness.core import (
-            ResumeContract as _ResumeContract,
-        )
-        from harness.core import (
-            StaticTipsProvider as _StaticTipsProvider,
-        )
-        from harness.core import (
-            TipLibrary as _TipLibrary,
-        )
-
-        loop_detector_obj = (
-            _LoopDetector() if (loop_detect and strategy.structural_profile != "bare") else None
-        )
-        contracts_obj = None
-        if contracts and strategy.structural_profile != "bare":
-            registry = _ContractRegistry.from_paths(
-                [
-                    cwd / ".harness" / "contracts",
-                    Path.home() / ".harness" / "contracts",
-                ]
-            )
-            if registry:
-                contracts_obj = registry
-        tips_obj = None
-        if tips and strategy.structural_profile != "bare":
-            providers: list[object] = []
-            library = _TipLibrary.load(
-                [
-                    cwd / ".harness" / "tips.jsonl",
-                    Path.home() / ".harness" / "tips.jsonl",
-                ]
-            )
-            if library:
-                providers.append(library)
-            experience_paths: list[Path] = []
-            configured_roots = os.environ.get("HARNESS_EXPERIENCE_ROOTS", "")
-            for raw in configured_roots.split(os.pathsep):
-                raw = raw.strip()
-                if raw:
-                    experience_paths.append(Path(raw))
-            repo_runs = cwd / "evals" / "runs"
-            if repo_runs not in experience_paths:
-                experience_paths.append(repo_runs)
-            artifact_provider = _ArtifactTipProvider.load(experience_paths)
-            if artifact_provider:
-                providers.append(artifact_provider)
-            if len(providers) == 1:
-                tips_obj = providers[0]
-            elif providers:
-                tips_obj = _CompositeTipsProvider(providers=providers)  # type: ignore[arg-type]
-            else:
-                tips_obj = _StaticTipsProvider(tips=[])
-
-        resume_obj = _ResumeContract.load(cwd / _DEFAULT_RESUME_PATH)
-
-        agent = _build_agent(
-            chain=chain,
-            base_url=base_url,
-            model=model,
-            storage=storage,
-            cwd=cwd,
-            config=config,
-            yes=yes,
-            inbox=inbox,
-            activity_store=storage,  # type: ignore[arg-type]
-            approval_store=storage,  # type: ignore[arg-type]
-            verifier=verifier,
-            critic=critic_obj,
-            budget=budget,
-            memory_store=storage,  # type: ignore[arg-type]
-            planner=planner,
-            predictor=ConsequencePredictor() if predict else None,
-            repair=RepairOrchestrator() if predict else None,
-            system_prompt=_DEFAULT_SYSTEM_PROMPT,
-            compactor=compactor,
-            max_repair_attempts=max_repair,
-            profile=strategy.structural_profile,
-            phases_enabled=bool(phases),
-            loop_detector=loop_detector_obj,
-            contracts=contracts_obj,
-            tips_provider=tips_obj,
-            resume=resume_obj,
-        )
-        if profile == "adaptive":
-            console.print(f"[dim]adaptive strategy[/dim] {strategy.rationale}")
-
-        request_kwargs: dict[str, object] = {
-            "prompt": prompt,
-            "model": model,
-            "max_steps": max_steps,
-            "require_tool_use": require_tools,
-        }
-        if max_output_tokens is not None:
-            request_kwargs["max_tokens"] = max_output_tokens
-        if session_id:
-            request_kwargs["session_id"] = session_id
-        if task_id:
-            request_kwargs["task_id"] = task_id
-        if phases:
-            parsed_phases = [p.strip().lower() for p in phases.split(",") if p.strip()]
-            if parsed_phases:
-                request_kwargs["phases"] = parsed_phases
-        request = RunRequest(**request_kwargs)  # type: ignore[arg-type]
-
-        last_verification: Verification | None = None
-        try:
-            async for event in agent.run(request):
-                _render(event)
-                if isinstance(event, Verification):
-                    last_verification = event
-        except Exception as exc:
-            console.print(f"\n[red]Unhandled error:[/red] {exc!s}")
-            raise typer.Exit(1) from None
-        await _print_defense_ledger(storage, session_id)
-    finally:
-        if isinstance(storage, SQLiteStorage):
-            await storage.close()
-
-    # Surface the final verifier verdict to the shell. The repair loop has
-    # already exhausted its retries by this point — a blocking final verdict
-    # means the harness ran out of budget while the work was still wrong.
-    # Eval tooling reads this exit code to distinguish "agent succeeded" from
-    # "agent gave up after every defense fired."
-    if last_verification is not None and not last_verification.result.can_finish:
-        raise typer.Exit(2)
+async def _run_once(**kwargs: Any) -> None:
+    await _run_once_impl(
+        **kwargs,
+        build_storage=_build_storage,
+        resolve_task_attachment=_resolve_task_attachment,
+        resolve_runtime_strategy=_resolve_runtime_strategy,
+        build_verifier=_build_verifier,
+        build_critic=_build_critic,
+        build_adapter=_build_adapter,
+        build_agent=_build_agent,
+        print_defense_ledger=_print_defense_ledger,
+        render=_render,
+        default_system_prompt=_DEFAULT_SYSTEM_PROMPT,
+        console=console,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1609,39 +812,17 @@ def sessions_list(
         ),
     ] = None,
 ) -> None:
-    """List saved sessions, newest first."""
-
-    async def _go() -> None:
-        storage = _build_storage(db=db, in_memory=in_memory)
-        try:
-            sessions = await storage.list(limit=limit, status=status)  # type: ignore[arg-type]
-        finally:
-            if isinstance(storage, SQLiteStorage):
-                await storage.close()
-
-        if not sessions:
-            console.print("[dim]No sessions.[/dim]")
-            return
-
-        table = Table(show_header=True, header_style="bold")
-        table.add_column("ID")
-        table.add_column("Status")
-        table.add_column("Provider")
-        table.add_column("Model")
-        table.add_column("Updated")
-        table.add_column("Turns", justify="right")
-        for s in sessions:
-            table.add_row(
-                s.id,
-                _status_style(s.status),
-                s.provider,
-                s.model,
-                _ago(s.updated_at),
-                str(len(s.messages)),
-            )
-        console.print(table)
-
-    _run_async(_go())
+    _sessions_list_command(
+        db=db,
+        in_memory=in_memory,
+        limit=limit,
+        status=status,
+        console=console,
+        build_storage=_build_storage,
+        run_async=_run_async,
+        ago=_ago,
+        status_style=_status_style,
+    )
 
 
 @sessions_app.command("show")
@@ -1650,22 +831,15 @@ def sessions_show(
     db: Annotated[Path | None, typer.Option("--db")] = None,
     in_memory: Annotated[bool, typer.Option("--in-memory")] = False,
 ) -> None:
-    """Print a session's full transcript."""
-
-    async def _go() -> None:
-        storage = _build_storage(db=db, in_memory=in_memory)
-        try:
-            session = await storage.get(session_id)
-        finally:
-            if isinstance(storage, SQLiteStorage):
-                await storage.close()
-
-        if session is None:
-            console.print(f"[red]Session not found:[/red] {session_id}")
-            raise typer.Exit(1)
-        _render_session(session)
-
-    _run_async(_go())
+    _sessions_show_command(
+        session_id=session_id,
+        db=db,
+        in_memory=in_memory,
+        console=console,
+        build_storage=_build_storage,
+        run_async=_run_async,
+        render_session=_render_session,
+    )
 
 
 @sessions_app.command("resume")
@@ -1708,56 +882,31 @@ def sessions_resume(
     config_path: Annotated[Path | None, typer.Option("--config")] = None,
     verbose: Annotated[bool, typer.Option("--verbose", "-v")] = False,
 ) -> None:
-    """Continue a saved session, optionally with a new user prompt."""
-    configure_logging(level="DEBUG" if verbose else "INFO")
-
-    cfg = _load_cli_config(config_path)
-
-    async def _go() -> None:
-        working_dir_hint = cwd.resolve() if cwd else None
-        storage = _build_storage(db=db, in_memory=in_memory, cwd=working_dir_hint)
-        try:
-            session = await storage.get(session_id)
-            if session is None:
-                console.print(f"[red]Session not found:[/red] {session_id}")
-                raise typer.Exit(1)
-
-            working_dir = (cwd or session.cwd).resolve()
-            chain = _resolve_chain(
-                failover_flag=failover, provider_flag=session.provider, config=cfg
-            )
-            verifier = _build_verifier(verify, chain=chain, model=session.model, config=cfg)
-            budget = (
-                ContextBudget(max_tokens=max_context_tokens)
-                if max_context_tokens is not None
-                else None
-            )
-            agent = _build_agent(
-                chain=chain,
-                base_url=base_url,
-                model=session.model,
-                storage=storage,
-                cwd=working_dir,
-                config=cfg,
-                yes=yes,
-                inbox=inbox,
-                activity_store=storage,  # type: ignore[arg-type]
-                approval_store=storage,  # type: ignore[arg-type]
-                verifier=verifier,
-                budget=budget,
-                memory_store=storage,  # type: ignore[arg-type]
-            )
-            try:
-                async for event in agent.resume(session_id, prompt=prompt, max_steps=max_steps):
-                    _render(event)
-            except Exception as exc:
-                console.print(f"\n[red]Unhandled error:[/red] {exc!s}")
-                raise typer.Exit(1) from None
-        finally:
-            if isinstance(storage, SQLiteStorage):
-                await storage.close()
-
-    _run_async(_go())
+    _sessions_resume_command(
+        session_id=session_id,
+        prompt=prompt,
+        db=db,
+        in_memory=in_memory,
+        cwd=cwd,
+        base_url=base_url,
+        max_steps=max_steps,
+        failover=failover,
+        yes=yes,
+        inbox=inbox,
+        verify=verify,
+        max_context_tokens=max_context_tokens,
+        config_path=config_path,
+        verbose=verbose,
+        console=console,
+        load_cli_config=_load_cli_config,
+        resolve_chain=_resolve_chain,
+        build_storage=_build_storage,
+        build_verifier=_build_verifier,
+        build_adapter=_build_adapter,
+        build_agent=_build_agent,
+        render=_render,
+        run_async=_run_async,
+    )
 
 
 @sessions_app.command("rm")
@@ -1767,21 +916,15 @@ def sessions_rm(
     in_memory: Annotated[bool, typer.Option("--in-memory")] = False,
     yes: Annotated[bool, typer.Option("--yes", "-y", help="Skip confirmation.")] = False,
 ) -> None:
-    """Delete a saved session."""
-    if not yes and not Confirm.ask(f"Delete session [bold]{session_id}[/bold]?", default=False):
-        console.print("[yellow]Aborted.[/yellow]")
-        raise typer.Exit(1)
-
-    async def _go() -> None:
-        storage = _build_storage(db=db, in_memory=in_memory)
-        try:
-            await storage.delete(session_id)
-        finally:
-            if isinstance(storage, SQLiteStorage):
-                await storage.close()
-
-    _run_async(_go())
-    console.print(f"[green]Deleted[/green] {session_id}")
+    _sessions_rm_command(
+        session_id=session_id,
+        db=db,
+        in_memory=in_memory,
+        yes=yes,
+        console=console,
+        build_storage=_build_storage,
+        run_async=_run_async,
+    )
 
 
 @sessions_app.command("fork")
@@ -1803,51 +946,23 @@ def sessions_fork(
     config_path: Annotated[Path | None, typer.Option("--config")] = None,
     verbose: Annotated[bool, typer.Option("--verbose", "-v")] = False,
 ) -> None:
-    """Branch a new session from an existing session's message history."""
-    configure_logging(level="DEBUG" if verbose else "INFO")
-    cfg = _load_cli_config(config_path)
-
-    async def _go() -> None:
-        from harness.core.errors import ConfigurationError as _CE
-
-        storage = _build_storage(db=db, in_memory=in_memory)
-        try:
-            try:
-                forked = await fork_session(storage, session_id, new_session_id=new_id)
-            except _CE as exc:
-                console.print(f"[red]Error:[/red] {exc}")
-                raise typer.Exit(1) from None
-            console.print(f"[green]Forked[/green] {session_id} → {forked.id}")
-            if not prompt:
-                console.print(
-                    f'[dim]Resume with:[/dim] harness sessions resume {forked.id} "<prompt>"'
-                )
-                return
-            # Run immediately with the given prompt.
-            chain = [forked.provider]
-            agent = _build_agent(
-                chain=chain,
-                base_url=None,
-                model=forked.model,
-                storage=storage,
-                cwd=forked.cwd,
-                config=cfg,
-                yes=yes,
-                activity_store=storage,  # type: ignore[arg-type]
-                approval_store=storage,  # type: ignore[arg-type]
-                memory_store=storage,  # type: ignore[arg-type]
-            )
-            async for event in agent.resume(forked.id, prompt=prompt):
-                _render(event)
-        finally:
-            if isinstance(storage, SQLiteStorage):
-                await storage.close()
-
-    try:
-        _run_async(_go())
-    except KeyboardInterrupt:
-        console.print("\n[yellow]Cancelled by user.[/yellow]")
-        raise typer.Exit(130) from None
+    _sessions_fork_command(
+        session_id=session_id,
+        prompt=prompt,
+        new_id=new_id,
+        db=db,
+        in_memory=in_memory,
+        yes=yes,
+        config_path=config_path,
+        verbose=verbose,
+        console=console,
+        load_cli_config=_load_cli_config,
+        build_storage=_build_storage,
+        build_agent=_build_agent,
+        render=_render,
+        run_async=_run_async,
+        fork_session_fn=fork_session,
+    )
 
 
 @sessions_app.command("diff")
@@ -1856,147 +971,20 @@ def sessions_diff_cmd(
     db: Annotated[Path | None, typer.Option("--db")] = None,
     in_memory: Annotated[bool, typer.Option("--in-memory")] = False,
 ) -> None:
-    """Show file changes made during a session."""
-
-    async def _go() -> None:
-        storage = _build_storage(db=db, in_memory=in_memory)
-        try:
-            activity = await storage.list_activity(session_id=session_id)  # type: ignore[attr-defined]
-            _render_session_diff(activity, console)
-        finally:
-            if isinstance(storage, SQLiteStorage):
-                await storage.close()
-
-    _run_async(_go())
-
-
-# ---------------------------------------------------------------------------
-# providers subcommands
-# ---------------------------------------------------------------------------
-
-
-@providers_app.command("list")
-def providers_list_cmd(
-    config_path: Annotated[Path | None, typer.Option("--config")] = None,
-) -> None:
-    """List known providers and their configuration status."""
-    cfg = _load_cli_config(config_path)
-    table = Table(show_header=True, header_style="bold")
-    table.add_column("Provider")
-    table.add_column("Status")
-    table.add_column("Notes")
-
-    settings = cfg.provider("ollama")
-    ollama_base = settings.get("base_url") or os.environ.get(
-        "OLLAMA_HOST", "http://localhost:11434"
+    _sessions_diff_command(
+        session_id=session_id,
+        db=db,
+        in_memory=in_memory,
+        build_storage=_build_storage,
+        render_session_diff=_render_session_diff,
+        console=console,
+        run_async=_run_async,
     )
-    table.add_row(
-        "ollama",
-        "[green]ready[/green]",
-        f"base_url: {ollama_base}",
-    )
-
-    has_or_key = bool(os.environ.get("OPENROUTER_API_KEY"))
-    or_settings = cfg.provider("openrouter")
-    or_status = "[green]ready[/green]" if has_or_key else "[red]missing OPENROUTER_API_KEY[/red]"
-    or_notes_parts = []
-    if has_or_key:
-        or_notes_parts.append("env: OPENROUTER_API_KEY set")
-    if "http_referer" in or_settings:
-        or_notes_parts.append(f"http_referer: {or_settings['http_referer']}")
-    if "x_title" in or_settings:
-        or_notes_parts.append(f"x_title: {or_settings['x_title']}")
-    table.add_row("openrouter", or_status, ", ".join(or_notes_parts) or "—")
-
-    console.print(table)
-
-
-@providers_app.command("capabilities")
-def providers_capabilities_cmd(
-    name: Annotated[str, typer.Argument(help="Provider name (ollama or openrouter).")],
-    config_path: Annotated[Path | None, typer.Option("--config")] = None,
-) -> None:
-    """Print a provider's reported Capabilities."""
-    cfg = _load_cli_config(config_path)
-    if name not in KNOWN_PROVIDERS:
-        console.print(f"[red]Unknown provider:[/red] {name}")
-        raise typer.Exit(2)
-
-    async def _go() -> None:
-        try:
-            adapter = _build_adapter(name, base_url=None, config=cfg)
-        except Exception as exc:
-            console.print(f"[red]Could not construct adapter:[/red] {exc}")
-            raise typer.Exit(2) from None
-        caps = await adapter.capabilities()
-        table = Table(show_header=False)
-        table.add_column("Field", style="bold")
-        table.add_column("Value")
-        table.add_row("streaming", str(caps.streaming))
-        table.add_row("tool_use", str(caps.tool_use))
-        table.add_row("structured_output", str(caps.structured_output))
-        table.add_row(
-            "max_context_tokens",
-            "—" if caps.max_context_tokens is None else str(caps.max_context_tokens),
-        )
-        table.add_row(
-            "models",
-            "—" if caps.models is None else ", ".join(caps.models),
-        )
-        console.print(table)
-
-    _run_async(_go())
-
-
-# ---------------------------------------------------------------------------
-# tools subcommands
-# ---------------------------------------------------------------------------
-
-
-@tools_app.command("list")
-def tools_list_cmd(
-    cwd: Annotated[
-        Path | None,
-        typer.Option("--cwd", help="Working directory used to construct fs/shell tools."),
-    ] = None,
-    config_path: Annotated[Path | None, typer.Option("--config")] = None,
-) -> None:
-    """List built-in tools with their effective approval levels."""
-    cfg = _load_cli_config(config_path)
-    working_dir = (cwd or Path.cwd()).resolve()
-    registry = _build_tools(working_dir)
-    policy = ApprovalPolicy(default="prompt", per_tool=dict(cfg.approval))
-
-    table = Table(show_header=True, header_style="bold")
-    table.add_column("Tool")
-    table.add_column("Approval")
-    table.add_column("Description")
-    for tool in registry.all():
-        effective = policy.decide(tool)
-        color = {"auto": "green", "prompt": "yellow", "deny": "red"}.get(effective, "white")
-        table.add_row(
-            tool.name,
-            f"[{color}]{effective}[/{color}]",
-            _truncate(tool.description, 80),
-        )
-    console.print(table)
 
 
 # ---------------------------------------------------------------------------
 # tasks subcommands
 # ---------------------------------------------------------------------------
-
-
-async def _append_task_activity(
-    storage: ActivityStore, *, task_id: str, kind: str, data: dict
-) -> None:
-    """Append a task-domain activity event to the ledger."""
-    event = ActivityEvent(task_id=task_id, kind=kind, data=data)
-    await storage.append_activity(event)
-
-
-def _close_if_sqlite(storage: object) -> bool:
-    return isinstance(storage, SQLiteStorage)
 
 
 @tasks_app.command("new")
@@ -2020,45 +1008,19 @@ def tasks_new_cmd(
     db: Annotated[Path | None, typer.Option("--db")] = None,
     in_memory: Annotated[bool, typer.Option("--in-memory")] = False,
 ) -> None:
-    """Create a new task."""
-    working_dir = (cwd or Path.cwd()).resolve()
-    label_list: list[str] = [s.strip() for s in labels.split(",") if s.strip()] if labels else []
-
-    async def _go() -> Task:
-        storage = _build_storage(db=db, in_memory=in_memory)
-        try:
-            store: TaskStore = storage  # type: ignore[assignment]
-            parent_id: str | None = None
-            if parent:
-                parent_task = await store.get_task_by_ref(parent)
-                if parent_task is None:
-                    console.print(f"[red]Parent task not found:[/red] {parent}")
-                    raise typer.Exit(1)
-                parent_id = parent_task.id
-
-            draft = Task(
-                ref="",  # filled in by the store
-                title=title,
-                description=description,
-                priority=priority,  # type: ignore[arg-type]
-                labels=label_list,
-                parent_id=parent_id,
-                cwd=working_dir,
-            )
-            saved = await store.create_task(draft)
-            await _append_task_activity(
-                storage,  # type: ignore[arg-type]
-                task_id=saved.id,
-                kind=task_activity.TASK_CREATED,
-                data={"ref": saved.ref, "title": saved.title},
-            )
-            return saved
-        finally:
-            if _close_if_sqlite(storage):
-                await storage.close()  # type: ignore[union-attr]
-
-    task = _run_async(_go())
-    console.print(f"[green]Created[/green] {task.ref}  {task.title}")
+    _tasks_new_command(
+        title=title,
+        description=description,
+        priority=priority,
+        labels=labels,
+        parent=parent,
+        cwd=cwd,
+        db=db,
+        in_memory=in_memory,
+        console=console,
+        build_storage=_build_storage,
+        run_async=_run_async,
+    )
 
 
 @tasks_app.command("list")
@@ -2071,37 +1033,18 @@ def tasks_list_cmd(
     db: Annotated[Path | None, typer.Option("--db")] = None,
     in_memory: Annotated[bool, typer.Option("--in-memory")] = False,
 ) -> None:
-    """List tasks, newest-updated first."""
-
-    async def _go() -> list[Task]:
-        storage = _build_storage(db=db, in_memory=in_memory)
-        try:
-            store: TaskStore = storage  # type: ignore[assignment]
-            return await store.list_tasks(limit=limit, status=status)  # type: ignore[arg-type]
-        finally:
-            if _close_if_sqlite(storage):
-                await storage.close()  # type: ignore[union-attr]
-
-    tasks = _run_async(_go())
-    if not tasks:
-        console.print("[dim]No tasks.[/dim]")
-        return
-
-    table = Table(show_header=True, header_style="bold")
-    table.add_column("Ref")
-    table.add_column("Status")
-    table.add_column("Title")
-    table.add_column("Labels")
-    table.add_column("Updated")
-    for t in tasks:
-        table.add_row(
-            t.ref,
-            _task_status_style(t.status),
-            _truncate(t.title, 60),
-            ", ".join(t.labels) if t.labels else "—",
-            _ago(t.updated_at),
-        )
-    console.print(table)
+    _tasks_list_command(
+        status=status,
+        limit=limit,
+        db=db,
+        in_memory=in_memory,
+        console=console,
+        build_storage=_build_storage,
+        run_async=_run_async,
+        task_status_style=_task_status_style,
+        truncate=_truncate,
+        ago=_ago,
+    )
 
 
 @tasks_app.command("show")
@@ -2110,27 +1053,15 @@ def tasks_show_cmd(
     db: Annotated[Path | None, typer.Option("--db")] = None,
     in_memory: Annotated[bool, typer.Option("--in-memory")] = False,
 ) -> None:
-    """Print a task's full details + activity log."""
-
-    async def _go() -> tuple[Task | None, list[ActivityEvent]]:
-        storage = _build_storage(db=db, in_memory=in_memory)
-        try:
-            store: TaskStore = storage  # type: ignore[assignment]
-            task = await store.get_task_by_ref(ref)
-            if task is None:
-                return None, []
-            activity_store: ActivityStore = storage  # type: ignore[assignment]
-            events = await activity_store.list_activity(task_id=task.id, limit=200)
-            return task, events
-        finally:
-            if _close_if_sqlite(storage):
-                await storage.close()  # type: ignore[union-attr]
-
-    task, events = _run_async(_go())
-    if task is None:
-        console.print(f"[red]Task not found:[/red] {ref}")
-        raise typer.Exit(1)
-    _render_task(task, events)
+    _tasks_show_command(
+        ref=ref,
+        db=db,
+        in_memory=in_memory,
+        console=console,
+        build_storage=_build_storage,
+        run_async=_run_async,
+        render_task=_render_task,
+    )
 
 
 @tasks_app.command("update")
@@ -2147,48 +1078,19 @@ def tasks_update_cmd(
     db: Annotated[Path | None, typer.Option("--db")] = None,
     in_memory: Annotated[bool, typer.Option("--in-memory")] = False,
 ) -> None:
-    """Update a task."""
-
-    async def _go() -> Task | None:
-        storage = _build_storage(db=db, in_memory=in_memory)
-        try:
-            store: TaskStore = storage  # type: ignore[assignment]
-            task = await store.get_task_by_ref(ref)
-            if task is None:
-                return None
-            old_status = task.status
-            if status is not None:
-                task.status = status  # type: ignore[assignment]
-            if title is not None:
-                task.title = title
-            if description is not None:
-                task.description = description
-            if priority is not None:
-                task.priority = priority  # type: ignore[assignment]
-            if labels is not None:
-                task.labels = [s.strip() for s in labels.split(",") if s.strip()]
-            task.touch()
-            saved = await store.update_task(task)
-            kind = (
-                task_activity.TASK_STATUS_CHANGED
-                if status is not None and status != old_status
-                else task_activity.TASK_UPDATED
-            )
-            data: dict[str, object] = {"ref": saved.ref}
-            if status is not None and status != old_status:
-                data["from"] = old_status
-                data["to"] = status
-            await _append_task_activity(storage, task_id=saved.id, kind=kind, data=data)  # type: ignore[arg-type]
-            return saved
-        finally:
-            if _close_if_sqlite(storage):
-                await storage.close()  # type: ignore[union-attr]
-
-    task = _run_async(_go())
-    if task is None:
-        console.print(f"[red]Task not found:[/red] {ref}")
-        raise typer.Exit(1)
-    console.print(f"[green]Updated[/green] {task.ref}")
+    _tasks_update_command(
+        ref=ref,
+        status=status,
+        title=title,
+        description=description,
+        priority=priority,
+        labels=labels,
+        db=db,
+        in_memory=in_memory,
+        console=console,
+        build_storage=_build_storage,
+        run_async=_run_async,
+    )
 
 
 @tasks_app.command("link")
@@ -2206,38 +1108,16 @@ def tasks_link_cmd(
     db: Annotated[Path | None, typer.Option("--db")] = None,
     in_memory: Annotated[bool, typer.Option("--in-memory")] = False,
 ) -> None:
-    """Add a typed link from one task to another."""
-
-    async def _go() -> Task | None:
-        storage = _build_storage(db=db, in_memory=in_memory)
-        try:
-            store: TaskStore = storage  # type: ignore[assignment]
-            task = await store.get_task_by_ref(ref)
-            if task is None:
-                return None
-            target_task = await store.get_task_by_ref(target)
-            if target_task is None:
-                console.print(f"[red]Target task not found:[/red] {target}")
-                raise typer.Exit(1)
-            task.links.append(TaskLink(target_ref=target, relation=relation))  # type: ignore[arg-type]
-            task.touch()
-            saved = await store.update_task(task)
-            await _append_task_activity(
-                storage,  # type: ignore[arg-type]
-                task_id=saved.id,
-                kind=task_activity.TASK_LINKED,
-                data={"ref": saved.ref, "target_ref": target, "relation": relation},
-            )
-            return saved
-        finally:
-            if _close_if_sqlite(storage):
-                await storage.close()  # type: ignore[union-attr]
-
-    task = _run_async(_go())
-    if task is None:
-        console.print(f"[red]Task not found:[/red] {ref}")
-        raise typer.Exit(1)
-    console.print(f"[green]Linked[/green] {task.ref} --{relation}--> {target}")
+    _tasks_link_command(
+        ref=ref,
+        target=target,
+        relation=relation,
+        db=db,
+        in_memory=in_memory,
+        console=console,
+        build_storage=_build_storage,
+        run_async=_run_async,
+    )
 
 
 @tasks_app.command("rm")
@@ -2247,34 +1127,15 @@ def tasks_rm_cmd(
     in_memory: Annotated[bool, typer.Option("--in-memory")] = False,
     yes: Annotated[bool, typer.Option("--yes", "-y", help="Skip confirmation.")] = False,
 ) -> None:
-    """Delete a task."""
-    if not yes and not Confirm.ask(f"Delete task [bold]{ref}[/bold]?", default=False):
-        console.print("[yellow]Aborted.[/yellow]")
-        raise typer.Exit(1)
-
-    async def _go() -> bool:
-        storage = _build_storage(db=db, in_memory=in_memory)
-        try:
-            store: TaskStore = storage  # type: ignore[assignment]
-            task = await store.get_task_by_ref(ref)
-            if task is None:
-                return False
-            await store.delete_task(task.id)
-            await _append_task_activity(
-                storage,  # type: ignore[arg-type]
-                task_id=task.id,
-                kind=task_activity.TASK_DELETED,
-                data={"ref": ref},
-            )
-            return True
-        finally:
-            if _close_if_sqlite(storage):
-                await storage.close()  # type: ignore[union-attr]
-
-    if not _run_async(_go()):
-        console.print(f"[red]Task not found:[/red] {ref}")
-        raise typer.Exit(1)
-    console.print(f"[green]Deleted[/green] {ref}")
+    _tasks_rm_command(
+        ref=ref,
+        db=db,
+        in_memory=in_memory,
+        yes=yes,
+        console=console,
+        build_storage=_build_storage,
+        run_async=_run_async,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -2297,51 +1158,21 @@ def approvals_list_cmd(
     db: Annotated[Path | None, typer.Option("--db")] = None,
     in_memory: Annotated[bool, typer.Option("--in-memory")] = False,
 ) -> None:
-    """List queued tool-call approvals, newest-requested first."""
-
-    async def _go() -> list[PendingApproval]:
-        storage = _build_storage(db=db, in_memory=in_memory)
-        try:
-            store: ApprovalStore = storage  # type: ignore[assignment]
-            task_id: str | None = None
-            if task:
-                task_obj = await storage.get_task_by_ref(task)  # type: ignore[union-attr]
-                if task_obj is None:
-                    console.print(f"[red]Task not found:[/red] {task}")
-                    raise typer.Exit(1)
-                task_id = task_obj.id
-            return await store.list_approvals(
-                session_id=session_id,
-                task_id=task_id,
-                status="pending" if pending_only else None,
-                limit=limit,
-            )
-        finally:
-            if _close_if_sqlite(storage):
-                await storage.close()  # type: ignore[union-attr]
-
-    items = _run_async(_go())
-    if not items:
-        console.print("[dim]No approvals.[/dim]")
-        return
-
-    table = Table(show_header=True, header_style="bold")
-    table.add_column("ID", no_wrap=True)
-    table.add_column("Status")
-    table.add_column("Tool", no_wrap=True)
-    table.add_column("Args")
-    table.add_column("Session", no_wrap=True)
-    table.add_column("Requested")
-    for a in items:
-        table.add_row(
-            a.id,
-            _approval_status_style(a.status),
-            a.tool_name,
-            _truncate(repr(a.arguments), 40),
-            a.session_id,
-            _ago(a.requested_at),
-        )
-    console.print(table)
+    _approvals_list_command(
+        pending_only=pending_only,
+        task=task,
+        session_id=session_id,
+        limit=limit,
+        db=db,
+        in_memory=in_memory,
+        console=console,
+        build_storage=_build_storage,
+        close_if_sqlite=_close_if_sqlite,
+        run_async=_run_async,
+        approval_status_style=_approval_status_style,
+        truncate=_truncate,
+        ago=_ago,
+    )
 
 
 @approvals_app.command("show")
@@ -2350,22 +1181,16 @@ def approvals_show_cmd(
     db: Annotated[Path | None, typer.Option("--db")] = None,
     in_memory: Annotated[bool, typer.Option("--in-memory")] = False,
 ) -> None:
-    """Print full details for one approval."""
-
-    async def _go() -> PendingApproval | None:
-        storage = _build_storage(db=db, in_memory=in_memory)
-        try:
-            store: ApprovalStore = storage  # type: ignore[assignment]
-            return await store.get_approval(approval_id)
-        finally:
-            if _close_if_sqlite(storage):
-                await storage.close()  # type: ignore[union-attr]
-
-    approval = _run_async(_go())
-    if approval is None:
-        console.print(f"[red]Approval not found:[/red] {approval_id}")
-        raise typer.Exit(1)
-    _render_approval(approval)
+    _approvals_show_command(
+        approval_id=approval_id,
+        db=db,
+        in_memory=in_memory,
+        console=console,
+        build_storage=_build_storage,
+        close_if_sqlite=_close_if_sqlite,
+        run_async=_run_async,
+        render_approval=_render_approval,
+    )
 
 
 @approvals_app.command("grant")
@@ -2374,25 +1199,14 @@ def approvals_grant_cmd(
     db: Annotated[Path | None, typer.Option("--db")] = None,
     in_memory: Annotated[bool, typer.Option("--in-memory")] = False,
 ) -> None:
-    """Mark an approval as granted. Replay happens on the next `sessions resume`."""
-
-    async def _go() -> PendingApproval | None:
-        storage = _build_storage(db=db, in_memory=in_memory)
-        try:
-            store: ApprovalStore = storage  # type: ignore[assignment]
-            return await store.resolve_approval(approval_id, status="granted", resolved_by="cli")
-        finally:
-            if _close_if_sqlite(storage):
-                await storage.close()  # type: ignore[union-attr]
-
-    updated = _run_async(_go())
-    if updated is None:
-        console.print(f"[red]Approval not found:[/red] {approval_id}")
-        raise typer.Exit(1)
-    console.print(
-        f"[green]Granted[/green] {updated.id}  "
-        f"[dim]({updated.tool_name})[/dim]  — "
-        f"resume the session to dispatch."
+    _approvals_grant_command(
+        approval_id=approval_id,
+        db=db,
+        in_memory=in_memory,
+        console=console,
+        build_storage=_build_storage,
+        close_if_sqlite=_close_if_sqlite,
+        run_async=_run_async,
     )
 
 
@@ -2402,22 +1216,15 @@ def approvals_deny_cmd(
     db: Annotated[Path | None, typer.Option("--db")] = None,
     in_memory: Annotated[bool, typer.Option("--in-memory")] = False,
 ) -> None:
-    """Mark an approval as denied. No replay; the queued result stays in transcript."""
-
-    async def _go() -> PendingApproval | None:
-        storage = _build_storage(db=db, in_memory=in_memory)
-        try:
-            store: ApprovalStore = storage  # type: ignore[assignment]
-            return await store.resolve_approval(approval_id, status="denied", resolved_by="cli")
-        finally:
-            if _close_if_sqlite(storage):
-                await storage.close()  # type: ignore[union-attr]
-
-    updated = _run_async(_go())
-    if updated is None:
-        console.print(f"[red]Approval not found:[/red] {approval_id}")
-        raise typer.Exit(1)
-    console.print(f"[yellow]Denied[/yellow] {updated.id}  [dim]({updated.tool_name})[/dim]")
+    _approvals_deny_command(
+        approval_id=approval_id,
+        db=db,
+        in_memory=in_memory,
+        console=console,
+        build_storage=_build_storage,
+        close_if_sqlite=_close_if_sqlite,
+        run_async=_run_async,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -2443,71 +1250,21 @@ def evidence_list_cmd(
     db: Annotated[Path | None, typer.Option("--db")] = None,
     in_memory: Annotated[bool, typer.Option("--in-memory")] = False,
 ) -> None:
-    """List the tool-call evidence ledger.
-
-    Each row is a `tool_call.completed` activity event — the runtime emits
-    one per dispatched tool call, carrying timing, exit codes, sizes, and
-    tool-specific metadata.
-    """
-
-    async def _go() -> list[ActivityEvent]:
-        storage = _build_storage(db=db, in_memory=in_memory)
-        try:
-            task_id: str | None = None
-            if task:
-                task_obj = await storage.get_task_by_ref(task)  # type: ignore[union-attr]
-                if task_obj is None:
-                    console.print(f"[red]Task not found:[/red] {task}")
-                    raise typer.Exit(1)
-                task_id = task_obj.id
-            store: ActivityStore = storage  # type: ignore[assignment]
-            events = await store.list_activity(
-                task_id=task_id,
-                session_id=session_id,
-                kinds=("tool_call.completed",),
-                limit=limit,
-            )
-        finally:
-            if _close_if_sqlite(storage):
-                await storage.close()  # type: ignore[union-attr]
-
-        if tool_name is not None:
-            events = [e for e in events if e.data.get("name") == tool_name]
-        if errors_only:
-            events = [e for e in events if e.data.get("is_error") is True]
-        return events
-
-    items = _run_async(_go())
-    if not items:
-        console.print("[dim]No evidence.[/dim]")
-        return
-
-    table = Table(show_header=True, header_style="bold")
-    table.add_column("When")
-    table.add_column("Tool")
-    table.add_column("Args")
-    table.add_column("Status")
-    table.add_column("ms", justify="right")
-    table.add_column("Evidence")
-    for e in items:
-        is_error = bool(e.data.get("is_error"))
-        status = "[red]error[/red]" if is_error else "[green]ok[/green]"
-        duration = e.data.get("duration_ms")
-        duration_str = "—" if duration is None else str(duration)
-        meta = e.data.get("metadata") or {}
-        meta_str = _truncate(
-            " ".join(f"{k}={v}" for k, v in meta.items()) or "—",
-            60,
-        )
-        table.add_row(
-            _ago(e.timestamp),
-            str(e.data.get("name", "?")),
-            _truncate(repr(e.data.get("arguments", {})), 30),
-            status,
-            duration_str,
-            meta_str,
-        )
-    console.print(table)
+    _evidence_list_command(
+        task=task,
+        session_id=session_id,
+        tool_name=tool_name,
+        errors_only=errors_only,
+        limit=limit,
+        db=db,
+        in_memory=in_memory,
+        console=console,
+        build_storage=_build_storage,
+        close_if_sqlite=_close_if_sqlite,
+        run_async=_run_async,
+        truncate=_truncate,
+        ago=_ago,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -2574,503 +1331,39 @@ def chat(
     verbose: Annotated[bool, typer.Option("--verbose", "-v")] = False,
 ) -> None:
     """Interactive REPL: chat with the agent, drive tools, resume across turns."""
-    configure_logging(level="DEBUG" if verbose else "INFO")
-    if not yes and os.environ.get("HARNESS_YES"):
-        yes = True
-    if verify == "none":
-        verify = None
-    cfg = _load_cli_config(config_path)
-    chain = _resolve_chain(failover_flag=failover, provider_flag=provider, config=cfg)
-    effective_model = model or cfg.default_model or "llama3.2"
-    working_dir = (cwd or Path.cwd()).resolve()
-    if not working_dir.exists() or not working_dir.is_dir():
-        console.print(f"[red]--cwd does not exist or is not a directory: {working_dir}[/red]")
-        raise typer.Exit(2)
-
-    try:
-        _run_async(
-            _chat_loop(
-                chain=chain,
-                base_url=base_url,
-                model=effective_model,
-                cwd=working_dir,
-                db=db,
-                in_memory=in_memory,
-                session_id=session_id,
-                task_ref=task_ref,
-                max_steps=max_steps,
-                yes=yes,
-                inbox=inbox,
-                verify=verify,
-                require_tools=require_tools,
-                max_context_tokens=max_context_tokens,
-                auto_compact=auto_compact,
-                config=cfg,
-            )
-        )
-    except KeyboardInterrupt:
-        console.print("\n[yellow]bye[/yellow]")
-        raise typer.Exit(130) from None
-
-
-async def _chat_loop(
-    *,
-    chain: list[str],
-    base_url: str | None,
-    model: str,
-    cwd: Path,
-    db: Path | None,
-    in_memory: bool,
-    session_id: str | None,
-    task_ref: str | None,
-    max_steps: int,
-    yes: bool,
-    inbox: bool,
-    verify: str | None,
-    require_tools: bool = False,
-    max_context_tokens: int | None,
-    auto_compact: bool = False,
-    config: HarnessConfig,
-) -> None:
-    from uuid import uuid4
-
-    storage = _build_storage(db=db, in_memory=in_memory, cwd=cwd)
-    try:
-        existing: Session | None = None
-        if session_id:
-            existing = await storage.get(session_id)
-        current_session_id = session_id or f"sess_{uuid4().hex[:12]}"
-
-        task_id, _task = await _resolve_task_attachment(storage, task_ref, current_session_id)
-
-        verifier = _build_verifier(verify, chain=chain, model=model, config=config, cwd=cwd)
-        budget = (
-            ContextBudget(max_tokens=max_context_tokens) if max_context_tokens is not None else None
-        )
-        compactor: ContextCompactor | None = None
-        if auto_compact:
-            adapter = _build_adapter(chain[0], base_url=base_url, config=config)
-            compactor = ContextCompactor(adapter=adapter, model=model)
-        agent = _build_agent(
-            chain=chain,
-            base_url=base_url,
-            model=model,
-            storage=storage,
-            cwd=cwd,
-            config=config,
-            yes=yes,
-            inbox=inbox,
-            activity_store=storage,  # type: ignore[arg-type]
-            approval_store=storage,  # type: ignore[arg-type]
-            verifier=verifier,
-            budget=budget,
-            memory_store=storage,  # type: ignore[arg-type]
-            system_prompt=_DEFAULT_SYSTEM_PROMPT,
-            compactor=compactor,
-        )
-
-        first_turn = existing is None
-
-        chain_label = chain[0]
-        if len(chain) > 1:
-            chain_label += "  [dim](failover: " + ", ".join(chain[1:]) + ")[/dim]"
-        intro = (
-            f"[bold]Session:[/bold] {current_session_id}"
-            + (" [dim](resumed)[/dim]" if existing else "")
-            + f"\n[bold]Provider:[/bold] {chain_label}"
-            f"\n[bold]Model:[/bold] {model}"
-            f"\n[bold]Tools:[/bold] {', '.join(agent.tools.names())}"
-            f"\n[bold]CWD:[/bold] {cwd}\n\n"
-            f"[dim]Type /help for commands. /quit to exit.[/dim]"
-        )
-        console.print(Panel(intro, title="harness chat", expand=False))
-
-        while True:
-            try:
-                user_input = console.input("\n[bold cyan]> [/bold cyan]").strip()
-            except EOFError:
-                console.print("\n[yellow]bye[/yellow]")
-                return
-            except KeyboardInterrupt:
-                console.print("\n[yellow]bye[/yellow]")
-                return
-
-            if not user_input:
-                continue
-
-            if user_input.startswith("/"):
-                keep_going = await _handle_slash(
-                    user_input, agent=agent, session_id=current_session_id, storage=storage
-                )
-                if not keep_going:
-                    return
-                continue
-
-            try:
-                if first_turn:
-                    request_kwargs: dict[str, object] = {
-                        "prompt": user_input,
-                        "session_id": current_session_id,
-                        "model": model,
-                        "max_steps": max_steps,
-                        "require_tool_use": require_tools,
-                    }
-                    if task_id:
-                        request_kwargs["task_id"] = task_id
-                    request = RunRequest(**request_kwargs)  # type: ignore[arg-type]
-                    async for event in agent.run(request):
-                        _render(event)
-                    first_turn = False
-                else:
-                    async for event in agent.resume(
-                        current_session_id, prompt=user_input, max_steps=max_steps
-                    ):
-                        _render(event)
-            except (KeyboardInterrupt, asyncio.CancelledError):
-                console.print("\n[yellow]cancelled[/yellow]")
-            except Exception as exc:
-                console.print(f"\n[red]Error:[/red] {exc!s}")
-    finally:
-        if isinstance(storage, SQLiteStorage):
-            await storage.close()
-
-
-_HELP_TEXT = (
-    "/help              show this help\n"
-    "/quit, /exit, /q   exit the chat\n"
-    "/tools             list registered tools and effective approval\n"
-    "/session           show current session id and turn count\n"
-    "/diff              show file changes made this session\n"
-    "/clear             clear the terminal\n"
-    "/model [name]      show or switch the active model mid-session\n"
-)
-
-# ---------------------------------------------------------------------------
-# Slash command registry
-# ---------------------------------------------------------------------------
-
-SlashHandler = Callable[..., Awaitable[bool]]
-
-_SLASH_REGISTRY: dict[str, SlashHandler] = {}
-
-
-def _slash(name: str) -> Callable[[SlashHandler], SlashHandler]:
-    """Decorator to register a slash command handler."""
-
-    def decorator(fn: SlashHandler) -> SlashHandler:
-        _SLASH_REGISTRY[name] = fn
-        return fn
-
-    return decorator
-
-
-@_slash("/quit")
-@_slash("/exit")
-@_slash("/q")
-async def _slash_quit(line: str, *, agent: Agent, session_id: str, storage: Storage) -> bool:
-    console.print("[yellow]bye[/yellow]")
-    return False
-
-
-@_slash("/help")
-async def _slash_help(line: str, *, agent: Agent, session_id: str, storage: Storage) -> bool:
-    console.print(Panel(_HELP_TEXT.rstrip(), title="commands", expand=False))
-    return True
-
-
-@_slash("/tools")
-async def _slash_tools(line: str, *, agent: Agent, session_id: str, storage: Storage) -> bool:
-    table = Table(show_header=True, header_style="bold")
-    table.add_column("Tool")
-    table.add_column("Approval")
-    for tool in agent.tools.all():
-        effective = agent.approval_policy.decide(tool)
-        color = {"auto": "green", "prompt": "yellow", "deny": "red"}.get(effective, "white")
-        table.add_row(tool.name, f"[{color}]{effective}[/{color}]")
-    console.print(table)
-    return True
-
-
-@_slash("/session")
-async def _slash_session(line: str, *, agent: Agent, session_id: str, storage: Storage) -> bool:
-    session = await storage.get(session_id)
-    if session is None:
-        console.print(f"[dim]Session {session_id} (no turns yet)[/dim]")
-    else:
-        console.print(
-            f"[dim]Session {session_id}, status: {session.status}, "
-            f"{len(session.messages)} messages[/dim]"
-        )
-    return True
-
-
-@_slash("/diff")
-async def _slash_diff(line: str, *, agent: Agent, session_id: str, storage: Storage) -> bool:
-    activity = await storage.list_activity(session_id=session_id)  # type: ignore[attr-defined]
-    _render_session_diff(activity, console)
-    return True
-
-
-@_slash("/clear")
-async def _slash_clear(line: str, *, agent: Agent, session_id: str, storage: Storage) -> bool:
-    console.clear()
-    return True
-
-
-@_slash("/model")
-async def _slash_model(line: str, *, agent: Agent, session_id: str, storage: Storage) -> bool:
-    parts = line.split(None, 1)
-    if len(parts) == 1:
-        console.print(f"[dim]Active model: {agent.default_model}[/dim]")
-    else:
-        new_model = parts[1].strip()
-        agent.default_model = new_model
-        console.print(f"[green]Switched model to:[/green] {new_model}")
-    return True
-
-
-async def _handle_slash(line: str, *, agent: Agent, session_id: str, storage: Storage) -> bool:
-    """Dispatch a /command via the registry. Returns False to terminate the REPL."""
-    cmd = line.split(None, 1)[0].lower()
-    handler = _SLASH_REGISTRY.get(cmd)
-    if handler is None:
-        console.print(f"[red]Unknown command:[/red] {cmd}.  Try /help.")
-        return True
-    return await handler(line, agent=agent, session_id=session_id, storage=storage)
-
-
-# ---------------------------------------------------------------------------
-# Markdown preprocessing
-# ---------------------------------------------------------------------------
-
-_DOLLAR = re.escape("$")
-_MATH_DISPLAY = re.compile(_DOLLAR * 2 + r"(.+?)" + _DOLLAR * 2, re.DOTALL)
-_MATH_INLINE = re.compile(_DOLLAR + r"([^\n]+?)" + _DOLLAR)
-_THINK_BLOCK = re.compile(r"<think>(.*?)</think>", re.DOTALL | re.IGNORECASE)
-_MERMAID_FENCE = re.compile(r"```mermaid\n(.*?)\n```", re.DOTALL)
-
-_mermaid_render_cache: dict[str, str] = {}
-
-
-def _render_mermaid(source: str) -> str:
-    """Convert mermaid source to an ASCII-art fenced block.
-
-    Tries `mermaid_ascii.mermaid_to_ascii` (optional pip dep), then the
-    `mermaid-ascii -i -` subprocess, then falls back to a plain code block
-    so the diagram is still visible even without the optional dependency.
-    """
-    if source in _mermaid_render_cache:
-        return _mermaid_render_cache[source]
-
-    ascii_art: str | None = None
-    try:
-        from mermaid_ascii import mermaid_to_ascii  # type: ignore[import-untyped]  # optional
-
-        result = mermaid_to_ascii(source)
-        if result and result.strip():
-            ascii_art = result.strip()
-    except ImportError:
-        import shutil
-        import subprocess
-
-        if shutil.which("mermaid-ascii"):
-            try:
-                proc = subprocess.run(
-                    ["mermaid-ascii", "-i", "-"],
-                    input=source,
-                    capture_output=True,
-                    text=True,
-                    timeout=10,
-                )
-                if proc.returncode == 0 and proc.stdout.strip():
-                    ascii_art = proc.stdout.strip()
-            except Exception:
-                pass
-    except Exception:
-        pass
-
-    rendered = f"```\n{ascii_art}\n```" if ascii_art else f"```\n{source}\n```"
-    _mermaid_render_cache[source] = rendered
-    return rendered
-
-
-def _convert_math(inner: str) -> str:
-    """Convert the body of a $...$ or $$...$$ span via unicodeitplus."""
-    return _unicodeit.replace(inner)
-
-
-def _preprocess_markdown(text: str) -> str:
-    """Prepare LLM output for Rich Markdown rendering.
-
-    - Renders ```mermaid fences to ASCII art via mermaid_ascii (optional dep)
-    - Converts LaTeX math spans ($...$, $$...$$) to Unicode via unicodeitplus
-      (2 566-symbol table, handles subscripts/superscripts as Unicode chars)
-    - Wraps <think>...</think> blocks in a dim blockquote
-    """
-    # Mermaid diagrams — intercept complete fences before Markdown sees them
-    text = _MERMAID_FENCE.sub(lambda m: _render_mermaid(m.group(1)), text)
-    # Display math first ($$...$$) to avoid partial matches
-    text = _MATH_DISPLAY.sub(lambda m: f"`{_convert_math(m.group(1))}`", text)
-    # Inline math ($...$)
-    text = _MATH_INLINE.sub(lambda m: _convert_math(m.group(1)), text)
-    # <think>...</think> blocks from reasoning models
-    text = _THINK_BLOCK.sub(
-        lambda m: "> *thinking: " + m.group(1).strip().replace("\n", " ")[:200] + "…*\n",
-        text,
+    _run_chat_command(
+        model=model,
+        provider=provider,
+        base_url=base_url,
+        cwd=cwd,
+        db=db,
+        in_memory=in_memory,
+        session_id=session_id,
+        task_ref=task_ref,
+        max_steps=max_steps,
+        failover=failover,
+        yes=yes,
+        inbox=inbox,
+        verify=verify,
+        require_tools=require_tools,
+        max_context_tokens=max_context_tokens,
+        config_path=config_path,
+        auto_compact=auto_compact,
+        verbose=verbose,
+        console=console,
+        configure_logging=configure_logging,
+        load_cli_config=_load_cli_config,
+        resolve_chain=_resolve_chain,
+        run_async=_run_async,
+        build_storage=_build_storage,
+        resolve_task_attachment=_resolve_task_attachment,
+        build_verifier=_build_verifier,
+        build_adapter=_build_adapter,
+        build_agent=_build_agent,
+        render=_render,
+        render_session_diff=_render_session_diff,
+        default_system_prompt=_DEFAULT_SYSTEM_PROMPT,
     )
-    return text
-
-
-# ---------------------------------------------------------------------------
-# Rendering
-# ---------------------------------------------------------------------------
-
-
-class Renderer:
-    """Stateful event renderer.
-
-    Text deltas are buffered and rendered as Markdown in a live context so
-    the response updates in real-time while still applying syntax highlighting
-    and other rich formatting. Spinners run between ToolCallEvent and
-    ToolResultEvent; only one Live context is active at a time.
-    """
-
-    def __init__(self, con: Console) -> None:
-        self._console = con
-        self._live: Live | None = None
-        self._live_kind: str = ""  # "spinner" | "text"
-        self._pending_name: str = ""
-        self._pending_start: float = 0.0
-        self._text_buf: str = ""
-
-    def render(self, event: Any) -> None:
-        if isinstance(event, TextDelta):
-            self._stop_spinner()
-            self._text_buf += event.text
-            rendered = Markdown(_preprocess_markdown(self._text_buf))
-            if self._live is None:
-                self._live = Live(
-                    rendered,
-                    console=self._console,
-                    refresh_per_second=12,
-                    vertical_overflow="visible",
-                )
-                self._live_kind = "text"
-                self._live.start()
-            else:
-                self._live.update(rendered)
-        elif isinstance(event, ToolCallEvent):
-            self._flush_text()
-            self._console.print()
-            self._console.print(
-                f"[blue]→[/blue] [bold]{event.call.name}[/bold]({_args_preview(event.call.arguments)})",
-                style="dim",
-            )
-            self._start_spinner(event.call.name)
-        elif isinstance(event, ToolResultEvent):
-            elapsed = time.monotonic() - self._pending_start if self._pending_start else 0.0
-            self._stop_spinner()
-            marker = "[red]✗[/red]" if event.result.is_error else "[green]✓[/green]"
-            full_len = len(event.result.content)
-            preview = _truncate(event.result.content, 200)
-            suffix = f"  [dim]… {full_len:,} bytes[/dim]" if full_len > 200 else ""
-            self._console.print(
-                f"{marker} {event.result.name}: {preview}{suffix}  [dim]({elapsed:.1f}s)[/dim]",
-                style="dim",
-            )
-        elif isinstance(event, StepStarted):
-            self._flush_text()
-            if event.total_steps > 1:
-                label = f"Step {event.step + 1}/{event.total_steps}"
-                if event.description:
-                    label += f": {event.description}"
-                self._console.print(f"\n[bold blue]●[/bold blue] {label}")
-        elif isinstance(event, StepCompleted):
-            pass
-        elif isinstance(event, ErrorEvent):
-            self._stop_spinner()
-            self._flush_text()
-            self._console.print()
-            self._console.print(f"[red]Error ({event.kind}):[/red] {event.error}")
-        elif isinstance(event, Verification):
-            self._flush_text()
-            r = event.result
-            marker = "[green]✓[/green]" if r.can_finish else "[red]✗[/red]"
-            conf = (
-                f"  [dim](confidence {r.confidence:.2f})[/dim]" if r.confidence is not None else ""
-            )
-            self._console.print()
-            self._console.print(
-                f"{marker} [bold]verify[/bold] ({r.verifier_name})  {r.reason}{conf}"
-            )
-        elif isinstance(event, Critique):
-            self._flush_text()
-            self._console.print()
-            self._console.print(
-                f"[yellow bold]critic[/yellow bold] [dim](attempt {event.attempt})[/dim]"
-            )
-            for line in event.text.splitlines():
-                self._console.print(f"  [yellow]{line}[/yellow]")
-            self._console.print()
-        elif isinstance(event, PhaseStartedEvent):
-            self._flush_text()
-            position = f" {event.index + 1}/{event.total}" if event.total > 1 else ""
-            note = f"  [dim]{event.notes}[/dim]" if event.notes else ""
-            self._console.print(f"[cyan]▶ phase{position}: {event.name}[/cyan]{note}")
-        elif isinstance(event, PhaseCompletedEvent):
-            self._flush_text()
-            position = f" {event.index + 1}/{event.total}" if event.total > 1 else ""
-            note = f"  [dim]{event.notes}[/dim]" if event.notes else ""
-            self._console.print(f"[green]✓ phase{position}: {event.name}[/green]{note}")
-        elif isinstance(event, PredictionEvent):
-            p = event.prediction
-            scope = p.effect_scope or "unknown"
-            self._console.print(
-                f"[dim]  ⟳ predict scope={scope} confidence={p.confidence:.2f} "
-                f"expected={p.expected_status} reversibility={p.reversibility}[/dim]"
-            )
-        elif isinstance(event, PredictionMismatchEvent):
-            o = event.outcome
-            self._console.print(
-                f"[yellow]  ⚠ mismatch severity={o.severity} actual={o.actual_status} "
-                f"lesson={o.lesson}[/yellow]"
-            )
-        elif isinstance(event, Done):
-            self._stop_spinner()
-            self._flush_text()
-            self._console.print()
-            if event.usage:
-                u = event.usage
-                self._console.print(
-                    f"[dim]tokens: {u.prompt_tokens:,} in / {u.completion_tokens:,} out[/dim]"
-                )
-
-    def _flush_text(self) -> None:
-        """Stop the text Live context (leaving rendered markdown on screen) and reset buffer."""
-        if self._live is not None and self._live_kind == "text":
-            self._live.stop()
-            self._live = None
-            self._live_kind = ""
-        self._text_buf = ""
-
-    def _start_spinner(self, name: str) -> None:
-        self._pending_name = name
-        self._pending_start = time.monotonic()
-        self._live = Live(
-            Spinner("dots", text=f"[dim]{name}[/dim]"),
-            console=self._console,
-            refresh_per_second=10,
-            transient=True,
-        )
-        self._live_kind = "spinner"
-        self._live.start()
-
-    def _stop_spinner(self) -> None:
-        if self._live is not None and self._live_kind == "spinner":
-            self._live.stop()
-            self._live = None
-            self._live_kind = ""
-        self._pending_start = 0.0
 
 
 _renderer = Renderer(console)
@@ -3078,280 +1371,6 @@ _renderer = Renderer(console)
 
 def _render(event: Any) -> None:
     _renderer.render(event)
-
-
-async def _print_defense_ledger(storage: Storage, session_id: str | None) -> None:
-    """List the activity ledger for the just-completed run and print a summary.
-
-    If `session_id` was supplied to the run, filter to that session. Otherwise
-    grab the most recent session from storage (the one we just created) and
-    filter to it. Failures here must not bubble up — the ledger is observability,
-    not control flow.
-    """
-    try:
-        target_session_id = session_id
-        if target_session_id is None:
-            sessions = await storage.list(limit=1)  # type: ignore[attr-defined]
-            if sessions:
-                target_session_id = sessions[0].id
-        activity_store: Any = storage
-        if target_session_id is not None:
-            events = await activity_store.list_activity(session_id=target_session_id, limit=500)
-        else:
-            events = await activity_store.list_activity(limit=500)
-        ledger = build_ledger(events)
-        if ledger.is_empty():
-            return
-        console.print(f"\n[dim]{format_ledger(ledger)}[/dim]")
-    except Exception as exc:
-        console.print(f"[dim]defense ledger unavailable: {exc!s}[/dim]")
-
-
-def _render_session_diff(activity: list[ActivityEvent], con: Console) -> None:
-    file_events = [
-        e
-        for e in activity
-        if e.kind == "tool_call.completed"
-        and e.data.get("name") in ("write_file", "edit_file")
-        and not e.data.get("is_error")
-    ]
-    shell_events = [
-        e
-        for e in activity
-        if e.kind == "tool_call.completed"
-        and e.data.get("name") == "shell"
-        and not e.data.get("is_error")
-    ]
-
-    if not file_events and not shell_events:
-        con.print("[dim]No file changes in this session.[/dim]")
-        return
-
-    for e in file_events:
-        meta = e.data.get("metadata") or {}
-        path = meta.get("path", "?")
-        before = (meta.get("content_before") or "").splitlines(keepends=True)
-        after = (meta.get("content_after") or "").splitlines(keepends=True)
-        diff = list(difflib.unified_diff(before, after, fromfile=f"a/{path}", tofile=f"b/{path}"))
-        con.rule(f"[bold]{e.data.get('name')}  {path}[/bold]")
-        if diff:
-            for line in diff:
-                style = (
-                    "green" if line.startswith("+") else "red" if line.startswith("-") else "dim"
-                )
-                con.print(line.rstrip(), style=style, highlight=False)
-        else:
-            con.print("[dim](no diff — content not captured)[/dim]")
-
-    if shell_events:
-        con.rule("[bold]shell[/bold]")
-        for e in shell_events:
-            meta = e.data.get("metadata") or {}
-            cmd = (e.data.get("arguments") or {}).get("command", "?")
-            con.print(f"  [dim]{cmd}[/dim]  exit_code={meta.get('exit_code', '?')}")
-
-
-def _render_session(session: Session) -> None:
-    header = (
-        f"[bold]{session.id}[/bold]  "
-        f"{_status_style(session.status)}  "
-        f"{session.provider}/{session.model}\n"
-        f"[dim]created {_ago(session.created_at)}, updated {_ago(session.updated_at)}[/dim]\n"
-        f"[dim]cwd: {session.cwd}[/dim]"
-    )
-    console.print(Panel(header, title="session", expand=False))
-
-    for msg in session.messages:
-        if msg.role == "user":
-            console.print(Panel(msg.content or "", title="[cyan]user[/cyan]", expand=False))
-        elif msg.role == "system":
-            console.print(Panel(msg.content or "", title="[grey]system[/grey]", expand=False))
-        elif msg.role == "assistant":
-            parts: list[str] = []
-            if msg.content:
-                parts.append(msg.content)
-            if msg.tool_calls:
-                for tc in msg.tool_calls:
-                    parts.append(
-                        f"→ {tc.name}({_args_preview(tc.arguments)})  [dim]({tc.id})[/dim]"
-                    )
-            console.print(
-                Panel(
-                    "\n".join(parts) or "[dim](empty turn)[/dim]",
-                    title="[green]assistant[/green]",
-                    expand=False,
-                )
-            )
-        elif msg.role == "tool":
-            console.print(
-                Panel(
-                    msg.content or "",
-                    title=f"[yellow]tool: {msg.name}[/yellow]  [dim]({msg.tool_call_id})[/dim]",
-                    expand=False,
-                )
-            )
-
-
-# ---------------------------------------------------------------------------
-# Formatting helpers
-# ---------------------------------------------------------------------------
-
-
-_STATUS_STYLES = {
-    "pending": "white",
-    "running": "blue",
-    "paused": "yellow",
-    "done": "green",
-    "failed": "red",
-    "cancelled": "magenta",
-}
-
-
-def _status_style(status: str) -> str:
-    color = _STATUS_STYLES.get(status, "white")
-    return f"[{color}]{status}[/{color}]"
-
-
-_APPROVAL_STATUS_STYLES = {
-    "pending": "yellow",
-    "granted": "green",
-    "denied": "red",
-}
-
-
-def _approval_status_style(status: str) -> str:
-    color = _APPROVAL_STATUS_STYLES.get(status, "white")
-    return f"[{color}]{status}[/{color}]"
-
-
-def _render_approval(approval: PendingApproval) -> None:
-    lines = [
-        f"[bold]{approval.id}[/bold]  {_approval_status_style(approval.status)}  "
-        f"{approval.tool_name}",
-        f"[dim]session: {approval.session_id}[/dim]",
-    ]
-    if approval.task_id:
-        lines.append(f"[dim]task: {approval.task_id}[/dim]")
-    lines.append(f"[dim]tool_call_id: {approval.tool_call_id}[/dim]")
-    lines.append(f"[dim]requested {_ago(approval.requested_at)}[/dim]")
-    if approval.resolved_at:
-        lines.append(
-            f"[dim]resolved {_ago(approval.resolved_at)} by {approval.resolved_by or '—'}[/dim]"
-        )
-    if approval.replayed_at:
-        lines.append(f"[dim]replayed {_ago(approval.replayed_at)}[/dim]")
-    console.print(Panel("\n".join(lines), title="approval", expand=False))
-
-    if approval.arguments:
-        import json as _json
-
-        console.print(
-            Panel(
-                _json.dumps(approval.arguments, indent=2),
-                title="[blue]arguments[/blue]",
-                expand=False,
-            )
-        )
-
-
-_TASK_STATUS_STYLES = {
-    "backlog": "white",
-    "todo": "cyan",
-    "in_progress": "blue",
-    "waiting": "yellow",
-    "done": "green",
-    "cancelled": "magenta",
-}
-
-
-def _task_status_style(status: str) -> str:
-    color = _TASK_STATUS_STYLES.get(status, "white")
-    return f"[{color}]{status}[/{color}]"
-
-
-def _render_task(task: Task, events: list[ActivityEvent]) -> None:
-    """Render a task header + body + activity timeline."""
-    header_lines = [
-        f"[bold]{task.ref}[/bold]  {_task_status_style(task.status)}  {task.title}",
-        f"[dim]created {_ago(task.created_at)}, updated {_ago(task.updated_at)}[/dim]",
-        f"[dim]cwd: {task.cwd}[/dim]",
-    ]
-    if task.priority:
-        header_lines.append(f"[dim]priority: {task.priority}[/dim]")
-    if task.labels:
-        header_lines.append(f"[dim]labels: {', '.join(task.labels)}[/dim]")
-    if task.parent_id:
-        header_lines.append(f"[dim]parent: {task.parent_id}[/dim]")
-    console.print(Panel("\n".join(header_lines), title="task", expand=False))
-
-    if task.description:
-        console.print(Panel(task.description, title="[cyan]description[/cyan]", expand=False))
-
-    if task.links:
-        link_lines = [f"{link.relation:<12} → {link.target_ref}" for link in task.links]
-        console.print(Panel("\n".join(link_lines), title="[blue]links[/blue]", expand=False))
-
-    if task.session_ids:
-        console.print(
-            Panel(
-                "\n".join(task.session_ids),
-                title=f"[magenta]sessions ({len(task.session_ids)})[/magenta]",
-                expand=False,
-            )
-        )
-
-    if events:
-        lines = [
-            f"[dim]{e.timestamp.isoformat(timespec='seconds')}[/dim]  "
-            f"[bold]{e.kind}[/bold]  {_compact_event_data(e.data)}"
-            for e in events
-        ]
-        console.print(
-            Panel(
-                "\n".join(lines),
-                title=f"[yellow]activity ({len(events)})[/yellow]",
-                expand=False,
-            )
-        )
-
-
-def _compact_event_data(data: dict) -> str:
-    if not data:
-        return ""
-    parts = []
-    for k, v in data.items():
-        if isinstance(v, str) and len(v) > 60:
-            v = v[:57] + "…"
-        parts.append(f"{k}={v}")
-    return " ".join(parts)
-
-
-def _ago(dt: datetime) -> str:
-    now = datetime.now(UTC)
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=UTC)
-    delta = now - dt
-    seconds = int(delta.total_seconds())
-    if seconds < 60:
-        return f"{seconds}s ago"
-    if seconds < 3600:
-        return f"{seconds // 60}m ago"
-    if seconds < 86400:
-        return f"{seconds // 3600}h ago"
-    return f"{seconds // 86400}d ago"
-
-
-def _args_preview(args: dict) -> str:
-    if not args:
-        return ""
-    parts = [f"{k}={_truncate(repr(v), 40)}" for k, v in args.items()]
-    return ", ".join(parts)
-
-
-def _truncate(s: str, limit: int) -> str:
-    if len(s) <= limit:
-        return s
-    return s[: limit - 1] + "…"
 
 
 # ---------------------------------------------------------------------------
@@ -3376,43 +1395,24 @@ def goal(
     config_path: Annotated[Path | None, typer.Option("--config")] = None,
     verbose: Annotated[bool, typer.Option("--verbose", "-v")] = False,
 ) -> None:
-    """Run a multi-step goal: the LLM plans first, then executes each step."""
-    configure_logging(level="DEBUG" if verbose else "INFO")
-
-    cfg = _load_cli_config(config_path)
-    chain = _resolve_chain(failover_flag=None, provider_flag=provider, config=cfg)
-    effective_model = model or cfg.default_model or "llama3.2"
-
-    working_dir = (cwd or Path.cwd()).resolve()
-    if not working_dir.exists() or not working_dir.is_dir():
-        console.print(f"[red]--cwd does not exist or is not a directory: {working_dir}[/red]")
-        raise typer.Exit(2)
-
-    try:
-        _run_async(
-            _run_once(
-                prompt=prompt,
-                model=effective_model,
-                chain=chain,
-                base_url=base_url,
-                cwd=working_dir,
-                max_steps=max_steps,
-                max_output_tokens=None,
-                session_id=None,
-                task_ref=None,
-                db=db,
-                in_memory=in_memory,
-                yes=yes,
-                inbox=False,
-                verify=None,
-                goal=True,
-                max_context_tokens=None,
-                config=cfg,
-            )
-        )
-    except KeyboardInterrupt:
-        console.print("\n[yellow]Cancelled by user.[/yellow]")
-        raise typer.Exit(130) from None
+    _run_goal_command(
+        prompt=prompt,
+        model=model,
+        provider=provider,
+        base_url=base_url,
+        cwd=cwd,
+        max_steps=max_steps,
+        db=db,
+        in_memory=in_memory,
+        yes=yes,
+        config_path=config_path,
+        verbose=verbose,
+        console=console,
+        load_cli_config=_load_cli_config,
+        resolve_chain=_resolve_chain,
+        run_async=_run_async,
+        run_once=_run_once,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -3427,30 +1427,7 @@ def init(
         typer.Option("--cwd", help="Directory to initialise (default: current directory)."),
     ] = None,
 ) -> None:
-    """Initialise a workspace-local Harness database in .harness/harness.db."""
-    working_dir = (cwd or Path.cwd()).resolve()
-    harness_dir = working_dir / ".harness"
-    db_path = harness_dir / "harness.db"
-
-    if db_path.exists():
-        console.print(f"[dim]Already initialised at [/dim]{db_path}[dim] — nothing to do.[/dim]")
-        return
-
-    harness_dir.mkdir(parents=True, exist_ok=True)
-    # Touch the db so SQLiteStorage picks it up next time.
-    db_path.touch()
-    console.print(
-        f"[green]Initialized[/green] harness workspace at {harness_dir}"
-        "\n[dim]Future commands run from this directory will use .harness/harness.db[/dim]"
-    )
-
-    gitignore = working_dir / ".gitignore"
-    if gitignore.exists():
-        content = gitignore.read_text()
-        if ".harness/" not in content:
-            console.print(
-                "\n[dim]Tip: add [/dim].harness/[dim] to .gitignore to keep the db local.[/dim]"
-            )
+    _init_workspace(cwd=cwd, console=console)
 
 
 # ---------------------------------------------------------------------------
@@ -3472,25 +1449,15 @@ def memory_save(
     db: Annotated[Path | None, typer.Option("--db")] = None,
     in_memory: Annotated[bool, typer.Option("--in-memory")] = False,
 ) -> None:
-    """Save a new memory entry."""
-    _VALID_KINDS = {"user_preference", "user_fact", "project_fact", "project_context"}
-    if kind not in _VALID_KINDS:
-        console.print(
-            f"[red]Invalid --kind:[/red] {kind!r}. Choose from: {', '.join(sorted(_VALID_KINDS))}"
-        )
-        raise typer.Exit(1)
-
-    async def _go() -> None:
-        storage = _build_storage(db=db, in_memory=in_memory)
-        try:
-            entry = MemoryEntry(kind=kind, text=text)  # type: ignore[arg-type]
-            saved = await storage.save_memory(entry)  # type: ignore[attr-defined]
-            console.print(f"[green]Saved[/green] {saved.id}  ({saved.kind})  {saved.text}")
-        finally:
-            if isinstance(storage, SQLiteStorage):
-                await storage.close()
-
-    _run_async(_go())
+    _memory_save_command(
+        text=text,
+        kind=kind,
+        db=db,
+        in_memory=in_memory,
+        console=console,
+        build_storage=_build_storage,
+        run_async=_run_async,
+    )
 
 
 @memory_app.command("list")
@@ -3503,35 +1470,16 @@ def memory_list(
     db: Annotated[Path | None, typer.Option("--db")] = None,
     in_memory: Annotated[bool, typer.Option("--in-memory")] = False,
 ) -> None:
-    """List stored memory entries."""
-    _VALID_KINDS = {"user_preference", "user_fact", "project_fact", "project_context"}
-    if kind is not None and kind not in _VALID_KINDS:
-        console.print(f"[red]Invalid --kind:[/red] {kind!r}")
-        raise typer.Exit(1)
-
-    async def _go() -> None:
-        storage = _build_storage(db=db, in_memory=in_memory)
-        try:
-            entries = await storage.list_memory(  # type: ignore[attr-defined]
-                kind=kind,
-                limit=limit,  # type: ignore[arg-type]
-            )
-            if not entries:
-                console.print("[dim]No memories stored.[/dim]")
-                return
-            table = Table(title="Memories", show_header=True)
-            table.add_column("ID", no_wrap=True)
-            table.add_column("Kind")
-            table.add_column("Text")
-            table.add_column("Created")
-            for e in entries:
-                table.add_row(e.id, e.kind, e.text, _ago(e.created_at))
-            console.print(table)
-        finally:
-            if isinstance(storage, SQLiteStorage):
-                await storage.close()
-
-    _run_async(_go())
+    _memory_list_command(
+        kind=kind,
+        limit=limit,
+        db=db,
+        in_memory=in_memory,
+        console=console,
+        build_storage=_build_storage,
+        run_async=_run_async,
+        ago=_ago,
+    )
 
 
 @memory_app.command("search")
@@ -3541,28 +1489,16 @@ def memory_search(
     db: Annotated[Path | None, typer.Option("--db")] = None,
     in_memory: Annotated[bool, typer.Option("--in-memory")] = False,
 ) -> None:
-    """Search memory entries by text."""
-
-    async def _go() -> None:
-        storage = _build_storage(db=db, in_memory=in_memory)
-        try:
-            entries = await storage.search_memory(query, limit=limit)  # type: ignore[attr-defined]
-            if not entries:
-                console.print("[dim]No matches.[/dim]")
-                return
-            table = Table(title=f"Memory search: {query!r}", show_header=True)
-            table.add_column("ID", no_wrap=True)
-            table.add_column("Kind")
-            table.add_column("Text")
-            table.add_column("Created")
-            for e in entries:
-                table.add_row(e.id, e.kind, e.text, _ago(e.created_at))
-            console.print(table)
-        finally:
-            if isinstance(storage, SQLiteStorage):
-                await storage.close()
-
-    _run_async(_go())
+    _memory_search_command(
+        query=query,
+        limit=limit,
+        db=db,
+        in_memory=in_memory,
+        console=console,
+        build_storage=_build_storage,
+        run_async=_run_async,
+        ago=_ago,
+    )
 
 
 @memory_app.command("rm")
@@ -3572,121 +1508,20 @@ def memory_rm(
     in_memory: Annotated[bool, typer.Option("--in-memory")] = False,
     yes: Annotated[bool, typer.Option("--yes", "-y", help="Skip confirmation.")] = False,
 ) -> None:
-    """Delete a memory entry by ID."""
-
-    async def _go() -> None:
-        storage = _build_storage(db=db, in_memory=in_memory)
-        try:
-            existing = await storage.list_memory(limit=1000)  # type: ignore[attr-defined]
-            match = next((e for e in existing if e.id == entry_id), None)
-            if match is None:
-                console.print(f"[red]Memory not found:[/red] {entry_id}")
-                raise typer.Exit(1)
-            if not yes:
-                confirmed = Confirm.ask(f"Delete memory {entry_id!r}?")
-                if not confirmed:
-                    raise typer.Abort()
-            await storage.delete_memory(entry_id)  # type: ignore[attr-defined]
-            console.print(f"[green]Deleted[/green] {entry_id}")
-        finally:
-            if isinstance(storage, SQLiteStorage):
-                await storage.close()
-
-    _run_async(_go())
+    _memory_rm_command(
+        entry_id=entry_id,
+        db=db,
+        in_memory=in_memory,
+        yes=yes,
+        console=console,
+        build_storage=_build_storage,
+        run_async=_run_async,
+    )
 
 
 # ---------------------------------------------------------------------------
 # lab subcommands — multi-agent orchestration
 # ---------------------------------------------------------------------------
-
-
-_ROLE_COLORS = {
-    "planner": "blue",
-    "reporter": "green",
-}
-
-
-def _role_color(role: str) -> str:
-    if role.startswith("worker"):
-        return "cyan"
-    return _ROLE_COLORS.get(role, "white")
-
-
-class LabRenderer:
-    """Renders OrchestratorEvent stream with role-color coding."""
-
-    def __init__(self, con: Console) -> None:
-        self._console = con
-        self._text_bufs: dict[str, str] = {}
-
-    def render(self, event: object) -> None:
-        if isinstance(event, AgentStartedEvent):
-            color = _role_color(event.role)
-            self._console.print(f"[{color}]▶ {event.role}[/{color}]")
-        elif isinstance(event, AgentDoneEvent):
-            color = _role_color(event.role)
-            # Flush any buffered text for this role
-            buf = self._text_bufs.pop(event.role, "").strip()
-            if buf:
-                self._console.print(f"  [{color}][{event.role}][/{color}] {buf}")
-            self._console.print(
-                f"[{color}]✓ {event.role} done ({event.turn_count} turns)[/{color}]"
-            )
-        elif isinstance(event, WorkItemCreatedEvent):
-            self._console.print(f"[dim]  + {event.task_ref} {event.title}[/dim]")
-        elif isinstance(event, WorkItemClaimedEvent):
-            self._console.print(f"[cyan]  → claimed {event.task_ref}[/cyan]")
-        elif isinstance(event, WorkItemCompletedEvent):
-            self._console.print(f"[cyan]  ✓ completed {event.task_ref}[/cyan]")
-        elif isinstance(event, WorkItemVerifiedEvent):
-            conf_str = f" ({event.confidence:.0%})" if event.confidence is not None else ""
-            self._console.print(f"[green]  ✓ {event.task_ref} verified{conf_str}[/green]")
-        elif isinstance(event, WorkItemRejectedEvent):
-            self._console.print(
-                f"[yellow]  ✗ {event.task_ref} rejected"
-                f" (attempt {event.attempt}): {event.reason}[/yellow]"
-            )
-        elif isinstance(event, WorkItemOrphanedEvent):
-            self._console.print(
-                f"[yellow]  ~ {event.task_ref} orphaned"
-                f" (attempt {event.attempt}) — re-queued[/yellow]"
-            )
-        elif isinstance(event, PlanRejectedEvent):
-            self._console.print(
-                f"[red]  ✗ plan rejected (attempt {event.attempt}): {event.reason}[/red]"
-            )
-        elif isinstance(event, AgentEventWrapper):
-            self._render_wrapped(event.role, event.event)
-
-    def _render_wrapped(self, role: str, event: object) -> None:
-        color = _role_color(role)
-        prefix = f"  [{color}][{role}][/{color}]"
-        if isinstance(event, TextDelta):
-            self._text_bufs.setdefault(role, "")
-            self._text_bufs[role] += event.text
-        elif isinstance(event, Done):
-            buf = self._text_bufs.pop(role, "").strip()
-            if buf:
-                # Print each line with role prefix
-                for line in buf.splitlines():
-                    if line.strip():
-                        self._console.print(f"{prefix} {line}")
-            if event.usage:
-                u = event.usage
-                self._console.print(
-                    f"{prefix} [dim]tokens: {u.prompt_tokens:,}in / {u.completion_tokens:,}out[/dim]"
-                )
-        elif isinstance(event, ToolCallEvent):
-            self._console.print(
-                f"{prefix} [dim]→ [bold]{event.call.name}[/bold]"
-                f"({_args_preview(event.call.arguments)})[/dim]"
-            )
-        elif isinstance(event, ToolResultEvent):
-            marker = "[red]✗[/red]" if event.result.is_error else "[green]✓[/green]"
-            preview = _truncate(event.result.content, 120)
-            self._console.print(f"{prefix} [dim]{marker} {event.result.name}: {preview}[/dim]")
-        elif isinstance(event, ErrorEvent):
-            self._console.print(f"{prefix} [red]error ({event.kind}):[/red] {event.error}")
 
 
 @lab_app.command("run")
@@ -3750,162 +1585,30 @@ def lab_run(
     ] = None,
 ) -> None:
     """Run a multi-agent job: planner decomposes, workers execute in parallel, reporter synthesizes."""
-
-    async def _run() -> None:
-        cfg = _load_cli_config(config_path)
-        working_dir = (cwd or Path.cwd()).resolve()
-        resolved_provider = provider or cfg.default_provider or "ollama"
-        resolved_model = model or cfg.default_model or "llama3.2"
-
-        if db is not None:
-            from harness.storage.sqlite import SQLiteStorage
-
-            storage: InMemoryStorage = SQLiteStorage(path=db)  # type: ignore[assignment]
-        else:
-            storage = InMemoryStorage()
-        worker_budget = (
-            ContextBudget(max_tokens=max_context_tokens) if max_context_tokens is not None else None
-        )
-        renderer = LabRenderer(console)
-
-        def agent_factory(role: AgentRole) -> Agent:
-            job_id = role.job_id or "_job_"
-            item_id = role.item_id or "_item_"
-
-            tools = ToolRegistry()
-
-            if role.name == "planner":
-                # Planner only sees queue tools — no filesystem access to prevent drift
-                tools.register(CreateWorkItemTool(storage, parent_id=job_id, cwd=working_dir))
-                tools.register(ListWorkItemsTool(storage, job_id))
-            elif role.name.startswith("worker"):
-                tools.register(ReadFileTool(cwd=working_dir))
-                tools.register(ListDirTool(cwd=working_dir))
-                tools.register(GlobTool(cwd=working_dir))
-                tools.register(WriteFileTool(cwd=working_dir))
-                tools.register(EditFileTool(cwd=working_dir))
-                tools.register(ShellTool(cwd=working_dir))
-                tools.register(TavilySearchTool())
-                tools.register(FetchUrlTool())
-                tools.register(ListWorkItemsTool(storage, job_id))
-                tools.register(CompleteWorkItemTool(storage, item_id))
-            else:
-                # reporter: read-only + queue listing
-                tools.register(ReadFileTool(cwd=working_dir))
-                tools.register(ListDirTool(cwd=working_dir))
-                tools.register(GlobTool(cwd=working_dir))
-                tools.register(ListWorkItemsTool(storage, job_id))
-
-            adapters = {
-                resolved_provider: _build_adapter(resolved_provider, base_url=None, config=cfg)
-            }
-            return Agent(
-                adapters=adapters,
-                tools=tools,
-                storage=storage,
-                failover=FailoverPolicy(chain=[resolved_provider]),
-                approval_policy=ApprovalPolicy(default="auto"),
-                approval_handler=AutoApprove(),
-                activity_store=storage,  # type: ignore[arg-type]
-                approval_store=storage,  # type: ignore[arg-type]
-                memory_store=storage,  # type: ignore[arg-type]
-                default_model=role.model or resolved_model,
-                default_cwd=str(working_dir),
-                system_prompt=role.system_prompt,
-                predictor=ConsequencePredictor(),
-                repair=RepairOrchestrator(),
-                budget=worker_budget if role.name.startswith("worker") else None,
-            )
-
-        resolved_planner_model = planner_model or resolved_model
-        resolved_worker_model = worker_model or resolved_model
-        resolved_reporter_model = reporter_model or resolved_model
-
-        planner_role = AgentRole(
-            name="planner",
-            model=resolved_planner_model,
-            system_prompt=(
-                "You are a Planner. Your ONLY job is to decompose the user's task into "
-                "independent work items using create_work_item.\n\n"
-                "Rules:\n"
-                "1. Read the task carefully. Each work item must be completable on its own "
-                "without depending on the output of another work item.\n"
-                "2. Use as few work items as possible — prefer 1-3 self-contained items over "
-                "4+ sequential steps. If the task can be done in one item, use one.\n"
-                "3. Do NOT read files, run commands, or do any work yourself.\n"
-                "4. Once you have called create_work_item for each sub-task, stop immediately."
-            ),
-        )
-        worker_role = AgentRole(
-            name="worker",
-            model=resolved_worker_model,
-            max_steps=max_steps,
-            system_prompt=(
-                "You are a Worker. Complete the assigned work item using tools.\n\n"
-                "1. Read the work item title and description.\n"
-                "2. Use the minimum tools needed to complete it.\n"
-                "3. Call complete_work_item(summary=...) as soon as the work is done. "
-                "The summary must describe what you actually did (file names, commands run, "
-                "results computed) — not just 'task completed'.\n\n"
-                "CRITICAL: Call complete_work_item as a tool call, not as plain text. "
-                "Do NOT write 'complete_work_item(...)' in your response — call it as a tool. "
-                "Do not loop or re-read files unnecessarily. Stay focused."
-            ),
-        )
-        reporter_role = AgentRole(
-            name="reporter",
-            model=resolved_reporter_model,
-            system_prompt=(
-                "You are a Reporter. Synthesize the completed work items into a clear, "
-                "concise final report for the user."
-            ),
-        )
-
-        judge_adapter = _build_adapter(resolved_provider, base_url=None, config=cfg)
-        work_item_judge: WorkItemJudge | None = None
-        if not no_judge:
-            work_item_judge = WorkItemJudge(
-                adapter=judge_adapter,
-                model=resolved_planner_model,
-            )
-
-        orchestrator = MultiAgentOrchestrator(
-            agent_factory=agent_factory,
-            store=storage,
-            planner_role=planner_role,
-            worker_role=worker_role,
-            reporter_role=reporter_role,
-            max_workers=workers,
-            max_worker_steps=max_steps,
-            job_cwd=working_dir,
-            provider=resolved_provider,
-            model=resolved_model,
-            work_item_judge=work_item_judge,
-            activity_store=storage,
-        )
-
-        console.print(f"[bold]harness lab run[/bold] — {workers} workers  max-steps={max_steps}")
-        if resolved_planner_model == resolved_worker_model == resolved_reporter_model:
-            console.print(
-                f"[dim]provider=[/dim]{resolved_provider}  [dim]model=[/dim]{resolved_model}"
-            )
-        else:
-            console.print(
-                f"[dim]provider=[/dim]{resolved_provider}  "
-                f"[dim]planner=[/dim]{resolved_planner_model}  "
-                f"[dim]worker=[/dim]{resolved_worker_model}  "
-                f"[dim]reporter=[/dim]{resolved_reporter_model}"
-            )
-        console.print()
-
-        try:
-            async for event in orchestrator.run(prompt):
-                renderer.render(event)
-        finally:
-            if hasattr(storage, "close"):
-                await storage.close()  # type: ignore[attr-defined]
-
-    _run_async(_run())
+    _lab_run_command(
+        prompt=prompt,
+        provider=provider,
+        model=model,
+        workers=workers,
+        yes=yes,
+        cwd=cwd,
+        config_path=config_path,
+        no_judge=no_judge,
+        db=db,
+        max_context_tokens=max_context_tokens,
+        max_steps=max_steps,
+        planner_model=planner_model,
+        worker_model=worker_model,
+        reporter_model=reporter_model,
+        console=console,
+        load_cli_config=_load_cli_config,
+        build_adapter=_build_adapter,
+        run_async=_run_async,
+        args_preview=_args_preview,
+        truncate=_truncate,
+        orchestrator_cls=MultiAgentOrchestrator,
+        work_item_judge_cls=WorkItemJudge,
+    )
 
 
 @lab_app.command("status")
@@ -3917,39 +1620,7 @@ def lab_status(
     ] = Path("harness.db"),
 ) -> None:
     """Show work item status for a job stored in a SQLite database."""
-
-    async def _run() -> None:
-        from harness.storage.sqlite import SQLiteStorage
-
-        storage = SQLiteStorage(path=db)
-        try:
-            items = await storage.list_tasks(parent_id=job_id)
-            if not items:
-                console.print(f"[yellow]No work items found for job {job_id!r}[/yellow]")
-                return
-
-            status_colors = {
-                "todo": "white",
-                "in_progress": "cyan",
-                "done": "green",
-                "cancelled": "red",
-            }
-
-            console.print(f"[bold]Job {job_id}[/bold] — {len(items)} work items\n")
-            for item in sorted(items, key=lambda t: t.created_at):
-                color = status_colors.get(item.status, "white")
-                summary = item.metadata.get("result_summary", "")
-                summary_str = f"  [dim]{summary[:80]}[/dim]" if summary else ""
-                retries = item.metadata.get("_judge_retries", 0)
-                retry_str = f" [yellow](retried {retries}x)[/yellow]" if retries else ""
-                console.print(
-                    f"  [{color}]{item.status:12}[/{color}] {item.ref or item.id[:8]}  {item.title}"
-                    f"{retry_str}{summary_str}"
-                )
-        finally:
-            await storage.close()
-
-    _run_async(_run())
+    _lab_status_command(job_id=job_id, db=db, console=console, run_async=_run_async)
 
 
 @lab_app.command("list")
@@ -3960,40 +1631,7 @@ def lab_list(
     ] = Path("harness.db"),
 ) -> None:
     """List all jobs in a SQLite database."""
-
-    async def _run() -> None:
-        from harness.storage.sqlite import SQLiteStorage
-
-        storage = SQLiteStorage(path=db)
-        try:
-            # Root tasks have no parent_id
-            all_tasks = await storage.list_tasks(parent_id=None)
-            jobs = [t for t in all_tasks if t.parent_id is None]
-            if not jobs:
-                console.print("[yellow]No jobs found.[/yellow]")
-                return
-
-            status_colors = {
-                "todo": "white",
-                "in_progress": "cyan",
-                "done": "green",
-                "cancelled": "red",
-            }
-
-            for job in sorted(jobs, key=lambda t: t.created_at, reverse=True):
-                color = status_colors.get(job.status, "white")
-                items = await storage.list_tasks(parent_id=job.id)
-                done_count = sum(1 for t in items if t.status == "done")
-                total_count = len(items)
-                ts = job.created_at.strftime("%Y-%m-%d %H:%M")
-                console.print(
-                    f"[{color}]{job.status:12}[/{color}]  {job.id[:16]}  "
-                    f"[dim]{ts}[/dim]  {done_count}/{total_count} items  {job.title[:60]}"
-                )
-        finally:
-            await storage.close()
-
-    _run_async(_run())
+    _lab_list_command(db=db, console=console, run_async=_run_async)
 
 
 @lab_app.command("resume")
@@ -4037,160 +1675,31 @@ def lab_resume(
     ] = None,
 ) -> None:
     """Resume an interrupted job from a SQLite database, skipping already-done work items."""
-
-    async def _run() -> None:
-        from harness.storage.sqlite import SQLiteStorage
-
-        cfg = _load_cli_config(config_path)
-        resolved_provider = provider or cfg.default_provider or "ollama"
-        resolved_model = model or cfg.default_model or "llama3.2"
-        resolved_worker_model = worker_model or resolved_model
-        resolved_planner_model = planner_model or resolved_model
-
-        storage = SQLiteStorage(path=db)
-        renderer = LabRenderer(console)
-
-        # Look up the job to get its cwd
-        root = await storage.get_task(job_id)
-        if root is None:
-            console.print(f"[red]Job {job_id!r} not found in {db}[/red]")
-            raise typer.Exit(1)
-
-        working_dir = root.cwd
-
-        worker_budget: ContextBudget | None = None
-
-        def agent_factory(role: AgentRole) -> Agent:
-            job = role.job_id or "_job_"
-            item = role.item_id or "_item_"
-            tools = ToolRegistry()
-
-            if role.name.startswith("worker"):
-                tools.register(ReadFileTool(cwd=working_dir))
-                tools.register(ListDirTool(cwd=working_dir))
-                tools.register(GlobTool(cwd=working_dir))
-                tools.register(WriteFileTool(cwd=working_dir))
-                tools.register(EditFileTool(cwd=working_dir))
-                tools.register(ShellTool(cwd=working_dir))
-                tools.register(TavilySearchTool())
-                tools.register(FetchUrlTool())
-                tools.register(ListWorkItemsTool(storage, job))
-                tools.register(CompleteWorkItemTool(storage, item))
-            else:
-                tools.register(ReadFileTool(cwd=working_dir))
-                tools.register(ListDirTool(cwd=working_dir))
-                tools.register(GlobTool(cwd=working_dir))
-                tools.register(ListWorkItemsTool(storage, job))
-
-            adapters = {
-                resolved_provider: _build_adapter(resolved_provider, base_url=None, config=cfg)
-            }
-            return Agent(
-                adapters=adapters,
-                tools=tools,
-                storage=storage,
-                failover=FailoverPolicy(chain=[resolved_provider]),
-                approval_policy=ApprovalPolicy(default="auto"),
-                approval_handler=AutoApprove(),
-                activity_store=storage,  # type: ignore[arg-type]
-                approval_store=storage,  # type: ignore[arg-type]
-                memory_store=storage,  # type: ignore[arg-type]
-                default_model=role.model or resolved_model,
-                default_cwd=str(working_dir),
-                system_prompt=role.system_prompt,
-                predictor=ConsequencePredictor(),
-                repair=RepairOrchestrator(),
-                budget=worker_budget if role.name.startswith("worker") else None,
-            )
-
-        worker_role = AgentRole(
-            name="worker",
-            model=resolved_worker_model,
-            max_steps=max_steps,
-            system_prompt=(
-                "You are a Worker. Complete the assigned work item using tools.\n\n"
-                "1. Read the work item title and description.\n"
-                "2. Use the minimum tools needed to complete it.\n"
-                "3. Call complete_work_item(summary=...) as soon as the work is done. "
-                "The summary must describe what you actually did.\n\n"
-                "CRITICAL: Call complete_work_item as a tool call, not as plain text."
-            ),
-        )
-        reporter_role = AgentRole(
-            name="reporter",
-            model=resolved_model,
-            system_prompt=(
-                "You are a Reporter. Synthesize the completed work items into a clear, "
-                "concise final report for the user."
-            ),
-        )
-        planner_role = AgentRole(
-            name="planner",
-            model=resolved_planner_model,
-            system_prompt="",
-        )
-
-        judge_adapter = _build_adapter(resolved_provider, base_url=None, config=cfg)
-        work_item_judge: WorkItemJudge | None = None
-        if not no_judge:
-            work_item_judge = WorkItemJudge(
-                adapter=judge_adapter,
-                model=resolved_planner_model,
-            )
-
-        orchestrator = MultiAgentOrchestrator(
-            agent_factory=agent_factory,
-            store=storage,
-            planner_role=planner_role,
-            worker_role=worker_role,
-            reporter_role=reporter_role,
-            max_workers=workers,
-            max_worker_steps=max_steps,
-            job_cwd=working_dir,
-            provider=resolved_provider,
-            model=resolved_model,
-            work_item_judge=work_item_judge,
-            activity_store=storage,
-        )
-
-        console.print(f"[bold]harness lab resume[/bold] {job_id[:16]}  — {workers} workers")
-        console.print(
-            f"[dim]provider=[/dim]{resolved_provider}  "
-            f"[dim]worker-model=[/dim]{resolved_worker_model}"
-        )
-        console.print()
-
-        try:
-            async for event in orchestrator.resume(job_id):
-                renderer.render(event)
-        finally:
-            await storage.close()
-
-    _run_async(_run())
+    _lab_resume_command(
+        job_id=job_id,
+        provider=provider,
+        model=model,
+        workers=workers,
+        db=db,
+        config_path=config_path,
+        no_judge=no_judge,
+        max_steps=max_steps,
+        planner_model=planner_model,
+        worker_model=worker_model,
+        console=console,
+        load_cli_config=_load_cli_config,
+        build_adapter=_build_adapter,
+        run_async=_run_async,
+        args_preview=_args_preview,
+        truncate=_truncate,
+        orchestrator_cls=MultiAgentOrchestrator,
+        work_item_judge_cls=WorkItemJudge,
+    )
 
 
 # ---------------------------------------------------------------------------
 # phase subcommands — external coordination primitive
 # ---------------------------------------------------------------------------
-
-
-async def _latest_session_id(storage: Storage) -> str | None:
-    """Most recent session in the workspace (None if storage is empty)."""
-    sessions = await storage.list(limit=1)  # type: ignore[attr-defined]
-    return sessions[0].id if sessions else None
-
-
-async def _append_phase_event(storage: Storage, kind: str, name: str, notes: str) -> str | None:
-    """Append a phase-* activity event to the most recent session."""
-    sid = await _latest_session_id(storage)
-    if sid is None:
-        return None
-    data: dict[str, Any] = {"phase": name}
-    if notes:
-        data["notes"] = notes
-    event = ActivityEvent(session_id=sid, kind=kind, data=data)
-    await storage.append_activity(event)  # type: ignore[attr-defined]
-    return sid
 
 
 @phase_app.command("declare")
@@ -4204,25 +1713,15 @@ def phase_declare(
     in_memory: Annotated[bool, typer.Option("--in-memory")] = False,
 ) -> None:
     """Record the start of a phase against the most recent session."""
-
-    async def _go() -> None:
-        storage = _build_storage(db=db, in_memory=in_memory)
-        try:
-            sid = await _append_phase_event(
-                storage, "phase.declared", name.strip().lower(), (notes or "").strip()
-            )
-            if sid is None:
-                console.print(
-                    "[yellow]No sessions found in workspace storage. Run `harness run` "
-                    "at least once before declaring phases.[/yellow]"
-                )
-                raise typer.Exit(1)
-            console.print(f"[green]declared[/green] phase {name!r}  (session {sid})")
-        finally:
-            if isinstance(storage, SQLiteStorage):
-                await storage.close()
-
-    _run_async(_go())
+    _phase_declare_command(
+        name=name,
+        notes=notes,
+        db=db,
+        in_memory=in_memory,
+        console=console,
+        build_storage=_build_storage,
+        run_async=_run_async,
+    )
 
 
 @phase_app.command("complete")
@@ -4236,22 +1735,15 @@ def phase_complete(
     in_memory: Annotated[bool, typer.Option("--in-memory")] = False,
 ) -> None:
     """Mark a phase as complete against the most recent session."""
-
-    async def _go() -> None:
-        storage = _build_storage(db=db, in_memory=in_memory)
-        try:
-            sid = await _append_phase_event(
-                storage, "phase.completed", name.strip().lower(), (notes or "").strip()
-            )
-            if sid is None:
-                console.print("[yellow]No sessions found in workspace storage.[/yellow]")
-                raise typer.Exit(1)
-            console.print(f"[green]completed[/green] phase {name!r}  (session {sid})")
-        finally:
-            if isinstance(storage, SQLiteStorage):
-                await storage.close()
-
-    _run_async(_go())
+    _phase_complete_command(
+        name=name,
+        notes=notes,
+        db=db,
+        in_memory=in_memory,
+        console=console,
+        build_storage=_build_storage,
+        run_async=_run_async,
+    )
 
 
 @phase_app.command("status")
@@ -4260,1054 +1752,13 @@ def phase_status(
     in_memory: Annotated[bool, typer.Option("--in-memory")] = False,
 ) -> None:
     """List declared / completed phases for the most recent session."""
-
-    async def _go() -> None:
-        storage = _build_storage(db=db, in_memory=in_memory)
-        try:
-            sid = await _latest_session_id(storage)
-            if sid is None:
-                console.print("[dim]No sessions yet.[/dim]")
-                return
-            events = await storage.list_activity(  # type: ignore[attr-defined]
-                session_id=sid,
-                kinds=("phase.declared", "phase.completed"),
-                limit=200,
-            )
-            declared: list[str] = []
-            completed: list[str] = []
-            for ev in events:
-                pname = str((ev.data or {}).get("phase", "")).strip()
-                if not pname:
-                    continue
-                if ev.kind == "phase.declared" and pname not in declared:
-                    declared.append(pname)
-                elif ev.kind == "phase.completed" and pname not in completed:
-                    completed.append(pname)
-            console.print(f"session: [dim]{sid}[/dim]")
-            if not declared:
-                console.print("[dim]no phases declared[/dim]")
-                return
-            console.print(f"declared (in order): {', '.join(declared)}")
-            if completed:
-                console.print(f"completed: {', '.join(completed)}")
-            outstanding = [p for p in declared if p not in completed]
-            if outstanding:
-                console.print(f"[yellow]outstanding:[/yellow] {', '.join(outstanding)}")
-            else:
-                console.print("[green]all declared phases completed[/green]")
-        finally:
-            if isinstance(storage, SQLiteStorage):
-                await storage.close()
-
-    _run_async(_go())
-
-
-# ---------------------------------------------------------------------------
-# eval subcommands
-# ---------------------------------------------------------------------------
-
-
-def _load_eval_module(name: str, evals_root: Path):
-    """Load runner.py or judge.py from the evals/ directory at runtime."""
-    import importlib.util
-
-    module_name = f"evals.{name}"
-    spec = importlib.util.spec_from_file_location(module_name, evals_root / f"{name}.py")
-    if spec is None or spec.loader is None:
-        raise ImportError(f"Could not load {name}.py from {evals_root}")
-    import sys as _sys
-
-    mod = importlib.util.module_from_spec(spec)
-    repo_root = str(evals_root.parent)
-    if repo_root not in _sys.path:
-        _sys.path.insert(0, repo_root)
-    _sys.modules[module_name] = mod
-    spec.loader.exec_module(mod)  # type: ignore[union-attr]
-    return mod
-
-
-def _find_evals_root() -> Path | None:
-    """Walk CWD upward looking for evals/fixtures/."""
-    current = Path.cwd().resolve()
-    while True:
-        if (current / "evals" / "fixtures").is_dir():
-            return current / "evals"
-        parent = current.parent
-        if parent == current:
-            return None
-        current = parent
-
-
-@eval_app.command("list")
-def eval_list(
-    fixture_set: Annotated[
-        str,
-        typer.Option(
-            "--fixture-set",
-            help="Fixture directory under evals/ to inspect (fixtures, fixtures-mutated, fixtures-holdout).",
-        ),
-    ] = "fixtures",
-    include_holdout: Annotated[
-        bool,
-        typer.Option("--include-holdout", help="Include fixtures marked holdout in metadata."),
-    ] = False,
-) -> None:
-    """List all available eval fixtures."""
-    evals_root = _find_evals_root()
-    if evals_root is None:
-        console.print("[red]No evals/fixtures/ directory found — run from the harness repo.[/red]")
-        raise typer.Exit(1)
-
-    runner = _load_eval_module("runner", evals_root)
-    fixtures = runner.discover_fixtures(
-        evals_root,
-        fixtures_subdir=fixture_set,
-        include_holdout=include_holdout,
+    _phase_status_command(
+        db=db,
+        in_memory=in_memory,
+        console=console,
+        build_storage=_build_storage,
+        run_async=_run_async,
     )
-    if not fixtures:
-        console.print("[dim]No fixtures found.[/dim]")
-        return
-
-    table = Table(show_header=True, header_style="bold")
-    table.add_column("Fixture", no_wrap=True)
-    table.add_column("Family", no_wrap=True)
-    table.add_column("Primary Dimension")
-    table.add_column("Trap (summary)")
-    for fx in fixtures:
-        primary = fx.rules.primary_dimension
-        trap = fx.rules.trap or ""
-        table.add_row(fx.name, fx.family, primary, _truncate(trap.strip(), 70))
-    console.print(table)
-
-
-@eval_app.command("mutate")
-def eval_mutate(
-    fixture_name: Annotated[
-        str,
-        typer.Argument(help="Fixture directory under evals/fixtures/ to mutate."),
-    ],
-    seed: Annotated[
-        int,
-        typer.Option(
-            "--seed",
-            help="Deterministic seed driving rename choices. Same seed = same mutation.",
-        ),
-    ] = 1,
-    dest: Annotated[
-        Path | None,
-        typer.Option(
-            "--dest",
-            help="Override destination root (default: evals/fixtures-mutated/).",
-        ),
-    ] = None,
-) -> None:
-    """Apply structure-preserving mutations to one fixture.
-
-    Writes a mutated copy under `evals/fixtures-mutated/<seed>-<name>/`
-    with symbol renames applied across source, tests, TASK.md, and
-    EVAL.md. The trap structure stays intact; only naming changes.
-
-    Useful for contamination-resistance checks: run the same eval against
-    the original fixture and the mutated copy. If the model passes
-    only the original (memorized solution) but fails the mutated one,
-    you've detected leakage.
-    """
-    evals_root = _find_evals_root()
-    if evals_root is None:
-        console.print("[red]No evals/fixtures/ directory found — run from the harness repo.[/red]")
-        raise typer.Exit(1)
-    mutator = _load_eval_module("mutator", evals_root)
-    src_dir = evals_root / "fixtures" / fixture_name
-    if not src_dir.is_dir():
-        console.print(f"[red]Fixture {fixture_name!r} not found at {src_dir}.[/red]")
-        raise typer.Exit(1)
-    result = mutator.mutate_fixture(src_dir, seed=seed, dest_root=dest)
-    if not result.renames:
-        console.print(
-            f"[yellow]No renames applied — the fixture didn't contain any "
-            f"of the pool symbols. Copy written to {result.dest_dir}.[/yellow]"
-        )
-        return
-    console.print(f"[green]Mutated {fixture_name} → {result.dest_dir}[/green]")
-    console.print("[bold]Renames:[/bold]")
-    for original, target in result.renames.items():
-        console.print(f"  {original} → {target}")
-    if result.touched_files:
-        console.print(f"[dim]Touched {len(result.touched_files)} file(s).[/dim]")
-
-
-@eval_app.command("calibrate")
-def eval_calibrate(
-    report_path: Annotated[
-        Path,
-        typer.Argument(help="Path to a saved eval report.json artifact."),
-    ],
-    gold_dir: Annotated[
-        Path | None,
-        typer.Option(
-            "--gold-dir",
-            help="Directory of human-labeled gold trajectory JSON files (default: evals/gold).",
-        ),
-    ] = None,
-) -> None:
-    """Compare a saved eval report against gold-labeled trajectory scores."""
-    evals_root = _find_evals_root()
-    if evals_root is None:
-        console.print("[red]No evals/fixtures/ directory found — run from the harness repo.[/red]")
-        raise typer.Exit(1)
-    calibration = _load_eval_module("calibration", evals_root)
-    resolved_gold_dir = gold_dir or (evals_root / "gold")
-    labels = calibration.load_gold_labels(resolved_gold_dir)
-    if not labels:
-        console.print(f"[yellow]No gold labels found in {resolved_gold_dir}.[/yellow]")
-        raise typer.Exit(1)
-    rows = calibration.compare_report_to_gold(
-        calibration.load_report(report_path),
-        labels,
-    )
-    if not rows:
-        console.print("[yellow]No overlapping labeled runs were found in the report.[/yellow]")
-        raise typer.Exit(1)
-    table = Table(show_header=True, header_style="bold", title="Judge calibration")
-    table.add_column("Dimension", no_wrap=True)
-    table.add_column("N", justify="right")
-    table.add_column("Exact", justify="right")
-    table.add_column("MAE", justify="right")
-    for row in rows:
-        table.add_row(
-            row.dimension,
-            str(row.count),
-            f"{row.exact_match_rate:.2f}",
-            f"{row.mean_absolute_error:.2f}",
-        )
-    console.print(table)
-
-
-@eval_app.command("history")
-def eval_history(
-    limit: Annotated[
-        int,
-        typer.Option("--limit", help="Number of history rows to display."),
-    ] = 10,
-) -> None:
-    """Show recent saved eval runs from evals/results/history.jsonl."""
-    evals_root = _find_evals_root()
-    if evals_root is None:
-        console.print("[red]No evals/fixtures/ directory found — run from the harness repo.[/red]")
-        raise typer.Exit(1)
-    history_path = evals_root / "results" / "history.jsonl"
-    if not history_path.exists():
-        console.print("[dim]No eval history found.[/dim]")
-        return
-    rows = [
-        json.loads(line)
-        for line in history_path.read_text(encoding="utf-8").splitlines()
-        if line.strip()
-    ]
-    rows = rows[-limit:]
-    table = Table(show_header=True, header_style="bold", title="Eval history")
-    table.add_column("Run", no_wrap=True)
-    table.add_column("Model", no_wrap=True)
-    table.add_column("Judge", no_wrap=True)
-    table.add_column("Set", no_wrap=True)
-    table.add_column("Mode", no_wrap=True)
-    table.add_column("Runs", justify="right")
-    table.add_column("Results", justify="right")
-    for row in rows:
-        table.add_row(
-            row.get("run_id", "?"),
-            f"{row.get('provider', '?')}/{row.get('model', '?')}",
-            f"{row.get('judge_provider', '?')}/{row.get('judge_model', '?')}",
-            row.get("fixture_set", "?"),
-            row.get("benchmark_mode", "original"),
-            str(row.get("n_runs", "?")),
-            str(len(row.get("results", []))),
-        )
-    console.print(table)
-
-
-def _collect_adjustment_files(root: Path) -> list[Path]:
-    if root.is_file():
-        return [root] if root.name == "harness_adjustments.json" else []
-    if not root.exists():
-        return []
-    return sorted(root.rglob("harness_adjustments.json"))
-
-
-def _load_adjustments(root: Path) -> list[dict[str, object]]:
-    rows: list[dict[str, object]] = []
-    for path in _collect_adjustment_files(root):
-        try:
-            payload = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            continue
-        if not isinstance(payload, list):
-            continue
-        for item in payload:
-            if not isinstance(item, dict):
-                continue
-            row = dict(item)
-            row.setdefault("source_file", str(path))
-            rows.append(row)
-    return rows
-
-
-@eval_app.command("adjustments")
-def eval_adjustments(
-    root: Annotated[
-        Path | None,
-        typer.Argument(
-            help=(
-                "Run directory, artifact directory, or harness_adjustments.json file. "
-                "Defaults to evals/runs."
-            )
-        ),
-    ] = None,
-    limit: Annotated[
-        int,
-        typer.Option("--limit", help="Maximum number of adjustment rows to display."),
-    ] = 20,
-    kind: Annotated[
-        str | None,
-        typer.Option("--kind", help="Filter by adjustment kind."),
-    ] = None,
-) -> None:
-    """Inspect analyzed harness adjustments from saved eval artifacts."""
-    evals_root = _find_evals_root()
-    if evals_root is None:
-        console.print("[red]No evals/fixtures/ directory found — run from the harness repo.[/red]")
-        raise typer.Exit(1)
-    search_root = root or (evals_root / "runs")
-    rows = _load_adjustments(search_root)
-    if kind:
-        rows = [row for row in rows if str(row.get("kind", "")).strip() == kind]
-    if not rows:
-        console.print("[dim]No analyzed harness adjustments found.[/dim]")
-        return
-    rows = rows[:limit]
-    table = Table(show_header=True, header_style="bold", title="Harness adjustments")
-    table.add_column("Kind", no_wrap=True)
-    table.add_column("Fixture", no_wrap=True)
-    table.add_column("Variant", no_wrap=True)
-    table.add_column("Weight", justify="right")
-    table.add_column("Text")
-    for row in rows:
-        raw_weight = row.get("weight", 0.0)
-        if isinstance(raw_weight, int | float | str):
-            try:
-                weight_text = f"{float(raw_weight):.1f}"
-            except ValueError:
-                weight_text = "0.0"
-        else:
-            weight_text = "0.0"
-        table.add_row(
-            str(row.get("kind", "?")),
-            str(row.get("source_fixture_name", "?")),
-            str(row.get("source_variant", "?")),
-            weight_text,
-            str(row.get("text", "")),
-        )
-    console.print(table)
-
-
-@eval_app.command("export-adjustments")
-def eval_export_adjustments(
-    output: Annotated[
-        Path,
-        typer.Argument(help="Destination file (.json or .jsonl)."),
-    ],
-    root: Annotated[
-        Path | None,
-        typer.Option(
-            "--root",
-            help="Run directory, artifact directory, or harness_adjustments.json file. Defaults to evals/runs.",
-        ),
-    ] = None,
-) -> None:
-    """Export a consolidated adjustment corpus from saved eval artifacts."""
-    evals_root = _find_evals_root()
-    if evals_root is None:
-        console.print("[red]No evals/fixtures/ directory found — run from the harness repo.[/red]")
-        raise typer.Exit(1)
-    search_root = root or (evals_root / "runs")
-    rows = _load_adjustments(search_root)
-    if not rows:
-        console.print("[dim]No analyzed harness adjustments found.[/dim]")
-        raise typer.Exit(1)
-    output.parent.mkdir(parents=True, exist_ok=True)
-    if output.suffix == ".jsonl":
-        with output.open("w", encoding="utf-8") as handle:
-            for row in rows:
-                handle.write(json.dumps(row) + "\n")
-    else:
-        output.write_text(json.dumps(rows, indent=2), encoding="utf-8")
-    console.print(f"[green]Exported {len(rows)} adjustment(s) to {output}[/green]")
-
-
-@eval_app.command("validate")
-def eval_validate() -> None:
-    """Validate eval assets: fixture sets, suites, and gold-label coverage."""
-    evals_root = _find_evals_root()
-    if evals_root is None:
-        console.print("[red]No evals/fixtures/ directory found — run from the harness repo.[/red]")
-        raise typer.Exit(1)
-    runner = _load_eval_module("runner", evals_root)
-    calibration = _load_eval_module("calibration", evals_root)
-
-    fixture_sets = ("fixtures", "fixtures-mutated", "fixtures-holdout")
-    suite_map = {
-        "fixtures": "full",
-        "fixtures-mutated": "mutated",
-        "fixtures-holdout": "holdout",
-    }
-    discovered: dict[str, list[Any]] = {}
-    for fixture_set in fixture_sets:
-        discovered[fixture_set] = runner.discover_fixtures(
-            evals_root,
-            fixtures_subdir=fixture_set,
-            include_holdout=True,
-        )
-        if not discovered[fixture_set]:
-            console.print(f"[red]No fixtures discovered in {fixture_set}.[/red]")
-            raise typer.Exit(1)
-
-    suites_dir = evals_root / "suites"
-    for fixture_set, suite_name in suite_map.items():
-        suite_path = suites_dir / f"{suite_name}.txt"
-        if not suite_path.exists():
-            console.print(f"[red]Missing suite file:[/red] {suite_path}")
-            raise typer.Exit(1)
-        members = {
-            line.strip()
-            for line in suite_path.read_text(encoding="utf-8").splitlines()
-            if line.strip() and not line.strip().startswith("#")
-        }
-        fixture_names = {fixture.name for fixture in discovered[fixture_set]}
-        missing = sorted(members - fixture_names)
-        if missing:
-            console.print(
-                f"[red]Suite {suite_name} references unknown fixtures:[/red] {', '.join(missing)}"
-            )
-            raise typer.Exit(1)
-
-    labels = calibration.load_gold_labels(evals_root / "gold")
-    if not labels:
-        console.print("[red]No gold labels found.[/red]")
-        raise typer.Exit(1)
-    gold_keys = {(label.fixture_name, label.variant) for label in labels}
-    missing_gold: list[str] = []
-    for fixtures in discovered.values():
-        for fixture in fixtures:
-            for variant in ("defended", "bare"):
-                key = (fixture.name, variant)
-                if key not in gold_keys:
-                    missing_gold.append(f"{fixture.name}:{variant}")
-    if missing_gold:
-        console.print(
-            "[red]Missing gold labels for fixtures:[/red] " + ", ".join(sorted(missing_gold)[:10])
-        )
-        raise typer.Exit(1)
-
-    table = Table(show_header=True, header_style="bold", title="Eval asset validation")
-    table.add_column("Fixture set", no_wrap=True)
-    table.add_column("Count", justify="right")
-    for fixture_set in fixture_sets:
-        table.add_row(fixture_set, str(len(discovered[fixture_set])))
-    table.add_row("gold labels", str(len(labels)))
-    console.print(table)
-
-
-@eval_app.command("run")
-def eval_run(
-    fixture_name: Annotated[
-        str | None,
-        typer.Argument(help="Fixture to run (e.g. 01-reproduce-before-repair). Omit to run all."),
-    ] = None,
-    provider: Annotated[
-        str | None,
-        typer.Option("--provider", "-p", help="Provider for the agent."),
-    ] = None,
-    model: Annotated[
-        str | None,
-        typer.Option("--model", "-m", help="Model for the agent."),
-    ] = None,
-    judge_model: Annotated[
-        str | None,
-        typer.Option("--judge-model", help="Model for the judge (defaults to --model)."),
-    ] = None,
-    judge_provider: Annotated[
-        str | None,
-        typer.Option(
-            "--judge-provider",
-            help="Provider for the judge (defaults to --provider, or ollama when provider=claude).",
-        ),
-    ] = None,
-    no_judge: Annotated[
-        bool,
-        typer.Option(
-            "--no-judge",
-            help="Skip LLM judging and report hard pass-rate metrics only.",
-        ),
-    ] = False,
-    agent_timeout: Annotated[
-        int,
-        typer.Option("--timeout", help="Agent timeout per fixture in seconds."),
-    ] = 300,
-    max_output_tokens: Annotated[
-        int | None,
-        typer.Option(
-            "--max-output-tokens",
-            help="Cap model output tokens for each eval agent turn.",
-        ),
-    ] = None,
-    n_runs: Annotated[
-        int,
-        typer.Option(
-            "--n-runs",
-            help=(
-                "Run each fixture N times to measure variance. Reports median "
-                "score per dimension and (min..max) range in the final table. "
-                "Use 3+ on non-deterministic local models. Default 1."
-            ),
-        ),
-    ] = 1,
-    ab: Annotated[
-        bool,
-        typer.Option(
-            "--ab",
-            help=(
-                "A/B mode: run each fixture twice per rep — once with the "
-                "full harness defense chain (defended), once with --bare "
-                "(no structural verifiers, no critic). Reports both arms "
-                "side-by-side so you can measure the harness's value-add."
-            ),
-        ),
-    ] = False,
-    fixture_set: Annotated[
-        str,
-        typer.Option(
-            "--fixture-set",
-            help="Fixture directory under evals/ to use (fixtures, fixtures-mutated, fixtures-holdout).",
-        ),
-    ] = "fixtures",
-    benchmark_mode: Annotated[
-        str,
-        typer.Option(
-            "--benchmark-mode",
-            help="Fixture selection mode: original, mutated, or mixed.",
-        ),
-    ] = "original",
-    mutation_seeds: Annotated[
-        str,
-        typer.Option(
-            "--mutation-seeds",
-            help="Comma-separated deterministic seeds used for mutated/mixed benchmark modes.",
-        ),
-    ] = "1",
-    include_holdout: Annotated[
-        bool,
-        typer.Option(
-            "--include-holdout",
-            help="Include fixtures marked holdout in fixture.yaml metadata.",
-        ),
-    ] = False,
-    suite: Annotated[
-        str | None,
-        typer.Option(
-            "--suite",
-            help="Optional suite file name under evals/suites/ (for example: smoke).",
-        ),
-    ] = None,
-    output_dir: Annotated[
-        Path | None,
-        typer.Option(
-            "--output-dir",
-            help="Override the run artifact directory (default: evals/runs/<timestamp>).",
-        ),
-    ] = None,
-    json_out: Annotated[
-        bool,
-        typer.Option("--json-out", help="Print the full machine-readable eval report as JSON."),
-    ] = False,
-    save_history: Annotated[
-        bool,
-        typer.Option(
-            "--save-history/--no-save-history",
-            help="Append a compact summary record to evals/results/history.jsonl.",
-        ),
-    ] = True,
-    config_path: Annotated[Path | None, typer.Option("--config")] = None,
-) -> None:
-    """Run one or all eval fixtures and display scored results."""
-    evals_root = _find_evals_root()
-    if evals_root is None:
-        console.print("[red]No evals/fixtures/ directory found — run from the harness repo.[/red]")
-        raise typer.Exit(1)
-
-    cfg = _load_cli_config(config_path)
-    resolved_provider = provider or cfg.default_provider or "ollama"
-    resolved_model = model or cfg.default_model or "llama3.2"
-    resolved_judge_model = judge_model or resolved_model
-    # claude -p has no adapter; fall back to ollama for judging unless overridden.
-    resolved_judge_provider = judge_provider or (
-        "ollama" if resolved_provider == "claude" else resolved_provider
-    )
-
-    runner = _load_eval_module("runner", evals_root)
-    judge_mod = None if no_judge else _load_eval_module("judge", evals_root)
-    mutator = _load_eval_module("mutator", evals_root)
-    types_mod = _load_eval_module("types", evals_root)
-    run_id = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
-    artifact_root = output_dir or (evals_root / "runs" / run_id)
-    artifact_root.mkdir(parents=True, exist_ok=True)
-    history_path = evals_root / "results" / "history.jsonl"
-
-    seed_values = [int(part.strip()) for part in mutation_seeds.split(",") if part.strip()]
-    mutation_coverage: float | None = None
-    discovery_root = evals_root
-    discovery_subdir = fixture_set
-    if benchmark_mode != "original":
-        materialized_root = artifact_root / "generated-fixtures"
-        fixture_source_root = evals_root / fixture_set
-        materialized = mutator.materialize_fixture_set(
-            fixture_source_root,
-            dest_root=materialized_root,
-            mode=benchmark_mode,
-            seeds=seed_values,
-        )
-        mutation_coverage = materialized.mutation_coverage
-        discovery_root = materialized_root
-        discovery_subdir = "fixtures"
-
-    fixtures = runner.discover_fixtures(
-        discovery_root,
-        fixtures_subdir=discovery_subdir,
-        include_holdout=include_holdout,
-    )
-    if suite:
-        suite_path = evals_root / "suites" / f"{suite}.txt"
-        if not suite_path.exists():
-            console.print(f"[red]Suite not found:[/red] {suite_path}")
-            raise typer.Exit(1)
-        wanted = {
-            line.strip()
-            for line in suite_path.read_text(encoding="utf-8").splitlines()
-            if line.strip() and not line.strip().startswith("#")
-        }
-        fixtures = [f for f in fixtures if f.name in wanted]
-    if fixture_name:
-        fixtures = [f for f in fixtures if f.name == fixture_name]
-        if not fixtures:
-            console.print(f"[red]Fixture not found:[/red] {fixture_name}")
-            raise typer.Exit(1)
-
-    if not fixtures:
-        console.print("[dim]No fixtures to run.[/dim]")
-        return
-
-    judge_adapter = (
-        None if no_judge else _build_adapter(resolved_judge_provider, base_url=None, config=cfg)
-    )
-    if benchmark_mode != "original" and mutation_coverage is not None:
-        console.print(
-            f"[dim]benchmark mode[/dim] {benchmark_mode}  "
-            f"[dim]mutation coverage[/dim] {mutation_coverage:.2f}"
-        )
-
-    def _score_cell(score: int) -> str:
-        color = "green" if score >= 4 else ("yellow" if score == 3 else "red")
-        return f"[{color}]{score}/5[/{color}]"
-
-    _DIM_ORDER = (
-        ("verification", "Verif."),
-        ("scope", "Scope"),
-        ("decomposition", "Decomp."),
-        ("correctness", "Correct."),
-        ("pushback", "Pushback"),
-        ("epistemic", "Epist."),
-        ("overall", "Overall"),
-    )
-
-    def _print_per_fixture(r: Any) -> None:
-        """Print one fixture's scorecard + rationales immediately, so a
-        killed batch still leaves partial results in the transcript."""
-        row_table = Table(show_header=True, header_style="bold")
-        row_table.add_column("Fixture", no_wrap=True)
-        for _, col in _DIM_ORDER:
-            row_table.add_column(col, justify="center")
-        row_table.add_column("Pass?", justify="center")
-        row_table.add_row(
-            r.fixture_name,
-            *(_score_cell(getattr(r, dim).score) for dim, _ in _DIM_ORDER),
-            "[green]PASS[/green]" if r.passed else "[red]FAIL[/red]",
-        )
-        console.print(row_table)
-        for dim_name, _ in _DIM_ORDER:
-            dim = getattr(r, dim_name)
-            color = "green" if dim.score >= 4 else ("yellow" if dim.score == 3 else "red")
-            console.print(
-                f"  [{color}]{dim.score}/5[/{color}] [dim]{dim_name}[/dim]  {dim.rationale}"
-            )
-        if r.hard_metrics is not None:
-            metrics = r.hard_metrics
-            console.print(
-                "  [dim]hard metrics[/dim] "
-                f"pass={metrics.verify_passed} files={metrics.files_touched} "
-                f"+{metrics.lines_added}/-{metrics.lines_deleted} "
-                f"tools={metrics.tool_calls} verify={metrics.did_run_verification}"
-            )
-        if r.artifact_dir is not None:
-            console.print(f"  [dim]artifacts[/dim] {r.artifact_dir}")
-
-    def _print_per_fixture_hard(
-        *, fixture_name: str, variant: str, run_index: int, outcome: Any
-    ) -> None:
-        metrics = outcome.hard_metrics
-        if metrics is None:
-            console.print(f"  [red]no hard metrics[/red] [{variant}] (run {run_index})")
-            return
-        label = f"{fixture_name} [dim]({variant}, run {run_index})[/dim]"
-        pass_label = "[green]PASS[/green]" if metrics.verify_passed else "[red]FAIL[/red]"
-        console.print(
-            f"{label} {pass_label}  "
-            f"agent_exit={outcome.agent_exit_code} verify_exit={outcome.test_exit_code}  "
-            f"files={metrics.files_touched} +{metrics.lines_added}/-{metrics.lines_deleted}  "
-            f"tools={metrics.tool_calls} secs={metrics.total_duration_seconds:.1f}"
-        )
-        if outcome.artifact_dir is not None:
-            console.print(f"  [dim]artifacts[/dim] {outcome.artifact_dir}")
-
-    # Variant arms: when --ab is on, run each fixture twice per rep — once
-    # defended (full structural chain + critic), once bare (model + tools
-    # only). The judge stays blind to which arm produced the output.
-    variants: tuple[str, ...] = ("defended", "bare") if ab else ("defended",)
-
-    # Collect every per-run EvalResult, keyed by (fixture, variant).
-    runs_by_pair: dict[tuple[str, str], list[Any]] = {}
-    outcomes_by_pair: dict[tuple[str, str], list[Any]] = {}
-    # Per-trial (defense ledger, passed, variant, fixture) for correlation.
-    defense_trials: list[tuple[Any, bool, str, str]] = []
-    all_results: list[Any] = []
-    hard_results: list[dict[str, Any]] = []
-    for fx in fixtures:
-        console.print(f"\n[bold blue]▶ {fx.name}[/bold blue]")
-        agent_desc = (
-            resolved_provider
-            if resolved_provider == "claude"
-            else f"{resolved_provider}/{resolved_model}"
-        )
-        for variant in variants:
-            for run_idx in range(n_runs):
-                pieces: list[str] = []
-                if ab:
-                    pieces.append(f"[{variant}]")
-                if n_runs > 1:
-                    pieces.append(f"(run {run_idx + 1}/{n_runs})")
-                run_label = " " + " ".join(pieces) if pieces else ""
-                run_artifact_dir = artifact_root / fx.name / variant / f"run-{run_idx + 1:02d}"
-                with console.status(f"[dim]running agent ({agent_desc}){run_label}...[/dim]"):
-                    try:
-                        outcome = runner.run_fixture(
-                            fx,
-                            provider=resolved_provider,
-                            model=resolved_model,
-                            agent_timeout=agent_timeout,
-                            max_output_tokens=max_output_tokens,
-                            variant=variant,
-                            artifact_dir=run_artifact_dir,
-                        )
-                    except Exception as exc:
-                        console.print(f"  [red]run failed{run_label}:[/red] {exc}")
-                        continue
-
-                exit_icon = (
-                    "[green]✓[/green]" if outcome.agent_exit_code == 0 else "[yellow]![/yellow]"
-                )
-                test_icon = "[green]✓[/green]" if outcome.test_exit_code == 0 else "[red]✗[/red]"
-                console.print(
-                    f"  agent {exit_icon} (exit {outcome.agent_exit_code})  "
-                    f"tests {test_icon} (exit {outcome.test_exit_code}){run_label}"
-                )
-                outcomes_by_pair.setdefault((fx.name, variant), []).append(outcome)
-
-                # Capture the defense ledger from this trial's transcript so we
-                # can correlate which defenses fired with PASS/FAIL outcomes.
-                # Bare-variant trials never emit a ledger (no structural chain
-                # → nothing to log) but we still record (None, passed) so the
-                # report distinguishes "defense was silent" from "no data."
-                ledger = parse_ledger_text(outcome.transcript)
-                if no_judge:
-                    passed = bool(outcome.hard_metrics and outcome.hard_metrics.verify_passed)
-                    defense_trials.append((ledger, passed, variant, fx.name))
-                    hard_results.append(
-                        {
-                            "fixture_name": fx.name,
-                            "variant": variant,
-                            "run_index": run_idx + 1,
-                            "hard_metrics": (
-                                outcome.hard_metrics.to_dict()
-                                if outcome.hard_metrics is not None
-                                else None
-                            ),
-                            "artifact_dir": str(run_artifact_dir),
-                            "agent_exit_code": outcome.agent_exit_code,
-                            "verify_exit_code": outcome.test_exit_code,
-                        }
-                    )
-                    _print_per_fixture_hard(
-                        fixture_name=fx.name,
-                        variant=variant,
-                        run_index=run_idx + 1,
-                        outcome=outcome,
-                    )
-                    continue
-
-                with console.status(f"[dim]scoring{run_label}...[/dim]"):
-                    try:
-                        assert judge_mod is not None
-                        assert judge_adapter is not None
-                        result = judge_mod.judge(
-                            adapter=judge_adapter,
-                            model=resolved_judge_model,
-                            fixture_name=fx.name,
-                            task_text=fx.task_text,
-                            eval_md=fx.eval_md,
-                            transcript=outcome.transcript,
-                            git_diff=outcome.git_diff,
-                            test_output=outcome.test_output,
-                            hard_metrics=outcome.hard_metrics,
-                            artifact_dir=str(run_artifact_dir),
-                            variant=variant,
-                            run_index=run_idx + 1,
-                        )
-                        runs_by_pair.setdefault((fx.name, variant), []).append(result)
-                        all_results.append(result)
-                    except Exception as exc:
-                        console.print(f"  [red]judge failed{run_label}:[/red] {exc}")
-                        continue
-
-                defense_trials.append((ledger, result.passed, variant, fx.name))
-                _print_per_fixture(result)
-
-    if not runs_by_pair and not outcomes_by_pair:
-        return
-
-    # End-of-batch rollup. With n_runs>1, each cell is "<median>/5 (min..max)".
-    # With --ab, the fixture column carries the variant label too.
-    def _cell_for_runs(runs: list[Any], dim_name: str) -> str:
-        scores = sorted(getattr(r, dim_name).score for r in runs)
-        # statistics.median averages the two middle values for even-N lists,
-        # which is what we want — picking scores[N//2] silently biased high
-        # on N=2 (e.g. median of [1, 5] became 5 instead of 3).
-        median = statistics.median(scores)
-        median_round = round(median)
-        color = "green" if median_round >= 4 else ("yellow" if median_round == 3 else "red")
-        # Render as int when whole, single decimal otherwise.
-        median_str = f"{median:g}" if median != int(median) else str(int(median))
-        if len(scores) == 1:
-            return f"[{color}]{median_str}/5[/{color}]"
-        return f"[{color}]{median_str}/5[/{color}] [dim]({scores[0]}..{scores[-1]})[/dim]"
-
-    def _aggregate_dimensions(runs: list[Any]) -> dict[str, Any]:
-        dims: dict[str, Any] = {}
-        for dim_name, _ in _DIM_ORDER:
-            scores = [getattr(r, dim_name).score for r in runs]
-            sem = None
-            if len(scores) >= 2:
-                sem = statistics.stdev(scores) / (len(scores) ** 0.5)
-            dims[dim_name] = types_mod.AggregatedDimension(
-                median=statistics.median(scores),
-                minimum=min(scores),
-                maximum=max(scores),
-                mean=statistics.fmean(scores),
-                sem=sem,
-            )
-        return dims
-
-    def _aggregate_hard_metrics(runs: list[Any]) -> dict[str, float]:
-        aggregates: dict[str, float] = {}
-        if not runs or runs[0].hard_metrics is None:
-            return aggregates
-        keys = (
-            "files_touched",
-            "lines_added",
-            "lines_deleted",
-            "tool_calls",
-            "shell_commands",
-            "agent_duration_seconds",
-            "verify_duration_seconds",
-            "total_duration_seconds",
-            "redundant_tool_calls",
-            "retry_loops",
-        )
-        for key in keys:
-            values = [
-                float(getattr(r.hard_metrics, key)) for r in runs if r.hard_metrics is not None
-            ]
-            if values:
-                aggregates[f"avg_{key}"] = statistics.fmean(values)
-        aggregates["verify_pass_rate"] = statistics.fmean(
-            [1.0 if r.hard_metrics and r.hard_metrics.verify_passed else 0.0 for r in runs]
-        )
-        return aggregates
-
-    aggregates: list[Any] = []
-
-    console.print()
-    title_pieces = ["Eval Results"]
-    if no_judge:
-        title_pieces.append("hard metrics only")
-    if n_runs > 1:
-        title_pieces.append(f"{n_runs} runs each")
-    if ab:
-        title_pieces.append("A/B: defended vs bare")
-    title = " — ".join(title_pieces)
-    table = Table(show_header=True, header_style="bold", title=title)
-    table.add_column("Fixture / variant", no_wrap=True)
-    if not no_judge:
-        for _, col in _DIM_ORDER:
-            table.add_column(col, justify="center")
-    table.add_column("Pass rate", justify="center")
-    aggregate_source = outcomes_by_pair if no_judge else runs_by_pair
-    for (fx_name, variant), runs in aggregate_source.items():
-        if no_judge:
-            n_passed = sum(
-                1 for outcome in runs if outcome.hard_metrics and outcome.hard_metrics.verify_passed
-            )
-        else:
-            n_passed = sum(1 for r in runs if r.passed)
-        pass_color = "green" if n_passed == len(runs) else ("yellow" if n_passed > 0 else "red")
-        label = f"{fx_name} [dim]({variant})[/dim]" if ab else fx_name
-        aggregates.append(
-            types_mod.FixtureAggregate(
-                fixture_name=fx_name,
-                variant=variant,
-                runs=len(runs),
-                passes=n_passed,
-                dimensions={} if no_judge else _aggregate_dimensions(runs),
-                hard_metrics=_aggregate_hard_metrics(runs),
-            )
-        )
-        row = [label]
-        if not no_judge:
-            row.extend(_cell_for_runs(runs, dim) for dim, _ in _DIM_ORDER)
-        row.append(f"[{pass_color}]{n_passed}/{len(runs)}[/{pass_color}]")
-        table.add_row(*row)
-    console.print(table)
-
-    metrics_table = Table(show_header=True, header_style="bold", title="Operational metrics")
-    metrics_table.add_column("Fixture / variant", no_wrap=True)
-    metrics_table.add_column("Avg files", justify="right")
-    metrics_table.add_column("Avg diff", justify="right")
-    metrics_table.add_column("Avg tools", justify="right")
-    metrics_table.add_column("Avg secs", justify="right")
-    metrics_table.add_column("Verify pass", justify="right")
-    for agg in aggregates:
-        metrics = agg.hard_metrics
-        label = f"{agg.fixture_name} ({agg.variant})" if ab else agg.fixture_name
-        avg_diff = (
-            f"+{metrics.get('avg_lines_added', 0):.1f}/-{metrics.get('avg_lines_deleted', 0):.1f}"
-        )
-        metrics_table.add_row(
-            label,
-            f"{metrics.get('avg_files_touched', 0):.1f}",
-            avg_diff,
-            f"{metrics.get('avg_tool_calls', 0):.1f}",
-            f"{metrics.get('avg_total_duration_seconds', 0):.1f}",
-            f"{metrics.get('verify_pass_rate', 0.0):.2f}",
-        )
-    console.print(metrics_table)
-
-    # Defense correlation report: which defenses fired correlate with PASS or
-    # FAIL? Only meaningful when we have multiple defended trials — bare
-    # trials always have empty ledgers (no structural chain), so a pure-bare
-    # run produces no signal here.
-    defended_trials = [
-        (ledger, passed) for ledger, passed, variant, _ in defense_trials if variant == "defended"
-    ]
-    if len(defended_trials) >= 3:
-        stats = correlate_defenses(defended_trials)
-        console.print()
-        defense_table = Table(
-            show_header=True,
-            header_style="bold",
-            title=f"Defense correlation ({len(defended_trials)} defended trials)",
-        )
-        defense_table.add_column("Defense", no_wrap=True)
-        defense_table.add_column("block→pass", justify="center")
-        defense_table.add_column("block→fail", justify="center")
-        defense_table.add_column("silent→pass", justify="center")
-        defense_table.add_column("silent→fail", justify="center")
-        defense_table.add_column("Verdict", justify="left")
-        verdict_color = {
-            "helps": "green",
-            "neutral": "yellow",
-            "hurts": "red",
-            "n/a": "dim",
-            "n/a (small N)": "dim",
-        }
-        for s in stats:
-            color = verdict_color.get(s.verdict(), "white")
-            defense_table.add_row(
-                s.name,
-                str(s.block_pass),
-                str(s.block_fail),
-                str(s.silent_pass),
-                str(s.silent_fail),
-                f"[{color}]{s.verdict()}[/{color}]",
-            )
-        console.print(defense_table)
-        console.print(
-            "[dim]Read: a defense that 'hurts' fires when a trial fails more "
-            "often than when it passes. Manually consider disabling such "
-            "defenses; this report is diagnostic only.[/dim]"
-        )
-
-    if no_judge:
-        report_data = {
-            "run_id": run_id,
-            "provider": resolved_provider,
-            "model": resolved_model,
-            "judge_provider": None,
-            "judge_model": None,
-            "fixture_set": fixture_set,
-            "n_runs": n_runs,
-            "ab": ab,
-            "artifact_root": str(artifact_root),
-            "benchmark_mode": benchmark_mode,
-            "mutation_coverage": mutation_coverage,
-            "no_judge": True,
-            "results": [],
-            "hard_results": hard_results,
-            "aggregates": [agg.to_dict() for agg in aggregates],
-        }
-    else:
-        report = types_mod.EvalReport(
-            run_id=run_id,
-            provider=resolved_provider,
-            model=resolved_model,
-            judge_provider=resolved_judge_provider,
-            judge_model=resolved_judge_model,
-            fixture_set=fixture_set,
-            n_runs=n_runs,
-            ab=ab,
-            artifact_root=artifact_root,
-            benchmark_mode=benchmark_mode,
-            mutation_coverage=mutation_coverage,
-            results=all_results,
-            aggregates=aggregates,
-        )
-        report_data = report.to_dict()
-    (artifact_root / "report.json").write_text(
-        json.dumps(report_data, indent=2),
-        encoding="utf-8",
-    )
-    if save_history:
-        history_path.parent.mkdir(parents=True, exist_ok=True)
-        with history_path.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(report_data) + "\n")
-    if json_out:
-        console.print_json(json.dumps(report_data))
 
 
 # ---------------------------------------------------------------------------
@@ -5322,30 +1773,7 @@ def contracts_list(
     ] = None,
 ) -> None:
     """Show all loaded contracts and the paths they came from."""
-    from harness.core import ContractRegistry
-
-    working = (cwd or Path.cwd()).resolve()
-    registry = ContractRegistry.from_paths(
-        [working / ".harness" / "contracts", Path.home() / ".harness" / "contracts"]
-    )
-    if not registry:
-        console.print("[dim]No contracts loaded.[/dim]")
-        return
-    table = Table(show_header=True, header_style="bold")
-    table.add_column("Name", no_wrap=True)
-    table.add_column("Priority", justify="right")
-    table.add_column("Triggers")
-    table.add_column("Rules", overflow="fold")
-    table.add_column("Source", style="dim", overflow="fold")
-    for c in sorted(registry.contracts, key=lambda x: (-x.priority, x.name)):
-        table.add_row(
-            c.name,
-            str(c.priority),
-            ", ".join(c.triggers) or "[dim](always)[/dim]",
-            "\n".join(f"- {r}" for r in c.rules),
-            c.source or "",
-        )
-    console.print(table)
+    _contracts_list_command(cwd=cwd, console=console)
 
 
 @contracts_app.command("test")
@@ -5354,17 +1782,7 @@ def contracts_test(
     cwd: Annotated[Path | None, typer.Option("--cwd")] = None,
 ) -> None:
     """Show which contracts would fire for a given task string."""
-    from harness.core import ContractRegistry
-
-    working = (cwd or Path.cwd()).resolve()
-    registry = ContractRegistry.from_paths(
-        [working / ".harness" / "contracts", Path.home() / ".harness" / "contracts"]
-    )
-    rendered = registry.render(task)
-    if rendered is None:
-        console.print("[dim]No contracts match.[/dim]")
-        return
-    console.print(rendered)
+    _contracts_test_command(task=task, cwd=cwd, console=console)
 
 
 # ---------------------------------------------------------------------------
@@ -5377,30 +1795,7 @@ def tips_list(
     cwd: Annotated[Path | None, typer.Option("--cwd")] = None,
 ) -> None:
     """Show all loaded tips, ordered by weight desc."""
-    from harness.core import TipLibrary
-
-    working = (cwd or Path.cwd()).resolve()
-    library = TipLibrary.load(
-        [working / ".harness" / "tips.jsonl", Path.home() / ".harness" / "tips.jsonl"]
-    )
-    if not library:
-        console.print("[dim]No tips loaded.[/dim]")
-        return
-    table = Table(show_header=True, header_style="bold")
-    table.add_column("ID", no_wrap=True, style="dim")
-    table.add_column("Weight", justify="right")
-    table.add_column("Triggers")
-    table.add_column("Tip", overflow="fold")
-    table.add_column("Source session", style="dim", no_wrap=True)
-    for tip in sorted(library.tips, key=lambda t: t.weight, reverse=True):
-        table.add_row(
-            tip.id,
-            f"{tip.weight:.1f}",
-            ", ".join(tip.triggers) or "[dim](always)[/dim]",
-            tip.text,
-            tip.source_session_id or "",
-        )
-    console.print(table)
+    _tips_list_command(cwd=cwd, console=console)
 
 
 @tips_app.command("add")
@@ -5423,22 +1818,13 @@ def tips_add(
     ] = "repo",
 ) -> None:
     """Append a tip to the library."""
-    from harness.core import Tip, TipLibrary
-
-    if scope not in ("repo", "user"):
-        console.print("[red]--scope must be 'repo' or 'user'.[/red]")
-        raise typer.Exit(2)
-    target = (
-        Path.cwd() / ".harness" / "tips.jsonl"
-        if scope == "repo"
-        else Path.home() / ".harness" / "tips.jsonl"
+    _tips_add_command(
+        text=text,
+        triggers=triggers,
+        weight=weight,
+        scope=scope,
+        console=console,
     )
-    library = TipLibrary.load([target])
-    library.path = target
-    triggers_tuple = tuple(t.strip() for t in (triggers or "").split(",") if t.strip())
-    tip = Tip(text=text.strip(), triggers=triggers_tuple, weight=weight)
-    library.add(tip, persist=True)
-    console.print(f"[green]Added tip {tip.id}[/green] to {target}")
 
 
 @tips_app.command("test")
@@ -5448,17 +1834,7 @@ def tips_test(
     cwd: Annotated[Path | None, typer.Option("--cwd")] = None,
 ) -> None:
     """Show which tips would fire for a given task string."""
-    from harness.core import TipLibrary
-
-    working = (cwd or Path.cwd()).resolve()
-    library = TipLibrary.load(
-        [working / ".harness" / "tips.jsonl", Path.home() / ".harness" / "tips.jsonl"]
-    )
-    rendered = library.render(task, top_k=top_k)
-    if rendered is None:
-        console.print("[dim]No tips match.[/dim]")
-        return
-    console.print(rendered)
+    _tips_test_command(task=task, top_k=top_k, cwd=cwd, console=console)
 
 
 @tips_app.command("mine")
@@ -5486,78 +1862,20 @@ def tips_mine(
     and appends them to the tip library. Skipped tips (bad JSON, over-long
     bodies) are logged but never crash the command.
     """
-    import json
-
-    from harness.core import MiningInput, Tip, TipLibrary, parse_mined_tips, render_mining_prompt
-    from harness.storage.sqlite import SQLiteStorage
-
-    cfg = _load_cli_config(config_path)
-    chain = _resolve_chain(failover_flag=None, provider_flag=provider, config=cfg)
-    effective_model = model or cfg.default_model or "gemma2:2b"
-    adapter = _build_adapter(chain[0], base_url=None, config=cfg)
-
-    target = (
-        Path.cwd() / ".harness" / "tips.jsonl"
-        if scope == "repo"
-        else Path.home() / ".harness" / "tips.jsonl"
+    _tips_mine_command(
+        session_id=session_id,
+        model=model,
+        provider=provider,
+        db=db,
+        scope=scope,
+        dry_run=dry_run,
+        config_path=config_path,
+        console=console,
+        load_cli_config=_load_cli_config,
+        resolve_chain=_resolve_chain,
+        build_adapter=_build_adapter,
+        run_async=_run_async,
     )
-
-    async def _go() -> list[Tip]:
-        storage = SQLiteStorage(path=db or default_db_path())
-        try:
-            session = await storage.get(session_id)
-            if session is None:
-                console.print(f"[red]Session {session_id} not found.[/red]")
-                raise typer.Exit(1)
-            user_msg = next((m for m in session.messages if m.role == "user"), None)
-            task_text = ((user_msg.content if user_msg else None) or "").strip()
-            transcript_tail = "\n".join(
-                f"[{m.role}] {(m.content or '')[:400]}" for m in session.messages[-12:]
-            )
-            failure_summary = f"Session ended with status={session.status}."
-
-            inp = MiningInput(
-                session_id=session_id,
-                task_text=task_text,
-                failure_summary=failure_summary,
-                transcript_excerpt=transcript_tail,
-            )
-            prompt = render_mining_prompt(inp)
-
-            response_parts: list[str] = []
-            from harness.core.events import Done as _Done
-            from harness.core.events import TextDelta as _TextDelta
-            from harness.core.schemas import Message as _Message
-
-            async for ev in adapter.stream(
-                model=effective_model,
-                messages=[_Message(role="user", content=prompt)],
-                temperature=0.0,
-                max_tokens=512,
-            ):
-                if isinstance(ev, _TextDelta):
-                    response_parts.append(ev.text)
-                elif isinstance(ev, _Done):
-                    break
-            response = "".join(response_parts)
-            return parse_mined_tips(response, source_session_id=session_id)
-        finally:
-            await storage.close()
-
-    tips = _run_async(_go())
-    if not tips:
-        console.print("[yellow]No tips extracted.[/yellow]")
-        return
-
-    if dry_run:
-        console.print(json.dumps([t.as_dict() for t in tips], indent=2))
-        return
-
-    library = TipLibrary.load([target])
-    library.path = target
-    for tip in tips:
-        library.add(tip, persist=True)
-    console.print(f"[green]Added {len(tips)} tip(s)[/green] to {target}")
 
 
 # ---------------------------------------------------------------------------
@@ -5570,25 +1888,7 @@ def tune_list(
     cwd: Annotated[Path | None, typer.Option("--cwd")] = None,
 ) -> None:
     """List versioned tunable prompts under `.harness/tuned-prompts/`."""
-    from harness.core.verifier_tuner import DEFAULT_TUNED_DIR, TunablePrompt
-
-    working = (cwd or Path.cwd()).resolve()
-    target_dir = working / DEFAULT_TUNED_DIR
-    if not target_dir.is_dir():
-        console.print(f"[dim]No tuned prompts at {target_dir}.[/dim]")
-        return
-    table = Table(show_header=True, header_style="bold")
-    table.add_column("Key", no_wrap=True)
-    table.add_column("Current version", justify="right")
-    table.add_column("Rationale", overflow="fold")
-    for entry in sorted(target_dir.glob("*.json")):
-        tp = TunablePrompt.load(entry)
-        if tp is None or not tp.versions:
-            continue
-        cur = tp.current
-        assert cur is not None
-        table.add_row(tp.key, str(cur.version), cur.rationale or "[dim](none)[/dim]")
-    console.print(table)
+    _tune_list_command(cwd=cwd, console=console)
 
 
 @tune_app.command("show")
@@ -5598,26 +1898,7 @@ def tune_show(
     cwd: Annotated[Path | None, typer.Option("--cwd")] = None,
 ) -> None:
     """Print one version (default: current) of a tunable prompt."""
-    from harness.core.verifier_tuner import DEFAULT_TUNED_DIR, TunablePrompt
-
-    working = (cwd or Path.cwd()).resolve()
-    path = working / DEFAULT_TUNED_DIR / f"{key}.json"
-    tp = TunablePrompt.load(path)
-    if tp is None or not tp.versions:
-        console.print(f"[red]No versions for {key!r} at {path}.[/red]")
-        raise typer.Exit(1)
-    if version is None:
-        selected = tp.current
-    else:
-        selected = next((v for v in tp.versions if v.version == version), None)
-    if selected is None:
-        console.print(f"[red]Version {version} not found for {key!r}.[/red]")
-        raise typer.Exit(1)
-    console.print(f"[bold]{key} v{selected.version}[/bold]")
-    if selected.rationale:
-        console.print(f"[dim]{selected.rationale}[/dim]")
-    console.print()
-    console.print(selected.text)
+    _tune_show_command(key=key, version=version, cwd=cwd, console=console)
 
 
 @tune_app.command("propose")
@@ -5653,95 +1934,21 @@ def tune_propose(
     `.harness/tuned-prompts/<key>.json` (still requires explicit
     runtime opt-in to actually use it).
     """
-    import json as _json
-
-    from harness.core.events import Done as _Done
-    from harness.core.events import TextDelta as _TextDelta
-    from harness.core.schemas import Message as _Message
-    from harness.core.verifier_tuner import (
-        DEFAULT_TUNED_DIR,
-        TUNER_SYSTEM,
-        TrajectoryPair,
-        TunablePrompt,
-        TuneRequest,
-        parse_proposal,
-        render_tune_prompt,
+    _tune_propose_command(
+        key=key,
+        current_prompt_file=current_prompt_file,
+        pairs_file=pairs_file,
+        model=model,
+        provider=provider,
+        notes=notes,
+        config_path=config_path,
+        dry_run=dry_run,
+        console=console,
+        load_cli_config=_load_cli_config,
+        resolve_chain=_resolve_chain,
+        build_adapter=_build_adapter,
+        run_async=_run_async,
     )
-
-    cfg = _load_cli_config(config_path)
-    chain = _resolve_chain(failover_flag=None, provider_flag=provider, config=cfg)
-    effective_model = model or cfg.default_model or "gemma2:2b"
-    adapter = _build_adapter(chain[0], base_url=None, config=cfg)
-
-    current_text = current_prompt_file.read_text(encoding="utf-8").strip()
-    raw_pairs = _json.loads(pairs_file.read_text(encoding="utf-8"))
-    pairs = [
-        TrajectoryPair(
-            fixture=str(p.get("fixture", "")),
-            defended_excerpt=str(p.get("defended_excerpt", "")),
-            defended_outcome=str(p.get("defended_outcome", "")),
-            bare_excerpt=str(p.get("bare_excerpt", "")),
-            bare_outcome=str(p.get("bare_outcome", "")),
-            differing_dimension=p.get("differing_dimension"),
-        )
-        for p in raw_pairs
-        if isinstance(p, dict)
-    ]
-
-    request = TuneRequest(
-        prompt_key=key,
-        current_prompt=current_text,
-        pairs=pairs,
-        notes=notes or "",
-    )
-
-    user_msg = render_tune_prompt(request)
-
-    async def _go() -> str:
-        chunks: list[str] = []
-        async for ev in adapter.stream(
-            model=effective_model,
-            messages=[
-                _Message(role="system", content=TUNER_SYSTEM),
-                _Message(role="user", content=user_msg),
-            ],
-            temperature=0.0,
-            max_tokens=1500,
-        ):
-            if isinstance(ev, _TextDelta):
-                chunks.append(ev.text)
-            elif isinstance(ev, _Done):
-                break
-        return "".join(chunks)
-
-    response = _run_async(_go())
-    delta = parse_proposal(response, prompt_key=key)
-    if delta is None:
-        console.print("[red]Tuner LLM returned no parseable proposal.[/red]")
-        console.print("[dim]Raw response:[/dim]")
-        console.print(response[:1000])
-        raise typer.Exit(1)
-
-    console.print(f"[bold]Proposed delta for {key!r}[/bold]")
-    console.print()
-    console.print(f"[dim]Rationale: {delta.rationale}[/dim]")
-    console.print()
-    console.print(delta.new_prompt)
-
-    if dry_run:
-        console.print("\n[dim]--dry-run: not saving.[/dim]")
-        return
-
-    target = Path.cwd().resolve() / DEFAULT_TUNED_DIR / f"{key}.json"
-    tp = TunablePrompt.load(target) or TunablePrompt(key=key)
-    if not tp.versions:
-        # Seed with the current text as v1 so the diff is auditable.
-        tp.add_version(current_text, rationale="seed: pre-tune baseline")
-    tp.add_version(delta.new_prompt, rationale=delta.rationale)
-    tp.save(target)
-    saved = tp.current
-    assert saved is not None  # add_version above guarantees this
-    console.print(f"\n[green]Saved v{saved.version} to {target}[/green]")
 
 
 @tune_app.command("rollback")
@@ -5750,21 +1957,7 @@ def tune_rollback(
     cwd: Annotated[Path | None, typer.Option("--cwd")] = None,
 ) -> None:
     """Drop the latest version, restoring the previous one as current."""
-    from harness.core.verifier_tuner import DEFAULT_TUNED_DIR, TunablePrompt
-
-    working = (cwd or Path.cwd()).resolve()
-    path = working / DEFAULT_TUNED_DIR / f"{key}.json"
-    tp = TunablePrompt.load(path)
-    if tp is None or len(tp.versions) <= 1:
-        console.print(f"[red]Nothing to roll back at {path}.[/red]")
-        raise typer.Exit(1)
-    dropped = tp.versions.pop()
-    tp.save(path)
-    remaining = tp.current
-    assert remaining is not None  # we checked len(versions) > 1 above
-    console.print(
-        f"[yellow]Rolled back v{dropped.version}. Current is now v{remaining.version}.[/yellow]"
-    )
+    _tune_rollback_command(key=key, cwd=cwd, console=console)
 
 
 # ---------------------------------------------------------------------------
@@ -5777,23 +1970,7 @@ def resume_show(
     cwd: Annotated[Path | None, typer.Option("--cwd")] = None,
 ) -> None:
     """Print the current resume contract (or a hint when missing)."""
-    from harness.core import DEFAULT_RESUME_PATH, ResumeContract
-
-    working = (cwd or Path.cwd()).resolve()
-    path = working / DEFAULT_RESUME_PATH
-    contract = ResumeContract.load(path)
-    if contract is None:
-        console.print(f"[dim]No resume contract at {path}.[/dim]")
-        console.print("Run `harness resume init` to create one.")
-        return
-    rendered = contract.render_for_prompt()
-    if rendered:
-        console.print(rendered)
-    else:
-        console.print(
-            "[yellow]Resume contract loaded but `current` is unset.[/yellow]\n"
-            f"Edit {path} to point at the feature this session should work on."
-        )
+    _resume_show_command(cwd=cwd, console=console)
 
 
 @resume_app.command("init")
@@ -5809,26 +1986,12 @@ def resume_init(
     ] = None,
 ) -> None:
     """Create a fresh `.harness/resume.json` with a single starter feature."""
-    from harness.core import DEFAULT_RESUME_PATH, FeatureItem, ResumeContract
-
-    working = (cwd or Path.cwd()).resolve()
-    path = working / DEFAULT_RESUME_PATH
-    if path.exists():
-        console.print(f"[yellow]{path} already exists. Use `resume show`.[/yellow]")
-        raise typer.Exit(1)
-    fname = (feature or "first-feature").strip()
-    contract = ResumeContract(
-        current=fname,
-        features=[
-            FeatureItem(
-                name=fname,
-                description=(description or "Describe what shipping this feature means.").strip(),
-                status="in_progress",
-            )
-        ],
+    _resume_init_command(
+        cwd=cwd,
+        feature=feature,
+        description=description,
+        console=console,
     )
-    contract.save(path)
-    console.print(f"[green]Wrote {path}[/green]")
 
 
 @resume_app.command("set-current")
@@ -5837,22 +2000,7 @@ def resume_set_current(
     cwd: Annotated[Path | None, typer.Option("--cwd")] = None,
 ) -> None:
     """Point the resume contract at a different feature for the next session."""
-    from harness.core import DEFAULT_RESUME_PATH, ResumeContract
-
-    working = (cwd or Path.cwd()).resolve()
-    path = working / DEFAULT_RESUME_PATH
-    contract = ResumeContract.load(path)
-    if contract is None:
-        console.print(f"[red]No resume contract at {path}.[/red]")
-        raise typer.Exit(1)
-    if contract.feature(feature_name) is None:
-        console.print(
-            f"[red]Feature {feature_name!r} not on the roadmap. Edit {path} to add it.[/red]"
-        )
-        raise typer.Exit(1)
-    contract.current = feature_name
-    contract.save(path)
-    console.print(f"[green]Current feature is now {feature_name!r}[/green]")
+    _resume_set_current_command(feature_name=feature_name, cwd=cwd, console=console)
 
 
 @resume_app.command("add-feature")
@@ -5869,27 +2017,13 @@ def resume_add_feature(
     cwd: Annotated[Path | None, typer.Option("--cwd")] = None,
 ) -> None:
     """Append a new pending feature to the roadmap."""
-    from harness.core import DEFAULT_RESUME_PATH, FeatureItem, ResumeContract
-
-    working = (cwd or Path.cwd()).resolve()
-    path = working / DEFAULT_RESUME_PATH
-    contract = ResumeContract.load(path) or ResumeContract()
-    if contract.feature(name) is not None:
-        console.print(f"[yellow]Feature {name!r} already exists. No change.[/yellow]")
-        raise typer.Exit(1)
-    phase_list = [p.strip().lower() for p in phases.split(",") if p.strip()] if phases else []
-    contract.features.append(
-        FeatureItem(
-            name=name,
-            description=(description or "").strip(),
-            status="pending",
-            phases=phase_list,
-        )
+    _resume_add_feature_command(
+        name=name,
+        description=description,
+        phases=phases,
+        cwd=cwd,
+        console=console,
     )
-    if contract.current is None:
-        contract.current = name
-    contract.save(path)
-    console.print(f"[green]Added {name!r} to {path}[/green]")
 
 
 if __name__ == "__main__":

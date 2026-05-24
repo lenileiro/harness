@@ -9,6 +9,7 @@ from types import SimpleNamespace
 from typer.testing import CliRunner
 
 from harness.cli import __main__ as cli_main
+from harness.cli import evals as eval_cli
 
 
 def test_eval_calibrate_reads_gold_labels(tmp_path: Path, monkeypatch) -> None:
@@ -58,7 +59,7 @@ def test_eval_calibrate_reads_gold_labels(tmp_path: Path, monkeypatch) -> None:
         encoding="utf-8",
     )
 
-    monkeypatch.setattr(cli_main, "_find_evals_root", lambda: repo_evals_root)
+    monkeypatch.setattr(eval_cli, "_find_evals_root", lambda: repo_evals_root)
     result = CliRunner().invoke(
         cli_main.app,
         ["eval", "calibrate", str(report), "--gold-dir", str(evals_root / "gold")],
@@ -81,14 +82,14 @@ def test_eval_validate_passes_against_repo_assets(monkeypatch) -> None:
 
 def test_eval_run_no_judge_uses_hard_metrics_only(tmp_path: Path, monkeypatch) -> None:
     repo_evals_root = Path(__file__).resolve().parents[3] / "evals"
-    eval_types = cli_main._load_eval_module("types", repo_evals_root)
+    eval_types = eval_cli._load_eval_module("types", repo_evals_root)
     evals_root = tmp_path / "evals"
     fixtures_dir = evals_root / "fixtures" / "01-demo"
     fixtures_dir.mkdir(parents=True)
     (fixtures_dir / "TASK.md").write_text("# Fix demo bug\n", encoding="utf-8")
     (fixtures_dir / "EVAL.md").write_text("Judge notes", encoding="utf-8")
 
-    monkeypatch.setattr(cli_main, "_find_evals_root", lambda: evals_root)
+    monkeypatch.setattr(eval_cli, "_find_evals_root", lambda: evals_root)
 
     fixture = eval_types.FixtureMeta(
         name="01-demo",
@@ -138,12 +139,12 @@ def test_eval_run_no_judge_uses_hard_metrics_only(tmp_path: Path, monkeypatch) -
             return SimpleNamespace()
         raise AssertionError(f"unexpected module load: {name}")
 
-    monkeypatch.setattr(cli_main, "_load_eval_module", _load_eval_module)
+    monkeypatch.setattr(eval_cli, "_load_eval_module", _load_eval_module)
 
     def _boom(*_args, **_kwargs):
         raise AssertionError("judge adapter should not be built in --no-judge mode")
 
-    monkeypatch.setattr(cli_main, "_build_adapter", _boom)
+    monkeypatch.setattr(eval_cli, "_build_adapter", _boom)
 
     out_dir = tmp_path / "artifacts"
     result = CliRunner().invoke(
@@ -196,7 +197,7 @@ def test_eval_adjustments_lists_saved_rows(tmp_path: Path, monkeypatch) -> None:
         encoding="utf-8",
     )
 
-    monkeypatch.setattr(cli_main, "_find_evals_root", lambda: repo_root / "evals")
+    monkeypatch.setattr(eval_cli, "_find_evals_root", lambda: repo_root / "evals")
     result = CliRunner().invoke(
         cli_main.app,
         ["eval", "adjustments", str(evals_root / "runs")],
@@ -231,7 +232,7 @@ def test_eval_export_adjustments_writes_jsonl(tmp_path: Path, monkeypatch) -> No
     )
     output = tmp_path / "adjustments.jsonl"
 
-    monkeypatch.setattr(cli_main, "_find_evals_root", lambda: repo_root / "evals")
+    monkeypatch.setattr(eval_cli, "_find_evals_root", lambda: repo_root / "evals")
     result = CliRunner().invoke(
         cli_main.app,
         [

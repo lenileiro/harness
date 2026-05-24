@@ -442,7 +442,7 @@ class TestPromptSurfaceRevertVerifier:
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         monkeypatch.setattr(
-            "harness.core.verification._git_diff_unified_zero",
+            "harness.core.verification_behavioral._git_diff_unified_zero",
             lambda _cwd: (
                 "diff --git a/src/cache.py b/src/cache.py\n"
                 "@@ -11 +11 @@\n"
@@ -514,7 +514,7 @@ class TestPromptSurfaceRevertVerifier:
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         monkeypatch.setattr(
-            "harness.core.verification._git_diff_unified_zero",
+            "harness.core.verification_behavioral._git_diff_unified_zero",
             lambda _cwd: (
                 "diff --git a/src/cache.py b/src/cache.py\n"
                 "@@ -46,0 +47,8 @@\n"
@@ -578,7 +578,7 @@ class TestPromptSurfaceRevertVerifier:
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         monkeypatch.setattr(
-            "harness.core.verification._git_diff_unified_zero",
+            "harness.core.verification_behavioral._git_diff_unified_zero",
             lambda _cwd: (
                 "diff --git a/src/format.py b/src/format.py\n"
                 "@@ -28,0 +29,2 @@\n"
@@ -638,7 +638,7 @@ class TestPromptSurfaceRevertVerifier:
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         monkeypatch.setattr(
-            "harness.core.verification._git_diff_unified_zero",
+            "harness.core.verification_behavioral._git_diff_unified_zero",
             lambda _cwd: (
                 "diff --git a/src/cache.py b/src/cache.py\n"
                 "@@ -20,14 +20,14 @@ class SimpleCache:\n"
@@ -722,7 +722,7 @@ class TestNegativeConstraintVerifier:
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         monkeypatch.setattr(
-            "harness.core.verification._git_diff_unified_zero",
+            "harness.core.verification_behavioral._git_diff_unified_zero",
             lambda _cwd: (
                 "diff --git a/tests/test_calc.py b/tests/test_calc.py\n"
                 "@@ -10,0 +11,1 @@\n"
@@ -759,7 +759,7 @@ class TestNegativeConstraintVerifier:
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         monkeypatch.setattr(
-            "harness.core.verification._git_diff_unified_zero",
+            "harness.core.verification_behavioral._git_diff_unified_zero",
             lambda _cwd: (
                 "diff --git a/src/feature.py b/src/feature.py\n"
                 "@@ -5,0 +6,2 @@\n"
@@ -793,7 +793,7 @@ class TestNegativeConstraintVerifier:
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         monkeypatch.setattr(
-            "harness.core.verification._git_diff_unified_zero",
+            "harness.core.verification_behavioral._git_diff_unified_zero",
             lambda _cwd: (
                 "diff --git a/tests/test_calc.py b/tests/test_calc.py\n"
                 "@@ -10,0 +11,1 @@\n"
@@ -919,7 +919,7 @@ class TestBugfixCommentRewriteVerifier:
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         monkeypatch.setattr(
-            "harness.core.verification._git_diff_unified_zero",
+            "harness.core.verification_behavioral._git_diff_unified_zero",
             lambda _cwd: (
                 "diff --git a/src/db.py b/src/db.py\n"
                 "@@ -14,3 +14,2 @@\n"
@@ -948,7 +948,7 @@ class TestBugfixCommentRewriteVerifier:
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         monkeypatch.setattr(
-            "harness.core.verification._git_diff_unified_zero",
+            "harness.core.verification_behavioral._git_diff_unified_zero",
             lambda _cwd: (
                 "diff --git a/src/db.py b/src/db.py\n"
                 "@@ -14,3 +14,1 @@\n"
