@@ -9,6 +9,8 @@ repos:
       - id: ruff
         args: [--fix]
         stages: [pre-commit]
+      - id: ruff
+        stages: [pre-push]
 
   - repo: https://github.com/RobertCraigie/pyright-python
     rev: v1.1.388
@@ -18,4 +20,4 @@ repos:
         entry: uv run pyright
         language: system
         pass_filenames: false
-        stages: [pre-commit]
+        stages: [pre-commit, pre-push]

@@ -53,10 +53,7 @@ class OutcomeCalibration:
         base_confidence: float,
         outcome: PredictionOutcome,
     ) -> float:
-        if outcome.matched:
-            delta = _MATCH_DELTA
-        else:
-            delta = _MISMATCH_DELTAS.get(outcome.severity, -0.08)
+        delta = _MATCH_DELTA if outcome.matched else _MISMATCH_DELTAS.get(outcome.severity, -0.08)
         return max(0.1, min(0.99, base_confidence + delta))
 
     def record(
