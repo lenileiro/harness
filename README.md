@@ -10,7 +10,7 @@ At a high level, Harness gives you:
 - a resumable agent runtime with tools, approvals, and storage
 - a CLI for running, chatting with, and inspecting agents
 - structural defenses around the base model/tool loop
-- persistent workspace memory, contracts, tips, and resume state
+- persistent workspace memory, contracts, tips, experience, and resume state
 - a behavioral eval harness for defended-vs-bare A/B testing
 
 ## What Harness Is For
@@ -50,6 +50,50 @@ packages/
 ```
 
 Supporting benchmark assets live under `evals/`.
+
+Key internal module boundaries after the reorg:
+
+```text
+packages/cli/src/harness/cli/
+├── __main__.py                    # CLI bootstrap and command registration
+├── approvals_evidence_commands.py # approvals + evidence command family
+├── chat_commands.py               # interactive chat / REPL flow
+├── common.py                      # shared CLI helpers
+├── evals.py                       # eval command family
+├── introspection.py               # providers + tools command family
+├── lab_commands.py                # multi-agent lab command family
+├── lifecycle_commands.py          # phase / contracts / tips / resume
+├── markdown_render.py             # markdown + mermaid rendering
+├── render.py                      # Rich rendering helpers
+├── run_commands.py                # one-shot run flow
+├── runtime_agent.py               # runtime agent assembly
+├── runtime_helpers.py             # verifier / critic / storage helpers
+├── sessions_commands.py           # session command family
+├── tasks_commands.py              # task command family
+├── tune_commands.py               # prompt tuning command family
+└── workspace_commands.py          # init / goal / memory command family
+
+evals/
+├── artifacts.py                   # artifact persistence helpers
+├── calibration.py                 # judge calibration helpers
+├── discovery.py                   # fixture discovery + metadata loading
+├── failure_analyzer.py            # artifact-to-adjustment analysis
+├── hard_checks.py                 # semantic hard behavior contracts
+├── judge.py                       # optional LLM-as-judge scoring
+├── runner.py                      # eval orchestration entrypoint
+└── types.py                       # shared eval schemas
+
+packages/core/src/harness/core/
+├── procedural_skill.py            # thin compatibility entrypoint
+├── tips_mining.py                 # tip extraction from failures
+├── tips_models.py                 # tip and experience data models
+├── tips_providers.py              # static + artifact-backed tip retrieval
+├── verification.py                # compatibility surface
+├── verification_behavioral.py     # prompt/diff-sensitive verifiers
+├── verification_guards.py         # guardrail helpers
+├── verification_judges.py         # LLM/rule judge verifiers
+└── verification_structural.py     # deterministic structural verifiers
+```
 
 ## Installation
 
@@ -166,6 +210,7 @@ Important runtime concepts:
 - Memory: persistent facts injected into later runs.
 - Contracts: hard environment rules loaded from `.harness/contracts/`.
 - Tips: soft procedural hints loaded from `.harness/tips.jsonl`.
+- Experience: artifact-backed lessons recovered from prior eval runs.
 - Resume state: a workspace roadmap file injected at run start.
 
 ## Running Agents
@@ -295,6 +340,9 @@ Harness separates hard and soft context:
   `~/.harness/contracts/`.
 - Tips are procedural hints loaded from `.harness/tips.jsonl` and
   `~/.harness/tips.jsonl`.
+- Experience can also be recovered from saved eval artifacts, where analyzed
+  `harness_adjustments.json` records are turned back into reusable guidance for
+  defended runs.
 - Resume state is a structured roadmap file at `.harness/resume.json`.
 
 These layers are intended to make the outer runtime more informative and more
@@ -332,6 +380,8 @@ Current subcommands:
 - `mutate`
 - `calibrate`
 - `history`
+- `adjustments`
+- `export-adjustments`
 - `validate`
 - `run`
 
@@ -346,6 +396,12 @@ uv run harness eval run --suite smoke --ab --json-out
 
 # Run mutation-based variants
 uv run harness eval run --suite smoke --benchmark-mode mutated --mutation-seeds 7,8
+
+# Inspect analyzer output from saved eval runs
+uv run harness eval adjustments evals/runs --limit 20
+
+# Export a consolidated adjustment corpus
+uv run harness eval export-adjustments adjustments.jsonl --root evals/runs
 
 # Validate fixtures, suites, and gold labels
 uv run harness eval validate
@@ -364,6 +420,15 @@ should not fail just because of harmless whitespace noise; the contracts are
 intended to check what changed and why, not only whether a diff matches a
 single string shape.
 
+Each saved eval run also persists artifact-backed adjustment hints such as:
+
+- what kind of failure happened
+- which verifier or guardrail would have helped
+- what corrective behavior should be reinforced later
+
+Those adjustments are written into `harness_adjustments.json` beside the other
+run artifacts and can be inspected or exported with the eval CLI.
+
 For benchmark rules and asset layout, see [evals/BENCHMARK.md](evals/BENCHMARK.md).
 
 ## Development Workflow
@@ -377,6 +442,8 @@ uv run pyright
 uv run pytest
 ```
 
+These are the same quality gates enforced in CI.
+
 ### Auto-format
 
 ```bash
@@ -388,7 +455,7 @@ uv run ruff check --fix .
 
 ```bash
 uv run pytest packages/core/tests/test_verification.py -q
-uv run pytest evals/tests/test_runner.py -q
+uv run pytest evals/tests/test_execution.py -q
 ```
 
 ## Design Principles
