@@ -38,7 +38,7 @@ import time
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, TypeVar
 
 import typer
 import unicodeitplus as _unicodeit
@@ -163,6 +163,33 @@ app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
 )
+
+_T = TypeVar("_T")
+
+
+def _run_async(awaitable: Awaitable[_T]) -> _T:
+    """Run a CLI coroutine in an explicitly managed event loop.
+
+    Under pytest, repeated sync CLI invocations after async tests can leave a
+    loop object pending finalization when using bare ``_run_async(...)``.
+    Managing the loop here keeps the CLI entrypoints deterministic across both
+    normal execution and mixed sync/async test processes.
+    """
+
+    loop = asyncio.new_event_loop()
+    try:
+        asyncio.set_event_loop(loop)
+        return loop.run_until_complete(awaitable)
+    finally:
+        try:
+            loop.run_until_complete(loop.shutdown_asyncgens())
+        finally:
+            try:
+                loop.run_until_complete(loop.shutdown_default_executor())
+            finally:
+                asyncio.set_event_loop(None)
+                loop.close()
+
 
 sessions_app = typer.Typer(
     name="sessions", help="Inspect, resume, and remove saved sessions.", no_args_is_help=True
@@ -1164,7 +1191,7 @@ def run(
         raise typer.Exit(2)
 
     try:
-        asyncio.run(
+        _run_async(
             _run_once(
                 prompt=prompt,
                 model=effective_model,
@@ -1419,7 +1446,7 @@ def sessions_list(
             )
         console.print(table)
 
-    asyncio.run(_go())
+    _run_async(_go())
 
 
 @sessions_app.command("show")
@@ -1443,7 +1470,7 @@ def sessions_show(
             raise typer.Exit(1)
         _render_session(session)
 
-    asyncio.run(_go())
+    _run_async(_go())
 
 
 @sessions_app.command("resume")
@@ -1535,7 +1562,7 @@ def sessions_resume(
             if isinstance(storage, SQLiteStorage):
                 await storage.close()
 
-    asyncio.run(_go())
+    _run_async(_go())
 
 
 @sessions_app.command("rm")
@@ -1558,7 +1585,7 @@ def sessions_rm(
             if isinstance(storage, SQLiteStorage):
                 await storage.close()
 
-    asyncio.run(_go())
+    _run_async(_go())
     console.print(f"[green]Deleted[/green] {session_id}")
 
 
@@ -1622,7 +1649,7 @@ def sessions_fork(
                 await storage.close()
 
     try:
-        asyncio.run(_go())
+        _run_async(_go())
     except KeyboardInterrupt:
         console.print("\n[yellow]Cancelled by user.[/yellow]")
         raise typer.Exit(130) from None
@@ -1645,7 +1672,7 @@ def sessions_diff_cmd(
             if isinstance(storage, SQLiteStorage):
                 await storage.close()
 
-    asyncio.run(_go())
+    _run_async(_go())
 
 
 # ---------------------------------------------------------------------------
@@ -1723,7 +1750,7 @@ def providers_capabilities_cmd(
         )
         console.print(table)
 
-    asyncio.run(_go())
+    _run_async(_go())
 
 
 # ---------------------------------------------------------------------------
@@ -1835,7 +1862,7 @@ def tasks_new_cmd(
             if _close_if_sqlite(storage):
                 await storage.close()  # type: ignore[union-attr]
 
-    task = asyncio.run(_go())
+    task = _run_async(_go())
     console.print(f"[green]Created[/green] {task.ref}  {task.title}")
 
 
@@ -1860,7 +1887,7 @@ def tasks_list_cmd(
             if _close_if_sqlite(storage):
                 await storage.close()  # type: ignore[union-attr]
 
-    tasks = asyncio.run(_go())
+    tasks = _run_async(_go())
     if not tasks:
         console.print("[dim]No tasks.[/dim]")
         return
@@ -1904,7 +1931,7 @@ def tasks_show_cmd(
             if _close_if_sqlite(storage):
                 await storage.close()  # type: ignore[union-attr]
 
-    task, events = asyncio.run(_go())
+    task, events = _run_async(_go())
     if task is None:
         console.print(f"[red]Task not found:[/red] {ref}")
         raise typer.Exit(1)
@@ -1962,7 +1989,7 @@ def tasks_update_cmd(
             if _close_if_sqlite(storage):
                 await storage.close()  # type: ignore[union-attr]
 
-    task = asyncio.run(_go())
+    task = _run_async(_go())
     if task is None:
         console.print(f"[red]Task not found:[/red] {ref}")
         raise typer.Exit(1)
@@ -2011,7 +2038,7 @@ def tasks_link_cmd(
             if _close_if_sqlite(storage):
                 await storage.close()  # type: ignore[union-attr]
 
-    task = asyncio.run(_go())
+    task = _run_async(_go())
     if task is None:
         console.print(f"[red]Task not found:[/red] {ref}")
         raise typer.Exit(1)
@@ -2049,7 +2076,7 @@ def tasks_rm_cmd(
             if _close_if_sqlite(storage):
                 await storage.close()  # type: ignore[union-attr]
 
-    if not asyncio.run(_go()):
+    if not _run_async(_go()):
         console.print(f"[red]Task not found:[/red] {ref}")
         raise typer.Exit(1)
     console.print(f"[green]Deleted[/green] {ref}")
@@ -2098,7 +2125,7 @@ def approvals_list_cmd(
             if _close_if_sqlite(storage):
                 await storage.close()  # type: ignore[union-attr]
 
-    items = asyncio.run(_go())
+    items = _run_async(_go())
     if not items:
         console.print("[dim]No approvals.[/dim]")
         return
@@ -2139,7 +2166,7 @@ def approvals_show_cmd(
             if _close_if_sqlite(storage):
                 await storage.close()  # type: ignore[union-attr]
 
-    approval = asyncio.run(_go())
+    approval = _run_async(_go())
     if approval is None:
         console.print(f"[red]Approval not found:[/red] {approval_id}")
         raise typer.Exit(1)
@@ -2163,7 +2190,7 @@ def approvals_grant_cmd(
             if _close_if_sqlite(storage):
                 await storage.close()  # type: ignore[union-attr]
 
-    updated = asyncio.run(_go())
+    updated = _run_async(_go())
     if updated is None:
         console.print(f"[red]Approval not found:[/red] {approval_id}")
         raise typer.Exit(1)
@@ -2191,7 +2218,7 @@ def approvals_deny_cmd(
             if _close_if_sqlite(storage):
                 await storage.close()  # type: ignore[union-attr]
 
-    updated = asyncio.run(_go())
+    updated = _run_async(_go())
     if updated is None:
         console.print(f"[red]Approval not found:[/red] {approval_id}")
         raise typer.Exit(1)
@@ -2255,7 +2282,7 @@ def evidence_list_cmd(
             events = [e for e in events if e.data.get("is_error") is True]
         return events
 
-    items = asyncio.run(_go())
+    items = _run_async(_go())
     if not items:
         console.print("[dim]No evidence.[/dim]")
         return
@@ -2366,7 +2393,7 @@ def chat(
         raise typer.Exit(2)
 
     try:
-        asyncio.run(
+        _run_async(
             _chat_loop(
                 chain=chain,
                 base_url=base_url,
@@ -3167,7 +3194,7 @@ def goal(
         raise typer.Exit(2)
 
     try:
-        asyncio.run(
+        _run_async(
             _run_once(
                 prompt=prompt,
                 model=effective_model,
@@ -3267,7 +3294,7 @@ def memory_save(
             if isinstance(storage, SQLiteStorage):
                 await storage.close()
 
-    asyncio.run(_go())
+    _run_async(_go())
 
 
 @memory_app.command("list")
@@ -3308,7 +3335,7 @@ def memory_list(
             if isinstance(storage, SQLiteStorage):
                 await storage.close()
 
-    asyncio.run(_go())
+    _run_async(_go())
 
 
 @memory_app.command("search")
@@ -3339,7 +3366,7 @@ def memory_search(
             if isinstance(storage, SQLiteStorage):
                 await storage.close()
 
-    asyncio.run(_go())
+    _run_async(_go())
 
 
 @memory_app.command("rm")
@@ -3369,7 +3396,7 @@ def memory_rm(
             if isinstance(storage, SQLiteStorage):
                 await storage.close()
 
-    asyncio.run(_go())
+    _run_async(_go())
 
 
 # ---------------------------------------------------------------------------
@@ -3682,7 +3709,7 @@ def lab_run(
             if hasattr(storage, "close"):
                 await storage.close()  # type: ignore[attr-defined]
 
-    asyncio.run(_run())
+    _run_async(_run())
 
 
 @lab_app.command("status")
@@ -3726,7 +3753,7 @@ def lab_status(
         finally:
             await storage.close()
 
-    asyncio.run(_run())
+    _run_async(_run())
 
 
 @lab_app.command("list")
@@ -3770,7 +3797,7 @@ def lab_list(
         finally:
             await storage.close()
 
-    asyncio.run(_run())
+    _run_async(_run())
 
 
 @lab_app.command("resume")
@@ -3943,7 +3970,7 @@ def lab_resume(
         finally:
             await storage.close()
 
-    asyncio.run(_run())
+    _run_async(_run())
 
 
 # ---------------------------------------------------------------------------
@@ -3999,7 +4026,7 @@ def phase_declare(
             if isinstance(storage, SQLiteStorage):
                 await storage.close()
 
-    asyncio.run(_go())
+    _run_async(_go())
 
 
 @phase_app.command("complete")
@@ -4028,7 +4055,7 @@ def phase_complete(
             if isinstance(storage, SQLiteStorage):
                 await storage.close()
 
-    asyncio.run(_go())
+    _run_async(_go())
 
 
 @phase_app.command("status")
@@ -4076,7 +4103,7 @@ def phase_status(
             if isinstance(storage, SQLiteStorage):
                 await storage.close()
 
-    asyncio.run(_go())
+    _run_async(_go())
 
 
 # ---------------------------------------------------------------------------
@@ -4656,7 +4683,6 @@ def tips_mine(
     and appends them to the tip library. Skipped tips (bad JSON, over-long
     bodies) are logged but never crash the command.
     """
-    import asyncio
     import json
 
     from harness.core import MiningInput, Tip, TipLibrary, parse_mined_tips, render_mining_prompt
@@ -4715,7 +4741,7 @@ def tips_mine(
         finally:
             await storage.close()
 
-    tips = asyncio.run(_go())
+    tips = _run_async(_go())
     if not tips:
         console.print("[yellow]No tips extracted.[/yellow]")
         return
@@ -4824,7 +4850,6 @@ def tune_propose(
     `.harness/tuned-prompts/<key>.json` (still requires explicit
     runtime opt-in to actually use it).
     """
-    import asyncio
     import json as _json
 
     from harness.core.events import Done as _Done
@@ -4886,7 +4911,7 @@ def tune_propose(
                 break
         return "".join(chunks)
 
-    response = asyncio.run(_go())
+    response = _run_async(_go())
     delta = parse_proposal(response, prompt_key=key)
     if delta is None:
         console.print("[red]Tuner LLM returned no parseable proposal.[/red]")

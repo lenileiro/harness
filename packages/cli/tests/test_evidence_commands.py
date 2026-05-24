@@ -120,7 +120,7 @@ class TestEvidenceFromRun:
                 text_turn("done"),
             ]
         )
-        _run(
+        run_result = _run(
             [
                 "run",
                 "x",
@@ -133,12 +133,15 @@ class TestEvidenceFromRun:
                 "sess_filter",
             ]
         )
+        assert run_result.exit_code == 0, run_result.stdout
 
         listing_all = _run(["evidence", "list", "--db", str(db_path)])
+        assert listing_all.exit_code == 0, listing_all.stdout
         assert "read_file" in listing_all.stdout
         assert "list_dir" in listing_all.stdout
 
         only_read = _run(["evidence", "list", "--db", str(db_path), "--tool", "read_file"])
+        assert only_read.exit_code == 0, only_read.stdout
         assert "read_file" in only_read.stdout
         assert "list_dir" not in only_read.stdout
 

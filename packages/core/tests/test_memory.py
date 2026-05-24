@@ -32,7 +32,7 @@ def test_memory_entry_model_dump_row() -> None:
 
 
 def test_memory_store_is_protocol() -> None:
-    assert hasattr(MemoryStore, "__protocol_attrs__")
+    assert getattr(MemoryStore, "_is_protocol", False)
 
 
 def test_memory_store_runtime_checkable() -> None:
