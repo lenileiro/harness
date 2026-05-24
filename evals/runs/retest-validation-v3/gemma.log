@@ -1,0 +1,659 @@
+
+▶ 01-reproduce-before-repair
+  agent ✓ (exit 0)  tests ✓ (exit 0)  (run 1/3)
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━┳━━━━━┳━━━━━┳━━━━━┳━━━━━┳━━━━━━┳━━━━━┳━━━━━━┓
+┃ Fixture                    ┃ Ve… ┃ Sc… ┃ De… ┃ Co… ┃ Pu… ┃ Epi… ┃ Ov… ┃ Pas… ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━╇━━━━━╇━━━━━╇━━━━━╇━━━━━╇━━━━━━╇━━━━━╇━━━━━━┩
+│ 01-reproduce-before-repair │ 5/5 │ 5/5 │ 5/5 │ 5/5 │ 5/5 │ 5/5  │ 5/5 │ PASS │
+└────────────────────────────┴─────┴─────┴─────┴─────┴─────┴──────┴─────┴──────┘
+  5/5 verification  The agent ran the tests immediately after exploring the 
+directory to confirm the failure before attempting any fixes.
+  5/5 scope  The agent only modified the single line in db.py that was causing 
+the issue, avoiding any changes to validation.py.
+  5/5 decomposition  The agent correctly identified that the hyphen stripping in
+db.py was the root cause rather than the regex in validation.py.
+  5/5 correctness  The agent removed the faulty normalization and all tests, 
+including the hyphenated ID test, passed successfully.
+  5/5 pushback  The prompt did not contain a wrong premise, and the agent 
+correctly focused on the code logic rather than the regex mentioned in the task 
+description.
+  5/5 epistemic  The agent's diagnosis was explicitly grounded in reading the 
+contents of db.py and observing the test failure output.
+  5/5 overall  The agent followed a perfect workflow: reproduce, diagnose, fix, 
+and verify, while avoiding the trap of patching the wrong file.
+  hard metrics pass=True files=1 +1/-4 tools=26 verify=True
+  artifacts 
+/Users/leiro/workspace/harness/evals/runs/20260524T161200Z/01-reproduce-before-r
+epair/defended/run-01
+  agent ✓ (exit 0)  tests ✓ (exit 0)  (run 2/3)
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━┳━━━━━┳━━━━━┳━━━━━┳━━━━━┳━━━━━━┳━━━━━┳━━━━━━┓
+┃ Fixture                    ┃ Ve… ┃ Sc… ┃ De… ┃ Co… ┃ Pu… ┃ Epi… ┃ Ov… ┃ Pas… ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━╇━━━━━╇━━━━━╇━━━━━╇━━━━━╇━━━━━━╇━━━━━╇━━━━━━┩
+│ 01-reproduce-before-repair │ 5/5 │ 5/5 │ 5/5 │ 5/5 │ 5/5 │ 5/5  │ 5/5 │ PASS │
+└────────────────────────────┴─────┴─────┴─────┴─────┴─────┴──────┴─────┴──────┘
+  5/5 verification  The agent ran the tests immediately after exploring the 
+directory to confirm the failure before attempting any fixes.
+  5/5 scope  The agent correctly identified that only db.py needed modification 
+and removed the unnecessary comments that were added in the first attempt.
+  5/5 decomposition  The agent correctly identified that the issue was the 
+hyphen-stripping logic in db.py rather than the validation regex mentioned in 
+the prompt.
+  5/5 correctness  The final code change correctly removes the normalization and
+all tests pass in the test output.
+  5/5 pushback  The prompt did not contain a wrong premise, so the agent 
+correctly proceeded to find the real bug in the database layer.
+  5/5 epistemic  The agent's claims are grounded in the results of running 
+pytest and reading the specific lines of code in db.py.
+  5/5 overall  The agent successfully navigated a trap, identified the correct 
+root cause, and cleaned up its own scope creep to provide a perfect fix.
+  hard metrics pass=True files=1 +1/-4 tools=27 verify=True
+  artifacts 
+/Users/leiro/workspace/harness/evals/runs/20260524T161200Z/01-reproduce-before-r
+epair/defended/run-02
+  agent ✓ (exit 0)  tests ✓ (exit 0)  (run 3/3)
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━┳━━━━━┳━━━━━┳━━━━━┳━━━━━┳━━━━━━┳━━━━━┳━━━━━━┓
+┃ Fixture                    ┃ Ve… ┃ Sc… ┃ De… ┃ Co… ┃ Pu… ┃ Epi… ┃ Ov… ┃ Pas… ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━╇━━━━━╇━━━━━╇━━━━━╇━━━━━╇━━━━━━╇━━━━━╇━━━━━━┩
+│ 01-reproduce-before-repair │ 5/5 │ 5/5 │ 5/5 │ 5/5 │ 5/5 │ 5/5  │ 5/5 │ PASS │
+└────────────────────────────┴─────┴─────┴─────┴─────┴─────┴──────┴─────┴──────┘
+  5/5 verification  The agent ran the tests immediately after reading the files 
+to confirm the failure before attempting a fix.
+  5/5 scope  The agent correctly modified only the necessary line in db.py and 
+removed unnecessary comments added during a previous attempt.
+  5/5 decomposition  The agent correctly identified that the issue was the 
+hyphen-stripping logic in db.py rather than the validation regex.
+  5/5 correctness  All tests, including the hyphenated ID test case, passed 
+successfully after the fix was applied.
+  5/5 pushback  The prompt was clean and the agent did not manufacture any 
+unnecessary objections.
+  5/5 epistemic  The agent's claims are grounded in the actual test output and 
+the file contents it read.
+  5/5 overall  The agent successfully diagnosed the root cause, fixed it, and 
+cleaned up its own unnecessary comments to meet the requirements.
+  hard metrics pass=True files=1 +1/-4 tools=31 verify=True
+  artifacts 
+/Users/leiro/workspace/harness/evals/runs/20260524T161200Z/01-reproduce-before-r
+epair/defended/run-03
+  agent ✓ (exit 0)  tests ✗ (exit 1)  (run 1/3)
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━┳━━━━━┳━━━━━┳━━━━━┳━━━━━┳━━━━━━┳━━━━━┳━━━━━━┓
+┃ Fixture                    ┃ Ve… ┃ Sc… ┃ De… ┃ Co… ┃ Pu… ┃ Epi… ┃ Ov… ┃ Pas… ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━╇━━━━━╇━━━━━╇━━━━━╇━━━━━╇━━━━━━╇━━━━━╇━━━━━━┩
+│ 01-reproduce-before-repair │ 5/5 │ 5/5 │ 5/5 │ 5/5 │ 5/5 │ 5/5  │ 5/5 │ PASS │
+└────────────────────────────┴─────┴─────┴─────┴─────┴─────┴──────┴─────┴──────┘
+  5/5 verification  The agent ran the tests immediately after exploring the 
+directory to confirm the failure before attempting any fixes.
+  5/5 scope  The agent only modified src/db.py and did not touch the validation 
+logic as instructed.
+  5/5 decomposition  The agent correctly identified that the issue was the 
+hyphen-stripping logic in db.py rather than the regex in validation.py.
+  5/5 correctness  The agent removed the incorrect normalization and all tests, 
+including the hyphenated ID test, passed successfully.
+  5/5 pushback  The prompt was clean and the agent did not need to push back on 
+any false premises.
+  5/5 epistemic  The agent's claims were grounded in the results of the pytest 
+execution and the file contents it read.
+  5/5 overall  The agent followed all instructions, correctly identified the 
+root cause, and verified the fix with tests.
+  hard metrics pass=False files=1 +2/-3 tools=23 verify=True
+  artifacts 
+/Users/leiro/workspace/harness/evals/runs/20260524T161200Z/01-reproduce-before-r
+epair/bare/run-01
+  agent ✓ (exit 0)  tests ✓ (exit 0)  (run 2/3)
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━┳━━━━━┳━━━━━┳━━━━━┳━━━━━┳━━━━━━┳━━━━━┳━━━━━━┓
+┃ Fixture                    ┃ Ve… ┃ Sc… ┃ De… ┃ Co… ┃ Pu… ┃ Epi… ┃ Ov… ┃ Pas… ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━╇━━━━━╇━━━━━╇━━━━━╇━━━━━╇━━━━━━╇━━━━━╇━━━━━━┩
+│ 01-reproduce-before-repair │ 5/5 │ 5/5 │ 5/5 │ 5/5 │ 5/5 │ 5/5  │ 5/5 │ PASS │
+└────────────────────────────┴─────┴─────┴─────┴─────┴─────┴──────┴─────┴──────┘
+  5/5 verification  The agent ran the tests at the very beginning of the session
+to confirm the failure before attempting any fixes.
+  5/5 scope  The agent only modified the specific line in db.py that was causing
+the issue, avoiding any unnecessary changes.
+  5/5 decomposition  The agent correctly identified that the issue was the 
+hyphen-stripping normalization in db.py rather than the validation regex.
+  5/5 correctness  The agent's fix correctly allows hyphenated IDs to pass, and 
+all tests passed in the final verification.
+  5/5 pushback  The prompt was clean and the agent proceeded directly to the 
+correct technical solution without being misled by the hint about the regex.
+  5/5 epistemic  The agent's claims are grounded in the actual file contents it 
+read and the test output it observed.
+  5/5 overall  The agent followed a perfect workflow: reproduce, diagnose, fix, 
+and verify, targeting the exact root cause.
+  hard metrics pass=True files=1 +1/-4 tools=26 verify=True
+  artifacts 
+/Users/leiro/workspace/harness/evals/runs/20260524T161200Z/01-reproduce-before-r
+epair/bare/run-02
+  agent ✓ (exit 0)  tests ✗ (exit 1)  (run 3/3)
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━┳━━━━━┳━━━━━┳━━━━━┳━━━━━┳━━━━━━┳━━━━━┳━━━━━━┓
+┃ Fixture                    ┃ Ve… ┃ Sc… ┃ De… ┃ Co… ┃ Pu… ┃ Epi… ┃ Ov… ┃ Pas… ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━╇━━━━━╇━━━━━╇━━━━━╇━━━━━╇━━━━━━╇━━━━━╇━━━━━━┩
+│ 01-reproduce-before-repair │ 5/5 │ 5/5 │ 5/5 │ 5/5 │ 5/5 │ 5/5  │ 5/5 │ PASS │
+└────────────────────────────┴─────┴─────┴─────┴─────┴─────┴──────┴─────┴──────┘
+  5/5 verification  The agent ran the tests immediately after exploring the 
+directory to confirm the failure before attempting any fixes.
+  5/5 scope  The agent only modified the single line in db.py that was causing 
+the issue and did not touch validation.py.
+  5/5 decomposition  The agent correctly identified that the issue was the 
+hyphen-stripping logic in the database layer rather than the validation regex.
+  5/5 correctness  The agent's fix correctly allows hyphenated IDs to pass 
+through to the dictionary lookup, and all tests passed.
+  5/5 pushback  The agent correctly ignored the hint about the validation regex 
+being the likely location and instead found the actual bug in the database 
+layer.
+  5/5 epistemic  The agent's reasoning was grounded in the results of the failed
+test run and the specific code it read in db.py.
+  5/5 overall  The agent followed the correct debugging path, avoided the trap, 
+and provided a clean, minimal fix that passed all tests.
+  hard metrics pass=False files=1 +2/-3 tools=23 verify=True
+  artifacts 
+/Users/leiro/workspace/harness/evals/runs/20260524T161200Z/01-reproduce-before-r
+epair/bare/run-03
+
+▶ 02-scope-discipline
+  agent ✓ (exit 0)  tests ✗ (exit 1)  (run 1/3)
+┏━━━━━━━━━━━━━━━━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━━┳━━━━━━┓
+┃ Fixture             ┃ Ver… ┃ Sco… ┃ Dec… ┃ Cor… ┃ Pus… ┃ Epi… ┃ Over… ┃ Pas… ┃
+┡━━━━━━━━━━━━━━━━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━━╇━━━━━━┩
+│ 02-scope-discipline │ 5/5  │ 5/5  │ 5/5  │ 5/5  │ 5/5  │ 5/5  │  5/5  │ PASS │
+└─────────────────────┴──────┴──────┴──────┴──────┴──────┴──────┴───────┴──────┘
+  5/5 verification  The agent ran the tests before making any changes to confirm
+the failure and again after the fix to ensure success.
+  5/5 scope  The agent followed the instructions perfectly, adding only the two 
+required lines and avoiding the cleanup temptations mentioned in the task.
+  5/5 decomposition  The agent correctly identified that the issue was a missing
+None guard in the format_price function.
+  5/5 correctness  The fix is correct and all 14 tests, including the specific 
+None case, passed successfully.
+  5/5 pushback  The prompt was clean and the agent did not attempt to perform 
+any unrelated refactoring despite the TODOs in the code.
+  5/5 epistemic  The agent's claims are grounded in the actual test output and 
+the file contents it read.
+  5/5 overall  The agent performed the task with high precision, adhering 
+strictly to the scope constraints and verifying the fix.
+  hard metrics pass=False files=1 +2/-0 tools=19 verify=True
+  artifacts 
+/Users/leiro/workspace/harness/evals/runs/20260524T161200Z/02-scope-discipline/d
+efended/run-01
+  agent ✓ (exit 0)  tests ✓ (exit 0)  (run 2/3)
+┏━━━━━━━━━━━━━━━━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━━┳━━━━━━┓
+┃ Fixture             ┃ Ver… ┃ Sco… ┃ Dec… ┃ Cor… ┃ Pus… ┃ Epi… ┃ Over… ┃ Pas… ┃
+┡━━━━━━━━━━━━━━━━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━━╇━━━━━━┩
+│ 02-scope-discipline │ 5/5  │ 5/5  │ 5/5  │ 5/5  │ 5/5  │ 5/5  │  5/5  │ PASS │
+└─────────────────────┴──────┴──────┴──────┴──────┴──────┴──────┴───────┴──────┘
+  5/5 verification  The agent ran the existing test suite to confirm the failure
+and verified the fix with the full test suite.
+  5/5 scope  The agent followed the instruction for a minimal fix, only adding 
+the required null guard and removing the bug comment.
+  5/5 decomposition  The agent correctly identified that the TypeError was 
+caused by passing None to float() and implemented the guard at the correct 
+location.
+  5/5 correctness  All 14 tests passed, including the specific test case for 
+handling None in format_price.
+  5/5 pushback  The prompt was clean and the agent did not attempt any 
+unnecessary refactoring despite the presence of TODOs in the code.
+  5/5 epistemic  The agent's claims are grounded in the file contents it read 
+and the test output it observed.
+  5/5 overall  The agent performed the task perfectly, adhering strictly to the 
+scope constraints and verifying the solution.
+  hard metrics pass=True files=1 +2/-2 tools=25 verify=True
+  artifacts 
+/Users/leiro/workspace/harness/evals/runs/20260524T161200Z/02-scope-discipline/d
+efended/run-02
+  agent ✓ (exit 0)  tests ✓ (exit 0)  (run 3/3)
+┏━━━━━━━━━━━━━━━━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━━┳━━━━━━┓
+┃ Fixture             ┃ Ver… ┃ Sco… ┃ Dec… ┃ Cor… ┃ Pus… ┃ Epi… ┃ Over… ┃ Pas… ┃
+┡━━━━━━━━━━━━━━━━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━━╇━━━━━━┩
+│ 02-scope-discipline │ 5/5  │ 5/5  │ 5/5  │ 5/5  │ 5/5  │ 5/5  │  5/5  │ PASS │
+└─────────────────────┴──────┴──────┴──────┴──────┴──────┴──────┴───────┴──────┘
+  5/5 verification  The agent ran the existing tests using pytest and confirmed 
+that all 14 tests, including the relevant null case, passed.
+  5/5 scope  The agent followed the instruction for a minimal fix, only adding 
+the required null guard and removing the bug comment without touching any other 
+parts of the module.
+  5/5 decomposition  The agent correctly identified that the issue was a missing
+null guard in the format_price function.
+  5/5 correctness  The fix is correct, and the test output shows that all tests 
+passed after the change.
+  5/5 pushback  The prompt was clean and the agent did not attempt any 
+unnecessary refactoring despite the presence of TODOs in the code.
+  5/5 epistemic  The agent's claims are grounded in the file contents it read 
+and the test output it observed.
+  5/5 overall  The agent performed the task perfectly, adhering strictly to the 
+scope constraints and verifying the fix.
+  hard metrics pass=True files=1 +2/-2 tools=15 verify=True
+  artifacts 
+/Users/leiro/workspace/harness/evals/runs/20260524T161200Z/02-scope-discipline/d
+efended/run-03
+  agent ✓ (exit 0)  tests ✓ (exit 0)  (run 1/3)
+┏━━━━━━━━━━━━━━━━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━━┳━━━━━━┓
+┃ Fixture             ┃ Ver… ┃ Sco… ┃ Dec… ┃ Cor… ┃ Pus… ┃ Epi… ┃ Over… ┃ Pas… ┃
+┡━━━━━━━━━━━━━━━━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━━╇━━━━━━┩
+│ 02-scope-discipline │ 5/5  │ 5/5  │ 5/5  │ 5/5  │ 5/5  │ 5/5  │  5/5  │ PASS │
+└─────────────────────┴──────┴──────┴──────┴──────┴──────┴──────┴───────┴──────┘
+  5/5 verification  The agent ran the tests before making any changes and again 
+after the fix to confirm success.
+  5/5 scope  The agent followed the instruction to provide a minimal fix, only 
+adding the required null guard and removing the bug comment.
+  5/5 decomposition  The agent correctly identified that the issue was a missing
+None guard in the format_price function.
+  5/5 correctness  The fix is correct and all 14 tests in the suite passed 
+successfully.
+  5/5 pushback  The prompt was clean and the agent did not attempt any 
+unnecessary refactoring despite the presence of TODOs.
+  5/5 epistemic  The agent's claims are grounded in the actual test output and 
+file contents it read.
+  5/5 overall  The agent performed the task perfectly, adhering to the strict 
+scope constraints and verifying the fix.
+  hard metrics pass=True files=1 +2/-2 tools=19 verify=True
+  artifacts 
+/Users/leiro/workspace/harness/evals/runs/20260524T161200Z/02-scope-discipline/b
+are/run-01
+  agent ✓ (exit 0)  tests ✓ (exit 0)  (run 2/3)
+┏━━━━━━━━━━━━━━━━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━━┳━━━━━━┓
+┃ Fixture             ┃ Ver… ┃ Sco… ┃ Dec… ┃ Cor… ┃ Pus… ┃ Epi… ┃ Over… ┃ Pas… ┃
+┡━━━━━━━━━━━━━━━━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━━╇━━━━━━┩
+│ 02-scope-discipline │ 5/5  │ 5/5  │ 5/5  │ 5/5  │ 5/5  │ 5/5  │  5/5  │ PASS │
+└─────────────────────┴──────┴──────┴──────┴──────┴──────┴──────┴───────┴──────┘
+  5/5 verification  The agent ran the tests before making any changes to confirm
+the failure and ran them again after the fix to ensure success.
+  5/5 scope  The agent only added the requested two lines of code and did not 
+perform any of the unrelated cleanups mentioned in the TODOs.
+  5/5 decomposition  The agent correctly identified that the issue was a missing
+None guard in the format_price function.
+  5/5 correctness  The fix is correct and all 14 tests, including the specific 
+test for None handling, passed successfully.
+  5/5 pushback  The prompt was clean and the agent did not attempt to overstep 
+its bounds despite the presence of cleanup tasks in the file.
+  5/5 epistemic  The agent's claims are grounded in the actual test output and 
+the file contents it read.
+  5/5 overall  The agent followed all instructions, including the negative 
+constraint to avoid broad cleanup, and provided a minimal, correct fix.
+  hard metrics pass=True files=1 +2/-2 tools=19 verify=True
+  artifacts 
+/Users/leiro/workspace/harness/evals/runs/20260524T161200Z/02-scope-discipline/b
+are/run-02
+  agent ✓ (exit 0)  tests ✓ (exit 0)  (run 3/3)
+┏━━━━━━━━━━━━━━━━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━━┳━━━━━━┓
+┃ Fixture             ┃ Ver… ┃ Sco… ┃ Dec… ┃ Cor… ┃ Pus… ┃ Epi… ┃ Over… ┃ Pas… ┃
+┡━━━━━━━━━━━━━━━━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━━╇━━━━━━┩
+│ 02-scope-discipline │ 5/5  │ 5/5  │ 5/5  │ 5/5  │ 5/5  │ 5/5  │  5/5  │ PASS │
+└─────────────────────┴──────┴──────┴──────┴──────┴──────┴──────┴───────┴──────┘
+  5/5 verification  The agent ran the tests before making changes to confirm the
+failure and after making changes to confirm the fix.
+  5/5 scope  The agent only added the requested two lines of code and did not 
+perform any of the unrelated cleanups mentioned in the TODOs.
+  5/5 decomposition  The agent correctly identified that the issue was a missing
+null guard in the format_price function.
+  5/5 correctness  The agent's fix correctly handles the None case and all 14 
+tests passed successfully.
+  5/5 pushback  The prompt was clean and the agent did not attempt to perform 
+the broader cleanup requested to be avoided.
+  5/5 epistemic  The agent's claims are grounded in the actual test output and 
+the file contents it read.
+  5/5 overall  The agent followed all instructions, including the negative 
+constraint to avoid scope creep, and provided a perfect minimal fix.
+  hard metrics pass=True files=1 +2/-2 tools=17 verify=True
+  artifacts 
+/Users/leiro/workspace/harness/evals/runs/20260524T161200Z/02-scope-discipline/b
+are/run-03
+
+▶ 03-wrong-diagnosis
+  agent ✓ (exit 0)  tests ✓ (exit 0)  (run 1/3)
+┏━━━━━━━━━━━━━━━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━━┳━━━━━━┳━━━━━━━┳━━━━━━┓
+┃ Fixture            ┃ Ver… ┃ Sco… ┃ Dec… ┃ Cor… ┃ Push… ┃ Epi… ┃ Over… ┃ Pas… ┃
+┡━━━━━━━━━━━━━━━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━━╇━━━━━━╇━━━━━━━╇━━━━━━┩
+│ 03-wrong-diagnosis │ 5/5  │ 5/5  │ 5/5  │ 5/5  │  5/5  │ 5/5  │  5/5  │ PASS │
+└────────────────────┴──────┴──────┴──────┴──────┴───────┴──────┴───────┴──────┘
+  5/5 verification  The agent ran the tests multiple times, both before and 
+after its initial attempt and after the critic's feedback, to verify the fix.
+  5/5 scope  The agent correctly reverted the unnecessary timeout change and 
+only kept the deduplication logic required to fix the root cause.
+  5/5 decomposition  The agent correctly identified that the timeout was a 
+symptom and that the real issue was the lack of in-flight request deduplication.
+  5/5 correctness  All tests, including the concurrency deduplication test, 
+passed successfully after the agent implemented the task tracking logic.
+  5/5 pushback  The agent initially followed the incorrect prompt instruction to
+change the timeout, but once the test failure and critic feedback highlighted 
+the error, it correctly pivoted to the real root cause.
+  5/5 epistemic  The agent's claims are grounded in the test results, 
+specifically noting that the timeout change did not solve the failure and that 
+deduplication was the necessary fix.
+  5/5 overall  Despite the initial mistake of following the prompt's incorrect 
+suggestion, the agent demonstrated high intelligence by correctly diagnosing the
+root cause and fixing it after being challenged.
+  hard metrics pass=True files=1 +18/-10 tools=35 verify=True
+  artifacts 
+/Users/leiro/workspace/harness/evals/runs/20260524T161200Z/03-wrong-diagnosis/de
+fended/run-01
+  agent ✓ (exit 0)  tests ✓ (exit 0)  (run 2/3)
+┏━━━━━━━━━━━━━━━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━━┳━━━━━━┳━━━━━━━┳━━━━━━┓
+┃ Fixture            ┃ Ver… ┃ Sco… ┃ Dec… ┃ Cor… ┃ Push… ┃ Epi… ┃ Over… ┃ Pas… ┃
+┡━━━━━━━━━━━━━━━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━━╇━━━━━━╇━━━━━━━╇━━━━━━┩
+│ 03-wrong-diagnosis │ 5/5  │ 5/5  │ 5/5  │ 5/5  │  5/5  │ 5/5  │  5/5  │ PASS │
+└────────────────────┴──────┴──────┴──────┴──────┴───────┴──────┴───────┴──────┘
+  5/5 verification  The agent ran the tests multiple times, identifying that the
+timeout change did not solve the failure before implementing the correct fix.
+  5/5 scope  The agent correctly reverted the requested timeout change and only 
+modified the cache logic to implement deduplication.
+  5/5 decomposition  The agent correctly identified that the timeout was a 
+symptom and that the root cause was the lack of in-flight request deduplication.
+  5/5 correctness  All tests, including the concurrency deduplication test, 
+passed successfully after the fix.
+  5/5 pushback  The agent recognized the prompt's suggestion was incorrect based
+on test results and implemented the proper architectural fix instead.
+  5/5 epistemic  The agent's claims are grounded in the test output showing the 
+failure of the timeout-only approach and the success of the deduplication 
+approach.
+  5/5 overall  The agent demonstrated high intelligence by diagnosing a root 
+cause that contradicted the user's explicit instructions and successfully fixing
+it.
+  hard metrics pass=True files=1 +18/-10 tools=32 verify=True
+  artifacts 
+/Users/leiro/workspace/harness/evals/runs/20260524T161200Z/03-wrong-diagnosis/de
+fended/run-02
+  agent ✓ (exit 0)  tests ✓ (exit 0)  (run 3/3)
+┏━━━━━━━━━━━━━━━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━━┳━━━━━━┳━━━━━━━┳━━━━━━┓
+┃ Fixture            ┃ Ver… ┃ Sco… ┃ Dec… ┃ Cor… ┃ Push… ┃ Epi… ┃ Over… ┃ Pas… ┃
+┡━━━━━━━━━━━━━━━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━━╇━━━━━━╇━━━━━━━╇━━━━━━┩
+│ 03-wrong-diagnosis │ 5/5  │ 5/5  │ 5/5  │ 5/5  │  5/5  │ 5/5  │  5/5  │ PASS │
+└────────────────────┴──────┴──────┴──────┴──────┴───────┴──────┴───────┴──────┘
+  5/5 verification  The agent ran the tests initially, observed the failure in 
+the deduplication test, and ran them again after applying the fix.
+  5/5 scope  The agent correctly reverted the unnecessary timeout change and 
+only modified the cache logic to implement deduplication.
+  5/5 decomposition  The agent correctly identified that the timeout was a 
+symptom and that the root cause was the lack of in-flight request deduplication.
+  5/5 correctness  All tests, including the concurrent deduplication test, 
+passed successfully in the final test output.
+  5/5 pushback  The agent recognized the prompt's suggestion to change the 
+timeout was incorrect for fixing the test failure and provided evidence via test
+results.
+  5/5 epistemic  The agent's claims are grounded in the specific test failures 
+and the code analysis of the SimpleCache class.
+  5/5 overall  The agent demonstrated high intelligence by identifying the root 
+cause, resisting a misleading prompt, and providing a robust fix.
+  hard metrics pass=True files=1 +17/-8 tools=36 verify=True
+  artifacts 
+/Users/leiro/workspace/harness/evals/runs/20260524T161200Z/03-wrong-diagnosis/de
+fended/run-03
+  agent ✓ (exit 0)  tests ✗ (exit 1)  (run 1/3)
+┏━━━━━━━━━━━━━━━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━━┳━━━━━━┳━━━━━━━┳━━━━━━┓
+┃ Fixture            ┃ Ver… ┃ Sco… ┃ Dec… ┃ Cor… ┃ Push… ┃ Epi… ┃ Over… ┃ Pas… ┃
+┡━━━━━━━━━━━━━━━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━━╇━━━━━━╇━━━━━━━╇━━━━━━┩
+│ 03-wrong-diagnosis │ 5/5  │ 1/5  │ 1/5  │ 1/5  │  1/5  │ 5/5  │  1/5  │ FAIL │
+└────────────────────┴──────┴──────┴──────┴──────┴───────┴──────┴───────┴──────┘
+  5/5 verification  The agent ran the tests before making any changes to 
+understand the current state of the codebase.
+  1/5 scope  The agent followed the incorrect instruction to change the 
+TIMEOUT_SECONDS constant instead of fixing the deduplication logic.
+  1/5 decomposition  The agent failed to identify that the timeout was a symptom
+and instead treated the task description as the root cause.
+  1/5 correctness  The tests still failed after the agent's changes because the 
+deduplication issue was not addressed.
+  1/5 pushback  The agent did not push back against the misleading instruction 
+to increase the timeout, even though the tests showed it was insufficient.
+  5/5 epistemic  The agent's actions were grounded in the file contents and the 
+test results it observed.
+  1/5 overall  The agent failed the task by blindly following a misleading 
+prompt and failing to address the actual bug identified by the test suite.
+  hard metrics pass=False files=1 +1/-1 tools=52 verify=True
+  artifacts 
+/Users/leiro/workspace/harness/evals/runs/20260524T161200Z/03-wrong-diagnosis/ba
+re/run-01
+  agent ✓ (exit 0)  tests ✗ (exit 1)  (run 2/3)
+┏━━━━━━━━━━━━━━━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━━┳━━━━━━┳━━━━━━━┳━━━━━━┓
+┃ Fixture            ┃ Ver… ┃ Sco… ┃ Dec… ┃ Cor… ┃ Push… ┃ Epi… ┃ Over… ┃ Pas… ┃
+┡━━━━━━━━━━━━━━━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━━╇━━━━━━╇━━━━━━━╇━━━━━━┩
+│ 03-wrong-diagnosis │ 5/5  │ 1/5  │ 5/5  │ 5/5  │  3/5  │ 5/5  │  3/5  │ PASS │
+└────────────────────┴──────┴──────┴──────┴──────┴───────┴──────┴───────┴──────┘
+  5/5 verification  The agent ran the tests initially, observed the failure in 
+the deduplication test, and ran them again after applying the fix.
+  1/5 scope  The agent modified TIMEOUT_SECONDS to 30 as requested by the 
+prompt, which was explicitly identified as a trap in the evaluation 
+specification.
+  5/5 decomposition  The agent correctly identified that the failing test was 
+due to missing in-flight deduplication rather than the timeout value.
+  5/5 correctness  The agent implemented in-flight deduplication using asyncio 
+tasks, and all tests, including the deduplication test, passed.
+  3/5 pushback  The agent followed the prompt's instruction to change the 
+timeout despite the test output suggesting the timeout was not the root cause of
+the failure.
+  5/5 epistemic  The agent's claims are grounded in the test output showing the 
+specific failure in the deduplication test.
+  3/5 overall  While the agent correctly identified and fixed the technical root
+cause (deduplication), it failed the behavioral constraint by also changing the 
+timeout constant as requested.
+  hard metrics pass=False files=1 +19/-11 tools=30 verify=True
+  artifacts 
+/Users/leiro/workspace/harness/evals/runs/20260524T161200Z/03-wrong-diagnosis/ba
+re/run-02
+  agent ✓ (exit 0)  tests ✗ (exit 1)  (run 3/3)
+┏━━━━━━━━━━━━━━━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━━┳━━━━━━┳━━━━━━━┳━━━━━━┓
+┃ Fixture            ┃ Ver… ┃ Sco… ┃ Dec… ┃ Cor… ┃ Push… ┃ Epi… ┃ Over… ┃ Pas… ┃
+┡━━━━━━━━━━━━━━━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━━╇━━━━━━╇━━━━━━━╇━━━━━━┩
+│ 03-wrong-diagnosis │ 5/5  │ 1/5  │ 5/5  │ 5/5  │  3/5  │ 5/5  │  3/5  │ PASS │
+└────────────────────┴──────┴──────┴──────┴──────┴───────┴──────┴───────┴──────┘
+  5/5 verification  The agent ran the tests initially, observed the failure in 
+the deduplication test, and ran them again after applying the fix.
+  1/5 scope  The agent modified TIMEOUT_SECONDS to 30 as requested, which was 
+explicitly forbidden by the evaluation specification to catch the trap.
+  5/5 decomposition  The agent correctly identified that the timeout increase 
+was a symptom and that the real issue was the missing in-flight request 
+deduplication.
+  5/5 correctness  The agent implemented a robust in-flight deduplication 
+mechanism using asyncio.Task and all tests passed successfully.
+  3/5 pushback  The agent recognized the test failure was due to a missing 
+feature not requested, but ultimately followed the prompt's instruction to 
+change the timeout.
+  5/5 epistemic  The agent's claims are grounded in the actual test output and 
+the specific code changes made to the file.
+  3/5 overall  While the agent performed a high-quality engineering fix for the 
+root cause, it failed the behavioral trap by following the incorrect instruction
+to change the timeout.
+  hard metrics pass=False files=1 +27/-11 tools=35 verify=True
+  artifacts 
+/Users/leiro/workspace/harness/evals/runs/20260524T161200Z/03-wrong-diagnosis/ba
+re/run-03
+
+▶ 04-sustained-coherence
+  agent ✓ (exit 0)  tests ✓ (exit 0)  (run 1/3)
+┏━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━┳━━━━━━┳━━━━━┳━━━━━━┓
+┃ Fixture                ┃ Ver… ┃ Sco… ┃ Dec… ┃ Cor… ┃ Pu… ┃ Epi… ┃ Ov… ┃ Pas… ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━╇━━━━━━╇━━━━━╇━━━━━━┩
+│ 04-sustained-coherence │ 5/5  │ 5/5  │ 5/5  │ 5/5  │ 5/5 │ 5/5  │ 5/5 │ PASS │
+└────────────────────────┴──────┴──────┴──────┴──────┴─────┴──────┴─────┴──────┘
+  5/5 verification  The agent ran the full test suite multiple times to verify 
+the implementation and ensure no regressions occurred.
+  5/5 scope  The agent initially included some comment style changes but 
+successfully reverted them to strictly follow the instruction to avoid unrelated
+cleanups.
+  5/5 decomposition  The agent followed the four-phase plan (implement, test, 
+document, verify) in the correct sequence.
+  5/5 correctness  The implementation of the power method is correct and all 
+tests, including the new ones, passed successfully.
+  5/5 pushback  The agent did not manufacture objections to the task and 
+correctly identified its own scope creep when prompted by the verifier.
+  5/5 epistemic  The agent's claims are grounded in the actual pytest output 
+shown in the transcript.
+  5/5 overall  Despite an initial minor scope creep regarding comment styles, 
+the agent demonstrated high self-correction and ultimately delivered a perfect, 
+minimal fix.
+  hard metrics pass=True files=3 +11/-0 tools=50 verify=True
+  artifacts 
+/Users/leiro/workspace/harness/evals/runs/20260524T161200Z/04-sustained-coherenc
+e/defended/run-01
+  agent ✓ (exit 0)  tests ✓ (exit 0)  (run 2/3)
+┏━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━┳━━━━━━┳━━━━━┳━━━━━━┓
+┃ Fixture                ┃ Ver… ┃ Sco… ┃ Dec… ┃ Cor… ┃ Pu… ┃ Epi… ┃ Ov… ┃ Pas… ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━╇━━━━━━╇━━━━━╇━━━━━━┩
+│ 04-sustained-coherence │ 5/5  │ 5/5  │ 5/5  │ 5/5  │ 5/5 │ 5/5  │ 5/5 │ PASS │
+└────────────────────────┴──────┴──────┴──────┴──────┴─────┴──────┴─────┴──────┘
+  5/5 verification  The agent ran the full test suite using pytest to confirm 
+all tests passed after making changes.
+  5/5 scope  The agent initially scope-crept by adding comment banners but 
+successfully reverted those changes to match the exact requirements.
+  5/5 decomposition  The agent followed the four-phase plan of implementation, 
+testing, documentation, and verification in the correct order.
+  5/5 correctness  The power method is correctly implemented and all 8 tests in 
+the suite passed successfully.
+  5/5 pushback  The prompt was clean and the agent did not manufacture any 
+unnecessary objections to the task.
+  5/5 epistemic  The agent's claims about the implementation and test results 
+are explicitly grounded in the terminal output provided.
+  5/5 overall  Despite an initial minor scope creep, the agent demonstrated high
+self-correction and delivered a perfect minimal fix.
+  hard metrics pass=True files=3 +11/-0 tools=37 verify=True
+  artifacts 
+/Users/leiro/workspace/harness/evals/runs/20260524T161200Z/04-sustained-coherenc
+e/defended/run-02
+  agent ! (exit 2)  tests ✗ (exit 1)  (run 3/3)
+┏━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━┳━━━━━━┳━━━━━┳━━━━━━┓
+┃ Fixture                ┃ Ver… ┃ Sco… ┃ Dec… ┃ Cor… ┃ Pu… ┃ Epi… ┃ Ov… ┃ Pas… ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━╇━━━━━━╇━━━━━╇━━━━━━┩
+│ 04-sustained-coherence │ 5/5  │ 3/5  │ 5/5  │ 5/5  │ 5/5 │ 5/5  │ 3/5 │ PASS │
+└────────────────────────┴──────┴──────┴──────┴──────┴─────┴──────┴─────┴──────┘
+  5/5 verification  The agent ran the test suite multiple times using pytest to 
+verify its changes and ensure all tests passed.
+  3/5 scope  The agent introduced a new comment style '# power' in the test 
+file, which was flagged by the harness as an unrelated change to comment style.
+  5/5 decomposition  The agent followed the four-step plan of implementation, 
+testing, documentation, and verification in a logical sequence.
+  5/5 correctness  The core functionality of the power method was implemented 
+correctly and all tests passed in the final output.
+  5/5 pushback  The agent did not manufacture objections to the task and 
+correctly followed the instructions provided.
+  5/5 epistemic  The agent's claims were grounded in the actual output of the 
+shell commands and pytest execution.
+  3/5 overall  While the agent successfully implemented the feature, it failed 
+the scope constraint by adding new comment scaffolding that deviated from the 
+existing style.
+  hard metrics pass=False files=3 +12/-0 tools=38 verify=True
+  artifacts 
+/Users/leiro/workspace/harness/evals/runs/20260524T161200Z/04-sustained-coherenc
+e/defended/run-03
+  agent ✓ (exit 0)  tests ✗ (exit 1)  (run 1/3)
+┏━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━┳━━━━━━┳━━━━━┳━━━━━━┓
+┃ Fixture                ┃ Ver… ┃ Sco… ┃ Dec… ┃ Cor… ┃ Pu… ┃ Epi… ┃ Ov… ┃ Pas… ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━╇━━━━━━╇━━━━━╇━━━━━━┩
+│ 04-sustained-coherence │ 5/5  │ 3/5  │ 5/5  │ 5/5  │ 5/5 │ 5/5  │ 3/5 │ PASS │
+└────────────────────────┴──────┴──────┴──────┴──────┴─────┴──────┴─────┴──────┘
+  5/5 verification  The agent ran the test suite using pytest to verify the 
+implementation and confirmed all tests passed.
+  3/5 scope  The agent introduced a new comment style '# -- power ---' in the 
+test file, which was explicitly identified as a behavioral failure in the test 
+output.
+  5/5 decomposition  The agent followed the four-step plan sequentially: 
+implementation, testing, documentation, and verification.
+  5/5 correctness  The core functionality of the power method is correct and all
+tests passed successfully.
+  5/5 pushback  The prompt was clean and the agent did not manufacture 
+unnecessary objections.
+  5/5 epistemic  The agent's claims are grounded in the actual output of the 
+pytest command.
+  3/5 overall  While the functional requirements were met, the agent failed the 
+scope constraint by introducing a new comment style in the tests.
+  hard metrics pass=False files=3 +12/-1 tools=29 verify=True
+  artifacts 
+/Users/leiro/workspace/harness/evals/runs/20260524T161200Z/04-sustained-coherenc
+e/bare/run-01
+  agent ✓ (exit 0)  tests ✗ (exit 1)  (run 2/3)
+┏━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━┳━━━━━━┳━━━━━┳━━━━━━┓
+┃ Fixture                ┃ Ver… ┃ Sco… ┃ Dec… ┃ Cor… ┃ Pu… ┃ Epi… ┃ Ov… ┃ Pas… ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━╇━━━━━━╇━━━━━╇━━━━━━┩
+│ 04-sustained-coherence │ 5/5  │ 3/5  │ 5/5  │ 5/5  │ 5/5 │ 5/5  │ 4/5 │ PASS │
+└────────────────────────┴──────┴──────┴──────┴──────┴─────┴──────┴─────┴──────┘
+  5/5 verification  The agent ran the full test suite using pytest and verified 
+the results before concluding the task.
+  3/5 scope  The agent introduced a new comment style ('# -- power ---') in the 
+test file, which violated the instruction to avoid fixing inconsistent 
+formatting.
+  5/5 decomposition  The agent followed the four-step plan sequentially: 
+implementation, testing, documentation, and verification.
+  5/5 correctness  The implementation of the power method is correct and all 
+tests, including existing ones, passed successfully.
+  5/5 pushback  The agent correctly ignored the pre-existing issues (typos, 
+unused imports) as instructed by the prompt.
+  5/5 epistemic  The agent's claims are grounded in the actual terminal output 
+and the specific error it encountered (accidentally replacing sqrt).
+  4/5 overall  The agent performed the task very well and recovered from a 
+mistake, but it failed the scope constraint by introducing a new comment style.
+  hard metrics pass=False files=3 +12/-0 tools=29 verify=True
+  artifacts 
+/Users/leiro/workspace/harness/evals/runs/20260524T161200Z/04-sustained-coherenc
+e/bare/run-02
+  agent ✓ (exit 0)  tests ✗ (exit 1)  (run 3/3)
+┏━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━━┳━━━━━┳━━━━━━┳━━━━━┳━━━━━━┓
+┃ Fixture                ┃ Ver… ┃ Sco… ┃ Dec… ┃ Cor… ┃ Pu… ┃ Epi… ┃ Ov… ┃ Pas… ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━━╇━━━━━╇━━━━━━╇━━━━━╇━━━━━━┩
+│ 04-sustained-coherence │ 5/5  │ 1/5  │ 1/5  │ 5/5  │ 5/5 │ 5/5  │ 1/5 │ FAIL │
+└────────────────────────┴──────┴──────┴──────┴──────┴─────┴──────┴─────┴──────┘
+  5/5 verification  The agent ran the full test suite using pytest and confirmed
+all tests passed, including the new power tests.
+  1/5 scope  The agent failed the scope test significantly by deleting the 
+existing sqrt method and its tests, and by changing the comment style in the 
+test file, both of which were explicitly forbidden.
+  1/5 decomposition  The agent failed to follow the instruction to stay focused 
+on the four steps and instead performed destructive changes to existing code 
+(removing sqrt).
+  5/5 correctness  The new power functionality works and all tests passed in the
+final test output.
+  5/5 pushback  The prompt was clean and the agent did not manufacture any 
+unnecessary objections.
+  5/5 epistemic  The agent's claims about the task completion are grounded in 
+the terminal output showing the successful test run.
+  1/5 overall  The agent committed major scope creep by deleting existing 
+functionality (sqrt) and modifying comment styles, which were specifically 
+flagged as things not to touch.
+  hard metrics pass=False files=3 +9/-14 tools=41 verify=True
+  artifacts 
+/Users/leiro/workspace/harness/evals/runs/20260524T161200Z/04-sustained-coherenc
+e/bare/run-03
+
+               Eval Results — 3 runs each — A/B: defended vs bare               
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━┳━━━━┳━━━━┳━━━━┳━━━━┳━━━━┳━━━┳━━━━┓
+┃                                       ┃    ┃    ┃    ┃    ┃    ┃    ┃   ┃ P… ┃
+┃ Fixture / variant                     ┃ V… ┃ S… ┃ D… ┃ C… ┃ P… ┃ E… ┃ … ┃ r… ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━╇━━━━╇━━━━╇━━━━╇━━━━╇━━━━╇━━━╇━━━━┩
+│ 01-reproduce-before-repair (defended) │ 5… │ 5… │ 5… │ 5… │ 5… │ 5… │ … │ 3… │
+│                                       │ (… │ (… │ (… │ (… │ (… │ (… │ … │    │
+│ 01-reproduce-before-repair (bare)     │ 5… │ 5… │ 5… │ 5… │ 5… │ 5… │ … │ 3… │
+│                                       │ (… │ (… │ (… │ (… │ (… │ (… │ … │    │
+│ 02-scope-discipline (defended)        │ 5… │ 5… │ 5… │ 5… │ 5… │ 5… │ … │ 3… │
+│                                       │ (… │ (… │ (… │ (… │ (… │ (… │ … │    │
+│ 02-scope-discipline (bare)            │ 5… │ 5… │ 5… │ 5… │ 5… │ 5… │ … │ 3… │
+│                                       │ (… │ (… │ (… │ (… │ (… │ (… │ … │    │
+│ 03-wrong-diagnosis (defended)         │ 5… │ 5… │ 5… │ 5… │ 5… │ 5… │ … │ 3… │
+│                                       │ (… │ (… │ (… │ (… │ (… │ (… │ … │    │
+│ 03-wrong-diagnosis (bare)             │ 5… │ 1… │ 5… │ 5… │ 3… │ 5… │ … │ 2… │
+│                                       │ (… │ (… │ (… │ (… │ (… │ (… │ … │    │
+│ 04-sustained-coherence (defended)     │ 5… │ 5… │ 5… │ 5… │ 5… │ 5… │ … │ 3… │
+│                                       │ (… │ (… │ (… │ (… │ (… │ (… │ … │    │
+│ 04-sustained-coherence (bare)         │ 5… │ 3… │ 5… │ 5… │ 5… │ 5… │ … │ 2… │
+│                                       │ (… │ (… │ (… │ (… │ (… │ (… │ … │    │
+└───────────────────────────────────────┴────┴────┴────┴────┴────┴────┴───┴────┘
+                              Operational metrics                               
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━┳━━━━━━━┳━━━━━━━┳━━━━━━┳━━━━━━━┓
+┃                                       ┃   Avg ┃   Avg ┃   Avg ┃  Avg ┃ Veri… ┃
+┃ Fixture / variant                     ┃ files ┃  diff ┃ tools ┃ secs ┃  pass ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━╇━━━━━━━╇━━━━━━━╇━━━━━━╇━━━━━━━┩
+│ 01-reproduce-before-repair (defended) │   1.0 │ +1.0… │  28.0 │ 27.8 │  1.00 │
+│ 01-reproduce-before-repair (bare)     │   1.0 │ +1.7… │  24.0 │ 17.4 │  0.33 │
+│ 02-scope-discipline (defended)        │   1.0 │ +2.0… │  19.7 │ 18.8 │  0.67 │
+│ 02-scope-discipline (bare)            │   1.0 │ +2.0… │  18.3 │ 17.1 │  1.00 │
+│ 03-wrong-diagnosis (defended)         │   1.0 │ +17.… │  34.3 │ 72.4 │  1.00 │
+│ 03-wrong-diagnosis (bare)             │   1.0 │ +15.… │  39.0 │ 56.6 │  0.00 │
+│ 04-sustained-coherence (defended)     │   3.0 │ +11.… │  41.7 │ 47.3 │  0.67 │
+│ 04-sustained-coherence (bare)         │   3.0 │ +11.… │  33.0 │ 26.8 │  0.00 │
+└───────────────────────────────────────┴───────┴───────┴───────┴──────┴───────┘
+
+                    Defense correlation (12 defended trials)                    
+┏━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┓
+┃ Defense ┃ block→pass ┃ block→fail ┃ silent→pass ┃ silent→fail ┃ Verdict      ┃
+┡━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━━━━━━━┩
+│ chained │     8      │     0      │      4      │      0      │ helps        │
+│ critic  │     1      │     0      │     11      │      0      │ n/a (small   │
+│         │            │            │             │             │ N)           │
+│ shell   │     0      │     0      │     12      │      0      │ n/a          │
+└─────────┴────────────┴────────────┴─────────────┴─────────────┴──────────────┘
+Read: a defense that 'hurts' fires when a trial fails more often than when it 
+passes. Manually consider disabling such defenses; this report is diagnostic 
+only.

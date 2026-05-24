@@ -205,6 +205,92 @@ Headlines:
    pre-fix to 2/1 post-fix. Half the chain blocks were the phase-loop
    bug masquerading as a real defense firing.
 
+## Post-refactor cross-model A/B (2026-05-24, retest-validation-v3)
+
+Re-ran the cross-model A/B after the in-flight harness refactor settled
+(new `adaptive` profile, hard_metrics tracking, operational metrics
+table, `BugfixCommentRewriteVerifier` addition, judgy artifact
+directories). First v3 attempt was compromised by a mid-run code edit
+that left `BugfixCommentRewriteVerifier` referenced in
+`cli/__main__.py` before being committed to `harness/core/__init__.py`;
+subprocesses launched during that window hit ImportError. Killed and
+restarted — fresh data below.
+
+### Per-model results
+
+| Model | F01 | F02 | F03 | F04 |
+|---|---|---|---|---|
+| Gemma 4 26B  | tied perfect (5/5, 3/3 PASS)  | tied perfect          | **def scope=5/5 vs bare=1**  | **def 5/5 all dims, 3/3 PASS** vs bare scope=3, 2/3 PASS |
+| Qwen3-coder  | tied 3/3 PASS                 | **bare 2/3 vs def 1/3** (qwen-specific regression) | 0/3 model ceiling (both arms)     | tied scope=3, 3/3 PASS each |
+| Kimi K2.6    | tied (def +2 verif)           | tied                  | **def scope=5/5 vs bare=1**, def +4 pushback  | tied 3/3 PASS each |
+
+Operational metrics — `Verify pass` column from the new
+operational-metrics report:
+
+| Cell | Defended verify-pass | Bare verify-pass |
+|---|---:|---:|
+| Gemma F03 | 1.00 | 0.00 |
+| Gemma F04 | 0.67 | 0.00 |
+| Kimi F03  | 1.00 | 0.00 |
+| Kimi F04  | 1.00 | 0.33 |
+
+Defense correlation across 36 defended trials (12 per model):
+
+| Model | chained block→pass | block→fail | Verdict |
+|---|---:|---:|---|
+| Gemma |   8 | 0 | helps |
+| Qwen  |   6 | 0 | helps (5 silent→fail = model failures, not chain misses) |
+| Kimi  |   9 | 0 | helps |
+
+**23 chained block→pass, 0 block→fail across all 36 trials. Zero
+false positives anywhere.**
+
+### Headlines
+
+1. **F03 ceiling broken on Gemma and Kimi.** The wrong-diagnosis
+   fixture — historically stuck at scope=1 across every prior
+   cross-model run on every model — now scores defended scope=5/5
+   reliably. Bare still scores 1. Defended verify-pass on F03 = 100%
+   for both Gemma and Kimi; bare = 0%. The defended chain is
+   pulling capable models past the "obey the literal prompt even when
+   it's wrong" trap that previously defined the ceiling.
+
+2. **F04 PASS-rate dominance.** Gemma defended F04: 3/3 PASS, 100%
+   verify-pass. Bare: 2/3 PASS, **0% verify-pass**. The scope-discipline
+   contract continues to prevent the seeded typo-fix scope creep, and
+   the broader chain catches edits that break existing tests.
+
+3. **Qwen F02 defended regression** is the one negative finding. The
+   defended arm scored 1/3 PASS, 0% verify-pass, while bare arm got
+   2/3 PASS, 33% verify-pass. The agent thrashes 119s avg, makes 42
+   tool calls, but tests still fail. Other fixtures unchanged or
+   better. Plausibly variance (n=3) or a model-specific interaction
+   with the new `adaptive` profile.
+
+4. **No defended catastrophes.** The advisory-mode philosophy from the
+   prior phase-gate / TestsBeforeEdit work held: even when the chain
+   misjudged on qwen F02, the runs completed and were measurable.
+
+### What changed vs prior runs
+
+The in-flight refactor (commits between `fc8e3d5` and the current
+state) added several pieces that show up in this run:
+
+- **`adaptive` profile** replaces `strict` as the default defended
+  profile. Selects verifiers per-task based on prompt classification.
+- **Operational metrics report**: per-fixture avg files/diff/tools/secs
+  and a verify-pass rate. New columns enable separating "agent
+  finished cleanly" from "agent finished cleanly AND tests pass."
+- **`BugfixCommentRewriteVerifier`**: catches the F04 typo-fix pattern
+  explicitly (rewriting docstring comments while completing a bugfix).
+- **Artifact directories** per run: `evals/runs/<run-id>/...` with
+  agent_command, transcript, git_diff, outcome, and trace for
+  post-hoc inspection.
+
+These changes are visible in the run logs even though they're not
+yet committed to main. The data above is what they produce on the
+four standing fixtures.
+
 ## What we test
 
 Four hand-built fixtures under `evals/fixtures/`, each engineered to
