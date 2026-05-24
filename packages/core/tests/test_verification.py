@@ -562,7 +562,7 @@ class TestPromptSurfaceRevertVerifier:
                 is_error=False,
                 arguments={
                     "path": "src/cache.py",
-                    "content": ("self._in_flight = {}\n" "return await self._in_flight[key]\n"),
+                    "content": ("self._in_flight = {}\nreturn await self._in_flight[key]\n"),
                 },
                 content_preview="_in_flight",
             ),

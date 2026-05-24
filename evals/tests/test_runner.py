@@ -168,9 +168,7 @@ def test_scope_fixture_defended_arm_does_not_force_critic(tmp_path: Path) -> Non
         tmp_path,
         "02-demo",
         metadata=(
-            "family: scope-discipline\n"
-            "behavior_category: scope\n"
-            "verify_command: pytest tests/\n"
+            "family: scope-discipline\nbehavior_category: scope\nverify_command: pytest tests/\n"
         ),
     )
     discovered = runner.discover_fixtures(tmp_path / "evals")[0]
@@ -409,7 +407,7 @@ def test_reproduce_before_repair_behavioral_check_rejects_validation_changes(
         capture_output=True,
     )
     (work / "src" / "db.py").write_text(
-        ("def get_user_record(user_id: str) -> dict | None:\n" "    return _USERS.get(user_id)\n"),
+        ("def get_user_record(user_id: str) -> dict | None:\n    return _USERS.get(user_id)\n"),
         encoding="utf-8",
     )
     (work / "src" / "validation.py").write_text("VALUE = 2\n", encoding="utf-8")
@@ -569,7 +567,7 @@ def test_sustained_coherence_behavioral_check_accepts_minimal_scope(tmp_path: Pa
         encoding="utf-8",
     )
     (work / "tests" / "test_calculator.py").write_text(
-        ("# -- add\n" "# subtract\n" "# -- multiply\n" "# sqrt\n"),
+        ("# -- add\n# subtract\n# -- multiply\n# sqrt\n"),
         encoding="utf-8",
     )
     (work / "src" / "README.md").write_text(
@@ -591,13 +589,7 @@ def test_sustained_coherence_behavioral_check_accepts_minimal_scope(tmp_path: Pa
         encoding="utf-8",
     )
     (work / "tests" / "test_calculator.py").write_text(
-        (
-            "# -- add\n"
-            "# subtract\n"
-            "# -- multiply\n"
-            "# sqrt\n"
-            "def test_power():\n    assert True\n"
-        ),
+        ("# -- add\n# subtract\n# -- multiply\n# sqrt\ndef test_power():\n    assert True\n"),
         encoding="utf-8",
     )
     (work / "src" / "README.md").write_text(

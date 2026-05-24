@@ -417,8 +417,7 @@ def _check_reproduce_before_repair_scope(work: Path) -> tuple[bool, str]:
         )
     except OSError as exc:
         return False, (
-            "behavioral hard check failed: could not inspect reproduce-before-repair diff: "
-            f"{exc}"
+            f"behavioral hard check failed: could not inspect reproduce-before-repair diff: {exc}"
         )
     if diff_result.returncode not in (0, 1):
         return (
@@ -606,7 +605,7 @@ def _check_scope_discipline_with_regression_test(task_text: str, work: Path) -> 
         )
     except OSError as exc:
         return False, (
-            "behavioral hard check failed: could not inspect regression-test scope diff: " f"{exc}"
+            f"behavioral hard check failed: could not inspect regression-test scope diff: {exc}"
         )
     if changed_files_result.returncode not in (0, 1):
         return False, "behavioral hard check failed: git diff for scope-discipline files failed"
