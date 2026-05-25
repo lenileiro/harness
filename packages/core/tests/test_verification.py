@@ -19,6 +19,7 @@ from harness.core import (
     Message,
     NegativeConstraintVerifier,
     PromptSurfaceRevertVerifier,
+    ResearchPromotionFlowVerifier,
     RuleVerifier,
     RunRequest,
     Session,
@@ -425,10 +426,107 @@ class TestVerifyBeforeDoneVerifier:
         assert result.can_finish is True
         assert "downstream" in result.reason.lower() or "deferring" in result.reason.lower()
 
+    async def test_promotion_artifact_pr_flow_skips_generic_verify_requirement(self) -> None:
+        verifier = VerifyBeforeDoneVerifier()
+        activity = [
+            self._activity(
+                kind="tool_call.completed",
+                name="write_file",
+                is_error=False,
+                arguments={
+                    "path": ".harness/research/promotions/promo-test/promotion_candidate.json"
+                },
+            ),
+            self._activity(
+                kind="tool_call.completed",
+                name="edit_file",
+                is_error=False,
+                arguments={"path": ".harness/research/promotions/promo-test/PR_BODY.md"},
+            ),
+            self._activity(
+                kind="tool_call.completed",
+                name="shell",
+                is_error=False,
+                arguments={
+                    "command": "harness research pr --candidate promo-test --base-branch main --push --open --draft"
+                },
+            ),
+        ]
+        result = await verifier.verify(session=_session(), activity=activity)
+        assert result.can_finish is True
+        assert "promotion artifacts" in result.reason.lower()
+
     async def test_empty_activity_passes(self) -> None:
         verifier = VerifyBeforeDoneVerifier()
         result = await verifier.verify(session=_session(), activity=[])
         assert result.can_finish is True
+
+
+@pytest.mark.asyncio
+class TestResearchPromotionFlowVerifier:
+    def _activity(self, *, kind: str, **data: object) -> ActivityEvent:
+        return ActivityEvent(session_id="s1", kind=kind, data=dict(data))
+
+    async def test_allows_harness_native_promotion_flow(self) -> None:
+        verifier = ResearchPromotionFlowVerifier()
+        activity = [
+            self._activity(
+                kind="tool_call.completed",
+                name="write_file",
+                is_error=False,
+                arguments={
+                    "path": ".harness/research/promotions/promo-test/promotion_candidate.json"
+                },
+            ),
+            self._activity(
+                kind="tool_call.completed",
+                name="shell",
+                is_error=False,
+                arguments={"command": "harness research create-candidate --title demo"},
+            ),
+            self._activity(
+                kind="tool_call.completed",
+                name="shell",
+                is_error=False,
+                arguments={"command": "harness research promote --candidate promo-test"},
+            ),
+            self._activity(
+                kind="tool_call.completed",
+                name="shell",
+                is_error=False,
+                arguments={"command": "harness research pr --candidate promo-test --push --open"},
+            ),
+        ]
+        result = await verifier.verify(session=_session(), activity=activity)
+        assert result.can_finish is True
+        assert "harness promotion flow" in result.reason.lower()
+
+    async def test_blocks_manual_pr_flow_without_harness_commands(self) -> None:
+        verifier = ResearchPromotionFlowVerifier()
+        activity = [
+            self._activity(
+                kind="tool_call.completed",
+                name="write_file",
+                is_error=False,
+                arguments={"path": ".harness/research/promotions/candidate.json"},
+            ),
+            self._activity(
+                kind="tool_call.completed",
+                name="shell",
+                is_error=False,
+                arguments={"command": "git checkout -b research/openapi-promotion"},
+            ),
+            self._activity(
+                kind="tool_call.completed",
+                name="shell",
+                is_error=False,
+                arguments={"command": "gh pr create --draft --base main --title demo"},
+            ),
+        ]
+        result = await verifier.verify(session=_session(), activity=activity)
+        assert result.can_finish is False
+        assert "create-candidate" in result.reason
+        assert "harness research pr" in result.reason
 
 
 # ---------------------------------------------------------------------------
