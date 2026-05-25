@@ -455,6 +455,170 @@ def test_research_refine_and_list_candidates(tmp_path: Path) -> None:
     assert "low" in listed.stdout
 
 
+def test_research_create_candidate_alias(tmp_path: Path) -> None:
+    runner = CliRunner()
+    opened = runner.invoke(
+        cli_main.app,
+        [
+            "research",
+            "open",
+            "--title",
+            "Alias candidate",
+            "--question",
+            "How should promotion candidate creation be exposed?",
+            "--scope",
+            "Make candidate creation discoverable.",
+            "--theme",
+            "autonomous-improvement",
+            "--cwd",
+            str(tmp_path),
+        ],
+    )
+    assert opened.exit_code == 0, opened.stdout
+    rabbit_hole_id = next((tmp_path / ".harness" / "research" / "rabbitholes").iterdir()).name
+
+    published = runner.invoke(
+        cli_main.app,
+        [
+            "research",
+            "publish",
+            "--rabbit-hole",
+            rabbit_hole_id,
+            "--title",
+            "Alias candidate findings",
+            "--summary",
+            "Agents search for create-candidate semantics.",
+            "--claim",
+            "A create-candidate alias should improve discoverability.",
+            "--cwd",
+            str(tmp_path),
+        ],
+    )
+    assert published.exit_code == 0, published.stdout
+    publication_id = next((tmp_path / ".harness" / "research" / "publications").iterdir()).name
+
+    created_candidate = runner.invoke(
+        cli_main.app,
+        [
+            "research",
+            "create-candidate",
+            "--title",
+            "Alias candidate",
+            "--summary",
+            "Create a promotion candidate through the alias.",
+            "--source-publication",
+            publication_id,
+            "--target-files",
+            ".harness/research/promotions/alias/promotion_candidate.json",
+            "--expected-metric",
+            "alias works",
+            "--validation-plan",
+            "inspect candidate",
+            "--risk-level",
+            "low",
+            "--cwd",
+            str(tmp_path),
+            "--mode",
+            "improve",
+            "--subsystem",
+            "research",
+            "--rationale",
+            "Alias should improve command discoverability.",
+            "--expected-outcome",
+            "Promotion candidate exists.",
+        ],
+    )
+    assert created_candidate.exit_code == 0, created_candidate.stdout
+    assert "Created promotion candidate" in created_candidate.stdout
+
+
+def test_research_candidate_create_subcommand_and_empty_hint(tmp_path: Path) -> None:
+    runner = CliRunner()
+
+    empty_list = runner.invoke(
+        cli_main.app,
+        ["research", "list-candidates", "--cwd", str(tmp_path)],
+    )
+    assert empty_list.exit_code == 0, empty_list.stdout
+    assert "create-candidate" in empty_list.stdout
+    assert "candidate create" in empty_list.stdout
+
+    opened = runner.invoke(
+        cli_main.app,
+        [
+            "research",
+            "open",
+            "--title",
+            "Candidate subcommand",
+            "--question",
+            "How should candidate creation be exposed under the candidate namespace?",
+            "--scope",
+            "Create a candidate through the nested subcommand.",
+            "--theme",
+            "autonomous-improvement",
+            "--cwd",
+            str(tmp_path),
+        ],
+    )
+    assert opened.exit_code == 0, opened.stdout
+    rabbit_hole_id = next((tmp_path / ".harness" / "research" / "rabbitholes").iterdir()).name
+
+    published = runner.invoke(
+        cli_main.app,
+        [
+            "research",
+            "publish",
+            "--rabbit-hole",
+            rabbit_hole_id,
+            "--title",
+            "Candidate subcommand findings",
+            "--summary",
+            "The nested candidate create command should work.",
+            "--claim",
+            "The candidate create subcommand improves discoverability.",
+            "--cwd",
+            str(tmp_path),
+        ],
+    )
+    assert published.exit_code == 0, published.stdout
+    publication_id = next((tmp_path / ".harness" / "research" / "publications").iterdir()).name
+
+    created_candidate = runner.invoke(
+        cli_main.app,
+        [
+            "research",
+            "candidate",
+            "create",
+            "--title",
+            "Nested candidate",
+            "--summary",
+            "Create a promotion candidate through the nested command.",
+            "--source-publication",
+            publication_id,
+            "--target-files",
+            ".harness/research/promotions/nested/promotion_candidate.json",
+            "--expected-metric",
+            "nested alias works",
+            "--validation-plan",
+            "inspect nested candidate",
+            "--risk-level",
+            "low",
+            "--cwd",
+            str(tmp_path),
+            "--mode",
+            "improve",
+            "--subsystem",
+            "research",
+            "--rationale",
+            "Nested alias should improve command discoverability.",
+            "--expected-outcome",
+            "Nested promotion candidate exists.",
+        ],
+    )
+    assert created_candidate.exit_code == 0, created_candidate.stdout
+    assert "Created promotion candidate" in created_candidate.stdout
+
+
 def test_research_archive_reject_and_resurrect(tmp_path: Path) -> None:
     runner = CliRunner()
     created = runner.invoke(

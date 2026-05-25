@@ -40,6 +40,7 @@ from harness.core import (
     PromptSurfaceRevertVerifier,
     RepairOrchestrator,
     RequestCritiqueTool,
+    ResearchPromotionFlowVerifier,
     Storage,
     TestsBeforeEditVerifier,
     ToolCall,
@@ -310,6 +311,7 @@ def build_agent(
     if profile == "strict":
         structural = ChainedVerifier(
             FileScopeVerifier(),
+            ResearchPromotionFlowVerifier(),
             MinimalFixVerifier(),
             TestsBeforeEditVerifier(),
             VerifyBeforeDoneVerifier(),
@@ -324,6 +326,7 @@ def build_agent(
     elif profile == "diagnostic":
         structural = ChainedVerifier(
             FileScopeVerifier(),
+            ResearchPromotionFlowVerifier(),
             VerifyBeforeDoneVerifier(),
             DiagnosisAlignmentVerifier(),
             MisdirectedSuggestionVerifier(),
@@ -333,7 +336,7 @@ def build_agent(
         )
         verifier = ChainedVerifier(structural, verifier) if verifier is not None else structural
     elif profile == "minimal":
-        verify_only = VerifyBeforeDoneVerifier()
+        verify_only = ChainedVerifier(ResearchPromotionFlowVerifier(), VerifyBeforeDoneVerifier())
         verifier = ChainedVerifier(verify_only, verifier) if verifier is not None else verify_only
 
     approval_policy = ApprovalPolicy(default="prompt", per_tool=dict(config.approval))
