@@ -1,0 +1,8 @@
+{
+  "candidate_id": "promo-refined-research-922bec07",
+  "branch_name": "research/promo-refined-research-922bec07",
+  "commit_message": "research: promote Refined Research",
+  "pr_title": "research: Refined Research",
+  "pr_body": "## Promotion Candidate\n- candidate: `promo-refined-research-922bec07`\n- branch: `research/promo-refined-research-922bec07`\n- base: `main`\n- risk: `medium`\n\n## Summary\nRefinement of the research hypothesis\n\n## Target Files\n- `.harness/research/promotions/promo-refined-research-922bec07/promotion_candidate.json`\n- `.harness/research/promotions/promo-refined-research-922bec07/promotion_draft.json`\n- `.harness/research/promotions/promo-refined-research-922bec07/PR_BODY.md`\n\n## Source Hypotheses\n- `hyp-the-research-flow-works-as-expec-88550bd4`\n\n## Evidence Checklist\n- [ ] Targeted tests passed\n- [ ] Relevant eval slices passed\n- [ ] No unintended file-scope expansion\n- [ ] Risk remains acceptable for review\n",
+  "base_branch": "main"
+}
