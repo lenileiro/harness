@@ -1,0 +1,8 @@
+{
+  "candidate_id": "promo-improve-help-text-for-create-can-9d3adf3d",
+  "branch_name": "research/promo-improve-help-text-for-create-can-9d3adf3d",
+  "commit_message": "research: promote Improve help text for create-candidate",
+  "pr_title": "improve: Improve help text for create-candidate",
+  "pr_body": "## Promotion Candidate\n- candidate: `promo-improve-help-text-for-create-can-9d3adf3d`\n- branch: `research/promo-improve-help-text-for-create-can-9d3adf3d`\n- base: `main`\n- risk: `medium`\n\n## Summary\nUpdating the help text to be more descriptive.\n\n## Change Intent\n- mode: `improve`\n- subsystem: `cli`\n- risk: `medium`\n\nUsers need more guidance on how to use the command correctly.\n\nExpected outcome: Improved user understanding of the command options.\n\n## Source Hypotheses\n- `hyp-adding-more-descriptive-help-tex-b6d0f03e`\n\n## Evidence Checklist\n- [ ] Targeted tests passed\n- [ ] Relevant eval slices passed\n- [ ] No unintended file-scope expansion\n- [ ] Risk remains acceptable for review\n",
+  "base_branch": "main"
+}
