@@ -80,6 +80,100 @@ def test_eval_validate_passes_against_repo_assets(monkeypatch) -> None:
     assert "Eval asset validation" in result.stdout
 
 
+def test_eval_create_run_scaffold_writes_fixture_and_gold(tmp_path: Path, monkeypatch) -> None:
+    evals_root = tmp_path / "evals"
+    evals_root.mkdir(parents=True)
+    monkeypatch.setattr(eval_cli, "_find_evals_root", lambda: evals_root)
+
+    result = CliRunner().invoke(
+        cli_main.app,
+        ["eval", "create", "25 Addition Bug", "--kind", "run"],
+    )
+
+    assert result.exit_code == 0, result.stdout
+    fixture_dir = evals_root / "fixtures" / "25-addition-bug"
+    assert (fixture_dir / "TASK.md").exists()
+    assert (fixture_dir / "EVAL.md").exists()
+    assert (fixture_dir / "fixture.yaml").exists()
+    assert (fixture_dir / "src" / "mathops.py").exists()
+    assert (fixture_dir / "tests" / "test_mathops.py").exists()
+    defended_gold = evals_root / "gold" / "25-addition-bug--defended.json"
+    bare_gold = evals_root / "gold" / "25-addition-bug--bare.json"
+    assert defended_gold.exists()
+    assert bare_gold.exists()
+    assert "placeholder gold labels" in result.stdout
+
+
+def test_eval_create_assigns_next_numeric_prefix(tmp_path: Path, monkeypatch) -> None:
+    evals_root = tmp_path / "evals"
+    existing = evals_root / "review-fixtures" / "03-existing-review"
+    existing.mkdir(parents=True)
+    monkeypatch.setattr(eval_cli, "_find_evals_root", lambda: evals_root)
+
+    result = CliRunner().invoke(
+        cli_main.app,
+        ["eval", "create", "missing guard", "--kind", "review"],
+    )
+
+    assert result.exit_code == 0, result.stdout
+    assert (evals_root / "review-fixtures" / "04-missing-guard").exists()
+
+
+def test_eval_create_review_scaffold_writes_base_and_head(tmp_path: Path, monkeypatch) -> None:
+    evals_root = tmp_path / "evals"
+    evals_root.mkdir(parents=True)
+    monkeypatch.setattr(eval_cli, "_find_evals_root", lambda: evals_root)
+
+    result = CliRunner().invoke(
+        cli_main.app,
+        ["eval", "create", "26-none-guard", "--kind", "review"],
+    )
+
+    assert result.exit_code == 0, result.stdout
+    fixture_dir = evals_root / "review-fixtures" / "26-none-guard"
+    assert (fixture_dir / "TASK.md").exists()
+    assert (fixture_dir / "expected.json").exists()
+    assert (fixture_dir / "base" / "src" / "profile.py").exists()
+    assert (fixture_dir / "head" / "src" / "profile.py").exists()
+
+
+def test_eval_create_adds_fixture_to_default_suite(tmp_path: Path, monkeypatch) -> None:
+    evals_root = tmp_path / "evals"
+    (evals_root / "suites").mkdir(parents=True)
+    (evals_root / "suites" / "review-smoke.txt").write_text(
+        "# Smoke suite for review-domain evals.\n01-existing-review\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(eval_cli, "_find_evals_root", lambda: evals_root)
+
+    result = CliRunner().invoke(
+        cli_main.app,
+        ["eval", "create", "none guard", "--kind", "review", "--add-to-suite"],
+    )
+
+    assert result.exit_code == 0, result.stdout
+    suite_text = (evals_root / "suites" / "review-smoke.txt").read_text(encoding="utf-8")
+    assert "02-none-guard" in suite_text
+    assert "Added to" in result.stdout
+
+
+def test_eval_create_workflow_scaffold_writes_fixture_json(tmp_path: Path, monkeypatch) -> None:
+    evals_root = tmp_path / "evals"
+    evals_root.mkdir(parents=True)
+    monkeypatch.setattr(eval_cli, "_find_evals_root", lambda: evals_root)
+
+    result = CliRunner().invoke(
+        cli_main.app,
+        ["eval", "create", "27-workflow-smoke", "--kind", "workflow"],
+    )
+
+    assert result.exit_code == 0, result.stdout
+    fixture_path = evals_root / "workflow-fixtures" / "27-workflow-smoke" / "fixture.json"
+    assert fixture_path.exists()
+    payload = json.loads(fixture_path.read_text(encoding="utf-8"))
+    assert payload["steps"][0]["argv"] == ["version"]
+
+
 def test_eval_run_no_judge_uses_hard_metrics_only(tmp_path: Path, monkeypatch) -> None:
     repo_evals_root = Path(__file__).resolve().parents[3] / "evals"
     eval_types = eval_cli._load_eval_module("types", repo_evals_root)

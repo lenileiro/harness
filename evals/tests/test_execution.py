@@ -204,3 +204,10 @@ def test_copy_fixture_for_run_hides_eval_metadata(tmp_path: Path) -> None:
     assert (dest / "TASK.md").exists()
     assert not (dest / "EVAL.md").exists()
     assert not (dest / "fixture.yaml").exists()
+
+
+def test_eval_env_exposes_project_root_and_workspace(tmp_path: Path) -> None:
+    env = runner._eval_env(work=tmp_path)  # type: ignore[attr-defined]
+
+    assert env["HARNESS_EVAL_WORKSPACE"] == str(tmp_path)
+    assert Path(env["HARNESS_EVAL_PROJECT_ROOT"]).resolve() == Path(__file__).resolve().parents[2]

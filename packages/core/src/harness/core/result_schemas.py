@@ -74,7 +74,9 @@ def _strip_fenced_json(text: str) -> str:
 
 def _json_object_candidates(text: str) -> list[dict[str, Any]]:
     decoder = json.JSONDecoder()
-    body = _normalize_wrapped_json_strings(_strip_fenced_json(text))
+    body = _repair_unescaped_inner_quotes(
+        _escape_quotes_in_backticks(_normalize_wrapped_json_strings(_strip_fenced_json(text)))
+    )
     candidates: list[dict[str, Any]] = []
     for index, char in enumerate(body):
         if char != "{":
@@ -116,6 +118,67 @@ def _normalize_wrapped_json_strings(text: str) -> str:
         if char == '"':
             in_string = True
             escaped = False
+    return "".join(parts)
+
+
+def _escape_quotes_in_backticks(text: str) -> str:
+    parts: list[str] = []
+    in_backticks = False
+    for char in text:
+        if char == "`":
+            in_backticks = not in_backticks
+            parts.append(char)
+            continue
+        if in_backticks and char == '"':
+            parts.append('\\"')
+            continue
+        parts.append(char)
+    return "".join(parts)
+
+
+def _repair_unescaped_inner_quotes(text: str) -> str:
+    parts: list[str] = []
+    in_string = False
+    escaped = False
+    index = 0
+    length = len(text)
+
+    while index < length:
+        char = text[index]
+        if not in_string:
+            parts.append(char)
+            if char == '"':
+                in_string = True
+                escaped = False
+            index += 1
+            continue
+
+        if escaped:
+            parts.append(char)
+            escaped = False
+            index += 1
+            continue
+        if char == "\\":
+            parts.append(char)
+            escaped = True
+            index += 1
+            continue
+        if char == '"':
+            lookahead = index + 1
+            while lookahead < length and text[lookahead].isspace():
+                lookahead += 1
+            next_char = text[lookahead] if lookahead < length else ""
+            if next_char and next_char not in {",", "}", "]", ":"}:
+                parts.append('\\"')
+                index += 1
+                continue
+            parts.append(char)
+            in_string = False
+            index += 1
+            continue
+        parts.append(char)
+        index += 1
+
     return "".join(parts)
 
 

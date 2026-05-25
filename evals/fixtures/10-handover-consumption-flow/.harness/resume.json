@@ -1,0 +1,26 @@
+{
+  "current": "handover-consumption",
+  "features": [
+    {
+      "name": "handover-checklist",
+      "description": "Capture the checklist for what a durable handover must contain.",
+      "status": "in_progress",
+      "phases": [],
+      "notes": [],
+      "session_id": null
+    },
+    {
+      "name": "handover-consumption",
+      "description": "Consume the handover and continue the next step without replaying prior context.",
+      "status": "pending",
+      "phases": [
+        "review",
+        "continue",
+        "verify"
+      ],
+      "notes": [],
+      "session_id": null
+    }
+  ],
+  "notes": []
+}

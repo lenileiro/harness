@@ -55,6 +55,33 @@ def test_parse_review_report_recovers_json_from_noisy_output() -> None:
     assert report.findings[0].file == "src/app.py"
 
 
+def test_parse_review_report_recovers_malformed_fenced_json_with_trailing_noise() -> None:
+    text = """```json
+{
+  "summary": "The change introduces a critical regression in the `display_name`
+function by removing safety checks for both `None` inputs and missing 'name' keys.",
+  "findings": [
+    {
+      "severity": "high",
+      "file": "src/profile.py",
+      "line": 1,
+      "issue": "Potential TypeError when `user` is None",
+      "rationale": "The original implementation used `.get("name", "anonymous")`
+to safely handle dictionaries missing the 'name' key. The new implementation uses direct access `user["name"]`.",
+      "suggested_fix": "Revert the change or ensure `user` is not None before subscripting."
+    }
+  ]
+}
+```
+an error occurred during closing of asynchronous generator
+RuntimeError: aclose(): asynchronous generator is already running
+"""
+    report = parse_review_report(text)
+    assert report is not None
+    assert report.findings[0].file == "src/profile.py"
+    assert "display_name" in report.summary
+
+
 def test_parse_research_memo_parses_valid_json() -> None:
     memo = parse_research_memo(
         json.dumps(

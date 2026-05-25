@@ -519,6 +519,13 @@ uv run harness eval adjustments evals/runs --limit 20
 # Export a consolidated adjustment corpus
 uv run harness eval export-adjustments adjustments.jsonl --root evals/runs
 
+# Scaffold a new review or workflow fixture
+uv run harness eval create 25-missing-guard --kind review
+uv run harness eval create 26-cli-smoke --kind workflow
+
+# Let Harness assign the next fixture number and register it in the default suite
+uv run harness eval create plugin-runtime-smoke --kind workflow --add-to-suite
+
 # Validate fixtures, suites, and gold labels
 uv run harness eval validate
 
@@ -542,6 +549,9 @@ Harness now uses multiple eval families:
 - `eval docs-audit`: documentation-audit fixtures
 - `eval workflow`: deterministic feature-workflow fixtures that execute real CLI
   command sequences against local workspaces and wrappers
+- `eval create`: scaffold a new fixture with companion files for any of the
+  supported eval families, including placeholder gold labels for `eval run`
+  and optional default-suite registration
 
 The hard layer is behavior-first, not exact patch-text matching. A correct fix
 should not fail just because of harmless whitespace noise; the contracts are

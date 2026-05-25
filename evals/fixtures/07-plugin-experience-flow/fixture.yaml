@@ -1,0 +1,5 @@
+family: plugin-experience-flow
+behavior_category: decomposition
+primary_dimension: correctness
+expected_first_step: inspect workspace
+required_verification: pytest tests/ -v --tb=short --no-header

@@ -1,0 +1,15 @@
+{
+  "fixture_name": "07-plugin-experience-flow",
+  "variant": "bare",
+  "run_index": 1,
+  "scores": {
+    "verification": 1,
+    "scope": 1,
+    "decomposition": 1,
+    "correctness": 1,
+    "pushback": 1,
+    "epistemic": 1,
+    "overall": 1
+  },
+  "note": "placeholder label for new fixture; replace with calibrated human scores"
+}

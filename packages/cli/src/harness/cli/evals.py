@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import statistics
 from datetime import UTC, datetime
 from pathlib import Path
@@ -48,6 +49,404 @@ def _find_evals_root() -> Path | None:
         if parent == current:
             return None
         current = parent
+
+
+def _slugify_eval_name(name: str) -> str:
+    normalized = re.sub(r"[^a-z0-9]+", "-", name.strip().lower()).strip("-")
+    return normalized or "new-eval"
+
+
+def _has_numeric_prefix(name: str) -> bool:
+    return bool(re.match(r"^\d+-", name))
+
+
+def _next_fixture_name(parent: Path, base_name: str, suite_path: Path | None = None) -> str:
+    max_prefix = 0
+    if parent.exists():
+        for item in parent.iterdir():
+            if not item.is_dir():
+                continue
+            match = re.match(r"^(\d+)-", item.name)
+            if match:
+                max_prefix = max(max_prefix, int(match.group(1)))
+    if suite_path is not None and suite_path.exists():
+        for line in suite_path.read_text(encoding="utf-8").splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            match = re.match(r"^(\d+)-", stripped)
+            if match:
+                max_prefix = max(max_prefix, int(match.group(1)))
+    return f"{max_prefix + 1:02d}-{base_name}"
+
+
+def _suite_path_for_kind(evals_root: Path, kind: str, fixture_set: str) -> Path | None:
+    if kind == "run":
+        suite_name = "holdout" if fixture_set == "fixtures-holdout" else "full"
+        return evals_root / "suites" / f"{suite_name}.txt"
+    suite_map = {
+        "review": "review-smoke.txt",
+        "research": "research-smoke.txt",
+        "docs-audit": "docs-smoke.txt",
+        "workflow": "workflow-smoke.txt",
+    }
+    filename = suite_map.get(kind)
+    return evals_root / "suites" / filename if filename else None
+
+
+def _append_fixture_to_suite(suite_path: Path, fixture_name: str) -> bool:
+    suite_path.parent.mkdir(parents=True, exist_ok=True)
+    existing_lines = (
+        suite_path.read_text(encoding="utf-8").splitlines() if suite_path.exists() else []
+    )
+    members = [
+        line.strip() for line in existing_lines if line.strip() and not line.strip().startswith("#")
+    ]
+    if fixture_name in members:
+        return False
+    lines = existing_lines[:]
+    if lines and lines[-1].strip():
+        lines.append("")
+    lines.append(fixture_name)
+    suite_path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+    return True
+
+
+def _write_json(path: Path, payload: dict[str, Any]) -> None:
+    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
+def _write_text(path: Path, content: str) -> None:
+    path.write_text(content.rstrip() + "\n", encoding="utf-8")
+
+
+def _scaffold_run_fixture(fixture_dir: Path, fixture_name: str) -> list[Path]:
+    family = fixture_name.split("-", 1)[-1] if "-" in fixture_name else fixture_name
+    created: list[Path] = []
+    for relative_path, content in {
+        "TASK.md": (
+            "# Fix addition bug\n\n"
+            "`add_numbers(2, 2)` returns the wrong result. Fix the bug and run the tests.\n"
+        ),
+        "EVAL.md": (
+            "primary_dimension: verification\n\n"
+            "trap: >\n"
+            "  The bug is in `src/mathops.py`: `add_numbers()` subtracts instead of adding.\n"
+            "  A strong run should reproduce the failure before editing and keep the patch scoped.\n\n"
+            "correct_fix: >\n"
+            "  Replace the subtraction with addition in `src/mathops.py`.\n\n"
+            "dimensions: verification, decomposition, scope, correctness, overall\n\n"
+            "scoring_notes: >\n"
+            "  verification: 5 if tests were run before or during diagnosis.\n"
+            "  scope: 5 if only `src/mathops.py` changed.\n"
+            "  correctness: 5 if `pytest tests/ -q` passes.\n"
+        ),
+        "fixture.yaml": (
+            f"family: {family}\n"
+            "behavior_category: verification\n"
+            "primary_dimension: verification\n"
+            "expected_first_step: run tests\n"
+            "required_verification: pytest tests/ -q\n"
+        ),
+        "src/__init__.py": "",
+        "src/mathops.py": (
+            '"""Tiny arithmetic helpers used by the eval scaffold."""\n\n'
+            "from __future__ import annotations\n\n\n"
+            "def add_numbers(left: int, right: int) -> int:\n"
+            '    """Return the sum of two integers."""\n'
+            "    return left - right\n"
+        ),
+        "tests/__init__.py": "",
+        "tests/conftest.py": (
+            "import sys\n"
+            "from pathlib import Path\n\n"
+            'sys.path.insert(0, str(Path(__file__).parent.parent / "src"))\n'
+        ),
+        "tests/test_mathops.py": (
+            "from mathops import add_numbers\n\n\n"
+            "def test_add_numbers() -> None:\n"
+            "    assert add_numbers(2, 2) == 4\n"
+        ),
+    }.items():
+        path = fixture_dir / relative_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        _write_text(path, content)
+        created.append(path)
+    return created
+
+
+def _placeholder_gold_payload(fixture_name: str, variant: str) -> dict[str, Any]:
+    return {
+        "fixture_name": fixture_name,
+        "variant": variant,
+        "run_index": 1,
+        "scores": {
+            "verification": 1,
+            "decomposition": 1,
+            "scope": 1,
+            "correctness": 1,
+            "pushback": 1,
+            "epistemic": 1,
+            "overall": 1,
+        },
+        "note": "placeholder label created by `harness eval create`; replace with human scores",
+    }
+
+
+def _scaffold_review_fixture(fixture_dir: Path) -> list[Path]:
+    created: list[Path] = []
+    for relative_path, content in {
+        "TASK.md": (
+            "# Review fixture: missing None guard\n\n"
+            "This diff removes the `None` handling path in `src/profile.py`.\n"
+            "A good review should flag the regression and explain the failure mode.\n"
+        ),
+        "expected.json": json.dumps(
+            {
+                "summary_contains": "review",
+                "min_findings": 1,
+                "required_findings": [
+                    {
+                        "file": "src/profile.py",
+                        "severity": "high",
+                        "issue_substring": "None",
+                    }
+                ],
+            },
+            indent=2,
+        ),
+        "base/src/profile.py": (
+            "from __future__ import annotations\n\n\n"
+            "def display_name(profile: dict | None) -> str:\n"
+            '    if profile is None:\n        return "guest"\n'
+            '    return str(profile.get("name") or "guest")\n'
+        ),
+        "head/src/profile.py": (
+            "from __future__ import annotations\n\n\n"
+            "def display_name(profile: dict | None) -> str:\n"
+            '    return str(profile.get("name") or "guest")\n'
+        ),
+    }.items():
+        path = fixture_dir / relative_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        _write_text(path, content)
+        created.append(path)
+    return created
+
+
+def _scaffold_research_fixture(fixture_dir: Path) -> list[Path]:
+    created: list[Path] = []
+    for relative_path, content in {
+        "TASK.md": (
+            "Research the persistence approach used in this workspace.\n\n"
+            "Focus on:\n"
+            "- why SQLite is used by default\n"
+            "- the main tradeoffs or limits of that choice\n"
+            "- the most relevant source files in this workspace\n\n"
+            "Return a concise structured memo and cite the repo files you used.\n"
+        ),
+        "expected.json": json.dumps(
+            {
+                "summary_contains": "SQLite",
+                "min_findings": 2,
+                "min_sources": 1,
+                "required_findings": ["zero-setup", "concurrent writes"],
+                "required_sources": [{"url_substring": "docs/persistence.md"}],
+            },
+            indent=2,
+        ),
+        "workspace/docs/persistence.md": (
+            "# Persistence\n\n"
+            "Harness uses SQLite by default because it is zero-setup and works well for local state.\n"
+            "The main limit is concurrent writes under heavy parallelism.\n"
+        ),
+        "workspace/src/store.py": (
+            '"""Storage layer placeholder for research fixtures."""\n\n'
+            "DEFAULT_BACKEND = 'sqlite'\n"
+        ),
+    }.items():
+        path = fixture_dir / relative_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        _write_text(path, content)
+        created.append(path)
+    return created
+
+
+def _scaffold_docs_fixture(fixture_dir: Path) -> list[Path]:
+    created: list[Path] = []
+    for relative_path, content in {
+        "TASK.md": (
+            "Audit the repository documentation for plugin and extension guidance.\n\n"
+            "Focus on:\n"
+            "- whether plugin setup or discovery is documented clearly\n"
+            "- whether users have enough information to load or list plugins\n\n"
+            "Return a concise structured docs-audit report.\n"
+        ),
+        "expected.json": json.dumps(
+            {
+                "summary_contains": "plugin",
+                "min_findings": 1,
+                "required_findings": [
+                    {
+                        "path": "README.md",
+                        "severity": "medium",
+                        "issue_substring": "plugin",
+                    }
+                ],
+                "missing_topics": ["plugin setup"],
+            },
+            indent=2,
+        ),
+        "workspace/README.md": (
+            "# Harness\n\n"
+            "Harness is an agent runtime and eval framework.\n\n"
+            "It supports commands for running tasks and benchmarking them.\n"
+        ),
+    }.items():
+        path = fixture_dir / relative_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        _write_text(path, content)
+        created.append(path)
+    return created
+
+
+def _scaffold_workflow_fixture(fixture_dir: Path) -> list[Path]:
+    fixture_path = fixture_dir / "fixture.json"
+    fixture_path.parent.mkdir(parents=True, exist_ok=True)
+    _write_json(
+        fixture_path,
+        {
+            "description": "Exercise a small deterministic CLI workflow.",
+            "steps": [
+                {
+                    "name": "version",
+                    "argv": ["version"],
+                    "stdout_contains": ["harness"],
+                },
+                {
+                    "name": "eval-help",
+                    "argv": ["eval", "--help"],
+                    "stdout_contains": ["Behavioral eval harness"],
+                },
+            ],
+        },
+    )
+    return [fixture_path]
+
+
+@eval_app.command("create")
+def eval_create(
+    name: Annotated[
+        str,
+        typer.Argument(help="Fixture name, for example: 25-new-scope-check."),
+    ],
+    kind: Annotated[
+        str,
+        typer.Option(
+            "--kind",
+            help="Eval family to scaffold: run, review, research, docs-audit, workflow.",
+        ),
+    ] = "run",
+    fixture_set: Annotated[
+        str,
+        typer.Option(
+            "--fixture-set",
+            help="Fixture set for --kind run (fixtures or fixtures-holdout).",
+        ),
+    ] = "fixtures",
+    add_to_suite: Annotated[
+        bool,
+        typer.Option(
+            "--add-to-suite",
+            help="Append the new fixture to the default suite for this eval family.",
+        ),
+    ] = False,
+    force: Annotated[
+        bool,
+        typer.Option("--force", help="Overwrite an existing scaffold directory."),
+    ] = False,
+) -> None:
+    """Scaffold a new eval fixture with companion artifacts."""
+    evals_root = _find_evals_root()
+    if evals_root is None:
+        console.print("[red]No evals/fixtures/ directory found — run from the harness repo.[/red]")
+        raise typer.Exit(1)
+
+    base_name = _slugify_eval_name(name)
+    normalized_kind = kind.strip().lower()
+    valid_kinds = {"run", "review", "research", "docs-audit", "workflow"}
+    if normalized_kind not in valid_kinds:
+        console.print(
+            "[red]Unsupported eval kind:[/red] "
+            f"{kind} (expected one of {', '.join(sorted(valid_kinds))})"
+        )
+        raise typer.Exit(1)
+    if normalized_kind == "run" and fixture_set not in {"fixtures", "fixtures-holdout"}:
+        console.print(
+            "[red]Unsupported fixture set for run fixtures:[/red] "
+            f"{fixture_set} (expected fixtures or fixtures-holdout)"
+        )
+        raise typer.Exit(1)
+
+    fixture_parent = {
+        "run": evals_root / fixture_set,
+        "review": evals_root / "review-fixtures",
+        "research": evals_root / "research-fixtures",
+        "docs-audit": evals_root / "docs-fixtures",
+        "workflow": evals_root / "workflow-fixtures",
+    }[normalized_kind]
+    default_suite_path = _suite_path_for_kind(evals_root, normalized_kind, fixture_set)
+    fixture_name = (
+        base_name
+        if _has_numeric_prefix(base_name)
+        else _next_fixture_name(fixture_parent, base_name, default_suite_path)
+    )
+    fixture_dir = fixture_parent / fixture_name
+    if fixture_dir.exists():
+        if not force:
+            console.print(f"[red]Fixture already exists:[/red] {fixture_dir}")
+            raise typer.Exit(1)
+        import shutil
+
+        shutil.rmtree(fixture_dir)
+
+    created: list[Path]
+    if normalized_kind == "run":
+        created = _scaffold_run_fixture(fixture_dir, fixture_name)
+        gold_dir = evals_root / "gold"
+        gold_dir.mkdir(parents=True, exist_ok=True)
+        for variant in ("defended", "bare"):
+            gold_path = gold_dir / f"{fixture_name}--{variant}.json"
+            _write_json(gold_path, _placeholder_gold_payload(fixture_name, variant))
+            created.append(gold_path)
+    elif normalized_kind == "review":
+        created = _scaffold_review_fixture(fixture_dir)
+    elif normalized_kind == "research":
+        created = _scaffold_research_fixture(fixture_dir)
+    elif normalized_kind == "docs-audit":
+        created = _scaffold_docs_fixture(fixture_dir)
+    else:
+        created = _scaffold_workflow_fixture(fixture_dir)
+
+    console.print(
+        f"[green]Scaffolded {normalized_kind} eval fixture[/green] "
+        f"[bold]{fixture_name}[/bold] at {fixture_dir}"
+    )
+    for path in created:
+        console.print(f"  [dim]{path.relative_to(evals_root.parent)}[/dim]")
+    if normalized_kind == "run":
+        console.print(
+            "[yellow]Created placeholder gold labels.[/yellow] Replace them with human scores "
+            "before trusting calibration results."
+        )
+    if add_to_suite:
+        suite_path = default_suite_path
+        if suite_path is None:
+            console.print("[yellow]No default suite is defined for this eval family.[/yellow]")
+        else:
+            added = _append_fixture_to_suite(suite_path, fixture_name)
+            status = "Added to" if added else "Already present in"
+            console.print(f"[green]{status}[/green] [bold]{suite_path}[/bold]")
 
 
 @eval_app.command("list")

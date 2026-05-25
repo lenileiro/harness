@@ -44,6 +44,13 @@ _check_sustained_coherence_scope = _hard_checks.check_sustained_coherence_scope
 _check_wrong_diagnosis_scope = _hard_checks.check_wrong_diagnosis_scope
 
 
+def _eval_env(*, work: Path) -> dict[str, str]:
+    env = os.environ.copy()
+    env["HARNESS_EVAL_PROJECT_ROOT"] = str(Path(__file__).resolve().parents[1])
+    env["HARNESS_EVAL_WORKSPACE"] = str(work)
+    return env
+
+
 def _git_env() -> dict[str, str]:
     env = os.environ.copy()
     env.update(
@@ -225,7 +232,7 @@ def run_fixture(
             max_output_tokens=max_output_tokens,
         )
         agent_started = time.perf_counter()
-        agent_env = os.environ.copy()
+        agent_env = _eval_env(work=work)
         experience_root = (_find_evals_root() / "runs").resolve()
         existing_roots = [
             raw.strip()
@@ -260,13 +267,14 @@ def run_fixture(
         # test, cargo, jest, ...) rather than hardcoding pytest here — the
         # harness eval framework is language-agnostic.
         verify_started = time.perf_counter()
+        verify_env = _eval_env(work=work)
         test_result = subprocess.run(
             fixture.verify_command,
             cwd=work,
             capture_output=True,
             text=True,
             timeout=test_timeout,
-            env=os.environ.copy(),
+            env=verify_env,
             shell=True,
         )
         verify_duration = time.perf_counter() - verify_started

@@ -31,7 +31,11 @@ def _run_async(awaitable: Awaitable[_T]) -> _T:
         return loop.run_until_complete(awaitable)
     finally:
         try:
-            loop.run_until_complete(loop.shutdown_asyncgens())
+            try:
+                loop.run_until_complete(loop.shutdown_asyncgens())
+            except RuntimeError as exc:
+                if "aclose(): asynchronous generator is already running" not in str(exc):
+                    raise
         finally:
             try:
                 loop.run_until_complete(loop.shutdown_default_executor())

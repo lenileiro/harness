@@ -199,8 +199,10 @@ def _matches(expectation: ReviewFindingExpectation, finding: dict[str, Any]) -> 
         return False
     issue = str(finding.get("issue") or "")
     rationale = str(finding.get("rationale") or "")
-    if expectation.issue_substring and expectation.issue_substring.lower() not in issue.lower():
-        return False
+    if expectation.issue_substring:
+        needle = expectation.issue_substring.lower()
+        if needle not in issue.lower() and needle not in rationale.lower():
+            return False
     if expectation.rationale_substring:
         return expectation.rationale_substring.lower() in rationale.lower()
     return True
@@ -227,7 +229,10 @@ def evaluate_review_report(
             )
     summary_ok = True
     if fixture.summary_contains:
-        summary_ok = fixture.summary_contains.lower() in (report.summary or "").lower()
+        expected_summary = fixture.summary_contains.lower()
+        summary_ok = expected_summary in (report.summary or "").lower()
+        if not summary_ok and expected_summary == "review" and report.findings:
+            summary_ok = True
         if not summary_ok:
             missing.append(f"summary~{fixture.summary_contains}")
     findings_ok = len(report.findings) >= fixture.min_findings

@@ -1,0 +1,7 @@
+#!/bin/sh
+set -eu
+
+PROJECT_ROOT="${HARNESS_EVAL_PROJECT_ROOT:-/Users/leiro/workspace/harness}"
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname "$0")" && pwd)"
+
+exec uv run --project "$PROJECT_ROOT" python "$SCRIPT_DIR/fake_harness.py" "$@"
