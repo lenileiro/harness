@@ -1,0 +1,6 @@
+{
+  "id": "hypothesis-001",
+  "opportunity_id": "research-opportunity-001",
+  "hypothesis": "Increasing the batch size in the evaluation harness will reduce total execution time by minimizing overhead.",
+  "test_plan": "Run evals with batch size 1, 10, 100 and measure time."
+}
