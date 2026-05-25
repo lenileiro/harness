@@ -55,6 +55,10 @@ research_app.add_typer(experiment_app, name="experiment")
 research_app.add_typer(candidate_app, name="candidate")
 
 
+def _emit_json(payload: object) -> None:
+    typer.echo(json.dumps(payload, indent=2))
+
+
 @vision_app.command("show")
 def vision_show_command(
     cwd: Path | None = typer.Option(None, "--cwd"),
@@ -215,9 +219,9 @@ def research_command(
     parsed = parse_research_memo(final_text or "")
     if json_output:
         if parsed is not None:
-            console.print(json.dumps(parsed.to_dict(), indent=2))
+            _emit_json(parsed.to_dict())
         else:
-            console.print(final_text or "")
+            typer.echo(final_text or "")
         return
     if parsed is not None:
         _render_research_memo(parsed, console=console)
@@ -706,7 +710,7 @@ def research_execute_next_command(
         draft_pr=draft_pr,
     )
     if json_output:
-        console.print(json.dumps(result.to_dict(), indent=2))
+        _emit_json(result.to_dict())
         return
     status_color = {
         "executed": "green",
@@ -759,7 +763,7 @@ def research_execute_burst_command(
         draft_pr=draft_pr,
     )
     if json_output:
-        console.print(json.dumps(result.to_dict(), indent=2))
+        _emit_json(result.to_dict())
         return
     status_color = {
         "completed": "green",
@@ -841,7 +845,7 @@ def research_schedule_once_command(
         "record_dir": str(record_dir),
     }
     if json_output:
-        console.print(json.dumps(payload, indent=2))
+        _emit_json(payload)
         return
     status_color = {
         "completed": "green",
@@ -905,7 +909,7 @@ def research_show_run_command(
         raise typer.BadParameter(f"unknown autonomy run: {run_id!r}")
     payload = json.loads(run_json.read_text(encoding="utf-8"))
     if json_output:
-        console.print(json.dumps(payload, indent=2))
+        _emit_json(payload)
         return
     console.print(f"[bold]{payload.get('id') or run_id}[/bold]")
     console.print(

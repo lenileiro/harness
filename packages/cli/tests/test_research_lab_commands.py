@@ -1761,6 +1761,52 @@ def test_research_schedule_once_uses_scheduler_config_defaults(tmp_path: Path) -
     assert '"steps_run": 1' in run_json
 
 
+def test_research_schedule_once_json_output_is_parseable(tmp_path: Path) -> None:
+    runner = CliRunner()
+
+    created = runner.invoke(
+        cli_main.app,
+        [
+            "research",
+            "create-opportunity",
+            "--title",
+            "JSON schedule",
+            "--summary",
+            "Emit parseable JSON even when record paths are long.",
+            "--cwd",
+            str(tmp_path),
+        ],
+    )
+    assert created.exit_code == 0, created.stdout
+
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        """
+        [research_scheduler]
+        max_steps = 1
+        max_risk = "low"
+        """,
+        encoding="utf-8",
+    )
+
+    scheduled = runner.invoke(
+        cli_main.app,
+        [
+            "research",
+            "schedule-once",
+            "--config",
+            str(config_path),
+            "--cwd",
+            str(tmp_path),
+            "--json",
+        ],
+    )
+    assert scheduled.exit_code == 0, scheduled.stdout
+    payload = json.loads(scheduled.stdout)
+    assert payload["result"]["steps_run"] == 1
+    assert payload["record_dir"]
+
+
 def test_research_schedule_once_can_invoke_mutation_hooks_from_config(
     tmp_path: Path, monkeypatch
 ) -> None:
