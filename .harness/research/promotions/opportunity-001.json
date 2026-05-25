@@ -1,0 +1,6 @@
+{
+  "id": "research-opportunity-001",
+  "title": "Investigate performance of large-scale evaluation runs",
+  "hypothesis": "Increasing the batch size in the evaluation harness will reduce total execution time by minimizing overhead.",
+  "target_files": []
+}
