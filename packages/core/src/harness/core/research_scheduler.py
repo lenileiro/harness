@@ -49,6 +49,24 @@ def build_research_queue(store: ResearchStore) -> list[ResearchQueueItem]:
                 summary=opportunity.title,
             )
         )
+    for hypothesis in store.list_hypotheses():
+        items.append(
+            ResearchQueueItem(
+                kind="hypothesis",
+                id=hypothesis.id,
+                priority=70 if hypothesis.risk_level == "low" else 50,
+                summary=hypothesis.claim,
+            )
+        )
+    for plan in store.list_experiment_plans():
+        items.append(
+            ResearchQueueItem(
+                kind="experiment_plan",
+                id=plan.id,
+                priority=75,
+                summary=plan.plan,
+            )
+        )
     return sorted(items, key=lambda item: (-item.priority, item.id))
 
 

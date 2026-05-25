@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import shlex
 import sys
 from pathlib import Path
@@ -871,6 +872,359 @@ def test_research_experiment_run_show_and_compare(tmp_path: Path) -> None:
     )
     assert compared.exit_code == 0, compared.stdout
     assert "status" in compared.stdout
+
+
+def test_research_execute_next_seeds_continuation_for_unknown(tmp_path: Path) -> None:
+    runner = CliRunner()
+
+    added_theme = runner.invoke(
+        cli_main.app,
+        [
+            "research",
+            "add-theme",
+            "--title",
+            "Autonomous improvement",
+            "--description",
+            "Study how agents can improve the harness safely.",
+            "--cwd",
+            str(tmp_path),
+        ],
+    )
+    assert added_theme.exit_code == 0, added_theme.stdout
+    theme_id = next((tmp_path / ".harness" / "research" / "themes").iterdir()).name
+
+    created_unknown = runner.invoke(
+        cli_main.app,
+        [
+            "research",
+            "create-unknown",
+            "--theme-id",
+            theme_id,
+            "--question",
+            "What work should the next agent take?",
+            "--why-it-matters",
+            "The autonomous loop needs a queue item to inspect.",
+            "--cwd",
+            str(tmp_path),
+        ],
+    )
+    assert created_unknown.exit_code == 0, created_unknown.stdout
+
+    executed = runner.invoke(
+        cli_main.app,
+        ["research", "execute-next", "--cwd", str(tmp_path)],
+    )
+    assert executed.exit_code == 0, executed.stdout
+    assert "executed" in executed.stdout
+    assert "bounded rabbit hole" in executed.stdout
+
+    rabbit_hole_dir = next((tmp_path / ".harness" / "research" / "rabbitholes").iterdir())
+    publication_dir = next((tmp_path / ".harness" / "research" / "publications").iterdir())
+    rabbit_hole_json = (rabbit_hole_dir / "rabbit_hole.json").read_text(encoding="utf-8")
+    publication_json = (publication_dir / "publication.json").read_text(encoding="utf-8")
+    assert "What work should the next agent take?" in rabbit_hole_json
+    assert "Continuation plan for What work should the next agent take?" in publication_json
+
+
+def test_research_execute_next_promotes_top_candidate(tmp_path: Path) -> None:
+    runner = CliRunner()
+
+    opened = runner.invoke(
+        cli_main.app,
+        [
+            "research",
+            "open",
+            "--title",
+            "Promotion workflow",
+            "--question",
+            "How should promotion artifacts be prepared?",
+            "--scope",
+            "Focus on promotion candidate drafting.",
+            "--theme",
+            "autonomous-improvement",
+            "--cwd",
+            str(tmp_path),
+        ],
+    )
+    assert opened.exit_code == 0, opened.stdout
+    rabbit_hole_id = next((tmp_path / ".harness" / "research" / "rabbitholes").iterdir()).name
+
+    published = runner.invoke(
+        cli_main.app,
+        [
+            "research",
+            "publish",
+            "--rabbit-hole",
+            rabbit_hole_id,
+            "--title",
+            "Promotion workflow findings",
+            "--summary",
+            "Promotion candidates should produce PR-ready artifacts.",
+            "--claim",
+            "Promotion candidates should write promotion_draft.json and PR_BODY.md.",
+            "--cwd",
+            str(tmp_path),
+        ],
+    )
+    assert published.exit_code == 0, published.stdout
+    publication_id = next((tmp_path / ".harness" / "research" / "publications").iterdir()).name
+
+    created = runner.invoke(
+        cli_main.app,
+        [
+            "research",
+            "create-opportunity",
+            "--title",
+            "Tighten promotion drafts",
+            "--summary",
+            "Promotion artifacts should be easy to open as PRs.",
+            "--cwd",
+            str(tmp_path),
+        ],
+    )
+    assert created.exit_code == 0, created.stdout
+    opportunity_id = next((tmp_path / ".harness" / "research" / "opportunities").iterdir()).name
+
+    hypothesized = runner.invoke(
+        cli_main.app,
+        [
+            "research",
+            "hypothesize",
+            "--opportunity",
+            opportunity_id,
+            "--claim",
+            "Explicit promotion artifacts improve reviewer trust.",
+            "--expected-win",
+            "Clearer autonomous promotion output.",
+            "--risk-level",
+            "low",
+            "--change-mode",
+            "improve",
+            "--cwd",
+            str(tmp_path),
+        ],
+    )
+    assert hypothesized.exit_code == 0, hypothesized.stdout
+    hypothesis_id = next((tmp_path / ".harness" / "research" / "hypotheses").iterdir()).name
+
+    refined = runner.invoke(
+        cli_main.app,
+        [
+            "research",
+            "refine",
+            "--title",
+            "Promotion draft evidence section",
+            "--summary",
+            "Prepare promotion artifacts for the next bounded step.",
+            "--source-publication",
+            publication_id,
+            "--source-hypothesis",
+            hypothesis_id,
+            "--target-files",
+            "README.md,packages/cli/src/harness/cli/research_commands.py",
+            "--expected-metric",
+            "promotion draft exists",
+            "--validation-plan",
+            "Inspect generated artifacts.",
+            "--risk-level",
+            "low",
+            "--cwd",
+            str(tmp_path),
+        ],
+    )
+    assert refined.exit_code == 0, refined.stdout
+    candidate_id = next((tmp_path / ".harness" / "research" / "promotions").iterdir()).name
+
+    executed = runner.invoke(
+        cli_main.app,
+        ["research", "execute-next", "--cwd", str(tmp_path)],
+    )
+    assert executed.exit_code == 0, executed.stdout
+    assert "executed" in executed.stdout
+    assert candidate_id in executed.stdout
+
+    candidate_dir = tmp_path / ".harness" / "research" / "promotions" / candidate_id
+    assert (candidate_dir / "promotion_draft.json").is_file()
+    assert (candidate_dir / "PR_BODY.md").is_file()
+
+
+def test_research_execute_next_narrows_opportunity_to_hypothesis(tmp_path: Path) -> None:
+    runner = CliRunner()
+
+    created = runner.invoke(
+        cli_main.app,
+        [
+            "research",
+            "create-opportunity",
+            "--title",
+            "Verifier routing improvements",
+            "--summary",
+            "Reduce verifier noise by tightening routing decisions.",
+            "--change-modes",
+            "improve",
+            "--priority",
+            "high",
+            "--cwd",
+            str(tmp_path),
+        ],
+    )
+    assert created.exit_code == 0, created.stdout
+    opportunity_id = next((tmp_path / ".harness" / "research" / "opportunities").iterdir()).name
+
+    executed = runner.invoke(
+        cli_main.app,
+        ["research", "execute-next", "--cwd", str(tmp_path)],
+    )
+    assert executed.exit_code == 0, executed.stdout
+    assert "executed" in executed.stdout
+    assert "bounded hypothesis" in executed.stdout
+    assert opportunity_id in executed.stdout
+
+    hypothesis_dir = next((tmp_path / ".harness" / "research" / "hypotheses").iterdir())
+    hypothesis_json = (hypothesis_dir / "hypothesis.json").read_text(encoding="utf-8")
+    assert "Verifier routing improvements" in hypothesis_json
+    assert "Reduce verifier noise by tightening routing decisions." in hypothesis_json
+    assert '"change_mode": "improve"' in hypothesis_json
+
+
+def test_research_execute_next_turns_hypothesis_into_plan(tmp_path: Path) -> None:
+    runner = CliRunner()
+
+    created = runner.invoke(
+        cli_main.app,
+        [
+            "research",
+            "create-opportunity",
+            "--title",
+            "Research completion policy",
+            "--summary",
+            "Tighten repo-first completion policy for research runs.",
+            "--cwd",
+            str(tmp_path),
+        ],
+    )
+    assert created.exit_code == 0, created.stdout
+    opportunity_id = next((tmp_path / ".harness" / "research" / "opportunities").iterdir()).name
+
+    hypothesized = runner.invoke(
+        cli_main.app,
+        [
+            "research",
+            "hypothesize",
+            "--opportunity",
+            opportunity_id,
+            "--claim",
+            "Repo-first completion rules improve research reliability.",
+            "--expected-win",
+            "More deterministic research outcomes.",
+            "--risk-level",
+            "low",
+            "--change-mode",
+            "improve",
+            "--cwd",
+            str(tmp_path),
+        ],
+    )
+    assert hypothesized.exit_code == 0, hypothesized.stdout
+    hypothesis_id = next((tmp_path / ".harness" / "research" / "hypotheses").iterdir()).name
+
+    executed = runner.invoke(
+        cli_main.app,
+        ["research", "execute-next", "--cwd", str(tmp_path)],
+    )
+    assert executed.exit_code == 0, executed.stdout
+    assert "executed" in executed.stdout
+    assert "experiment plan" in executed.stdout
+    assert hypothesis_id in executed.stdout
+
+    plan_dir = next((tmp_path / ".harness" / "research" / "experiment-plans").iterdir())
+    plan_json = (plan_dir / "experiment_plan.json").read_text(encoding="utf-8")
+    assert hypothesis_id in plan_json
+    assert (
+        "Test the hypothesis: Repo-first completion rules improve research reliability."
+        in plan_json
+    )
+    assert '"checks": [' in plan_json
+    assert '"pytest"' in plan_json
+    assert '"workflow-smoke"' in plan_json
+
+
+def test_research_execute_next_runs_experiment_plan(tmp_path: Path) -> None:
+    runner = CliRunner()
+
+    created = runner.invoke(
+        cli_main.app,
+        [
+            "research",
+            "create-opportunity",
+            "--title",
+            "Experiment execution policy",
+            "--summary",
+            "Run one bounded experiment plan automatically.",
+            "--cwd",
+            str(tmp_path),
+        ],
+    )
+    assert created.exit_code == 0, created.stdout
+    opportunity_id = next((tmp_path / ".harness" / "research" / "opportunities").iterdir()).name
+
+    hypothesized = runner.invoke(
+        cli_main.app,
+        [
+            "research",
+            "hypothesize",
+            "--opportunity",
+            opportunity_id,
+            "--claim",
+            "One bounded experiment run is safe enough for autonomous execution.",
+            "--expected-win",
+            "The autonomous loop can validate a testable step.",
+            "--risk-level",
+            "low",
+            "--change-mode",
+            "improve",
+            "--cwd",
+            str(tmp_path),
+        ],
+    )
+    assert hypothesized.exit_code == 0, hypothesized.stdout
+    hypothesis_id = next((tmp_path / ".harness" / "research" / "hypotheses").iterdir()).name
+
+    ok_cmd = f'{shlex.quote(sys.executable)} -c "print(\\"ok\\")"'
+    planned = runner.invoke(
+        cli_main.app,
+        [
+            "research",
+            "plan-experiment",
+            "--hypothesis",
+            hypothesis_id,
+            "--plan",
+            "Run a single passing check.",
+            "--checks",
+            ok_cmd,
+            "--cwd",
+            str(tmp_path),
+        ],
+    )
+    assert planned.exit_code == 0, planned.stdout
+    plan_id = next((tmp_path / ".harness" / "research" / "experiment-plans").iterdir()).name
+
+    executed = runner.invoke(
+        cli_main.app,
+        ["research", "execute-next", "--cwd", str(tmp_path)],
+    )
+    assert executed.exit_code == 0, executed.stdout
+    assert "executed" in executed.stdout
+    assert "experiment plan" in executed.stdout
+    assert plan_id in executed.stdout
+
+    experiment_id = next((tmp_path / ".harness" / "research" / "experiments").iterdir()).name
+    result_json = (
+        tmp_path / ".harness" / "research" / "experiments" / experiment_id / "result.json"
+    ).read_text(encoding="utf-8")
+    assert '"status": "passed"' in result_json
+    result_payload = json.loads(result_json)
+    assert result_payload["command_results"][0]["command"] == ok_cmd
 
 
 def test_research_run_subcommand_uses_research_domain(tmp_path: Path, monkeypatch) -> None:

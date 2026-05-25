@@ -20,6 +20,7 @@ from harness.cli.promotion_commands import (
     show_candidate_command as _show_candidate_command,
 )
 from harness.core import ResearchMemo, parse_research_memo
+from harness.core.autonomy import execute_next_research_item
 from harness.core.citations import Citation
 from harness.core.experiment_plans import ExperimentPlan
 from harness.core.experiment_runner import compare_experiment_results, run_experiment_plan
@@ -668,6 +669,55 @@ def research_queue_command(
     for item in items:
         table.add_row(item.kind, item.id, str(item.priority), item.summary)
     console.print(table)
+
+
+@research_app.command("execute-next")
+def research_execute_next_command(
+    *,
+    cwd: Path | None = typer.Option(None, "--cwd"),
+    max_risk: str = typer.Option("medium", "--max-risk"),
+    base_branch: str = typer.Option("main", "--base-branch"),
+    create_branch: bool = typer.Option(False, "--create-branch/--no-create-branch"),
+    commit: bool = typer.Option(False, "--commit/--no-commit"),
+    push: bool = typer.Option(False, "--push/--no-push"),
+    open_pr: bool = typer.Option(False, "--open/--no-open"),
+    draft_pr: bool = typer.Option(True, "--draft/--ready"),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    working_dir = (cwd or Path.cwd()).resolve()
+    if open_pr and not push:
+        raise typer.BadParameter("--open requires --push so the branch exists remotely")
+    if push and not create_branch:
+        raise typer.BadParameter("--push requires --create-branch")
+    store = ResearchStore(root=default_research_root(working_dir))
+    result = execute_next_research_item(
+        store=store,
+        cwd=working_dir,
+        max_risk=max_risk,
+        base_branch=base_branch,
+        create_branch=create_branch,
+        commit=commit,
+        push=push,
+        open_pr=open_pr,
+        draft_pr=draft_pr,
+    )
+    if json_output:
+        console.print(json.dumps(result.to_dict(), indent=2))
+        return
+    status_color = {
+        "executed": "green",
+        "deferred": "yellow",
+        "no_work": "dim",
+    }.get(result.status, "white")
+    console.print(f"[{status_color}]{result.status}[/{status_color}] {result.message}")
+    if result.queue_item_kind and result.queue_item_id:
+        console.print(f"queue_item={result.queue_item_kind}:{result.queue_item_id}")
+    if result.branch_name:
+        console.print(f"branch={result.branch_name}")
+    if result.draft_json:
+        console.print(f"draft_json={result.draft_json}")
+    if result.pr_body:
+        console.print(f"pr_body={result.pr_body}")
 
 
 @research_app.command("rebalance")
