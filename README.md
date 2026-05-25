@@ -3,7 +3,8 @@
 Harness is a Python agent runtime and benchmark harness for tool-using LLMs.
 It is built as a `uv` workspace with a Typer CLI, pluggable model adapters,
 durable sessions and tasks, layered runtime defenses, and an execution-backed
-eval stack for coding-agent behavior.
+eval stack for coding-agent behavior, autonomous research flows, and
+feature-level CLI workflows.
 
 At a high level, Harness gives you:
 
@@ -12,6 +13,8 @@ At a high level, Harness gives you:
 - structural defenses around the base model/tool loop
 - persistent workspace memory, contracts, tips, experience, and resume state
 - a behavioral eval harness for defended-vs-bare A/B testing
+- a durable research/autonomy layer for vision, rabbit holes, publications,
+  experiments, promotions, and portfolio management
 
 ## What Harness Is For
 
@@ -82,22 +85,46 @@ evals/
 ├── artifacts.py                   # artifact persistence helpers
 ├── calibration.py                 # judge calibration helpers
 ├── discovery.py                   # fixture discovery + metadata loading
+├── docs_runner.py                 # docs-audit domain eval family
 ├── failure_analyzer.py            # artifact-to-adjustment analysis
 ├── hard_checks.py                 # semantic hard behavior contracts
 ├── judge.py                       # optional LLM-as-judge scoring
-├── runner.py                      # eval orchestration entrypoint
+├── research_runner.py             # research domain eval family
+├── review_runner.py               # code-review domain eval family
+├── runner.py                      # coding benchmark orchestration entrypoint
+├── workflow_runner.py             # deterministic feature-workflow eval runner
 └── types.py                       # shared eval schemas
 
 packages/core/src/harness/core/
+├── citations.py                   # publication-to-publication lineage links
 ├── domain_profiles.py             # task/domain policy presets
 ├── experience.py                  # public experience compatibility surface
 ├── experience_curator.py          # archival maintenance for procedures
 ├── experience_providers.py        # static + artifact + procedure retrieval
+├── experiment_plans.py            # experiment planning models
+├── experiment_runner.py           # bounded experiment execution helpers
+├── experiments.py                 # experiment + result models
 ├── extensions.py                  # provider/plugin extension protocols
+├── hypotheses.py                  # competing improvement angles
+├── inspiration.py                 # external/internal idea intake models
+├── observations.py                # section observations for synthesis
+├── opportunities.py               # cross-section opportunity objects
+├── portfolio.py                   # promotion/research portfolio snapshots
 ├── plugin_loader.py               # plugin manifest and loader
 ├── procedural_skill.py            # thin compatibility entrypoint
+├── pr_generation.py               # promotion draft / PR payload generation
 ├── procedures.py                  # writable procedure artifacts
+├── promotion_candidates.py        # refinement outputs ready for promotion
+├── publications.py                # durable research publication summaries
+├── refinement.py                  # refinement helpers
+├── research_archive.py            # reject/archive/resurrect flows
+├── research_index.py              # research search/index helpers
+├── research_models.py             # vision/theme/unknown/rabbithole/publication
+├── research_roles.py              # built-in autonomous research roles
+├── research_scheduler.py          # queue building and rebalance helpers
+├── research_store.py              # research artifact persistence
 ├── result_schemas.py              # typed machine-readable outputs
+├── section_maps.py                # deep-dive subsystem maps
 ├── tool_entry.py                  # declarative tool entry model
 ├── tips_mining.py                 # tip extraction from failures
 ├── tips_models.py                 # tip and experience data models
@@ -191,12 +218,15 @@ Current top-level commands include:
 - `run`: single prompt execution
 - `chat`: interactive REPL
 - `review`: diff-aware read-only code review
+- `docs-audit`: documentation analysis in a structured docs domain
 - `goal`: planner-first execution
 - `init`: create workspace-local storage
 - `sessions`: inspect and resume saved sessions
 - `plugins`: inspect discovered plugin providers
 - `providers`: inspect provider configuration
 - `tools`: inspect built-in tools
+- `vision`: update and inspect the current research direction
+- `research`: manage rabbit holes, publications, opportunities, experiments, and promotion
 - `tasks`: durable task management
 - `approvals`: inspect and resolve queued tool approvals
 - `evidence`: inspect the tool-call evidence ledger
@@ -363,7 +393,7 @@ Typical use:
 ```bash
 uv run harness run --session fix-auth --yes "start debugging auth failures"
 uv run harness sessions list
-uv run harness resume --help
+uv run harness sessions resume --help
 ```
 
 ### Tasks
@@ -432,6 +462,19 @@ The experience CLI supports writable procedure artifacts and curation:
 - `procedures list`
 - `curate`
 
+The research CLI supports the autonomous research stack:
+
+- `vision show`, `vision update`
+- `research open`, `publish`, `search`, `show-publication`, `cite`
+- `research add-theme`, `list-themes`, `create-unknown`, `list-unknowns`
+- `research map-section`, `add-observation`, `show-section`
+- `research create-opportunity`, `list-opportunities`, `related`
+- `research hypothesize`, `plan-experiment`
+- `research experiment run|show|compare`
+- `research refine`, `list-candidates`, `candidate show`, `promote`, `pr`
+- `research archive`, `reject`, `list-archive`, `resurrect`
+- `research roles`, `portfolio`, `queue`, `rebalance`
+
 ## Evals
 
 Harness includes a behavioral eval stack under `evals/`.
@@ -452,6 +495,10 @@ Current subcommands:
 - `adjustments`
 - `export-adjustments`
 - `validate`
+- `review`
+- `research`
+- `docs-audit`
+- `workflow`
 - `run`
 
 ### Example eval runs
@@ -474,6 +521,9 @@ uv run harness eval export-adjustments adjustments.jsonl --root evals/runs
 
 # Validate fixtures, suites, and gold labels
 uv run harness eval validate
+
+# Run deterministic feature-workflow fixtures over the CLI surface
+uv run harness eval workflow --suite workflow-smoke --json-out
 ```
 
 ### How eval scoring works
@@ -483,6 +533,15 @@ The eval harness uses two layers of scoring:
 1. Hard metrics from execution evidence and fixture-specific behavior contracts.
 2. Optional LLM-judge scores for qualities like scope discipline, decomposition,
    pushback, and epistemic grounding.
+
+Harness now uses multiple eval families:
+
+- `eval run`: the original coding-agent benchmark harness
+- `eval review`: structured code-review fixtures
+- `eval research`: research memo fixtures
+- `eval docs-audit`: documentation-audit fixtures
+- `eval workflow`: deterministic feature-workflow fixtures that execute real CLI
+  command sequences against local workspaces and wrappers
 
 The hard layer is behavior-first, not exact patch-text matching. A correct fix
 should not fail just because of harmless whitespace noise; the contracts are
@@ -524,7 +583,7 @@ uv run ruff check --fix .
 
 ```bash
 uv run pytest packages/core/tests/test_verification.py -q
-uv run pytest evals/tests/test_execution.py -q
+uv run pytest evals/tests/test_workflow_runner.py -q
 ```
 
 ## Design Principles
