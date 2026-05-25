@@ -1277,8 +1277,7 @@ def research_plan_experiment_command(
     console.print(f"[green]Planned experiment {experiment_plan.id}[/green] at {target}")
 
 
-@research_app.command("refine")
-def research_refine_command(
+def _research_create_candidate_command(
     *,
     title: str = typer.Option(..., "--title"),
     summary: str = typer.Option(..., "--summary"),
@@ -1335,6 +1334,126 @@ def research_refine_command(
     console.print(f"[green]Created promotion candidate {candidate.id}[/green] at {target}")
 
 
+@research_app.command("refine", help="Create a promotion candidate from prior research evidence.")
+def research_refine_command(
+    *,
+    title: str = typer.Option(..., "--title"),
+    summary: str = typer.Option(..., "--summary"),
+    source_publication: list[str] = typer.Option([], "--source-publication"),
+    source_hypothesis: list[str] = typer.Option([], "--source-hypothesis"),
+    target_files: str | None = typer.Option(None, "--target-files"),
+    expected_metric: str | None = typer.Option(None, "--expected-metric"),
+    validation_plan: str | None = typer.Option(None, "--validation-plan"),
+    risk_level: str = typer.Option("medium", "--risk-level"),
+    created_by: str = typer.Option("human", "--created-by"),
+    cwd: Path | None = typer.Option(None, "--cwd"),
+    mode: str | None = typer.Option(None, "--mode"),
+    subsystem: str | None = typer.Option(None, "--subsystem"),
+    rationale: str | None = typer.Option(None, "--rationale"),
+    expected_outcome: str | None = typer.Option(None, "--expected-outcome"),
+    risk: str | None = typer.Option(None, "--risk"),
+) -> None:
+    _research_create_candidate_command(
+        title=title,
+        summary=summary,
+        source_publication=source_publication,
+        source_hypothesis=source_hypothesis,
+        target_files=target_files,
+        expected_metric=expected_metric,
+        validation_plan=validation_plan,
+        risk_level=risk_level,
+        created_by=created_by,
+        cwd=cwd,
+        mode=mode,
+        subsystem=subsystem,
+        rationale=rationale,
+        expected_outcome=expected_outcome,
+        risk=risk,
+    )
+
+
+@research_app.command(
+    "create-candidate",
+    help="Create a promotion candidate from prior research evidence.",
+)
+def research_create_candidate_command(
+    *,
+    title: str = typer.Option(..., "--title"),
+    summary: str = typer.Option(..., "--summary"),
+    source_publication: list[str] = typer.Option([], "--source-publication"),
+    source_hypothesis: list[str] = typer.Option([], "--source-hypothesis"),
+    target_files: str | None = typer.Option(None, "--target-files"),
+    expected_metric: str | None = typer.Option(None, "--expected-metric"),
+    validation_plan: str | None = typer.Option(None, "--validation-plan"),
+    risk_level: str = typer.Option("medium", "--risk-level"),
+    created_by: str = typer.Option("human", "--created-by"),
+    cwd: Path | None = typer.Option(None, "--cwd"),
+    mode: str | None = typer.Option(None, "--mode"),
+    subsystem: str | None = typer.Option(None, "--subsystem"),
+    rationale: str | None = typer.Option(None, "--rationale"),
+    expected_outcome: str | None = typer.Option(None, "--expected-outcome"),
+    risk: str | None = typer.Option(None, "--risk"),
+) -> None:
+    _research_create_candidate_command(
+        title=title,
+        summary=summary,
+        source_publication=source_publication,
+        source_hypothesis=source_hypothesis,
+        target_files=target_files,
+        expected_metric=expected_metric,
+        validation_plan=validation_plan,
+        risk_level=risk_level,
+        created_by=created_by,
+        cwd=cwd,
+        mode=mode,
+        subsystem=subsystem,
+        rationale=rationale,
+        expected_outcome=expected_outcome,
+        risk=risk,
+    )
+
+
+@candidate_app.command(
+    "create",
+    help="Create a promotion candidate from prior research evidence.",
+)
+def research_candidate_create_command(
+    *,
+    title: str = typer.Option(..., "--title"),
+    summary: str = typer.Option(..., "--summary"),
+    source_publication: list[str] = typer.Option([], "--source-publication"),
+    source_hypothesis: list[str] = typer.Option([], "--source-hypothesis"),
+    target_files: str | None = typer.Option(None, "--target-files"),
+    expected_metric: str | None = typer.Option(None, "--expected-metric"),
+    validation_plan: str | None = typer.Option(None, "--validation-plan"),
+    risk_level: str = typer.Option("medium", "--risk-level"),
+    created_by: str = typer.Option("human", "--created-by"),
+    cwd: Path | None = typer.Option(None, "--cwd"),
+    mode: str | None = typer.Option(None, "--mode"),
+    subsystem: str | None = typer.Option(None, "--subsystem"),
+    rationale: str | None = typer.Option(None, "--rationale"),
+    expected_outcome: str | None = typer.Option(None, "--expected-outcome"),
+    risk: str | None = typer.Option(None, "--risk"),
+) -> None:
+    _research_create_candidate_command(
+        title=title,
+        summary=summary,
+        source_publication=source_publication,
+        source_hypothesis=source_hypothesis,
+        target_files=target_files,
+        expected_metric=expected_metric,
+        validation_plan=validation_plan,
+        risk_level=risk_level,
+        created_by=created_by,
+        cwd=cwd,
+        mode=mode,
+        subsystem=subsystem,
+        rationale=rationale,
+        expected_outcome=expected_outcome,
+        risk=risk,
+    )
+
+
 @research_app.command("list-candidates")
 def research_list_candidates_command(
     *,
@@ -1344,7 +1463,11 @@ def research_list_candidates_command(
     store = ResearchStore(root=default_research_root(working_dir))
     candidates = store.list_promotion_candidates()
     if not candidates:
-        console.print("[dim]No promotion candidates found.[/dim]")
+        console.print(
+            "[dim]No promotion candidates found. "
+            "Use `harness research create-candidate` or "
+            "`harness research candidate create` (legacy alias: `refine`).[/dim]"
+        )
         return
     table = Table(show_header=True, header_style="bold")
     table.add_column("ID", style="dim", no_wrap=True)

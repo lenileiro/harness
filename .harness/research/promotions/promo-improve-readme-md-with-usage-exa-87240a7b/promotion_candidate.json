@@ -1,0 +1,18 @@
+{
+  "id": "promo-improve-readme-md-with-usage-exa-87240a7b",
+  "title": "Improve README.md with usage example",
+  "summary": "Based on hypothesis that a usage example improves onboarding.",
+  "source_publications": [],
+  "source_hypotheses": [
+    "hyp-adding-a-usage-example-to-readme-2c920779"
+  ],
+  "target_files": [
+    "README.md"
+  ],
+  "expected_metric": "user-onboarding-success",
+  "validation_plan": "Manual review of the example",
+  "risk_level": "medium",
+  "created_by": "human",
+  "created_at": "2026-05-25T22:11:24+00:00",
+  "change_intent": null
+}
