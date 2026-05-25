@@ -144,10 +144,27 @@ def ensure_branch(*, cwd: Path, branch_name: str, base_branch: str) -> None:
     _git(["git", "switch", "-c", branch_name, base_branch], cwd=cwd)
 
 
-def commit_paths(*, cwd: Path, message: str, paths: tuple[str, ...]) -> None:
+def paths_have_changes(*, cwd: Path, paths: tuple[str, ...]) -> bool:
+    if not paths:
+        return False
+    result = subprocess.run(
+        ["git", "status", "--short", "--", *paths],
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return bool(result.stdout.strip())
+
+
+def commit_paths(*, cwd: Path, message: str, paths: tuple[str, ...]) -> bool:
     if not paths:
         raise ValueError("commit requires at least one target file")
-    _git(["git", "commit", "-m", message, "--only", "--", *paths], cwd=cwd)
+    _git(["git", "add", "--", *paths], cwd=cwd)
+    if not paths_have_changes(cwd=cwd, paths=paths):
+        return False
+    _git(["git", "commit", "-m", message, "--", *paths], cwd=cwd)
+    return True
 
 
 def push_branch(*, cwd: Path, branch_name: str, remote: str = "origin") -> None:
@@ -189,6 +206,7 @@ __all__ = [
     "commit_paths",
     "create_pull_request",
     "ensure_branch",
+    "paths_have_changes",
     "pr_body_for_candidate",
     "pr_title_for_candidate",
     "push_branch",

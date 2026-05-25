@@ -23,6 +23,17 @@ _WRITE_TOOL_NAMES = frozenset(
     }
 )
 
+_PROMOTION_ARTIFACT_PREFIX = ".harness/research/promotions/"
+_PROMOTION_FLOW_COMMAND_HINTS: tuple[str, ...] = (
+    "harness research create-candidate",
+    "harness research candidate create",
+    "harness research refine",
+    "harness research promote",
+    "harness research pr",
+    "gh pr create",
+    ".harness/research/promotions/",
+)
+
 _TEST_COMMAND_HINTS: tuple[str, ...] = (
     "pytest",
     "python -m pytest",
@@ -108,6 +119,65 @@ def first_user_prompt(session: Session) -> str:
         if getattr(msg, "role", None) == "user" and msg.content:
             return msg.content
     return ""
+
+
+def _promotion_artifact_path(path: str) -> bool:
+    normalized = path.strip().replace("\\", "/")
+    if normalized.startswith("./"):
+        normalized = normalized[2:]
+    return normalized.startswith(_PROMOTION_ARTIFACT_PREFIX)
+
+
+def _shell_command(event: ActivityEvent) -> str:
+    arguments = event.data.get("arguments")
+    if not isinstance(arguments, dict):
+        return ""
+    return str(arguments.get("command") or arguments.get("cmd") or arguments.get("text") or "")
+
+
+def _normalize_shell_command(command: str) -> str:
+    return " ".join(command.lower().split())
+
+
+def _is_harness_research_pr_open_command(command: str) -> bool:
+    normalized = _normalize_shell_command(command)
+    return "harness research pr" in normalized and "--push" in normalized and "--open" in normalized
+
+
+def _is_promotion_artifact_pr_flow(tool_events: list[ActivityEvent]) -> bool:
+    file_write_events = _promotion_artifact_writes(tool_events)
+    commands = _executed_shell_commands(tool_events)
+    shell_driven_promotion = any(
+        any(hint in command for hint in _PROMOTION_FLOW_COMMAND_HINTS) for command in commands
+    )
+    if not file_write_events and not shell_driven_promotion:
+        return False
+    return any(_is_harness_research_pr_open_command(command) for command in commands)
+
+
+def _promotion_artifact_writes(tool_events: list[ActivityEvent]) -> list[ActivityEvent]:
+    writes: list[ActivityEvent] = []
+    for event in tool_events:
+        if event.data.get("name") not in {"write_file", "edit_file", "apply_diff", "patch"}:
+            continue
+        if event.data.get("is_error"):
+            continue
+        arguments = event.data.get("arguments")
+        if not isinstance(arguments, dict):
+            continue
+        path = str(arguments.get("path") or arguments.get("file") or "").strip()
+        if path and _promotion_artifact_path(path):
+            writes.append(event)
+    return writes
+
+
+def _executed_shell_commands(tool_events: list[ActivityEvent]) -> list[str]:
+    return [
+        _normalize_shell_command(_shell_command(event))
+        for event in tool_events
+        if event.data.get("name") in {"shell", "bash", "run_command", "execute"}
+        and not event.data.get("is_error")
+    ]
 
 
 def minimal_hint(prompt: str) -> str | None:
@@ -258,6 +328,16 @@ class VerifyBeforeDoneVerifier:
     ) -> VerificationResult:
         tool_events = [e for e in activity if e.kind == "tool_call.completed"]
 
+        if _is_promotion_artifact_pr_flow(tool_events):
+            return VerificationResult(
+                can_finish=True,
+                reason=(
+                    "Only generated research promotion artifacts were modified and the "
+                    "PR flow was completed — generic verify_work is not required."
+                ),
+                verifier_name=self.name,
+            )
+
         wrote = any(e.data.get("name") in self._writes for e in tool_events)
         if not wrote:
             return VerificationResult(
@@ -284,6 +364,65 @@ class VerifyBeforeDoneVerifier:
         return VerificationResult(
             can_finish=True,
             reason="verify_work was called — deferring to downstream verifier.",
+            verifier_name=self.name,
+        )
+
+
+class ResearchPromotionFlowVerifier:
+    name = "research_promotion_flow"
+
+    async def verify(
+        self, *, session: Session, activity: list[ActivityEvent]
+    ) -> VerificationResult:
+        tool_events = [e for e in activity if e.kind == "tool_call.completed"]
+        promotion_writes = _promotion_artifact_writes(tool_events)
+        commands = _executed_shell_commands(tool_events)
+        shell_driven_promotion = any(
+            any(hint in command for hint in _PROMOTION_FLOW_COMMAND_HINTS) for command in commands
+        )
+        if not promotion_writes and not shell_driven_promotion:
+            return VerificationResult(
+                can_finish=True,
+                reason="no research promotion artifacts were edited",
+                verifier_name=self.name,
+            )
+
+        created_candidate = any(
+            needle in command
+            for command in commands
+            for needle in (
+                "harness research refine",
+                "harness research create-candidate",
+                "harness research candidate create",
+            )
+        )
+        promoted = any("harness research promote" in command for command in commands)
+        opened_pr = any(_is_harness_research_pr_open_command(command) for command in commands)
+
+        if created_candidate and promoted and opened_pr:
+            return VerificationResult(
+                can_finish=True,
+                reason="research promotion artifacts were produced through the harness promotion flow",
+                verifier_name=self.name,
+            )
+
+        missing: list[str] = []
+        if not created_candidate:
+            missing.append("candidate creation via refine/create-candidate")
+        if not promoted:
+            missing.append("promotion draft generation via `harness research promote`")
+        if not opened_pr:
+            missing.append("PR opening via `harness research pr --push --open [--draft]`")
+
+        return VerificationResult(
+            can_finish=False,
+            reason=(
+                "You edited `.harness/research/promotions/...` artifacts directly without "
+                "using the full Harness promotion flow. Use "
+                "`harness research create-candidate` (or `refine` / `candidate create`), "
+                "`harness research promote`, and `harness research pr --push --open` instead. "
+                f"Missing: {', '.join(missing)}."
+            ),
             verifier_name=self.name,
         )
 

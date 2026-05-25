@@ -1,0 +1,22 @@
+{
+  "id": "promo-improve-help-text-for-create-can-9d3adf3d",
+  "title": "Improve help text for create-candidate",
+  "summary": "Updating the help text to be more descriptive.",
+  "source_publications": [],
+  "source_hypotheses": [
+    "hyp-adding-more-descriptive-help-tex-b6d0f03e"
+  ],
+  "target_files": [],
+  "expected_metric": "",
+  "validation_plan": "",
+  "risk_level": "medium",
+  "created_by": "human",
+  "created_at": "2026-05-25T22:18:06+00:00",
+  "change_intent": {
+    "mode": "improve",
+    "subsystem": "cli",
+    "rationale": "Users need more guidance on how to use the command correctly.",
+    "expected_outcome": "Improved user understanding of the command options.",
+    "risk": "medium"
+  }
+}
