@@ -1,0 +1,11 @@
+{
+  "id": "cand-001",
+  "hypothesis_id": "hyp-001",
+  "title": "OpenAPI Spec Candidate",
+  "target_files": [
+    ".harness/research/promotions/opportunity.json",
+    ".harness/research/promotions/hypothesis.json",
+    ".harness/research/promotions/candidate.json",
+    ".harness/research/promotions/openapi_spec.json"
+  ]
+}
