@@ -77,6 +77,33 @@ class TestLoadConfig:
         assert cfg.plugins_enabled == ("workspace-demo",)
         assert cfg.plugins_disabled == ("legacy-tools",)
         assert cfg.include_plugin_entry_points is True
+        assert cfg.research_scheduler.max_steps is None
+
+    def test_research_scheduler_config(self, tmp_path: Path) -> None:
+        target = tmp_path / "config.toml"
+        target.write_text(
+            """
+            [research_scheduler]
+            max_steps = 7
+            max_risk = "low"
+            base_branch = "develop"
+            create_branch = true
+            commit = true
+            push = false
+            open_pr = false
+            draft_pr = true
+            """,
+            encoding="utf-8",
+        )
+        cfg = load_config(target)
+        assert cfg.research_scheduler.max_steps == 7
+        assert cfg.research_scheduler.max_risk == "low"
+        assert cfg.research_scheduler.base_branch == "develop"
+        assert cfg.research_scheduler.create_branch is True
+        assert cfg.research_scheduler.commit is True
+        assert cfg.research_scheduler.push is False
+        assert cfg.research_scheduler.open_pr is False
+        assert cfg.research_scheduler.draft_pr is True
 
     def test_invalid_approval_value_raises(self, tmp_path: Path) -> None:
         target = tmp_path / "config.toml"
@@ -112,4 +139,16 @@ class TestLoadConfig:
             encoding="utf-8",
         )
         with pytest.raises(ConfigError, match=r"plugins\.enabled"):
+            load_config(target)
+
+    def test_research_scheduler_section_validates_types(self, tmp_path: Path) -> None:
+        target = tmp_path / "config.toml"
+        target.write_text(
+            """
+            [research_scheduler]
+            max_steps = 0
+            """,
+            encoding="utf-8",
+        )
+        with pytest.raises(ConfigError, match=r"research_scheduler\.max_steps"):
             load_config(target)

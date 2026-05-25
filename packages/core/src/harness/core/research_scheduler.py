@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections import Counter
 from dataclasses import dataclass
 
@@ -22,7 +23,19 @@ class PatternFinding:
 
 def build_research_queue(store: ResearchStore) -> list[ResearchQueueItem]:
     items: list[ResearchQueueItem] = []
-    for candidate in store.list_promotion_candidates():
+    candidates = store.list_promotion_candidates()
+    active_candidates = []
+    for candidate in candidates:
+        review_path = store.promotion_candidates_dir / candidate.id / "promotion_review.json"
+        if review_path.is_file():
+            payload = json.loads(review_path.read_text(encoding="utf-8"))
+            if str(payload.get("status") or "").strip() == "failed":
+                continue
+        active_candidates.append(candidate)
+    promoted_hypotheses = {
+        hypothesis_id for candidate in candidates for hypothesis_id in candidate.source_hypotheses
+    }
+    for candidate in active_candidates:
         items.append(
             ResearchQueueItem(
                 kind="promotion_candidate",
@@ -50,6 +63,8 @@ def build_research_queue(store: ResearchStore) -> list[ResearchQueueItem]:
             )
         )
     for hypothesis in store.list_hypotheses():
+        if hypothesis.id in promoted_hypotheses:
+            continue
         items.append(
             ResearchQueueItem(
                 kind="hypothesis",
@@ -58,13 +73,32 @@ def build_research_queue(store: ResearchStore) -> list[ResearchQueueItem]:
                 summary=hypothesis.claim,
             )
         )
+    experiments = store.list_experiments()
+    executed_plan_ids = {experiment.plan_id for experiment in experiments}
     for plan in store.list_experiment_plans():
+        if plan.id in executed_plan_ids:
+            continue
         items.append(
             ResearchQueueItem(
                 kind="experiment_plan",
                 id=plan.id,
                 priority=75,
                 summary=plan.plan,
+            )
+        )
+    for experiment in experiments:
+        result = store.load_experiment_result(experiment.id)
+        if result.status != "passed":
+            continue
+        plan = store.load_experiment_plan(experiment.plan_id)
+        if plan.hypothesis_id in promoted_hypotheses:
+            continue
+        items.append(
+            ResearchQueueItem(
+                kind="experiment_result",
+                id=experiment.id,
+                priority=85,
+                summary=result.status,
             )
         )
     return sorted(items, key=lambda item: (-item.priority, item.id))

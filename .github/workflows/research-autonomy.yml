@@ -1,0 +1,427 @@
+name: research-autonomy
+
+on:
+  workflow_dispatch:
+    inputs:
+      max_steps:
+        description: "Maximum bounded steps to run"
+        required: false
+        default: "3"
+      max_risk:
+        description: "Maximum risk level (low, medium, high)"
+        required: false
+        default: "low"
+      run_live_eval:
+        description: "Also run a secret-backed live canonical eval"
+        required: false
+        default: "false"
+      live_fixture:
+        description: "Canonical eval fixture to run in live mode"
+        required: false
+        default: "09-handover-vision-flow"
+      live_provider:
+        description: "Provider for live eval mode"
+        required: false
+        default: "openrouter"
+      live_model:
+        description: "Model for live eval mode"
+        required: false
+        default: "google/gemma-4-26b-a4b-it"
+      comment_on_pr:
+        description: "Post the autonomy summary back to a PR when one can be resolved"
+        required: false
+        default: "false"
+      pr_number:
+        description: "Optional PR number to comment on"
+        required: false
+        default: ""
+      run_mutation:
+        description: "Allow a bounded mutation-capable schedule-once run"
+        required: false
+        default: "false"
+      mutation_max_steps:
+        description: "Maximum bounded steps for mutation mode"
+        required: false
+        default: "2"
+      mutation_max_risk:
+        description: "Maximum risk level for mutation mode"
+        required: false
+        default: "low"
+      mutation_create_branch:
+        description: "Allow branch creation in mutation mode"
+        required: false
+        default: "false"
+      mutation_commit:
+        description: "Allow commits in mutation mode"
+        required: false
+        default: "false"
+      mutation_push:
+        description: "Allow push in mutation mode"
+        required: false
+        default: "false"
+      mutation_open_pr:
+        description: "Allow PR creation in mutation mode"
+        required: false
+        default: "false"
+  schedule:
+    - cron: "15 4 * * *"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  schedule-once:
+    name: schedule-once
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+          cache-dependency-glob: "**/uv.lock"
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Sync workspace
+        run: uv sync --all-extras --all-groups
+
+      - name: Run scheduled autonomy burst
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .artifacts/research-autonomy/workspace
+          max_steps="${{ github.event.inputs.max_steps || '3' }}"
+          max_risk="${{ github.event.inputs.max_risk || 'low' }}"
+          cat > .artifacts/research-autonomy/config.toml <<EOF
+          [research_scheduler]
+          max_steps = ${max_steps}
+          max_risk = "${max_risk}"
+          base_branch = "main"
+          create_branch = false
+          commit = false
+          push = false
+          open_pr = false
+          draft_pr = true
+          EOF
+          uv run harness research create-opportunity \
+            --title "Scheduled autonomy burst" \
+            --summary "Record one deterministic autonomous burst in CI." \
+            --cwd .artifacts/research-autonomy/workspace
+          uv run harness research schedule-once \
+            --config .artifacts/research-autonomy/config.toml \
+            --cwd .artifacts/research-autonomy/workspace \
+            --json > .artifacts/research-autonomy/result.json
+          uv run harness research list-runs \
+            --cwd .artifacts/research-autonomy/workspace
+
+      - name: Write scheduled autonomy summary
+        shell: bash
+        run: |
+          uv run python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          payload = json.loads(Path(".artifacts/research-autonomy/result.json").read_text())
+          result = payload.get("result") or {}
+          lines = [
+              "## Scheduled autonomy burst",
+              "",
+              f"- status: `{result.get('status', 'unknown')}`",
+              f"- stop_reason: `{result.get('stop_reason', '')}`",
+              f"- steps: `{result.get('steps_run', 0)}`",
+              "",
+              "### Steps",
+          ]
+          for index, step in enumerate(result.get("results") or [], start=1):
+              if not isinstance(step, dict):
+                  continue
+              queue = ""
+              if step.get("queue_item_kind") and step.get("queue_item_id"):
+                  queue = f" (`{step['queue_item_kind']}:{step['queue_item_id']}`)"
+              lines.append(f"{index}. **{step.get('status', 'unknown')}** {step.get('message', '')}{queue}")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as handle:
+              handle.write("\n".join(lines) + "\n")
+          PY
+
+      - name: Upload autonomy artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: research-autonomy
+          path: .artifacts/research-autonomy/
+
+  live-autonomy-eval:
+    name: live autonomy eval
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.run_live_eval == 'true'
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    env:
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+          cache-dependency-glob: "**/uv.lock"
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Sync workspace
+        run: uv sync --all-extras --all-groups
+
+      - name: Run secret-backed live canonical eval
+        shell: bash
+        run: |
+          set -euo pipefail
+          fixture="${{ github.event.inputs.live_fixture || '09-handover-vision-flow' }}"
+          provider="${{ github.event.inputs.live_provider || 'openrouter' }}"
+          model="${{ github.event.inputs.live_model || 'google/gemma-4-26b-a4b-it' }}"
+          if [[ "$provider" == "openrouter" && -z "${OPENROUTER_API_KEY:-}" ]]; then
+            echo "OPENROUTER_API_KEY is required for openrouter live eval mode" >&2
+            exit 1
+          fi
+          if [[ "$provider" == "anthropic" && -z "${ANTHROPIC_API_KEY:-}" ]]; then
+            echo "ANTHROPIC_API_KEY is required for anthropic live eval mode" >&2
+            exit 1
+          fi
+          mkdir -p .artifacts/research-autonomy-live
+          uv run harness eval run "$fixture" \
+            --provider "$provider" \
+            --model "$model" \
+            --output-dir .artifacts/research-autonomy-live \
+            --json-out \
+            > .artifacts/research-autonomy-live/report.json
+
+      - name: Write live autonomy summary
+        shell: bash
+        run: |
+          uv run python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          payload = json.loads(Path(".artifacts/research-autonomy-live/report.json").read_text())
+          results = payload.get("results") or []
+          lines = ["## Live autonomy eval", ""]
+          for item in results:
+              if not isinstance(item, dict):
+                  continue
+              fixture = item.get("fixture_name", "unknown")
+              overall = (item.get("overall") or {}).get("score", "n/a")
+              verify = (item.get("verification") or {}).get("score", "n/a")
+              lines.append(f"- `{fixture}` overall={overall} verification={verify}")
+          summary = "\n".join(lines) + "\n"
+          Path(".artifacts/research-autonomy-live/summary.md").write_text(summary, encoding="utf-8")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as handle:
+              handle.write(summary)
+          PY
+
+      - name: Resolve PR for live autonomy comment
+        if: github.event.inputs.comment_on_pr == 'true'
+        id: live-pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          pr="${{ github.event.inputs.pr_number || '' }}"
+          if [[ -z "$pr" ]]; then
+            pr="$(gh pr list --head "${GITHUB_REF_NAME}" --state open --json number --jq '.[0].number' || true)"
+          fi
+          echo "pr_number=$pr" >> "$GITHUB_OUTPUT"
+
+      - name: Comment live autonomy summary on PR
+        if: github.event.inputs.comment_on_pr == 'true' && steps.live-pr.outputs.pr_number != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh pr comment "${{ steps.live-pr.outputs.pr_number }}" \
+            --body-file .artifacts/research-autonomy-live/summary.md
+
+      - name: Upload live eval artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: research-autonomy-live
+          path: .artifacts/research-autonomy-live/
+
+  mutation-autonomy:
+    name: mutation autonomy
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.run_mutation == 'true'
+    environment: autonomy-mutations
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+          cache-dependency-glob: "**/uv.lock"
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Sync workspace
+        run: uv sync --all-extras --all-groups
+
+      - name: Run bounded mutation-capable burst
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .artifacts/research-autonomy-mutation/workspace
+          max_steps="${{ github.event.inputs.mutation_max_steps || '2' }}"
+          max_risk="${{ github.event.inputs.mutation_max_risk || 'low' }}"
+          create_branch="${{ github.event.inputs.mutation_create_branch || 'false' }}"
+          commit="${{ github.event.inputs.mutation_commit || 'false' }}"
+          push="${{ github.event.inputs.mutation_push || 'false' }}"
+          open_pr="${{ github.event.inputs.mutation_open_pr || 'false' }}"
+          cat > .artifacts/research-autonomy-mutation/config.toml <<EOF
+          [research_scheduler]
+          max_steps = ${max_steps}
+          max_risk = "${max_risk}"
+          base_branch = "main"
+          create_branch = ${create_branch}
+          commit = ${commit}
+          push = ${push}
+          open_pr = ${open_pr}
+          draft_pr = true
+          EOF
+          uv run harness research create-opportunity \
+            --title "Mutation autonomy burst" \
+            --summary "Manual bounded mutation-capable autonomy run in CI." \
+            --cwd .artifacts/research-autonomy-mutation/workspace
+          uv run harness research hypothesize \
+            --opportunity "$(find .artifacts/research-autonomy-mutation/workspace/.harness/research/opportunities -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | head -n1)" \
+            --claim "Promotion artifacts should be ready for bounded mutation mode." \
+            --expected-win "The mutation lane can consume a promotable candidate deterministically." \
+            --risk-level low \
+            --change-mode improve \
+            --cwd .artifacts/research-autonomy-mutation/workspace
+          uv run harness research refine \
+            --title "Mutation lane seeded candidate" \
+            --summary "Seed a bounded candidate for the mutation autonomy workflow." \
+            --source-hypothesis "$(find .artifacts/research-autonomy-mutation/workspace/.harness/research/hypotheses -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | head -n1)" \
+            --target-files "README.md,packages/cli/src/harness/cli/research_commands.py" \
+            --expected-metric "promotion draft exists" \
+            --validation-plan "Inspect generated promotion artifacts." \
+            --risk-level low \
+            --mode improve \
+            --subsystem research \
+            --rationale "Seed a deterministic promotable item for CI mutation policy checks." \
+            --expected-outcome "Mutation lane reaches the reviewed promotion-artifact step." \
+            --risk low \
+            --cwd .artifacts/research-autonomy-mutation/workspace
+          uv run harness research schedule-once \
+            --config .artifacts/research-autonomy-mutation/config.toml \
+            --cwd .artifacts/research-autonomy-mutation/workspace \
+            --json > .artifacts/research-autonomy-mutation/result.json
+          uv run harness research list-runs \
+            --cwd .artifacts/research-autonomy-mutation/workspace
+
+      - name: Write mutation autonomy summary
+        shell: bash
+        run: |
+          uv run python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          payload = json.loads(Path(".artifacts/research-autonomy-mutation/result.json").read_text())
+          result = payload.get("result") or {}
+          lines = [
+              "## Mutation autonomy burst",
+              "",
+              f"- status: `{result.get('status', 'unknown')}`",
+              f"- stop_reason: `{result.get('stop_reason', '')}`",
+              f"- steps: `{result.get('steps_run', 0)}`",
+              "",
+              "### Steps",
+          ]
+          for index, step in enumerate(result.get("results") or [], start=1):
+              if not isinstance(step, dict):
+                  continue
+              queue = ""
+              if step.get("queue_item_kind") and step.get("queue_item_id"):
+                  queue = f" (`{step['queue_item_kind']}:{step['queue_item_id']}`)"
+              branch = ""
+              if step.get("branch_name"):
+                  branch = f" branch=`{step['branch_name']}`"
+              lines.append(
+                  f"{index}. **{step.get('status', 'unknown')}** {step.get('message', '')}{queue}{branch}"
+              )
+          summary = "\n".join(lines) + "\n"
+          Path(".artifacts/research-autonomy-mutation/summary.md").write_text(
+              summary, encoding="utf-8"
+          )
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as handle:
+              handle.write(summary)
+          PY
+
+      - name: Resolve PR for mutation autonomy comment
+        if: github.event.inputs.comment_on_pr == 'true'
+        id: mutation-pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          pr="${{ github.event.inputs.pr_number || '' }}"
+          if [[ -z "$pr" ]]; then
+            branch="$(uv run python - <<'PY'
+          import json
+          from pathlib import Path
+
+          payload = json.loads(Path(".artifacts/research-autonomy-mutation/result.json").read_text())
+          results = (payload.get("result") or {}).get("results") or []
+          for item in results:
+              if isinstance(item, dict) and item.get("branch_name"):
+                  print(item["branch_name"])
+                  break
+          PY
+            )"
+            if [[ -n "$branch" ]]; then
+              pr="$(gh pr list --head "$branch" --state open --json number --jq '.[0].number' || true)"
+            fi
+          fi
+          if [[ -z "$pr" ]]; then
+            pr="$(gh pr list --head "${GITHUB_REF_NAME}" --state open --json number --jq '.[0].number' || true)"
+          fi
+          echo "pr_number=$pr" >> "$GITHUB_OUTPUT"
+
+      - name: Comment mutation autonomy summary on PR
+        if: github.event.inputs.comment_on_pr == 'true' && steps.mutation-pr.outputs.pr_number != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh pr comment "${{ steps.mutation-pr.outputs.pr_number }}" \
+            --body-file .artifacts/research-autonomy-mutation/summary.md
+
+      - name: Upload mutation artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: research-autonomy-mutation
+          path: .artifacts/research-autonomy-mutation/

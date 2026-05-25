@@ -596,6 +596,83 @@ uv run pytest packages/core/tests/test_verification.py -q
 uv run pytest evals/tests/test_workflow_runner.py -q
 ```
 
+### Autonomous research in CI
+
+Harness now supports bounded unattended research runs through:
+
+```bash
+uv run harness research schedule-once --config .harness-scheduler.toml --cwd /path/to/workspace
+uv run harness research list-runs --cwd /path/to/workspace
+```
+
+Scheduler defaults can live in TOML:
+
+```toml
+[research_scheduler]
+max_steps = 3
+max_risk = "low"
+base_branch = "main"
+create_branch = false
+commit = false
+push = false
+open_pr = false
+draft_pr = true
+```
+
+CI wiring now includes:
+
+- `.github/workflows/ci.yml`
+  deterministic `research schedule-once` smoke coverage
+- `.github/workflows/research-autonomy.yml`
+  manual and scheduled autonomy bursts with uploaded run artifacts
+  and an optional secret-backed live canonical eval lane on manual dispatch
+  plus a separate mutation-capable manual lane guarded by environment approval
+
+All of these workflows now write a concise autonomy summary into the GitHub
+workflow step summary, so reviewers can see status, stop reason, and step-level
+actions without downloading artifacts first.
+
+For the manual live and mutation lanes, dispatch inputs can also opt into PR
+commenting:
+
+```text
+comment_on_pr = true
+pr_number     = 123
+```
+
+If `pr_number` is omitted, the workflow tries to find an open PR for the
+current branch, and mutation mode also tries the generated promotion branch
+before falling back to the checked-out ref.
+
+Manual live mode is opt-in and intended for provider-backed checks such as:
+
+```text
+run_live_eval = true
+live_fixture  = 09-handover-vision-flow
+live_provider = openrouter
+live_model    = google/gemma-4-26b-a4b-it
+```
+
+The live lane is disabled by default and requires the corresponding provider
+secret, for example `OPENROUTER_API_KEY`.
+
+Mutation mode is also opt-in and intended for explicitly bounded GitHub-side
+automation. Its manual dispatch inputs gate:
+
+```text
+run_mutation          = true
+mutation_max_steps    = 2
+mutation_max_risk     = low
+mutation_create_branch = false
+mutation_commit       = false
+mutation_push         = false
+mutation_open_pr      = false
+```
+
+The mutation lane runs only on manual dispatch, uses a dedicated
+`autonomy-mutations` environment, gets write permissions only in that job, and
+can post the run summary back to a PR when `comment_on_pr=true`.
+
 ## Design Principles
 
 This repo is increasingly oriented around a simple claim:

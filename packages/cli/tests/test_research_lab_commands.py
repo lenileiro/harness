@@ -1028,6 +1028,16 @@ def test_research_execute_next_promotes_top_candidate(tmp_path: Path) -> None:
             "Inspect generated artifacts.",
             "--risk-level",
             "low",
+            "--mode",
+            "improve",
+            "--subsystem",
+            "research",
+            "--rationale",
+            "Explicit promotion artifacts improve reviewer trust.",
+            "--expected-outcome",
+            "Generate promotable PR artifacts with clear evidence.",
+            "--risk",
+            "low",
             "--cwd",
             str(tmp_path),
         ],
@@ -1046,6 +1056,146 @@ def test_research_execute_next_promotes_top_candidate(tmp_path: Path) -> None:
     candidate_dir = tmp_path / ".harness" / "research" / "promotions" / candidate_id
     assert (candidate_dir / "promotion_draft.json").is_file()
     assert (candidate_dir / "PR_BODY.md").is_file()
+    assert (candidate_dir / "promotion_review.json").is_file()
+    review_json = (candidate_dir / "promotion_review.json").read_text(encoding="utf-8")
+    assert '"status": "passed"' in review_json
+
+
+def test_research_execute_next_defers_weak_candidate_after_review(tmp_path: Path) -> None:
+    runner = CliRunner()
+
+    opened = runner.invoke(
+        cli_main.app,
+        [
+            "research",
+            "open",
+            "--title",
+            "Weak promotion workflow",
+            "--question",
+            "How should weak promotion candidates be stopped?",
+            "--scope",
+            "Focus on autonomous review before PR drafting.",
+            "--theme",
+            "autonomous-improvement",
+            "--cwd",
+            str(tmp_path),
+        ],
+    )
+    assert opened.exit_code == 0, opened.stdout
+    rabbit_hole_id = next((tmp_path / ".harness" / "research" / "rabbitholes").iterdir()).name
+
+    published = runner.invoke(
+        cli_main.app,
+        [
+            "research",
+            "publish",
+            "--rabbit-hole",
+            rabbit_hole_id,
+            "--title",
+            "Weak promotion findings",
+            "--summary",
+            "The runner should defer candidates that lack review metadata.",
+            "--claim",
+            "Missing validation metadata should block autonomous promotion.",
+            "--cwd",
+            str(tmp_path),
+        ],
+    )
+    assert published.exit_code == 0, published.stdout
+    publication_id = next((tmp_path / ".harness" / "research" / "publications").iterdir()).name
+
+    created = runner.invoke(
+        cli_main.app,
+        [
+            "research",
+            "create-opportunity",
+            "--title",
+            "Stop weak candidates",
+            "--summary",
+            "Candidates missing evidence fields should defer safely.",
+            "--cwd",
+            str(tmp_path),
+        ],
+    )
+    assert created.exit_code == 0, created.stdout
+    opportunity_id = next((tmp_path / ".harness" / "research" / "opportunities").iterdir()).name
+
+    hypothesized = runner.invoke(
+        cli_main.app,
+        [
+            "research",
+            "hypothesize",
+            "--opportunity",
+            opportunity_id,
+            "--claim",
+            "Candidates need review metadata before promotion.",
+            "--expected-win",
+            "Unsafe promotion attempts are deferred.",
+            "--risk-level",
+            "low",
+            "--change-mode",
+            "improve",
+            "--cwd",
+            str(tmp_path),
+        ],
+    )
+    assert hypothesized.exit_code == 0, hypothesized.stdout
+    hypothesis_id = next((tmp_path / ".harness" / "research" / "hypotheses").iterdir()).name
+
+    refined = runner.invoke(
+        cli_main.app,
+        [
+            "research",
+            "refine",
+            "--title",
+            "Underspecified candidate",
+            "--summary",
+            "Intentionally omit the evidence fields so review must defer it.",
+            "--source-publication",
+            publication_id,
+            "--source-hypothesis",
+            hypothesis_id,
+            "--risk-level",
+            "low",
+            "--cwd",
+            str(tmp_path),
+        ],
+    )
+    assert refined.exit_code == 0, refined.stdout
+    candidate_id = next((tmp_path / ".harness" / "research" / "promotions").iterdir()).name
+
+    executed = runner.invoke(
+        cli_main.app,
+        ["research", "execute-next", "--cwd", str(tmp_path)],
+    )
+    assert executed.exit_code == 0, executed.stdout
+    assert "deferred" in executed.stdout
+    assert "missing an expected metric" in executed.stdout
+    assert "missing a validation plan" in executed.stdout
+    assert candidate_id in executed.stdout
+    assert "Created follow-up opportunity" in executed.stdout
+
+    candidate_dir = tmp_path / ".harness" / "research" / "promotions" / candidate_id
+    assert (candidate_dir / "promotion_draft.json").is_file()
+    assert (candidate_dir / "PR_BODY.md").is_file()
+    review_json = (candidate_dir / "promotion_review.json").read_text(encoding="utf-8")
+    assert '"status": "failed"' in review_json
+    assert "candidate is missing an expected metric" in review_json
+    opportunity_json = ""
+    for entry in (tmp_path / ".harness" / "research" / "opportunities").iterdir():
+        payload = (entry / "opportunity.json").read_text(encoding="utf-8")
+        if "Revise Underspecified candidate" in payload:
+            opportunity_json = payload
+            break
+    assert "Revise Underspecified candidate" in opportunity_json
+    assert "Resolve autonomous promotion review findings" in opportunity_json
+
+    follow_up = runner.invoke(
+        cli_main.app,
+        ["research", "execute-next", "--cwd", str(tmp_path)],
+    )
+    assert follow_up.exit_code == 0, follow_up.stdout
+    assert "bounded hypothesis" in follow_up.stdout
 
 
 def test_research_execute_next_narrows_opportunity_to_hypothesis(tmp_path: Path) -> None:
@@ -1225,6 +1375,552 @@ def test_research_execute_next_runs_experiment_plan(tmp_path: Path) -> None:
     assert '"status": "passed"' in result_json
     result_payload = json.loads(result_json)
     assert result_payload["command_results"][0]["command"] == ok_cmd
+
+
+def test_research_execute_next_turns_passed_experiment_into_candidate(tmp_path: Path) -> None:
+    runner = CliRunner()
+
+    created = runner.invoke(
+        cli_main.app,
+        [
+            "research",
+            "create-opportunity",
+            "--title",
+            "Promotion from experiment evidence",
+            "--summary",
+            "A passed experiment should become a promotion candidate.",
+            "--related-sections",
+            "research,autonomy",
+            "--cwd",
+            str(tmp_path),
+        ],
+    )
+    assert created.exit_code == 0, created.stdout
+    opportunity_id = next((tmp_path / ".harness" / "research" / "opportunities").iterdir()).name
+
+    hypothesized = runner.invoke(
+        cli_main.app,
+        [
+            "research",
+            "hypothesize",
+            "--opportunity",
+            opportunity_id,
+            "--claim",
+            "Passed experiments provide enough evidence to draft a promotion candidate.",
+            "--expected-win",
+            "The loop can advance from evidence to promotion artifacts.",
+            "--risk-level",
+            "low",
+            "--change-mode",
+            "improve",
+            "--cwd",
+            str(tmp_path),
+        ],
+    )
+    assert hypothesized.exit_code == 0, hypothesized.stdout
+    hypothesis_id = next((tmp_path / ".harness" / "research" / "hypotheses").iterdir()).name
+
+    ok_cmd = f'{shlex.quote(sys.executable)} -c "print(\\"ok\\")"'
+    planned = runner.invoke(
+        cli_main.app,
+        [
+            "research",
+            "plan-experiment",
+            "--hypothesis",
+            hypothesis_id,
+            "--plan",
+            "Run a passing experiment that can be promoted.",
+            "--target-files",
+            "packages/core/src/harness/core/autonomy.py",
+            "--checks",
+            ok_cmd,
+            "--cwd",
+            str(tmp_path),
+        ],
+    )
+    assert planned.exit_code == 0, planned.stdout
+
+    first_execution = runner.invoke(
+        cli_main.app,
+        ["research", "execute-next", "--cwd", str(tmp_path)],
+    )
+    assert first_execution.exit_code == 0, first_execution.stdout
+    assert "experiment plan" in first_execution.stdout
+
+    second_execution = runner.invoke(
+        cli_main.app,
+        ["research", "execute-next", "--cwd", str(tmp_path)],
+    )
+    assert second_execution.exit_code == 0, second_execution.stdout
+    assert "promotion candidate" in second_execution.stdout
+
+    candidate_dir = next((tmp_path / ".harness" / "research" / "promotions").iterdir())
+    candidate_json = (candidate_dir / "promotion_candidate.json").read_text(encoding="utf-8")
+    assert "Promotion from experiment evidence promotion candidate" in candidate_json
+    assert hypothesis_id in candidate_json
+    assert "packages/core/src/harness/core/autonomy.py" in candidate_json
+    assert '"mode": "improve"' in candidate_json
+    assert '"subsystem": "research"' in candidate_json
+
+
+def test_research_execute_burst_runs_until_max_steps(tmp_path: Path) -> None:
+    runner = CliRunner()
+
+    created = runner.invoke(
+        cli_main.app,
+        [
+            "research",
+            "create-opportunity",
+            "--title",
+            "Burst execution",
+            "--summary",
+            "Advance several bounded steps automatically.",
+            "--cwd",
+            str(tmp_path),
+        ],
+    )
+    assert created.exit_code == 0, created.stdout
+
+    executed = runner.invoke(
+        cli_main.app,
+        ["research", "execute-burst", "--max-steps", "3", "--cwd", str(tmp_path)],
+    )
+    assert executed.exit_code == 0, executed.stdout
+    assert "paused" in executed.stdout
+    assert "stop_reason=max_steps" in executed.stdout
+    assert "bounded hypothesis" in executed.stdout
+    assert "experiment plan" in executed.stdout
+    assert "recorded a failed result" in executed.stdout
+
+
+def test_research_execute_burst_stops_on_deferred_review(tmp_path: Path) -> None:
+    runner = CliRunner()
+
+    opened = runner.invoke(
+        cli_main.app,
+        [
+            "research",
+            "open",
+            "--title",
+            "Burst weak promotion workflow",
+            "--question",
+            "How should burst mode stop on weak promotion candidates?",
+            "--scope",
+            "Focus on autonomous review before PR drafting.",
+            "--theme",
+            "autonomous-improvement",
+            "--cwd",
+            str(tmp_path),
+        ],
+    )
+    assert opened.exit_code == 0, opened.stdout
+    rabbit_hole_id = next((tmp_path / ".harness" / "research" / "rabbitholes").iterdir()).name
+
+    published = runner.invoke(
+        cli_main.app,
+        [
+            "research",
+            "publish",
+            "--rabbit-hole",
+            rabbit_hole_id,
+            "--title",
+            "Burst weak promotion findings",
+            "--summary",
+            "Burst mode should stop when promotion review fails.",
+            "--claim",
+            "Missing validation metadata should block autonomous promotion.",
+            "--cwd",
+            str(tmp_path),
+        ],
+    )
+    assert published.exit_code == 0, published.stdout
+    publication_id = next((tmp_path / ".harness" / "research" / "publications").iterdir()).name
+
+    created = runner.invoke(
+        cli_main.app,
+        [
+            "research",
+            "create-opportunity",
+            "--title",
+            "Burst stop weak candidates",
+            "--summary",
+            "Candidates missing evidence fields should defer safely.",
+            "--cwd",
+            str(tmp_path),
+        ],
+    )
+    assert created.exit_code == 0, created.stdout
+    opportunity_id = next((tmp_path / ".harness" / "research" / "opportunities").iterdir()).name
+
+    hypothesized = runner.invoke(
+        cli_main.app,
+        [
+            "research",
+            "hypothesize",
+            "--opportunity",
+            opportunity_id,
+            "--claim",
+            "Candidates need review metadata before promotion.",
+            "--expected-win",
+            "Unsafe promotion attempts are deferred.",
+            "--risk-level",
+            "low",
+            "--change-mode",
+            "improve",
+            "--cwd",
+            str(tmp_path),
+        ],
+    )
+    assert hypothesized.exit_code == 0, hypothesized.stdout
+    hypothesis_id = next((tmp_path / ".harness" / "research" / "hypotheses").iterdir()).name
+
+    refined = runner.invoke(
+        cli_main.app,
+        [
+            "research",
+            "refine",
+            "--title",
+            "Burst underspecified candidate",
+            "--summary",
+            "Intentionally omit the evidence fields so review must defer it.",
+            "--source-publication",
+            publication_id,
+            "--source-hypothesis",
+            hypothesis_id,
+            "--risk-level",
+            "low",
+            "--cwd",
+            str(tmp_path),
+        ],
+    )
+    assert refined.exit_code == 0, refined.stdout
+
+    executed = runner.invoke(
+        cli_main.app,
+        ["research", "execute-burst", "--max-steps", "2", "--cwd", str(tmp_path)],
+    )
+    assert executed.exit_code == 0, executed.stdout
+    assert "paused" in executed.stdout
+    assert "stop_reason=deferred" in executed.stdout
+    assert "failed autonomous review" in executed.stdout
+    assert "Created follow-up opportunity" in executed.stdout
+
+
+def test_research_schedule_once_persists_run_record(tmp_path: Path) -> None:
+    runner = CliRunner()
+
+    created = runner.invoke(
+        cli_main.app,
+        [
+            "research",
+            "create-opportunity",
+            "--title",
+            "Scheduled burst execution",
+            "--summary",
+            "Persist an unattended burst run.",
+            "--cwd",
+            str(tmp_path),
+        ],
+    )
+    assert created.exit_code == 0, created.stdout
+
+    scheduled = runner.invoke(
+        cli_main.app,
+        ["research", "schedule-once", "--max-steps", "2", "--cwd", str(tmp_path)],
+    )
+    assert scheduled.exit_code == 0, scheduled.stdout
+    assert "record_dir=" in scheduled.stdout
+
+    runs_dir = tmp_path / ".harness" / "research" / "autonomy-runs"
+    run_dir = next(runs_dir.iterdir())
+    run_json = (run_dir / "run.json").read_text(encoding="utf-8")
+    assert '"mode": "burst"' in run_json
+    assert '"steps_run": 2' in run_json
+    assert (run_dir / "RUN.md").is_file()
+
+
+def test_research_list_runs_shows_persisted_records(tmp_path: Path) -> None:
+    runner = CliRunner()
+
+    created = runner.invoke(
+        cli_main.app,
+        [
+            "research",
+            "create-opportunity",
+            "--title",
+            "Burst listing",
+            "--summary",
+            "Persist a run that can be listed later.",
+            "--cwd",
+            str(tmp_path),
+        ],
+    )
+    assert created.exit_code == 0, created.stdout
+
+    scheduled = runner.invoke(
+        cli_main.app,
+        ["research", "schedule-once", "--max-steps", "1", "--cwd", str(tmp_path)],
+    )
+    assert scheduled.exit_code == 0, scheduled.stdout
+
+    listed = runner.invoke(
+        cli_main.app,
+        ["research", "list-runs", "--cwd", str(tmp_path)],
+    )
+    assert listed.exit_code == 0, listed.stdout
+    assert "burst" in listed.stdout
+    assert "paused" in listed.stdout
+
+
+def test_research_show_run_renders_persisted_record(tmp_path: Path) -> None:
+    runner = CliRunner()
+
+    created = runner.invoke(
+        cli_main.app,
+        [
+            "research",
+            "create-opportunity",
+            "--title",
+            "Show run",
+            "--summary",
+            "Persist a run that can be rendered later.",
+            "--cwd",
+            str(tmp_path),
+        ],
+    )
+    assert created.exit_code == 0, created.stdout
+
+    scheduled = runner.invoke(
+        cli_main.app,
+        ["research", "schedule-once", "--max-steps", "1", "--cwd", str(tmp_path)],
+    )
+    assert scheduled.exit_code == 0, scheduled.stdout
+
+    run_dir = next((tmp_path / ".harness" / "research" / "autonomy-runs").iterdir())
+    shown = runner.invoke(
+        cli_main.app,
+        ["research", "show-run", run_dir.name, "--cwd", str(tmp_path)],
+    )
+    assert shown.exit_code == 0, shown.stdout
+    assert run_dir.name in shown.stdout
+    assert "mode=burst" in shown.stdout
+    assert "1. executed" in shown.stdout
+
+    shown_json = runner.invoke(
+        cli_main.app,
+        ["research", "show-run", run_dir.name, "--cwd", str(tmp_path), "--json"],
+    )
+    assert shown_json.exit_code == 0, shown_json.stdout
+    assert '"mode": "burst"' in shown_json.stdout
+
+
+def test_research_schedule_once_uses_scheduler_config_defaults(tmp_path: Path) -> None:
+    runner = CliRunner()
+
+    created = runner.invoke(
+        cli_main.app,
+        [
+            "research",
+            "create-opportunity",
+            "--title",
+            "Configured schedule",
+            "--summary",
+            "Use scheduler defaults from config.",
+            "--cwd",
+            str(tmp_path),
+        ],
+    )
+    assert created.exit_code == 0, created.stdout
+
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        """
+        [research_scheduler]
+        max_steps = 1
+        max_risk = "low"
+        base_branch = "develop"
+        """,
+        encoding="utf-8",
+    )
+
+    scheduled = runner.invoke(
+        cli_main.app,
+        [
+            "research",
+            "schedule-once",
+            "--config",
+            str(config_path),
+            "--cwd",
+            str(tmp_path),
+        ],
+    )
+    assert scheduled.exit_code == 0, scheduled.stdout
+
+    run_dir = next((tmp_path / ".harness" / "research" / "autonomy-runs").iterdir())
+    run_json = (run_dir / "run.json").read_text(encoding="utf-8")
+    assert '"steps_run": 1' in run_json
+
+
+def test_research_schedule_once_can_invoke_mutation_hooks_from_config(
+    tmp_path: Path, monkeypatch
+) -> None:
+    runner = CliRunner()
+
+    opened = runner.invoke(
+        cli_main.app,
+        [
+            "research",
+            "open",
+            "--title",
+            "Mutation schedule",
+            "--question",
+            "How should scheduled mutation mode consume a promotable candidate?",
+            "--scope",
+            "Seed a bounded promotion candidate.",
+            "--theme",
+            "autonomous-improvement",
+            "--cwd",
+            str(tmp_path),
+        ],
+    )
+    assert opened.exit_code == 0, opened.stdout
+    rabbit_hole_id = next((tmp_path / ".harness" / "research" / "rabbitholes").iterdir()).name
+
+    published = runner.invoke(
+        cli_main.app,
+        [
+            "research",
+            "publish",
+            "--rabbit-hole",
+            rabbit_hole_id,
+            "--title",
+            "Mutation schedule findings",
+            "--summary",
+            "A seeded candidate should exercise the mutation hooks.",
+            "--claim",
+            "Config-driven schedule-once should honor branch creation.",
+            "--cwd",
+            str(tmp_path),
+        ],
+    )
+    assert published.exit_code == 0, published.stdout
+    publication_id = next((tmp_path / ".harness" / "research" / "publications").iterdir()).name
+
+    created = runner.invoke(
+        cli_main.app,
+        [
+            "research",
+            "create-opportunity",
+            "--title",
+            "Mutation seed opportunity",
+            "--summary",
+            "Seed a promotable item for schedule-once.",
+            "--cwd",
+            str(tmp_path),
+        ],
+    )
+    assert created.exit_code == 0, created.stdout
+    opportunity_id = next((tmp_path / ".harness" / "research" / "opportunities").iterdir()).name
+
+    hypothesized = runner.invoke(
+        cli_main.app,
+        [
+            "research",
+            "hypothesize",
+            "--opportunity",
+            opportunity_id,
+            "--claim",
+            "A seeded promotion candidate should let schedule-once exercise branch creation.",
+            "--expected-win",
+            "Mutation policy can be tested deterministically.",
+            "--risk-level",
+            "low",
+            "--change-mode",
+            "improve",
+            "--cwd",
+            str(tmp_path),
+        ],
+    )
+    assert hypothesized.exit_code == 0, hypothesized.stdout
+    hypothesis_id = next((tmp_path / ".harness" / "research" / "hypotheses").iterdir()).name
+
+    refined = runner.invoke(
+        cli_main.app,
+        [
+            "research",
+            "refine",
+            "--title",
+            "Mutation seeded candidate",
+            "--summary",
+            "Seed a promotable candidate for mutation-mode schedule-once.",
+            "--source-publication",
+            publication_id,
+            "--source-hypothesis",
+            hypothesis_id,
+            "--target-files",
+            "README.md",
+            "--expected-metric",
+            "promotion draft exists",
+            "--validation-plan",
+            "Inspect generated artifacts.",
+            "--risk-level",
+            "low",
+            "--mode",
+            "improve",
+            "--subsystem",
+            "research",
+            "--rationale",
+            "Exercise config-driven branch creation safely.",
+            "--expected-outcome",
+            "Mutation-mode schedule-once invokes ensure_branch.",
+            "--risk",
+            "low",
+            "--cwd",
+            str(tmp_path),
+        ],
+    )
+    assert refined.exit_code == 0, refined.stdout
+
+    seen: dict[str, object] = {}
+
+    def fake_ensure_branch(*, cwd: Path, branch_name: str, base_branch: str) -> None:
+        seen["branch"] = (cwd, branch_name, base_branch)
+
+    monkeypatch.setattr("harness.core.autonomy.ensure_branch", fake_ensure_branch)
+
+    config_path = tmp_path / "config.toml"
+    config_path.write_text(
+        """
+        [research_scheduler]
+        max_steps = 1
+        max_risk = "low"
+        base_branch = "develop"
+        create_branch = true
+        commit = false
+        push = false
+        open_pr = false
+        draft_pr = true
+        """,
+        encoding="utf-8",
+    )
+
+    scheduled = runner.invoke(
+        cli_main.app,
+        [
+            "research",
+            "schedule-once",
+            "--config",
+            str(config_path),
+            "--cwd",
+            str(tmp_path),
+        ],
+    )
+    assert scheduled.exit_code == 0, scheduled.stdout
+    assert "record_dir=" in scheduled.stdout
+    assert "branch" in seen
+    branch_call = seen["branch"]
+    assert isinstance(branch_call, tuple)
+    assert branch_call[2] == "develop"
 
 
 def test_research_run_subcommand_uses_research_domain(tmp_path: Path, monkeypatch) -> None:

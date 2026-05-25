@@ -48,3 +48,84 @@ jobs:
 
       - name: Pytest
         run: uv run pytest -v
+
+  research-autonomy-smoke:
+    name: research autonomy smoke
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+          cache-dependency-glob: "**/uv.lock"
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Sync workspace
+        run: uv sync --all-extras --all-groups
+
+      - name: Run deterministic autonomy burst
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .artifacts/research-autonomy-smoke/workspace
+          cat > .artifacts/research-autonomy-smoke/config.toml <<'EOF'
+          [research_scheduler]
+          max_steps = 2
+          max_risk = "low"
+          base_branch = "main"
+          create_branch = false
+          commit = false
+          push = false
+          open_pr = false
+          draft_pr = true
+          EOF
+          uv run harness research create-opportunity \
+            --title "CI scheduled burst" \
+            --summary "Deterministic CI smoke for research schedule-once." \
+            --cwd .artifacts/research-autonomy-smoke/workspace
+          uv run harness research schedule-once \
+            --config .artifacts/research-autonomy-smoke/config.toml \
+            --cwd .artifacts/research-autonomy-smoke/workspace \
+            --json > .artifacts/research-autonomy-smoke/run.json
+          uv run harness research list-runs --cwd .artifacts/research-autonomy-smoke/workspace
+
+      - name: Write autonomy summary
+        shell: bash
+        run: |
+          uv run python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          payload = json.loads(Path(".artifacts/research-autonomy-smoke/run.json").read_text())
+          result = payload.get("result") or {}
+          lines = [
+              "## Research autonomy smoke",
+              "",
+              f"- status: `{result.get('status', 'unknown')}`",
+              f"- stop_reason: `{result.get('stop_reason', '')}`",
+              f"- steps: `{result.get('steps_run', 0)}`",
+              "",
+              "### Steps",
+          ]
+          for index, step in enumerate(result.get("results") or [], start=1):
+              if not isinstance(step, dict):
+                  continue
+              queue = ""
+              if step.get("queue_item_kind") and step.get("queue_item_id"):
+                  queue = f" (`{step['queue_item_kind']}:{step['queue_item_id']}`)"
+              lines.append(f"{index}. **{step.get('status', 'unknown')}** {step.get('message', '')}{queue}")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as handle:
+              handle.write("\n".join(lines) + "\n")
+          PY
+
+      - name: Upload autonomy artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: research-autonomy-smoke
+          path: .artifacts/research-autonomy-smoke/

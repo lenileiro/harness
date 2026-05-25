@@ -48,3 +48,42 @@ Autonomous promotion should include:
 - unbounded file edits during promotion
 - silent deletion of failed research
 - direct jump from inspiration to production change without intermediate evidence
+
+## Scheduler policy
+
+Autonomous CI or cron execution should use bounded scheduler settings.
+
+Recommended defaults:
+- low or medium max risk
+- explicit max step budget
+- no branch / commit / push / PR side effects unless intentionally enabled
+
+Harness supports this through:
+- `harness research schedule-once`
+- `harness research list-runs`
+- `[research_scheduler]` config defaults in TOML
+
+## Live CI mode
+
+Secret-backed live autonomy should remain explicitly gated.
+
+Recommended policy:
+- deterministic `schedule-once` runs on push / PR / cron by default
+- live provider-backed evals only on manual dispatch
+- required provider secrets must be present or the job should fail fast
+- live mode should upload artifacts for later review instead of mutating the repo by default
+- if humans review work through GitHub PRs, live mode may post a concise summary comment only when explicitly enabled
+
+## Mutation CI mode
+
+Mutation-capable autonomy should be a separate lane from both deterministic and
+live-eval modes.
+
+Recommended policy:
+- manual dispatch only
+- dedicated protected environment such as `autonomy-mutations`
+- explicit write permissions only for the mutation job
+- default all mutation flags to off
+- require bounded `max_steps` and low/medium risk
+- upload artifacts for review even when mutation is enabled
+- allow PR comments only behind an explicit dispatch flag or a supplied PR number

@@ -9,7 +9,7 @@ from rich.console import Console
 from rich.table import Table
 
 from harness.cli.common import _load_cli_config, _resolve_chain, _run_async
-from harness.cli.config import HarnessConfig
+from harness.cli.config import HarnessConfig, default_config_path
 from harness.cli.promotion_commands import (
     pr_command as _pr_command,
 )
@@ -20,7 +20,11 @@ from harness.cli.promotion_commands import (
     show_candidate_command as _show_candidate_command,
 )
 from harness.core import ResearchMemo, parse_research_memo
-from harness.core.autonomy import execute_next_research_item
+from harness.core.autonomy import (
+    execute_next_research_item,
+    execute_research_burst,
+    run_scheduled_research_burst,
+)
 from harness.core.citations import Citation
 from harness.core.experiment_plans import ExperimentPlan
 from harness.core.experiment_runner import compare_experiment_results, run_experiment_plan
@@ -718,6 +722,213 @@ def research_execute_next_command(
         console.print(f"draft_json={result.draft_json}")
     if result.pr_body:
         console.print(f"pr_body={result.pr_body}")
+
+
+@research_app.command("execute-burst")
+def research_execute_burst_command(
+    *,
+    cwd: Path | None = typer.Option(None, "--cwd"),
+    max_steps: int = typer.Option(5, "--max-steps"),
+    max_risk: str = typer.Option("medium", "--max-risk"),
+    base_branch: str = typer.Option("main", "--base-branch"),
+    create_branch: bool = typer.Option(False, "--create-branch/--no-create-branch"),
+    commit: bool = typer.Option(False, "--commit/--no-commit"),
+    push: bool = typer.Option(False, "--push/--no-push"),
+    open_pr: bool = typer.Option(False, "--open/--no-open"),
+    draft_pr: bool = typer.Option(True, "--draft/--ready"),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    working_dir = (cwd or Path.cwd()).resolve()
+    if max_steps < 1:
+        raise typer.BadParameter("--max-steps must be at least 1")
+    if open_pr and not push:
+        raise typer.BadParameter("--open requires --push so the branch exists remotely")
+    if push and not create_branch:
+        raise typer.BadParameter("--push requires --create-branch")
+    store = ResearchStore(root=default_research_root(working_dir))
+    result = execute_research_burst(
+        store=store,
+        cwd=working_dir,
+        max_steps=max_steps,
+        max_risk=max_risk,
+        base_branch=base_branch,
+        create_branch=create_branch,
+        commit=commit,
+        push=push,
+        open_pr=open_pr,
+        draft_pr=draft_pr,
+    )
+    if json_output:
+        console.print(json.dumps(result.to_dict(), indent=2))
+        return
+    status_color = {
+        "completed": "green",
+        "paused": "yellow",
+    }.get(result.status, "white")
+    console.print(
+        f"[{status_color}]{result.status}[/{status_color}] "
+        f"steps={result.steps_run} stop_reason={result.stop_reason}"
+    )
+    for index, step in enumerate(result.results, start=1):
+        console.print(f"{index}. {step.status} {step.message}")
+        if step.queue_item_kind and step.queue_item_id:
+            console.print(f"   queue_item={step.queue_item_kind}:{step.queue_item_id}")
+        if step.branch_name:
+            console.print(f"   branch={step.branch_name}")
+        if step.draft_json:
+            console.print(f"   draft_json={step.draft_json}")
+        if step.pr_body:
+            console.print(f"   pr_body={step.pr_body}")
+
+
+@research_app.command("schedule-once")
+def research_schedule_once_command(
+    *,
+    cwd: Path | None = typer.Option(None, "--cwd"),
+    max_steps: int | None = typer.Option(None, "--max-steps"),
+    max_risk: str | None = typer.Option(None, "--max-risk"),
+    base_branch: str | None = typer.Option(None, "--base-branch"),
+    create_branch: bool | None = typer.Option(None, "--create-branch/--no-create-branch"),
+    commit: bool | None = typer.Option(None, "--commit/--no-commit"),
+    push: bool | None = typer.Option(None, "--push/--no-push"),
+    open_pr: bool | None = typer.Option(None, "--open/--no-open"),
+    draft_pr: bool | None = typer.Option(None, "--draft/--ready"),
+    config_path: Path | None = typer.Option(
+        None, "--config", help=f"Override config path (default: {default_config_path()})."
+    ),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    working_dir = (cwd or Path.cwd()).resolve()
+    cfg = _load_cli_config(config_path)
+    scheduler = cfg.research_scheduler
+    resolved_max_steps = max_steps if max_steps is not None else (scheduler.max_steps or 5)
+    resolved_max_risk = max_risk if max_risk is not None else (scheduler.max_risk or "medium")
+    resolved_base_branch = (
+        base_branch if base_branch is not None else (scheduler.base_branch or "main")
+    )
+    resolved_create_branch = (
+        create_branch if create_branch is not None else bool(scheduler.create_branch or False)
+    )
+    resolved_commit = commit if commit is not None else bool(scheduler.commit or False)
+    resolved_push = push if push is not None else bool(scheduler.push or False)
+    resolved_open_pr = open_pr if open_pr is not None else bool(scheduler.open_pr or False)
+    resolved_draft_pr = (
+        draft_pr
+        if draft_pr is not None
+        else (True if scheduler.draft_pr is None else scheduler.draft_pr)
+    )
+    if resolved_max_steps < 1:
+        raise typer.BadParameter("--max-steps must be at least 1")
+    if resolved_open_pr and not resolved_push:
+        raise typer.BadParameter("--open requires --push so the branch exists remotely")
+    if resolved_push and not resolved_create_branch:
+        raise typer.BadParameter("--push requires --create-branch")
+    store = ResearchStore(root=default_research_root(working_dir))
+    result, record_dir = run_scheduled_research_burst(
+        store=store,
+        cwd=working_dir,
+        max_steps=resolved_max_steps,
+        max_risk=resolved_max_risk,
+        base_branch=resolved_base_branch,
+        create_branch=resolved_create_branch,
+        commit=resolved_commit,
+        push=resolved_push,
+        open_pr=resolved_open_pr,
+        draft_pr=resolved_draft_pr,
+    )
+    payload = {
+        "result": result.to_dict(),
+        "record_dir": str(record_dir),
+    }
+    if json_output:
+        console.print(json.dumps(payload, indent=2))
+        return
+    status_color = {
+        "completed": "green",
+        "paused": "yellow",
+    }.get(result.status, "white")
+    console.print(
+        f"[{status_color}]{result.status}[/{status_color}] "
+        f"steps={result.steps_run} stop_reason={result.stop_reason}"
+    )
+    console.print(f"record_dir={record_dir}")
+
+
+@research_app.command("list-runs")
+def research_list_runs_command(
+    *,
+    cwd: Path | None = typer.Option(None, "--cwd"),
+    limit: int = typer.Option(10, "--limit"),
+) -> None:
+    working_dir = (cwd or Path.cwd()).resolve()
+    runs_dir = default_research_root(working_dir) / "autonomy-runs"
+    if not runs_dir.exists():
+        console.print("[dim]No autonomy runs found.[/dim]")
+        return
+    entries = sorted(
+        (entry for entry in runs_dir.iterdir() if (entry / "run.json").is_file()),
+        reverse=True,
+    )
+    if limit > 0:
+        entries = entries[:limit]
+    if not entries:
+        console.print("[dim]No autonomy runs found.[/dim]")
+        return
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("ID", style="dim", no_wrap=True)
+    table.add_column("Mode", no_wrap=True)
+    table.add_column("Status", no_wrap=True)
+    table.add_column("Stop", no_wrap=True)
+    table.add_column("Steps", no_wrap=True)
+    for entry in entries:
+        payload = json.loads((entry / "run.json").read_text(encoding="utf-8"))
+        table.add_row(
+            str(payload.get("id") or entry.name),
+            str(payload.get("mode") or "burst"),
+            str(payload.get("status") or "unknown"),
+            str(payload.get("stop_reason") or ""),
+            str(payload.get("steps_run") or 0),
+        )
+    console.print(table)
+
+
+@research_app.command("show-run")
+def research_show_run_command(
+    run_id: str,
+    *,
+    cwd: Path | None = typer.Option(None, "--cwd"),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    working_dir = (cwd or Path.cwd()).resolve()
+    run_json = default_research_root(working_dir) / "autonomy-runs" / run_id / "run.json"
+    if not run_json.is_file():
+        raise typer.BadParameter(f"unknown autonomy run: {run_id!r}")
+    payload = json.loads(run_json.read_text(encoding="utf-8"))
+    if json_output:
+        console.print(json.dumps(payload, indent=2))
+        return
+    console.print(f"[bold]{payload.get('id') or run_id}[/bold]")
+    console.print(
+        f"mode={payload.get('mode') or 'burst'} "
+        f"status={payload.get('status') or 'unknown'} "
+        f"stop_reason={payload.get('stop_reason') or ''} "
+        f"steps={payload.get('steps_run') or 0}"
+    )
+    results = payload.get("results") or []
+    for index, result in enumerate(results, start=1):
+        if not isinstance(result, dict):
+            continue
+        console.print(f"{index}. {result.get('status') or 'unknown'} {result.get('message') or ''}")
+        queue_kind = result.get("queue_item_kind")
+        queue_id = result.get("queue_item_id")
+        if queue_kind and queue_id:
+            console.print(f"   queue_item={queue_kind}:{queue_id}")
+        if result.get("branch_name"):
+            console.print(f"   branch={result['branch_name']}")
+        if result.get("draft_json"):
+            console.print(f"   draft_json={result['draft_json']}")
+        if result.get("pr_body"):
+            console.print(f"   pr_body={result['pr_body']}")
 
 
 @research_app.command("rebalance")

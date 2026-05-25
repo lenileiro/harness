@@ -51,6 +51,18 @@ def default_config_path() -> Path:
 
 
 @dataclass(frozen=True, slots=True)
+class ResearchSchedulerConfig:
+    max_steps: int | None = None
+    max_risk: str | None = None
+    base_branch: str | None = None
+    create_branch: bool | None = None
+    commit: bool | None = None
+    push: bool | None = None
+    open_pr: bool | None = None
+    draft_pr: bool | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class HarnessConfig:
     """Resolved CLI configuration.
 
@@ -65,6 +77,7 @@ class HarnessConfig:
     plugins_enabled: tuple[str, ...] = ()
     plugins_disabled: tuple[str, ...] = ()
     include_plugin_entry_points: bool = False
+    research_scheduler: ResearchSchedulerConfig = field(default_factory=ResearchSchedulerConfig)
 
     def provider(self, name: str) -> dict[str, Any]:
         """Return the per-provider settings dict (empty if unset)."""
@@ -134,6 +147,30 @@ def load_config(path: Path | None = None) -> HarnessConfig:
     if not isinstance(include_plugin_entry_points, bool):
         raise ConfigError("`plugins.include_entry_points` must be a boolean")
 
+    scheduler_section = raw.get("research_scheduler", {})
+    if not isinstance(scheduler_section, dict):
+        raise ConfigError("`[research_scheduler]` must be a table")
+
+    def _optional_bool(name: str) -> bool | None:
+        value = scheduler_section.get(name)
+        if value is None:
+            return None
+        if not isinstance(value, bool):
+            raise ConfigError(f"`research_scheduler.{name}` must be a boolean")
+        return value
+
+    max_steps = scheduler_section.get("max_steps")
+    if max_steps is not None and (not isinstance(max_steps, int) or max_steps < 1):
+        raise ConfigError("`research_scheduler.max_steps` must be a positive integer")
+
+    max_risk = scheduler_section.get("max_risk")
+    if max_risk is not None and not isinstance(max_risk, str):
+        raise ConfigError("`research_scheduler.max_risk` must be a string")
+
+    base_branch = scheduler_section.get("base_branch")
+    if base_branch is not None and not isinstance(base_branch, str):
+        raise ConfigError("`research_scheduler.base_branch` must be a string")
+
     return HarnessConfig(
         default_provider=default_provider,
         default_model=default_model,
@@ -142,7 +179,23 @@ def load_config(path: Path | None = None) -> HarnessConfig:
         plugins_enabled=_string_list("enabled"),
         plugins_disabled=_string_list("disabled"),
         include_plugin_entry_points=include_plugin_entry_points,
+        research_scheduler=ResearchSchedulerConfig(
+            max_steps=max_steps,
+            max_risk=max_risk,
+            base_branch=base_branch,
+            create_branch=_optional_bool("create_branch"),
+            commit=_optional_bool("commit"),
+            push=_optional_bool("push"),
+            open_pr=_optional_bool("open_pr"),
+            draft_pr=_optional_bool("draft_pr"),
+        ),
     )
 
 
-__all__ = ["ConfigError", "HarnessConfig", "default_config_path", "load_config"]
+__all__ = [
+    "ConfigError",
+    "HarnessConfig",
+    "ResearchSchedulerConfig",
+    "default_config_path",
+    "load_config",
+]
