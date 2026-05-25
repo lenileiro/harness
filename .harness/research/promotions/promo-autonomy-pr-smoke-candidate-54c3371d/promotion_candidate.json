@@ -1,0 +1,26 @@
+{
+  "id": "promo-autonomy-pr-smoke-candidate-54c3371d",
+  "title": "Autonomy PR smoke candidate",
+  "summary": "Use generated promotion artifacts as the bounded PR diff.",
+  "source_publications": [],
+  "source_hypotheses": [
+    "hyp-generated-promotion-artifacts-sh-0be40eec"
+  ],
+  "target_files": [
+    ".harness/research/promotions/promo-autonomy-pr-smoke-candidate-54c3371d/promotion_candidate.json",
+    ".harness/research/promotions/promo-autonomy-pr-smoke-candidate-54c3371d/promotion_draft.json",
+    ".harness/research/promotions/promo-autonomy-pr-smoke-candidate-54c3371d/PR_BODY.md"
+  ],
+  "expected_metric": "A draft PR is opened successfully on GitHub.",
+  "validation_plan": "Verify the PR exists and contains the generated PR body.",
+  "risk_level": "low",
+  "created_by": "human",
+  "created_at": "2026-05-25T21:36:40+00:00",
+  "change_intent": {
+    "mode": "improve",
+    "subsystem": "research",
+    "rationale": "Smoke-test the GitHub PR path locally without touching product code.",
+    "expected_outcome": "A draft PR exists from a temp-clone branch.",
+    "risk": "low"
+  }
+}
