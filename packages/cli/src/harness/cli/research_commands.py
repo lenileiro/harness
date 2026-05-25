@@ -1295,8 +1295,8 @@ def research_experiment_compare_command(
     table.add_row("status", str(comparison["left_status"]), str(comparison["right_status"]))
     table.add_row(
         "duration_seconds",
-        f'{comparison["left_duration_seconds"]:.2f}',
-        f'{comparison["right_duration_seconds"]:.2f}',
+        f"{comparison['left_duration_seconds']:.2f}",
+        f"{comparison['right_duration_seconds']:.2f}",
     )
     table.add_row("commands", str(comparison["left_commands"]), str(comparison["right_commands"]))
     console.print(table)
