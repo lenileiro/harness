@@ -1,0 +1,62 @@
+{
+  "description": "Exercise eval-management commands against a self-contained miniature eval asset tree.",
+  "harness_bin": "fake-harness",
+  "steps": [
+    {
+      "name": "eval-list",
+      "argv": ["eval", "list", "--fixture-set", "fixtures"],
+      "append_cwd": false,
+      "stdout_contains": ["01-demo", "verification"]
+    },
+    {
+      "name": "eval-mutate",
+      "argv": ["eval", "mutate", "01-demo", "--seed", "1"],
+      "append_cwd": false,
+      "stdout_contains": ["Mutated 01-demo", "Calculator"]
+    },
+    {
+      "name": "eval-validate",
+      "argv": ["eval", "validate"],
+      "append_cwd": false,
+      "stdout_contains": ["Eval asset validation", "workflow-fixtures", "gold labels"]
+    },
+    {
+      "name": "eval-history",
+      "argv": ["eval", "history", "--limit", "1"],
+      "append_cwd": false,
+      "stdout_contains": ["Eval history", "demo-run", "original"]
+    },
+    {
+      "name": "eval-adjustments",
+      "argv": ["eval", "adjustments", "evals/runs"],
+      "append_cwd": false,
+      "stdout_contains": ["Harness adjustments", "tests_first", "01-demo"]
+    },
+    {
+      "name": "eval-export-adjustments",
+      "argv": ["eval", "export-adjustments", "adjustments.jsonl", "--root", "evals/runs"],
+      "append_cwd": false,
+      "stdout_contains": ["Exported 1 adjustment(s)"],
+      "files_exist": ["adjustments.jsonl"],
+      "file_contains": [
+        {
+          "path": "adjustments.jsonl",
+          "substring": "\"kind\": \"tests_first\""
+        }
+      ]
+    },
+    {
+      "name": "eval-calibrate",
+      "argv": ["eval", "calibrate", "report.json", "--gold-dir", "evals/gold"],
+      "append_cwd": false,
+      "stdout_contains": ["Judge calibration", "verification"]
+    },
+    {
+      "name": "eval-workflow",
+      "argv": ["eval", "workflow", "01-workflow", "--output-dir", "evals/runs/workflow-local", "--json-out"],
+      "append_cwd": false,
+      "stdout_contains": ["01-workflow", "\"passed\": true"],
+      "files_exist": ["evals/runs/workflow-local/report.json"]
+    }
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "description": "Exercise tune list/show/rollback/propose against a seeded tuned-prompt store and deterministic proposer response.",
+  "harness_bin": "fake-harness",
+  "steps": [
+    {
+      "name": "tune-list",
+      "argv": ["tune", "list", "--cwd", "."],
+      "stdout_contains": ["minimal_fix_verifier", "tuned"]
+    },
+    {
+      "name": "tune-show-current",
+      "argv": ["tune", "show", "minimal_fix_verifier", "--cwd", "."],
+      "stdout_contains": ["minimal_fix_verifier v2", "revised prompt", "tuned"]
+    },
+    {
+      "name": "tune-rollback",
+      "argv": ["tune", "rollback", "minimal_fix_verifier", "--cwd", "."],
+      "stdout_contains": ["Rolled back", "Current is now v1"]
+    },
+    {
+      "name": "tune-show-rolled-back",
+      "argv": ["tune", "show", "minimal_fix_verifier", "--cwd", "."],
+      "stdout_contains": ["minimal_fix_verifier v1", "seed prompt", "initial"]
+    },
+    {
+      "name": "tune-propose-dry-run",
+      "argv": [
+        "tune",
+        "propose",
+        "minimal_fix_verifier",
+        "--current",
+        "current.txt",
+        "--pairs",
+        "pairs.json",
+        "--provider",
+        "ollama",
+        "--model",
+        "test-model",
+        "--dry-run"
+      ],
+      "append_cwd": false,
+      "stdout_contains": [
+        "Prefer the minimum diff that fixes the issue.",
+        "tighten scope discipline",
+        "--dry-run: not saving."
+      ]
+    }
+  ]
+}

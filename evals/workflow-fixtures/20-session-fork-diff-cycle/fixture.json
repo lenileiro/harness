@@ -1,0 +1,54 @@
+{
+  "description": "Exercise session diff rendering and session forking, including a live fork with a follow-up prompt.",
+  "harness_bin": "fake-harness",
+  "steps": [
+    {
+      "name": "sessions-diff-parent",
+      "argv": ["sessions", "diff", "sess_parent_eval", "--db", "sessions.db"],
+      "append_cwd": false,
+      "stdout_contains": ["write_file", "notes.txt", "shell", "echo seeded"]
+    },
+    {
+      "name": "sessions-fork-static",
+      "argv": [
+        "sessions",
+        "fork",
+        "sess_parent_eval",
+        "--session",
+        "sess_branch_eval",
+        "--db",
+        "sessions.db"
+      ],
+      "append_cwd": false,
+      "stdout_contains": ["Forked", "sess_parent_eval", "sess_branch_eval"]
+    },
+    {
+      "name": "sessions-show-forked",
+      "argv": ["sessions", "show", "sess_branch_eval", "--db", "sessions.db"],
+      "append_cwd": false,
+      "stdout_contains": ["parent prompt", "parent answer"]
+    },
+    {
+      "name": "sessions-fork-live",
+      "argv": [
+        "sessions",
+        "fork",
+        "sess_parent_eval",
+        "continue from fork",
+        "--session",
+        "sess_branch_live_eval",
+        "--db",
+        "sessions.db",
+        "--yes"
+      ],
+      "append_cwd": false,
+      "stdout_contains": ["Forked", "fork response live"]
+    },
+    {
+      "name": "sessions-show-live-fork",
+      "argv": ["sessions", "show", "sess_branch_live_eval", "--db", "sessions.db"],
+      "append_cwd": false,
+      "stdout_contains": ["parent prompt", "continue from fork", "fork response live"]
+    }
+  ]
+}

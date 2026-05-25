@@ -1,0 +1,72 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import asyncio
+import sys
+from collections.abc import AsyncIterator
+from pathlib import Path
+
+from harness.cli import __main__ as cli_main
+from harness.tasks import Task
+
+
+class FakeOrchestrator:
+    def __init__(self, *args, **kwargs):
+        self.kwargs = kwargs
+
+    async def run(self, prompt: str) -> AsyncIterator[object]:
+        if False:
+            yield None
+
+    async def resume(self, job_id: str) -> AsyncIterator[object]:
+        if False:
+            yield None
+
+
+async def _seed_lab_db(db: Path, cwd: Path) -> None:
+    from harness.storage.sqlite import SQLiteStorage
+
+    storage = SQLiteStorage(path=db)
+    try:
+        root = Task(
+            id="task_root_eval",
+            ref="T-001",
+            title="Root job",
+            cwd=cwd,
+            status="in_progress",
+        )
+        child = Task(
+            id="task_child_eval",
+            ref="T-002",
+            title="Child task",
+            cwd=cwd,
+            parent_id=root.id,
+            status="done",
+            metadata={"result_summary": "finished work"},
+        )
+        await storage.create_task(root)
+        await storage.create_task(child)
+    finally:
+        await storage.close()
+
+
+def _db_arg(argv: list[str]) -> Path | None:
+    for index, item in enumerate(argv):
+        if item == "--db" and index + 1 < len(argv):
+            return Path(argv[index + 1])
+    return None
+
+
+argv = sys.argv[1:]
+db = _db_arg(argv)
+if (
+    db is not None
+    and argv[:2] in (["lab", "list"], ["lab", "status"], ["lab", "resume"])
+    and not db.exists()
+):
+    asyncio.run(_seed_lab_db(db, Path.cwd()))
+
+cli_main.MultiAgentOrchestrator = FakeOrchestrator
+
+if __name__ == "__main__":
+    cli_main.app()

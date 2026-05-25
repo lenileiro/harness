@@ -23,6 +23,7 @@ from harness.core.approval import (
 )
 from harness.core.budget import ContextBudget, count_tokens, prune
 from harness.core.calibration import CalibrationRecord, OutcomeCalibration
+from harness.core.citations import Citation, CitationRelationship
 from harness.core.compactor import ContextCompactor
 from harness.core.critic import Critic, LLMCritic, MultiCritic, make_multi_critic
 from harness.core.defense_ledger import (
@@ -91,6 +92,7 @@ from harness.core.flow_checkpoint import (
 )
 from harness.core.guardrails import Guardrail, GuardrailMode, GuardrailResult
 from harness.core.handoff import HandoffTool
+from harness.core.inspiration import ExternalSource, InspirationNote
 from harness.core.loop_detector import LoopDetector, LoopFinding, LoopPattern
 from harness.core.memory import MemoryEntry, MemoryKind, MemoryStore
 from harness.core.orchestrator import (
@@ -113,6 +115,20 @@ from harness.core.orchestrator import (
     WorkQueue,
 )
 from harness.core.planner import LLMPlanner, NoOpPlanner, Plan, PlanContext, Planner, PlanStep
+from harness.core.portfolio import PortfolioSnapshot, build_portfolio_snapshot
+from harness.core.pr_generation import (
+    PromotionDraft,
+    branch_name_for_candidate,
+    build_promotion_draft,
+    commit_message_for_candidate,
+    commit_paths,
+    create_pull_request,
+    ensure_branch,
+    pr_body_for_candidate,
+    pr_title_for_candidate,
+    push_branch,
+    write_promotion_draft,
+)
 from harness.core.prediction import (
     ConsequencePredictor,
     PredictionOutcome,
@@ -136,7 +152,25 @@ from harness.core.prompt_injection_probe import (
     annotate_if_suspicious,
     scan_text,
 )
+from harness.core.publications import summarize_publication
 from harness.core.repair import RepairDirective, RepairMode, RepairOrchestrator
+from harness.core.research_archive import ArchivedResearchItem
+from harness.core.research_index import ResearchIndex
+from harness.core.research_models import (
+    ChangeIntent,
+    Publication,
+    RabbitHole,
+    Theme,
+    Unknown,
+    Vision,
+)
+from harness.core.research_roles import BUILTIN_RESEARCH_ROLES, ResearchRole
+from harness.core.research_scheduler import (
+    ResearchQueueItem,
+    build_research_queue,
+    rebalance_research_queue,
+)
+from harness.core.research_store import ResearchSearchHit, ResearchStore, default_research_root
 from harness.core.result_schemas import (
     DocsAuditFinding,
     DocsAuditReport,
@@ -228,6 +262,7 @@ from harness.core.verification import (
 __version__ = "0.0.0"
 
 __all__ = [
+    "BUILTIN_RESEARCH_ROLES",
     "DEFAULT_RESUME_PATH",
     "ActivityEvent",
     "ActivityStore",
@@ -246,6 +281,7 @@ __all__ = [
     "ApprovalPolicy",
     "ApprovalStatus",
     "ApprovalStore",
+    "ArchivedResearchItem",
     "ArtifactExperienceProvider",
     "ArtifactTipProvider",
     "Authority",
@@ -257,8 +293,11 @@ __all__ = [
     "CanonicalizationResult",
     "Capabilities",
     "ChainedVerifier",
+    "ChangeIntent",
     "CheckMessagesTool",
     "CheckpointStore",
+    "Citation",
+    "CitationRelationship",
     "ClaimGroundingVerifier",
     "CompleteWorkItemTool",
     "CompositeExperienceProvider",
@@ -290,6 +329,7 @@ __all__ = [
     "EvidenceContract",
     "EvidenceContractResult",
     "ExperienceProvider",
+    "ExternalSource",
     "FailoverPolicy",
     "FeatureItem",
     "FileCheckpointStore",
@@ -309,6 +349,7 @@ __all__ = [
     "InMemoryCheckpointStore",
     "InboxApprovalHandler",
     "InjectionFinding",
+    "InspirationNote",
     "InternalError",
     "LLMCritic",
     "LLMJudgeVerifier",
@@ -348,22 +389,31 @@ __all__ = [
     "PlanRejectedEvent",
     "PlanStep",
     "Planner",
+    "PortfolioSnapshot",
     "PredictionEvent",
     "PredictionMismatchEvent",
     "PredictionOutcome",
     "Procedure",
     "ProcedureLibrary",
     "ProgressLedger",
+    "PromotionDraft",
     "PromptSurfaceRevertVerifier",
     "PruneLedgerTool",
+    "Publication",
+    "RabbitHole",
     "RateLimitError",
     "RepairDirective",
     "RepairMode",
     "RepairOrchestrator",
     "ReplanRequestedEvent",
     "RequestCritiqueTool",
+    "ResearchIndex",
     "ResearchMemo",
+    "ResearchQueueItem",
+    "ResearchRole",
+    "ResearchSearchHit",
     "ResearchSource",
+    "ResearchStore",
     "ResumeContract",
     "ReviewFinding",
     "ReviewReport",
@@ -384,6 +434,7 @@ __all__ = [
     "Storage",
     "TestsBeforeEditVerifier",
     "TextDelta",
+    "Theme",
     "TimeoutError",
     "Tip",
     "TipLibrary",
@@ -402,6 +453,7 @@ __all__ = [
     "ToolResultStep",
     "ToolRetry",
     "ToolSpec",
+    "Unknown",
     "Usage",
     "Verification",
     "VerificationGateway",
@@ -410,6 +462,7 @@ __all__ = [
     "VerifierRouter",
     "VerifyBeforeDoneVerifier",
     "VerifyWorkTool",
+    "Vision",
     "WorkItemClaimedEvent",
     "WorkItemCompletedEvent",
     "WorkItemCreatedEvent",
@@ -421,18 +474,27 @@ __all__ = [
     "__version__",
     "activity",
     "annotate_if_suspicious",
+    "branch_name_for_candidate",
     "build_ledger",
+    "build_portfolio_snapshot",
+    "build_promotion_draft",
+    "build_research_queue",
     "canonicalize_tool_name",
     "check_dangerous_command",
     "classify",
+    "commit_message_for_candidate",
+    "commit_paths",
     "compare_prediction",
     "configure_logging",
     "correlate_defenses",
     "count_tokens",
+    "create_pull_request",
     "curate_procedures",
     "default_experience_roots",
     "default_procedure_paths",
+    "default_research_root",
     "domain_profile_names",
+    "ensure_branch",
     "evaluate_evidence",
     "filter_tools_by_authority",
     "fork_session",
@@ -449,14 +511,20 @@ __all__ = [
     "parse_research_memo",
     "parse_review_report",
     "persist",
+    "pr_body_for_candidate",
+    "pr_title_for_candidate",
     "prune",
+    "push_branch",
+    "rebalance_research_queue",
     "redact_secrets",
     "render_mining_prompt",
     "router",
     "scan_text",
     "span",
     "start",
+    "summarize_publication",
     "tool_matches_phase",
     "validate_inputs",
     "validate_outputs",
+    "write_promotion_draft",
 ]

@@ -1,0 +1,137 @@
+{
+  "description": "Exercise section maps, observations, inspiration intake, and related opportunity discovery.",
+  "steps": [
+    {
+      "name": "map-section",
+      "argv": [
+        "research",
+        "map-section",
+        "--section",
+        "verification",
+        "--files",
+        "packages/core/src/harness/core/verification.py,packages/core/src/harness/core/verification_behavioral.py",
+        "--interfaces",
+        "Verifier,VerificationResult",
+        "--constraints",
+        "must stay deterministic for hard checks",
+        "--weaknesses",
+        "prompt-heavy verifier paths are brittle",
+        "--opportunities",
+        "sharper verifier routing"
+      ],
+      "stdout_contains": ["Mapped section verification"]
+    },
+    {
+      "name": "show-section",
+      "argv": ["research", "show-section", "verification"],
+      "stdout_contains": ["verification", "Verifier", "sharper verifier routing"]
+    },
+    {
+      "name": "add-observation",
+      "argv": [
+        "research",
+        "add-observation",
+        "--title",
+        "Verifier prompt drift",
+        "--summary",
+        "Prompt-heavy verifier paths overreact to unrelated changes.",
+        "--source-type",
+        "repo",
+        "--source-ref",
+        "packages/core/src/harness/core/verification_behavioral.py",
+        "--related-sections",
+        "verification,runtime",
+        "--theme",
+        "verifier-reliability"
+      ],
+      "stdout_contains": ["Recorded observation"]
+    },
+    {
+      "name": "ingest-paper",
+      "argv": [
+        "research",
+        "ingest-paper",
+        "--title",
+        "Reflexion",
+        "--citation",
+        "Shinn et al. 2023",
+        "--summary",
+        "Agents benefit from explicit reflective loops.",
+        "--excerpt",
+        "Reflection can improve decision quality.",
+        "--themes",
+        "verifier-reliability,autonomous-improvement",
+        "--related-sections",
+        "verification,research"
+      ],
+      "stdout_contains": ["Recorded inspiration"]
+    },
+    {
+      "name": "ingest-repo",
+      "argv": [
+        "research",
+        "ingest-repo",
+        "--title",
+        "Hermes Agent",
+        "--repo",
+        "https://github.com/nousresearch/hermes-agent",
+        "--summary",
+        "External agent platform with plugin and memory ideas.",
+        "--excerpt",
+        "Plugin and memory abstractions are reusable.",
+        "--themes",
+        "autonomous-improvement,extensions",
+        "--related-sections",
+        "plugins,experience"
+      ],
+      "stdout_contains": ["Recorded inspiration"]
+    },
+    {
+      "name": "scout",
+      "argv": ["research", "scout"],
+      "stdout_contains": ["paper", "repo", "Reflexion", "Hermes Agent"]
+    },
+    {
+      "name": "create-opportunity",
+      "argv": [
+        "research",
+        "create-opportunity",
+        "--title",
+        "Refine verifier reflection routing",
+        "--summary",
+        "Combine repo observations with reflective research to narrow verifier prompts.",
+        "--related-sections",
+        "verification,runtime,research",
+        "--origin-observations",
+        "{latest_observation_id}",
+        "--change-modes",
+        "improve,build_on",
+        "--theme",
+        "verifier-reliability",
+        "--priority",
+        "high"
+      ],
+      "stdout_contains": ["Created opportunity"]
+    },
+    {
+      "name": "list-opportunities",
+      "argv": ["research", "list-opportunities", "--theme", "verifier-reliability"],
+      "stdout_contains": ["opp-refine-verifier-reflection-routi", "verifier-reliabil", "high"]
+    },
+    {
+      "name": "related",
+      "argv": ["research", "related", "verification"],
+      "stdout_contains": ["Refine", "reflection", "narrow"]
+    },
+    {
+      "name": "search-observation",
+      "argv": ["research", "search", "prompt-heavy", "--kind", "observation"],
+      "stdout_contains": ["observation", "obs-verifier-prompt-drift-", "prompt", "drift"]
+    },
+    {
+      "name": "search-inspiration",
+      "argv": ["research", "search", "Reflection", "--kind", "inspiration"],
+      "stdout_contains": ["inspiration", "Reflexion"]
+    }
+  ]
+}

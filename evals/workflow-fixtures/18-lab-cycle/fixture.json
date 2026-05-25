@@ -1,0 +1,45 @@
+{
+  "description": "Exercise lab run/list/status/resume with a deterministic orchestrator and seeded sqlite job store.",
+  "harness_bin": "fake-harness",
+  "steps": [
+    {
+      "name": "lab-run",
+      "argv": [
+        "lab",
+        "run",
+        "do work",
+        "--cwd",
+        ".",
+        "--no-judge",
+        "--db",
+        "lab.db"
+      ],
+      "stdout_contains": ["harness lab run"]
+    },
+    {
+      "name": "lab-list",
+      "argv": ["lab", "list", "--db", "lab.db"],
+      "append_cwd": false,
+      "stdout_contains": ["Root job", "1/1 items"]
+    },
+    {
+      "name": "lab-status",
+      "argv": ["lab", "status", "task_root_eval", "--db", "lab.db"],
+      "append_cwd": false,
+      "stdout_contains": ["Child task", "finished work"]
+    },
+    {
+      "name": "lab-resume",
+      "argv": [
+        "lab",
+        "resume",
+        "task_root_eval",
+        "--db",
+        "lab.db",
+        "--no-judge"
+      ],
+      "append_cwd": false,
+      "stdout_contains": ["harness lab resume"]
+    }
+  ]
+}

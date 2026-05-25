@@ -1,0 +1,10 @@
+[
+  {
+    "fixture": "f01",
+    "defended_excerpt": "agent ran tests first",
+    "defended_outcome": "PASS overall=5/5",
+    "bare_excerpt": "agent jumped to edit",
+    "bare_outcome": "FAIL scope=1/5",
+    "differing_dimension": "scope"
+  }
+]

@@ -1,0 +1,61 @@
+{
+  "description": "Exercise local plugin discovery/validation and writable procedures.",
+  "steps": [
+    {
+      "name": "plugins-list",
+      "argv": ["plugins", "list", "--kind", "tool"],
+      "stdout_contains": ["demo", "tool", "workspace"]
+    },
+    {
+      "name": "plugins-validate",
+      "argv": ["plugins", "validate", "--kind", "tool"],
+      "stdout_contains": ["demo", "ok"]
+    },
+    {
+      "name": "procedures-add",
+      "argv": [
+        "experience",
+        "procedures",
+        "add",
+        "--name",
+        "Scope discipline",
+        "--body",
+        "Keep the patch in the named formatter only.",
+        "--triggers",
+        "format_price,minimal fix",
+        "--scope",
+        "repo"
+      ],
+      "stdout_contains": ["Added procedure"],
+      "files_exist": [".harness/procedures"]
+    },
+    {
+      "name": "procedures-add-duplicate",
+      "argv": [
+        "experience",
+        "procedures",
+        "add",
+        "--name",
+        "Scope discipline duplicate",
+        "--body",
+        "Keep the patch in the named formatter only.",
+        "--triggers",
+        "format_price,minimal fix",
+        "--scope",
+        "repo"
+      ],
+      "stdout_contains": ["Added procedure"],
+      "files_exist": [".harness/procedures"]
+    },
+    {
+      "name": "procedures-list",
+      "argv": ["experience", "procedures", "list", "--scope", "repo"],
+      "stdout_contains": ["discipline", "general", "human"]
+    },
+    {
+      "name": "experience-curate",
+      "argv": ["experience", "curate", "--scope", "repo", "--dry-run"],
+      "stdout_contains": ["scanned=", "duplicate"]
+    }
+  ]
+}

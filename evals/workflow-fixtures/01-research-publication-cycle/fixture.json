@@ -1,0 +1,107 @@
+{
+  "description": "Exercise the rabbit-hole to publication workflow through real CLI commands.",
+  "steps": [
+    {
+      "name": "vision-update",
+      "argv": [
+        "vision",
+        "update",
+        "--title",
+        "Autonomous research harness",
+        "--summary",
+        "Turn Harness into a compounding research and promotion system.",
+        "--theme",
+        "autonomous-improvement",
+        "--success-metric",
+        "high-signal autonomous PRs"
+      ],
+      "stdout_contains": ["Updated vision"],
+      "files_exist": [".harness/research/vision/current/vision.json"]
+    },
+    {
+      "name": "add-theme",
+      "argv": [
+        "research",
+        "add-theme",
+        "--title",
+        "Verifier reliability",
+        "--description",
+        "Study routing and contract opportunities.",
+        "--priority",
+        "high"
+      ],
+      "stdout_contains": ["Added theme"],
+      "files_exist": [".harness/research/themes/{latest_theme_id}/theme.json"]
+    },
+    {
+      "name": "create-unknown",
+      "argv": [
+        "research",
+        "create-unknown",
+        "--theme-id",
+        "{latest_theme_id}",
+        "--question",
+        "Which verifier routing refinements reduce false positives?",
+        "--why-it-matters",
+        "False positives create noise in defended runs.",
+        "--confidence",
+        "0.5",
+        "--related-sections",
+        "verification,runtime"
+      ],
+      "stdout_contains": ["Created unknown"],
+      "files_exist": [".harness/research/unknowns/{latest_unknown_id}/unknown.json"]
+    },
+    {
+      "name": "open-rabbithole",
+      "argv": [
+        "research",
+        "open",
+        "--title",
+        "Verifier routing deep dive",
+        "--question",
+        "Can routing reduce verifier noise?",
+        "--scope",
+        "Inspect routing, prompt overlap, and eval impact.",
+        "--theme",
+        "verification",
+        "--related-sections",
+        "verification,runtime",
+        "--mode",
+        "improve",
+        "--subsystem",
+        "verification",
+        "--rationale",
+        "Routing is too broad.",
+        "--expected-outcome",
+        "Less verifier noise."
+      ],
+      "stdout_contains": ["Opened rabbit hole"],
+      "files_exist": [".harness/research/rabbitholes/{latest_rabbit_hole_id}/rabbit_hole.json"]
+    },
+    {
+      "name": "publish",
+      "argv": [
+        "research",
+        "publish",
+        "--rabbit-hole",
+        "{latest_rabbit_hole_id}",
+        "--title",
+        "Verifier routing findings",
+        "--summary",
+        "Scoped routing helps.",
+        "--claim",
+        "Scoped routing reduces verifier noise.",
+        "--evidence",
+        "Targeted evals showed fewer false positives."
+      ],
+      "stdout_contains": ["Published"],
+      "files_exist": [".harness/research/publications/{latest_publication_id}/publication.json"]
+    },
+    {
+      "name": "search",
+      "argv": ["research", "search", "routing", "--kind", "publication"],
+      "stdout_contains": ["publication", "pub-verifier-routing-findings"]
+    }
+  ]
+}

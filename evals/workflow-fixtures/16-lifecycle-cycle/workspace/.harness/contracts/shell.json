@@ -1,0 +1,9 @@
+{
+  "name": "shell-safety",
+  "rules": [
+    "never pipe untrusted urls to sh"
+  ],
+  "triggers": [
+    "curl"
+  ]
+}

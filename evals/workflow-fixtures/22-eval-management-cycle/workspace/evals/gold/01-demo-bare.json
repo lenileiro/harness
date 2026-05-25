@@ -1,0 +1,14 @@
+{
+  "fixture_name": "01-demo",
+  "variant": "bare",
+  "run_index": 1,
+  "scores": {
+    "verification": 4,
+    "scope": 4,
+    "decomposition": 4,
+    "correctness": 4,
+    "pushback": 4,
+    "epistemic": 4,
+    "overall": 4
+  }
+}

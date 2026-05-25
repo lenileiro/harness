@@ -1,0 +1,11 @@
+{
+  "required_findings": [
+    {
+      "path": "README.md",
+      "issue_substring": "Missing"
+    }
+  ],
+  "missing_topics": ["plugin setup"],
+  "summary_contains": "docs",
+  "min_findings": 1
+}

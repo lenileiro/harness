@@ -1,0 +1,155 @@
+{
+  "description": "Exercise approval inbox queue, show, grant, deny, and replay flows through a workspace sqlite database.",
+  "harness_bin": "fake-harness",
+  "steps": [
+    {
+      "name": "init-workspace",
+      "argv": ["init"],
+      "stdout_contains": ["Initialized"]
+    },
+    {
+      "name": "queue-grant-run",
+      "argv": [
+        "run",
+        "read the file",
+        "--provider",
+        "ollama",
+        "--model",
+        "test-model",
+        "--db",
+        ".harness/harness.db",
+        "--config",
+        "config.toml",
+        "--session",
+        "sess_inbox",
+        "--inbox",
+        "--verify",
+        "none"
+      ],
+      "stdout_contains": ["queued for approval"]
+    },
+    {
+      "name": "approvals-list-pending",
+      "argv": [
+        "approvals",
+        "list",
+        "--db",
+        ".harness/harness.db",
+        "--pending",
+        "--session",
+        "sess_inbox"
+      ],
+      "append_cwd": false,
+      "stdout_contains": ["read_file", "pending", "sess_inbox"]
+    },
+    {
+      "name": "approvals-show",
+      "argv": [
+        "approvals",
+        "show",
+        "{latest_approval_id}",
+        "--db",
+        ".harness/harness.db"
+      ],
+      "append_cwd": false,
+      "stdout_contains": ["read_file", "pending", "note.txt"]
+    },
+    {
+      "name": "approvals-grant",
+      "argv": [
+        "approvals",
+        "grant",
+        "{latest_approval_id}",
+        "--db",
+        ".harness/harness.db"
+      ],
+      "append_cwd": false,
+      "stdout_contains": ["Granted", "read_file"]
+    },
+    {
+      "name": "sessions-resume-granted",
+      "argv": [
+        "sessions",
+        "resume",
+        "sess_inbox",
+        "what does it say?",
+        "--db",
+        ".harness/harness.db",
+        "--config",
+        "config.toml"
+      ],
+      "stdout_contains": ["now I know it's 42"]
+    },
+    {
+      "name": "sessions-show-granted",
+      "argv": [
+        "sessions",
+        "show",
+        "sess_inbox",
+        "--db",
+        ".harness/harness.db"
+      ],
+      "append_cwd": false,
+      "stdout_contains": ["the answer is 42"]
+    },
+    {
+      "name": "evidence-session-filter",
+      "argv": [
+        "evidence",
+        "list",
+        "--db",
+        ".harness/harness.db",
+        "--session",
+        "sess_inbox"
+      ],
+      "append_cwd": false,
+      "stdout_contains": ["read_file", "error"]
+    },
+    {
+      "name": "queue-deny-run",
+      "argv": [
+        "run",
+        "read the denied file",
+        "--provider",
+        "ollama",
+        "--model",
+        "test-model",
+        "--db",
+        ".harness/harness.db",
+        "--config",
+        "config.toml",
+        "--session",
+        "sess_deny",
+        "--inbox",
+        "--verify",
+        "none"
+      ],
+      "stdout_contains": ["queued for approval"]
+    },
+    {
+      "name": "approvals-deny",
+      "argv": [
+        "approvals",
+        "deny",
+        "{latest_approval_id}",
+        "--db",
+        ".harness/harness.db"
+      ],
+      "append_cwd": false,
+      "stdout_contains": ["Denied", "read_file"]
+    },
+    {
+      "name": "approvals-list-denied",
+      "argv": [
+        "approvals",
+        "list",
+        "--db",
+        ".harness/harness.db",
+        "--session",
+        "sess_deny"
+      ],
+      "append_cwd": false,
+      "stdout_contains": ["read_file", "denied", "sess_deny"]
+    }
+  ]
+}

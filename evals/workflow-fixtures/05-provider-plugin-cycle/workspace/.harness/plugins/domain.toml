@@ -1,0 +1,4 @@
+name = "docs-review-pack"
+kind = "domain_profile"
+provider = "provider_plugins:DocsReviewProfileProvider"
+description = "Local domain-profile provider"

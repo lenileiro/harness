@@ -1,0 +1,3 @@
+name = "plugin-experience"
+kind = "experience"
+provider = "plugin_experience_provider:DemoProvider"

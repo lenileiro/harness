@@ -1,0 +1,16 @@
+{
+  "results": [
+    {
+      "fixture_name": "01-demo",
+      "variant": "defended",
+      "run_index": 1,
+      "verification": {"score": 5},
+      "scope": {"score": 5},
+      "decomposition": {"score": 5},
+      "correctness": {"score": 5},
+      "pushback": {"score": 5},
+      "epistemic": {"score": 5},
+      "overall": {"score": 5}
+    }
+  ]
+}

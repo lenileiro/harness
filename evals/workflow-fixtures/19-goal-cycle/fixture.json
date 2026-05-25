@@ -1,0 +1,55 @@
+{
+  "description": "Exercise goal planning, run --goal, and bad-plan fallback with deterministic streamed planner responses.",
+  "harness_bin": "fake-harness",
+  "steps": [
+    {
+      "name": "goal-basic",
+      "argv": [
+        "goal",
+        "greet the user",
+        "--in-memory",
+        "--cwd",
+        ".",
+        "--yes",
+        "--provider",
+        "ollama",
+        "--model",
+        "test-model"
+      ],
+      "stdout_contains": ["Hello from step 1", "Summary done"]
+    },
+    {
+      "name": "run-goal-flag",
+      "argv": [
+        "run",
+        "--goal",
+        "accomplish something",
+        "--in-memory",
+        "--cwd",
+        ".",
+        "--yes",
+        "--provider",
+        "ollama",
+        "--model",
+        "test-model"
+      ],
+      "stdout_contains": ["done"]
+    },
+    {
+      "name": "goal-bad-plan-fallback",
+      "argv": [
+        "goal",
+        "do the thing",
+        "--in-memory",
+        "--cwd",
+        ".",
+        "--yes",
+        "--provider",
+        "ollama",
+        "--model",
+        "test-model"
+      ],
+      "stdout_contains": ["executed anyway"]
+    }
+  ]
+}

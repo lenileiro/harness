@@ -1,0 +1,112 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import asyncio
+import sys
+from pathlib import Path
+
+from harness.cli import __main__ as cli_main
+from harness.core import Capabilities, Done, Message, TextDelta, ToolCall, ToolCallEvent
+from harness.storage.sqlite import SQLiteStorage
+
+
+def _session_arg(argv: list[str]) -> str | None:
+    for index, item in enumerate(argv):
+        if item == "--session" and index + 1 < len(argv):
+            return argv[index + 1]
+    return None
+
+
+async def _latest_approval_id(db_path: Path) -> str:
+    storage = SQLiteStorage(path=db_path)
+    try:
+        approvals = await storage.list_approvals(limit=50)
+        if not approvals:
+            raise RuntimeError("no approvals found")
+        return approvals[0].id
+    finally:
+        await storage.close()
+
+
+def _resolve_runtime_placeholders(argv: list[str]) -> list[str]:
+    if "{latest_approval_id}" not in argv:
+        return argv
+    db_arg: str | None = None
+    for index, item in enumerate(argv):
+        if item == "--db" and index + 1 < len(argv):
+            db_arg = argv[index + 1]
+            break
+    db_path = Path(db_arg or ".harness/harness.db")
+    latest = asyncio.run(_latest_approval_id(db_path))
+    return [latest if item == "{latest_approval_id}" else item for item in argv]
+
+
+def _tool_turn(path: str) -> list[object]:
+    call = ToolCall(id="c1", name="read_file", arguments={"path": path})
+    return [
+        ToolCallEvent(call=call),
+        Done(final_message=Message(role="assistant", content=None, tool_calls=[call])),
+    ]
+
+
+def _text_turn(text: str) -> list[object]:
+    return [TextDelta(text=text), Done(final_message=Message(role="assistant", content=text))]
+
+
+class FakeAdapter:
+    name = "ollama"
+    mode = "default"
+    turn = 0
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+    async def capabilities(self) -> Capabilities:
+        return Capabilities(streaming=True, tool_use=True)
+
+    async def cancel(self, session_id: str) -> None:
+        return None
+
+    def stream(self, **kwargs):
+        return self._stream()
+
+    async def _stream(self):
+        script: list[object]
+        if FakeAdapter.mode == "queue_grant":
+            script = (
+                _tool_turn("note.txt")
+                if FakeAdapter.turn == 0
+                else _text_turn("queued; will resume later")
+            )
+        elif FakeAdapter.mode == "queue_deny":
+            script = _tool_turn("deny.txt") if FakeAdapter.turn == 0 else _text_turn("queued")
+        elif FakeAdapter.mode == "resume_grant":
+            script = _text_turn("now I know it's 42")
+        elif FakeAdapter.mode == "resume_deny":
+            script = _text_turn("resume after deny ok")
+        else:
+            script = _text_turn("default ok")
+        FakeAdapter.turn += 1
+        for event in script:
+            yield event
+
+
+argv = _resolve_runtime_placeholders(sys.argv[1:])
+command = argv[0] if argv else ""
+subcommand = argv[1] if len(argv) > 1 else ""
+session_id = _session_arg(argv)
+
+if command == "run" and session_id == "sess_inbox":
+    FakeAdapter.mode = "queue_grant"
+elif command == "run" and session_id == "sess_deny":
+    FakeAdapter.mode = "queue_deny"
+elif command == "sessions" and subcommand == "resume" and len(argv) > 2 and argv[2] == "sess_inbox":
+    FakeAdapter.mode = "resume_grant"
+elif command == "sessions" and subcommand == "resume" and len(argv) > 2 and argv[2] == "sess_deny":
+    FakeAdapter.mode = "resume_deny"
+
+cli_main.OllamaAdapter = FakeAdapter
+sys.argv = [sys.argv[0], *argv]
+
+if __name__ == "__main__":
+    cli_main.app()

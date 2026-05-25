@@ -1,0 +1,28 @@
+{
+  "description": "Exercise the chat REPL end to end with stdin-driven commands.",
+  "harness_bin": "fake-harness",
+  "steps": [
+    {
+      "name": "chat-repl",
+      "argv": [
+        "chat",
+        "--session",
+        "sess_chat_eval",
+        "--provider",
+        "ollama",
+        "--model",
+        "test-model",
+        "--in-memory",
+        "--yes"
+      ],
+      "stdin_text": "hello\n/session\n/quit\n",
+      "stdout_contains": [
+        "harness chat",
+        "hello from fake chat",
+        "sess_chat_eval",
+        "2 messages",
+        "bye"
+      ]
+    }
+  ]
+}

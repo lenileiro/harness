@@ -1,0 +1,54 @@
+{
+  "description": "Exercise research run end to end with a deterministic harness wrapper.",
+  "harness_bin": "fake-harness",
+  "steps": [
+    {
+      "name": "research-run-json",
+      "argv": [
+        "research",
+        "run",
+        "compare verifier routing and promotion evidence",
+        "--json",
+        "--yes"
+      ],
+      "stdout_contains": [
+        "\"summary\": \"Verifier routing and promotion evidence should stay aligned.\"",
+        "\"Scoped verifier routing lowers noise.\"",
+        "\"How strict should promotion evidence be?\""
+      ],
+      "files_exist": [".harness/research-run-capture.json"],
+      "file_contains": [
+        {
+          "path": ".harness/research-run-capture.json",
+          "substring": "\"domain\": \"research\""
+        },
+        {
+          "path": ".harness/research-run-capture.json",
+          "substring": "\"profile\": \"minimal\""
+        },
+        {
+          "path": ".harness/research-run-capture.json",
+          "substring": "\"require_tools\": false"
+        },
+        {
+          "path": ".harness/research-run-capture.json",
+          "substring": "\"loop_detect\": true"
+        }
+      ]
+    },
+    {
+      "name": "research-run-rendered",
+      "argv": [
+        "research",
+        "run",
+        "compare verifier routing and promotion evidence",
+        "--yes"
+      ],
+      "stdout_contains": [
+        "Verifier routing and promotion evidence should stay aligned.",
+        "Findings",
+        "Sources"
+      ]
+    }
+  ]
+}

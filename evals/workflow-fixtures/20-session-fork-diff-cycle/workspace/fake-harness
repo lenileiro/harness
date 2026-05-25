@@ -1,0 +1,96 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import asyncio
+import sys
+from collections.abc import AsyncIterator
+from pathlib import Path
+
+from harness.cli import __main__ as cli_main
+from harness.core import Capabilities, Done, Message, Session, TextDelta
+from harness.storage.sqlite import SQLiteStorage
+from harness.tasks import ActivityEvent
+
+
+def _db_path(argv: list[str]) -> Path:
+    for index, item in enumerate(argv):
+        if item == "--db" and index + 1 < len(argv):
+            return Path(argv[index + 1]).resolve()
+    return Path("sessions.db").resolve()
+
+
+async def _ensure_seeded(db_path: Path, cwd: Path) -> None:
+    storage = SQLiteStorage(path=db_path)
+    try:
+        session = await storage.get("sess_parent_eval")
+        if session is not None:
+            return
+        seeded = Session(
+            id="sess_parent_eval",
+            provider="ollama",
+            model="test-model",
+            cwd=cwd,
+            messages=[
+                Message(role="user", content="parent prompt"),
+                Message(role="assistant", content="parent answer"),
+            ],
+            status="done",
+        )
+        await storage.save(seeded)
+        await storage.append_activity(
+            ActivityEvent(
+                session_id=seeded.id,
+                kind="tool_call.completed",
+                data={
+                    "name": "write_file",
+                    "is_error": False,
+                    "metadata": {
+                        "path": "notes.txt",
+                        "content_before": "",
+                        "content_after": "seeded note\n",
+                    },
+                },
+            )
+        )
+        await storage.append_activity(
+            ActivityEvent(
+                session_id=seeded.id,
+                kind="tool_call.completed",
+                data={
+                    "name": "shell",
+                    "is_error": False,
+                    "arguments": {"command": "echo seeded > notes.txt"},
+                    "metadata": {"exit_code": 0},
+                },
+            )
+        )
+    finally:
+        await storage.close()
+
+
+class FakeAdapter:
+    name = "ollama"
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+    async def capabilities(self) -> Capabilities:
+        return Capabilities(streaming=True, tool_use=True)
+
+    async def cancel(self, session_id: str) -> None:
+        return None
+
+    def stream(self, **kwargs) -> AsyncIterator[object]:
+        return self._stream()
+
+    async def _stream(self) -> AsyncIterator[object]:
+        yield TextDelta(text="fork response live")
+        yield Done(final_message=Message(role="assistant", content="fork response live"))
+
+
+argv = sys.argv[1:]
+asyncio.run(_ensure_seeded(_db_path(argv), Path.cwd()))
+cli_main.OllamaAdapter = FakeAdapter
+
+if __name__ == "__main__":
+    cli_main.app()

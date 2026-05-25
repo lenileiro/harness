@@ -1,0 +1,181 @@
+{
+  "description": "Exercise research reporting and search surfaces for vision, themes, unknowns, hypotheses, plans, and candidates.",
+  "steps": [
+    {
+      "name": "vision-update",
+      "argv": [
+        "vision",
+        "update",
+        "--title",
+        "Autonomous research reporting harness",
+        "--summary",
+        "Track research state with durable searchable reporting surfaces.",
+        "--theme",
+        "research-reporting",
+        "--success-metric",
+        "high-signal dashboards"
+      ],
+      "stdout_contains": ["Updated vision"],
+      "files_exist": [".harness/research/vision/current/vision.json"]
+    },
+    {
+      "name": "vision-show",
+      "argv": ["vision", "show"],
+      "stdout_contains": ["Autonomous research reporting harness", "research-reporting", "high-signal dashboards"]
+    },
+    {
+      "name": "add-theme",
+      "argv": [
+        "research",
+        "add-theme",
+        "--title",
+        "Research reporting",
+        "--description",
+        "Surface research state clearly for autonomous agents.",
+        "--priority",
+        "medium"
+      ],
+      "stdout_contains": ["Added theme"],
+      "files_exist": [".harness/research/themes/{latest_theme_id}/theme.json"]
+    },
+    {
+      "name": "create-unknown",
+      "argv": [
+        "research",
+        "create-unknown",
+        "--theme-id",
+        "{latest_theme_id}",
+        "--question",
+        "Which reporting views best expose autonomous research progress?",
+        "--why-it-matters",
+        "Agents need shared situational awareness.",
+        "--confidence",
+        "0.4",
+        "--related-sections",
+        "research,promotion"
+      ],
+      "stdout_contains": ["Created unknown"],
+      "files_exist": [".harness/research/unknowns/{latest_unknown_id}/unknown.json"]
+    },
+    {
+      "name": "search-vision",
+      "argv": ["research", "search", "durable searchable", "--kind", "vision"],
+      "stdout_contains": ["vision", "current"]
+    },
+    {
+      "name": "search-theme",
+      "argv": ["research", "search", "autonomous agents", "--kind", "theme"],
+      "stdout_contains": ["theme", "{latest_theme_id}"]
+    },
+    {
+      "name": "search-unknown",
+      "argv": ["research", "search", "situational awareness", "--kind", "unknown"],
+      "stdout_contains": ["unknown", "{latest_unknown_id}"]
+    },
+    {
+      "name": "create-opportunity",
+      "argv": [
+        "research",
+        "create-opportunity",
+        "--title",
+        "Improve research dashboards",
+        "--summary",
+        "Unify reporting views for themes, candidates, and experiments.",
+        "--related-sections",
+        "research,promotion,portfolio",
+        "--change-modes",
+        "improve,extend",
+        "--theme",
+        "research-reporting",
+        "--priority",
+        "medium"
+      ],
+      "stdout_contains": ["Created opportunity"],
+      "files_exist": [".harness/research/opportunities/{latest_opportunity_id}/opportunity.json"]
+    },
+    {
+      "name": "hypothesize",
+      "argv": [
+        "research",
+        "hypothesize",
+        "--opportunity",
+        "{latest_opportunity_id}",
+        "--claim",
+        "Consistent dashboards make autonomous coordination easier.",
+        "--expected-win",
+        "Lower time to orient on active work.",
+        "--risk-level",
+        "low",
+        "--change-mode",
+        "improve"
+      ],
+      "stdout_contains": ["Created hypothesis"],
+      "files_exist": [".harness/research/hypotheses/{latest_hypothesis_id}/hypothesis.json"]
+    },
+    {
+      "name": "plan-experiment",
+      "argv": [
+        "research",
+        "plan-experiment",
+        "--hypothesis",
+        "{latest_hypothesis_id}",
+        "--plan",
+        "Prototype a reporting candidate and verify candidate listing output.",
+        "--target-files",
+        "packages/cli/src/harness/cli/research_commands.py",
+        "--checks",
+        "pytest,pyright",
+        "--eval-slices",
+        "workflow-smoke"
+      ],
+      "stdout_contains": ["Planned experiment"],
+      "files_exist": [".harness/research/experiment-plans/{latest_experiment_plan_id}/experiment_plan.json"]
+    },
+    {
+      "name": "search-hypothesis",
+      "argv": ["research", "search", "coordination easier", "--kind", "hypothesis"],
+      "stdout_contains": ["hypothesis", "{latest_hypothesis_id}"]
+    },
+    {
+      "name": "search-plan",
+      "argv": ["research", "search", "candidate listing output", "--kind", "experiment-plan"],
+      "stdout_contains": ["experiment_plan", "{latest_experiment_plan_id}"]
+    },
+    {
+      "name": "refine",
+      "argv": [
+        "research",
+        "refine",
+        "--title",
+        "Research dashboard candidate",
+        "--summary",
+        "Make candidate reporting easier to scan.",
+        "--source-hypothesis",
+        "{latest_hypothesis_id}",
+        "--target-files",
+        "packages/cli/src/harness/cli/research_commands.py",
+        "--expected-metric",
+        "Candidate dashboards stay legible.",
+        "--validation-plan",
+        "Run workflow smoke and focused CLI tests.",
+        "--risk-level",
+        "low",
+        "--mode",
+        "improve",
+        "--subsystem",
+        "research-reporting",
+        "--rationale",
+        "Agents need fast orientation.",
+        "--expected-outcome",
+        "Reporting artifacts are easier to review."
+      ],
+      "stdout_contains": ["Created promotion candidate"],
+      "files_exist": [".harness/research/promotions/{latest_promotion_candidate_id}/promotion_candidate.json"]
+    },
+    {
+      "name": "list-candidates",
+      "argv": ["research", "list-candidates"],
+      "stdout_contains": ["{latest_promotion_candidate_id}", "Research", "dashboard", "candidate", "low"]
+    }
+  ]
+}

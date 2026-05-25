@@ -1,0 +1,123 @@
+{
+  "description": "Exercise cleanup commands and mined tips persistence through deterministic memory, task, run, and tips workflows.",
+  "harness_bin": "fake-harness",
+  "steps": [
+    {
+      "name": "init-workspace",
+      "argv": ["init"],
+      "stdout_contains": ["Initialized"]
+    },
+    {
+      "name": "memory-save",
+      "argv": [
+        "memory",
+        "save",
+        "Temporary cleanup note",
+        "--kind",
+        "project_fact",
+        "--db",
+        ".harness/harness.db"
+      ],
+      "append_cwd": false,
+      "stdout_contains": ["Saved", "project_fact"]
+    },
+    {
+      "name": "memory-rm",
+      "argv": [
+        "memory",
+        "rm",
+        "{latest_memory_id}",
+        "--db",
+        ".harness/harness.db",
+        "--yes"
+      ],
+      "append_cwd": false,
+      "stdout_contains": ["Deleted", "mem_"]
+    },
+    {
+      "name": "memory-list-empty",
+      "argv": ["memory", "list", "--db", ".harness/harness.db"],
+      "append_cwd": false,
+      "stdout_contains": ["No memories"]
+    },
+    {
+      "name": "tasks-new",
+      "argv": [
+        "tasks",
+        "new",
+        "Temporary cleanup task",
+        "--db",
+        ".harness/harness.db"
+      ],
+      "stdout_contains": ["Created T-001"]
+    },
+    {
+      "name": "tasks-rm",
+      "argv": ["tasks", "rm", "T-001", "--db", ".harness/harness.db", "--yes"],
+      "append_cwd": false,
+      "stdout_contains": ["Deleted", "T-001"]
+    },
+    {
+      "name": "tasks-list-empty",
+      "argv": ["tasks", "list", "--db", ".harness/harness.db"],
+      "append_cwd": false,
+      "stdout_contains": ["No tasks"]
+    },
+    {
+      "name": "run-bootstrap-session",
+      "argv": [
+        "run",
+        "Investigate why cleanup and mining flows matter",
+        "--provider",
+        "ollama",
+        "--model",
+        "test-model",
+        "--db",
+        ".harness/harness.db",
+        "--session",
+        "sess_tips_mine",
+        "--yes",
+        "--verify",
+        "none"
+      ],
+      "stdout_contains": ["cleanup mining bootstrap ok"]
+    },
+    {
+      "name": "tips-mine",
+      "argv": [
+        "tips",
+        "mine",
+        "sess_tips_mine",
+        "--provider",
+        "ollama",
+        "--model",
+        "test-model",
+        "--db",
+        ".harness/harness.db",
+        "--scope",
+        "repo"
+      ],
+      "append_cwd": false,
+      "stdout_contains": ["Added 1 tip(s)"]
+    },
+    {
+      "name": "tips-list-mined",
+      "argv": ["tips", "list"],
+      "append_cwd": false,
+      "stdout_contains": [
+        "workflow",
+        "repetitive",
+        "Persist cleanup",
+        "tips after",
+        "sess_tips_mine"
+      ],
+      "files_exist": [".harness/tips.jsonl"]
+    },
+    {
+      "name": "tips-test-mined",
+      "argv": ["tips", "test", "Use workflow cleanup before retrying repetitive failures"],
+      "append_cwd": false,
+      "stdout_contains": ["Persist cleanup learnings", "repetitive failures"]
+    }
+  ]
+}

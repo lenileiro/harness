@@ -1,0 +1,51 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+
+from harness.cli import __main__ as cli_main
+from harness.core import Capabilities, Done, Message, TextDelta
+
+
+class FakeAdapter:
+    name = "ollama"
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+    async def capabilities(self) -> Capabilities:
+        return Capabilities(streaming=True, tool_use=True)
+
+    async def cancel(self, session_id: str) -> None:
+        return None
+
+    def stream(self, **kwargs):
+        cwd = Path.cwd()
+        capture = cwd / ".harness" / "runtime-plugin-capture.json"
+        capture.parent.mkdir(parents=True, exist_ok=True)
+        messages = kwargs.get("messages") or []
+        tools = kwargs.get("tools") or []
+        payload = {
+            "model": kwargs.get("model"),
+            "message_roles": [getattr(message, "role", None) for message in messages],
+            "message_contents": [getattr(message, "content", None) for message in messages],
+            "tool_names": [
+                tool.get("function", {}).get("name") for tool in tools if isinstance(tool, dict)
+            ],
+        }
+        payload["tool_count"] = len(payload["tool_names"])
+        capture.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        print("RUNTIME_CAPTURE::" + json.dumps(payload, sort_keys=True), file=sys.stderr)
+        return self._stream()
+
+    async def _stream(self):
+        yield TextDelta(text="plugin runtime ok")
+        yield Done(final_message=Message(role="assistant", content="plugin runtime ok"))
+
+
+cli_main.OllamaAdapter = FakeAdapter
+
+if __name__ == "__main__":
+    cli_main.app()

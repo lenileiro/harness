@@ -1,0 +1,117 @@
+{
+  "description": "Exercise the remaining research search kinds across rabbit holes, section maps, opportunities, and all-kind search.",
+  "steps": [
+    {
+      "name": "open-rabbithole",
+      "argv": [
+        "research",
+        "open",
+        "--title",
+        "Verifier cross-section scan",
+        "--question",
+        "Which verifier sections deserve deeper coordination work?",
+        "--scope",
+        "Link verification, promotion, and reporting concerns.",
+        "--theme",
+        "verification",
+        "--related-sections",
+        "verification,promotion,research",
+        "--mode",
+        "build_on",
+        "--subsystem",
+        "verification",
+        "--rationale",
+        "Shared search surfaces should reveal related work.",
+        "--expected-outcome",
+        "Agents can find adjacent verifier research faster."
+      ],
+      "stdout_contains": ["Opened rabbit hole"],
+      "files_exist": [".harness/research/rabbitholes/{latest_rabbit_hole_id}/rabbit_hole.json"]
+    },
+    {
+      "name": "map-section",
+      "argv": [
+        "research",
+        "map-section",
+        "--section",
+        "promotion",
+        "--files",
+        "packages/core/src/harness/core/pr_generation.py,packages/core/src/harness/core/promotion_candidates.py",
+        "--interfaces",
+        "PromotionCandidate,PromotionDraft",
+        "--constraints",
+        "promotion artifacts must stay deterministic",
+        "--weaknesses",
+        "reporting is scattered",
+        "--opportunities",
+        "clearer candidate prioritization"
+      ],
+      "stdout_contains": ["Mapped section promotion"],
+      "files_exist": [".harness/research/section-maps/{latest_section_map_id}/section_map.json"]
+    },
+    {
+      "name": "add-observation",
+      "argv": [
+        "research",
+        "add-observation",
+        "--title",
+        "Verifier coordination debt",
+        "--summary",
+        "Related verifier and promotion work is hard to discover quickly.",
+        "--source-type",
+        "repo",
+        "--source-ref",
+        "packages/core/src/harness/core/pr_generation.py",
+        "--related-sections",
+        "verification,promotion",
+        "--theme",
+        "verification"
+      ],
+      "stdout_contains": ["Recorded observation"],
+      "files_exist": [".harness/research/observations/{latest_observation_id}/observation.json"]
+    },
+    {
+      "name": "create-opportunity",
+      "argv": [
+        "research",
+        "create-opportunity",
+        "--title",
+        "Unify verifier search surfaces",
+        "--summary",
+        "Improve cross-linking between verifier, promotion, and reporting records.",
+        "--related-sections",
+        "verification,promotion,research",
+        "--origin-observations",
+        "{latest_observation_id}",
+        "--change-modes",
+        "improve,extend",
+        "--theme",
+        "verification",
+        "--priority",
+        "medium"
+      ],
+      "stdout_contains": ["Created opportunity"],
+      "files_exist": [".harness/research/opportunities/{latest_opportunity_id}/opportunity.json"]
+    },
+    {
+      "name": "search-rabbit-hole",
+      "argv": ["research", "search", "coordination work", "--kind", "rabbit-hole"],
+      "stdout_contains": ["rabbit_hole", "{latest_rabbit_hole_id}"]
+    },
+    {
+      "name": "search-section-map",
+      "argv": ["research", "search", "candidate prioritization", "--kind", "section-map"],
+      "stdout_contains": ["section_map", "{latest_section_map_id}"]
+    },
+    {
+      "name": "search-opportunity",
+      "argv": ["research", "search", "cross-linking", "--kind", "opportunity"],
+      "stdout_contains": ["opportunity", "{latest_opportunity_id}"]
+    },
+    {
+      "name": "search-all",
+      "argv": ["research", "search", "verifier", "--kind", "all"],
+      "stdout_contains": ["rabbit_hole", "observation", "opportunity"]
+    }
+  ]
+}

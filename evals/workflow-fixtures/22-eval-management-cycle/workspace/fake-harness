@@ -1,0 +1,202 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import json
+from dataclasses import dataclass
+from pathlib import Path
+from types import SimpleNamespace
+
+from harness.cli import __main__ as cli_main
+from harness.cli import evals as eval_cli
+
+ROOT = Path.cwd() / "evals"
+
+
+@dataclass(slots=True)
+class _Fixture:
+    name: str
+    family: str
+    rules: object
+
+
+def _discover_fixtures(*_args, fixtures_subdir: str = "fixtures", **_kwargs):
+    if fixtures_subdir == "fixtures":
+        return [
+            _Fixture(
+                "01-demo",
+                "verification",
+                SimpleNamespace(primary_dimension="verification", trap="broad patching"),
+            )
+        ]
+    if fixtures_subdir == "fixtures-mutated":
+        return [
+            _Fixture(
+                "0001-01-demo",
+                "verification",
+                SimpleNamespace(primary_dimension="verification", trap="broad patching"),
+            )
+        ]
+    if fixtures_subdir == "fixtures-holdout":
+        return [
+            _Fixture(
+                "01-holdout",
+                "verification",
+                SimpleNamespace(primary_dimension="verification", trap="holdout trap"),
+            )
+        ]
+    return []
+
+
+def _mutate_fixture(src_fixture_dir: Path, *, seed: int, dest_root: Path | None = None):
+    dest_root = dest_root or (src_fixture_dir.parent.parent / "fixtures-mutated")
+    dest_dir = dest_root / f"{seed:04d}-{src_fixture_dir.name}"
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    return SimpleNamespace(
+        fixture_name=src_fixture_dir.name,
+        seed=seed,
+        dest_dir=dest_dir,
+        renames={"Calculator": "MathOps"},
+        touched_files=[Path("TASK.md")],
+    )
+
+
+def _load_gold_labels(_gold_dir: Path):
+    def _label(fixture_name: str, variant: str, score: int):
+        return SimpleNamespace(
+            fixture_name=fixture_name,
+            variant=variant,
+            run_index=1,
+            scores={
+                "verification": score,
+                "scope": score,
+                "decomposition": score,
+                "correctness": score,
+                "pushback": score,
+                "epistemic": score,
+                "overall": score,
+            },
+        )
+
+    return [
+        _label("01-demo", "defended", 5),
+        _label("01-demo", "bare", 4),
+        _label("0001-01-demo", "defended", 5),
+        _label("0001-01-demo", "bare", 4),
+        _label("01-holdout", "defended", 5),
+        _label("01-holdout", "bare", 4),
+    ]
+
+
+def _load_report(report_path: Path):
+    return json.loads(report_path.read_text(encoding="utf-8"))["results"]
+
+
+def _compare_report_to_gold(report_results, labels):
+    score = int(report_results[0]["verification"]["score"])
+    label_score = int(labels[0].scores["verification"])
+    return [
+        SimpleNamespace(
+            dimension="verification",
+            count=1,
+            exact_match_rate=1.0 if score == label_score else 0.0,
+            mean_absolute_error=float(abs(score - label_score)),
+        )
+    ]
+
+
+def _discover_review_fixtures(*_args, **_kwargs):
+    return [SimpleNamespace(name="01-review")]
+
+
+def _discover_research_fixtures(*_args, **_kwargs):
+    return [SimpleNamespace(name="01-research")]
+
+
+def _discover_docs_fixtures(*_args, **_kwargs):
+    return [SimpleNamespace(name="01-docs")]
+
+
+class _WorkflowFixture:
+    def __init__(self, name: str):
+        self.name = name
+
+
+class _WorkflowResult:
+    def __init__(self, artifact_dir: Path | None):
+        self.fixture_name = "01-workflow"
+        self.passed = True
+        self.steps_total = 1
+        self.steps_passed = 1
+        self.step_results = []
+        self.artifact_dir = artifact_dir
+        self.duration_seconds = 0.1
+
+    def to_dict(self):
+        return {
+            "fixture_name": self.fixture_name,
+            "passed": self.passed,
+            "steps_total": self.steps_total,
+            "steps_passed": self.steps_passed,
+            "step_results": self.step_results,
+            "artifact_dir": str(self.artifact_dir) if self.artifact_dir else None,
+            "duration_seconds": self.duration_seconds,
+        }
+
+
+class _WorkflowReport:
+    def __init__(self, **kwargs):
+        self.kwargs = kwargs
+
+    def to_dict(self):
+        return {
+            "run_id": self.kwargs["run_id"],
+            "artifact_root": str(self.kwargs["artifact_root"]),
+            "results": [result.to_dict() for result in self.kwargs["results"]],
+        }
+
+
+def _discover_workflow_fixtures(*_args, **_kwargs):
+    return [_WorkflowFixture("01-workflow")]
+
+
+def _run_workflow_fixture(*_args, **kwargs):
+    artifact_dir = kwargs.get("artifact_dir")
+    if artifact_dir is not None:
+        artifact_dir.mkdir(parents=True, exist_ok=True)
+        (artifact_dir / "result.json").write_text(
+            json.dumps(_WorkflowResult(artifact_dir).to_dict(), indent=2),
+            encoding="utf-8",
+        )
+    return _WorkflowResult(artifact_dir)
+
+
+def _fake_load_eval_module(name: str, _root: Path):
+    if name == "runner":
+        return SimpleNamespace(discover_fixtures=_discover_fixtures)
+    if name == "mutator":
+        return SimpleNamespace(mutate_fixture=_mutate_fixture)
+    if name == "calibration":
+        return SimpleNamespace(
+            load_gold_labels=_load_gold_labels,
+            load_report=_load_report,
+            compare_report_to_gold=_compare_report_to_gold,
+        )
+    if name == "review_runner":
+        return SimpleNamespace(discover_review_fixtures=_discover_review_fixtures)
+    if name == "research_runner":
+        return SimpleNamespace(discover_research_fixtures=_discover_research_fixtures)
+    if name == "docs_runner":
+        return SimpleNamespace(discover_docs_fixtures=_discover_docs_fixtures)
+    if name == "workflow_runner":
+        return SimpleNamespace(
+            discover_workflow_fixtures=_discover_workflow_fixtures,
+            run_workflow_fixture=_run_workflow_fixture,
+            WorkflowEvalReport=_WorkflowReport,
+        )
+    raise AssertionError(f"unexpected module load: {name}")
+
+
+eval_cli._load_eval_module = _fake_load_eval_module
+
+if __name__ == "__main__":
+    cli_main.app()

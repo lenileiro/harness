@@ -1,0 +1,4 @@
+name = "demo"
+kind = "tool"
+provider = "workspace_plugin:DemoProvider"
+description = "Local demo plugin"

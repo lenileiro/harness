@@ -1,0 +1,4 @@
+name = "strict-verify-pack"
+kind = "verifier"
+provider = "provider_plugins:StrictVerifierProvider"
+description = "Local verifier provider"

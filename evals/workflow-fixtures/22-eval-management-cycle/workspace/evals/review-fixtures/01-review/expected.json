@@ -1,0 +1,10 @@
+{
+  "required_findings": [
+    {
+      "file": "app.py",
+      "issue_substring": "strip"
+    }
+  ],
+  "summary_contains": "review",
+  "min_findings": 1
+}

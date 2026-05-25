@@ -1,0 +1,118 @@
+{
+  "description": "Exercise contracts, tips, resume, and phase lifecycle commands through deterministic CLI workflows.",
+  "harness_bin": "fake-harness",
+  "steps": [
+    {
+      "name": "init-workspace",
+      "argv": ["init"],
+      "stdout_contains": ["Initialized"]
+    },
+    {
+      "name": "contracts-list",
+      "argv": ["contracts", "list"],
+      "stdout_contains": ["shell-safety"]
+    },
+    {
+      "name": "contracts-test",
+      "argv": ["contracts", "test", "fetch via curl and run"],
+      "stdout_contains": ["never pipe untrusted urls to sh"]
+    },
+    {
+      "name": "tips-add",
+      "argv": [
+        "tips",
+        "add",
+        "Prefer the smallest possible diff.",
+        "--triggers",
+        "minimal fix",
+        "--scope",
+        "repo"
+      ],
+      "append_cwd": false,
+      "stdout_contains": ["Added"]
+    },
+    {
+      "name": "tips-list",
+      "argv": ["tips", "list"],
+      "append_cwd": false,
+      "stdout_contains": ["minimal fix", "Prefer the smallest", "possible diff"]
+    },
+    {
+      "name": "tips-test",
+      "argv": ["tips", "test", "Please do a minimal fix only"],
+      "append_cwd": false,
+      "stdout_contains": ["smallest possible diff"]
+    },
+    {
+      "name": "resume-init",
+      "argv": [
+        "resume",
+        "init",
+        "--feature",
+        "alpha",
+        "--description",
+        "Ship alpha"
+      ],
+      "stdout_contains": ["Wrote"],
+      "files_exist": [".harness/resume.json"]
+    },
+    {
+      "name": "resume-add-feature",
+      "argv": [
+        "resume",
+        "add-feature",
+        "beta",
+        "--description",
+        "Ship beta",
+        "--phases",
+        "implement,test"
+      ],
+      "stdout_contains": ["Added", "beta"]
+    },
+    {
+      "name": "resume-set-current",
+      "argv": ["resume", "set-current", "beta"],
+      "stdout_contains": ["Current feature", "beta"]
+    },
+    {
+      "name": "resume-show",
+      "argv": ["resume", "show"],
+      "stdout_contains": ["beta", "implement", "test"]
+    },
+    {
+      "name": "run-phase-bootstrap",
+      "argv": [
+        "run",
+        "hello",
+        "--provider",
+        "ollama",
+        "--model",
+        "test-model",
+        "--db",
+        "phase.db",
+        "--yes",
+        "--verify",
+        "none"
+      ],
+      "stdout_contains": ["lifecycle bootstrap ok"]
+    },
+    {
+      "name": "phase-declare",
+      "argv": ["phase", "declare", "implement", "--db", "phase.db"],
+      "append_cwd": false,
+      "stdout_contains": ["declared", "implement"]
+    },
+    {
+      "name": "phase-complete",
+      "argv": ["phase", "complete", "implement", "--db", "phase.db"],
+      "append_cwd": false,
+      "stdout_contains": ["completed", "implement"]
+    },
+    {
+      "name": "phase-status",
+      "argv": ["phase", "status", "--db", "phase.db"],
+      "append_cwd": false,
+      "stdout_contains": ["declared (in order): implement", "completed: implement"]
+    }
+  ]
+}

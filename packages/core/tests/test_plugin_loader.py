@@ -165,6 +165,29 @@ def test_load_tool_provider_imports_provider(
     assert [spec.name for spec in specs] == ["dummy_tool"]
 
 
+def test_load_tool_provider_imports_workspace_root_module_without_syspath_patch(
+    tmp_path: Path,
+) -> None:
+    workspace_plugins = tmp_path / ".harness" / "plugins"
+    workspace_plugins.mkdir(parents=True)
+    _write_provider_module(tmp_path, "workspace_root_provider")
+    manifest = workspace_plugins / "demo.toml"
+    manifest.write_text(
+        'name = "demo"\nprovider = "workspace_root_provider:DemoProvider"\n',
+        encoding="utf-8",
+    )
+
+    plugin = ToolProviderPlugin(
+        name="demo",
+        provider_ref="workspace_root_provider:DemoProvider",
+        source="workspace",
+        path=manifest,
+    )
+
+    provider = load_tool_provider(plugin)
+    assert [spec.name for spec in provider.specs()] == ["dummy_tool"]
+
+
 def test_load_experience_and_domain_profile_providers(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -312,3 +335,26 @@ def test_validate_provider_plugin_reports_failure(
     ok, detail = validate_provider_plugin(plugin)
     assert ok is False
     assert "missing_plugin_module" in detail
+
+
+def test_validate_provider_plugin_loads_workspace_root_module(tmp_path: Path) -> None:
+    workspace_plugins = tmp_path / ".harness" / "plugins"
+    workspace_plugins.mkdir(parents=True)
+    _write_provider_module(tmp_path, "workspace_validate_provider")
+    manifest = workspace_plugins / "demo.toml"
+    manifest.write_text(
+        'name = "demo"\nprovider = "workspace_validate_provider:DemoProvider"\n',
+        encoding="utf-8",
+    )
+
+    plugin = ToolProviderPlugin(
+        name="demo",
+        provider_ref="workspace_validate_provider:DemoProvider",
+        source="workspace",
+        kind="tool",
+        path=manifest,
+    )
+
+    ok, detail = validate_provider_plugin(plugin)
+    assert ok is True
+    assert detail == "ok"

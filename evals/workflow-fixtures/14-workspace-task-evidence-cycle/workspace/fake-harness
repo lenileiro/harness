@@ -1,0 +1,38 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+from harness.cli import __main__ as cli_main
+from harness.core import Capabilities, Done, Message, TextDelta, ToolCall, ToolCallEvent
+
+
+class FakeAdapter:
+    name = "ollama"
+    _turn = 0
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+    async def capabilities(self) -> Capabilities:
+        return Capabilities(streaming=True, tool_use=True)
+
+    async def cancel(self, session_id: str) -> None:
+        return None
+
+    def stream(self, **kwargs):
+        return self._stream()
+
+    async def _stream(self):
+        if FakeAdapter._turn == 0:
+            FakeAdapter._turn += 1
+            call = ToolCall(id="c1", name="read_file", arguments={"path": "note.txt"})
+            yield ToolCallEvent(call=call)
+            yield Done(final_message=Message(role="assistant", content=None, tool_calls=[call]))
+            return
+        yield TextDelta(text="workspace task evidence ok")
+        yield Done(final_message=Message(role="assistant", content="workspace task evidence ok"))
+
+
+cli_main.OllamaAdapter = FakeAdapter
+
+if __name__ == "__main__":
+    cli_main.app()

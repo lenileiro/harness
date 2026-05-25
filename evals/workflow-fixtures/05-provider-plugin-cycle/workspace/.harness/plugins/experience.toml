@@ -1,0 +1,4 @@
+name = "repo-hints"
+kind = "experience"
+provider = "provider_plugins:RepoHintsProvider"
+description = "Local experience provider"

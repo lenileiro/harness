@@ -1,0 +1,11 @@
+{
+  "description": "Exercise the top-level version command directly through the real CLI.",
+  "steps": [
+    {
+      "name": "version",
+      "argv": ["version"],
+      "append_cwd": false,
+      "stdout_contains": ["0.0.0"]
+    }
+  ]
+}

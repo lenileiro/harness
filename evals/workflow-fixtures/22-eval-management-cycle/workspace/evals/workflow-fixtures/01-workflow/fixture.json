@@ -1,0 +1,11 @@
+{
+  "description": "Minimal nested workflow fixture for eval workflow command coverage.",
+  "steps": [
+    {
+      "name": "version",
+      "argv": ["version"],
+      "append_cwd": false,
+      "stdout_contains": ["harness"]
+    }
+  ]
+}

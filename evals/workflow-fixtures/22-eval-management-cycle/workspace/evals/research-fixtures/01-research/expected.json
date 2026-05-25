@@ -1,0 +1,11 @@
+{
+  "required_findings": ["persistence"],
+  "required_sources": [
+    {
+      "title_substring": "README"
+    }
+  ],
+  "summary_contains": "tradeoff",
+  "min_findings": 1,
+  "min_sources": 1
+}

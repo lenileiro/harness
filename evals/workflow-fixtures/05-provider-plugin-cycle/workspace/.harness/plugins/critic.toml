@@ -1,0 +1,4 @@
+name = "skeptic-pack"
+kind = "critic"
+provider = "provider_plugins:SkepticCriticProvider"
+description = "Local critic provider"

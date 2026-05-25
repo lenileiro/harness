@@ -1,0 +1,45 @@
+{
+  "description": "Exercise non-tool provider plugin discovery and validation.",
+  "steps": [
+    {
+      "name": "experience-list",
+      "argv": ["plugins", "list", "--kind", "experience"],
+      "stdout_contains": ["repo-hints", "experience", "workspace"]
+    },
+    {
+      "name": "experience-validate",
+      "argv": ["plugins", "validate", "--kind", "experience"],
+      "stdout_contains": ["repo-hints", "ok"]
+    },
+    {
+      "name": "domain-list",
+      "argv": ["plugins", "list", "--kind", "domain-profile"],
+      "stdout_contains": ["docs-review-pack", "domain_profile", "workspace"]
+    },
+    {
+      "name": "domain-validate",
+      "argv": ["plugins", "validate", "--kind", "domain-profile"],
+      "stdout_contains": ["docs-review-pack", "ok"]
+    },
+    {
+      "name": "verifier-list",
+      "argv": ["plugins", "list", "--kind", "verifier"],
+      "stdout_contains": ["strict-verify-pack", "verifier", "workspace"]
+    },
+    {
+      "name": "verifier-validate",
+      "argv": ["plugins", "validate", "--kind", "verifier"],
+      "stdout_contains": ["strict-verify-pack", "ok"]
+    },
+    {
+      "name": "critic-list",
+      "argv": ["plugins", "list", "--kind", "critic"],
+      "stdout_contains": ["skeptic-pack", "critic", "workspace"]
+    },
+    {
+      "name": "critic-validate",
+      "argv": ["plugins", "validate", "--kind", "critic"],
+      "stdout_contains": ["skeptic-pack", "ok"]
+    }
+  ]
+}

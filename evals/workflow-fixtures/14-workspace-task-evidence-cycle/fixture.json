@@ -1,0 +1,159 @@
+{
+  "description": "Exercise workspace init, memory storage, task lifecycle, and evidence capture through a shared sqlite workspace database.",
+  "harness_bin": "fake-harness",
+  "steps": [
+    {
+      "name": "init-workspace",
+      "argv": ["init"],
+      "stdout_contains": ["Initialized"]
+    },
+    {
+      "name": "memory-save",
+      "argv": [
+        "memory",
+        "save",
+        "Remember plugin loaders stay repo local",
+        "--kind",
+        "project_fact",
+        "--db",
+        ".harness/harness.db"
+      ],
+      "append_cwd": false,
+      "stdout_contains": ["Saved", "project_fact"]
+    },
+    {
+      "name": "memory-list",
+      "argv": ["memory", "list", "--db", ".harness/harness.db"],
+      "append_cwd": false,
+      "stdout_contains": ["Memories", "project_fact", "Remember plugin", "repo local"]
+    },
+    {
+      "name": "memory-search",
+      "argv": ["memory", "search", "plugin loaders", "--db", ".harness/harness.db"],
+      "append_cwd": false,
+      "stdout_contains": ["Memory search", "project_fact", "Remember plugin", "repo local"]
+    },
+    {
+      "name": "tasks-new-primary",
+      "argv": [
+        "tasks",
+        "new",
+        "Investigate workspace evidence",
+        "--db",
+        ".harness/harness.db",
+        "--priority",
+        "high"
+      ],
+      "stdout_contains": ["Created T-001"]
+    },
+    {
+      "name": "tasks-new-secondary",
+      "argv": [
+        "tasks",
+        "new",
+        "Collect supporting notes",
+        "--db",
+        ".harness/harness.db"
+      ],
+      "stdout_contains": ["Created T-002"]
+    },
+    {
+      "name": "tasks-update",
+      "argv": [
+        "tasks",
+        "update",
+        "T-001",
+        "--db",
+        ".harness/harness.db",
+        "--status",
+        "in_progress",
+        "--labels",
+        "workflow,demo"
+      ],
+      "append_cwd": false,
+      "stdout_contains": ["Updated", "T-001"]
+    },
+    {
+      "name": "tasks-link",
+      "argv": [
+        "tasks",
+        "link",
+        "T-001",
+        "T-002",
+        "--db",
+        ".harness/harness.db",
+        "--relation",
+        "depends_on"
+      ],
+      "append_cwd": false,
+      "stdout_contains": ["Linked", "T-001", "depends_on", "T-002"]
+    },
+    {
+      "name": "run-with-task",
+      "argv": [
+        "run",
+        "read the note and summarize it",
+        "--provider",
+        "ollama",
+        "--model",
+        "test-model",
+        "--db",
+        ".harness/harness.db",
+        "--task",
+        "T-001",
+        "--session",
+        "sess_task_memory",
+        "--yes",
+        "--verify",
+        "none"
+      ],
+      "stdout_contains": ["workspace task evidence ok"]
+    },
+    {
+      "name": "tasks-show-primary",
+      "argv": ["tasks", "show", "T-001", "--db", ".harness/harness.db"],
+      "append_cwd": false,
+      "stdout_contains": [
+        "T-001",
+        "depends_on",
+        "T-002",
+        "sess_task_memory",
+        "agent_run.completed",
+        "task.status_changed"
+      ]
+    },
+    {
+      "name": "tasks-list",
+      "argv": ["tasks", "list", "--db", ".harness/harness.db"],
+      "append_cwd": false,
+      "stdout_contains": [
+        "T-001",
+        "T-002",
+        "Investigate workspace",
+        "evidence",
+        "Collect supporting notes"
+      ]
+    },
+    {
+      "name": "evidence-task-filter",
+      "argv": ["evidence", "list", "--db", ".harness/harness.db", "--task", "T-001"],
+      "append_cwd": false,
+      "stdout_contains": ["read_file", "bytes="]
+    },
+    {
+      "name": "evidence-tool-filter",
+      "argv": [
+        "evidence",
+        "list",
+        "--db",
+        ".harness/harness.db",
+        "--task",
+        "T-001",
+        "--tool",
+        "read_file"
+      ],
+      "append_cwd": false,
+      "stdout_contains": ["read_file", "bytes="]
+    }
+  ]
+}

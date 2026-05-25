@@ -1,0 +1,41 @@
+{
+  "description": "Exercise session creation and inspection commands through a real saved session.",
+  "harness_bin": "fake-harness",
+  "steps": [
+    {
+      "name": "run-session",
+      "argv": [
+        "run",
+        "say hello",
+        "--session",
+        "sess_workflow_eval",
+        "--provider",
+        "ollama",
+        "--model",
+        "test-model",
+        "--yes",
+        "--verify",
+        "none"
+      ],
+      "stdout_contains": ["workflow session ok"]
+    },
+    {
+      "name": "sessions-list",
+      "argv": ["sessions", "list"],
+      "append_cwd": false,
+      "stdout_contains": ["sess_workflow_eval"]
+    },
+    {
+      "name": "sessions-show",
+      "argv": ["sessions", "show", "sess_workflow_eval"],
+      "append_cwd": false,
+      "stdout_contains": ["say hello", "workflow session ok"]
+    },
+    {
+      "name": "sessions-rm",
+      "argv": ["sessions", "rm", "sess_workflow_eval", "--yes"],
+      "append_cwd": false,
+      "stdout_contains": ["Deleted"]
+    }
+  ]
+}

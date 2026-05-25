@@ -1,0 +1,160 @@
+{
+  "description": "Exercise candidate refinement, promotion draft generation, and archive flow.",
+  "steps": [
+    {
+      "name": "create-opportunity",
+      "argv": [
+        "research",
+        "create-opportunity",
+        "--title",
+        "Tighten research promotion",
+        "--summary",
+        "Turn research findings into smaller bounded promotion candidates.",
+        "--related-sections",
+        "research,promotion",
+        "--change-modes",
+        "improve,extend",
+        "--theme",
+        "autonomous-improvement",
+        "--priority",
+        "high"
+      ],
+      "stdout_contains": ["Created opportunity"],
+      "files_exist": [".harness/research/opportunities/{latest_opportunity_id}/opportunity.json"]
+    },
+    {
+      "name": "hypothesize",
+      "argv": [
+        "research",
+        "hypothesize",
+        "--opportunity",
+        "{latest_opportunity_id}",
+        "--claim",
+        "A promotion draft should always include explicit evidence sections.",
+        "--expected-win",
+        "Higher signal PRs.",
+        "--risk-level",
+        "low",
+        "--change-mode",
+        "improve"
+      ],
+      "stdout_contains": ["Created hypothesis"],
+      "files_exist": [".harness/research/hypotheses/{latest_hypothesis_id}/hypothesis.json"]
+    },
+    {
+      "name": "plan-experiment",
+      "argv": [
+        "research",
+        "plan-experiment",
+        "--hypothesis",
+        "{latest_hypothesis_id}",
+        "--plan",
+        "Create a bounded promotion candidate and inspect the generated PR payload.",
+        "--target-files",
+        "packages/core/src/harness/core/pr_generation.py",
+        "--checks",
+        "pytest,pyright",
+        "--eval-slices",
+        "workflow-smoke"
+      ],
+      "stdout_contains": ["Planned experiment"],
+      "files_exist": [".harness/research/experiment-plans/{latest_experiment_plan_id}/experiment_plan.json"]
+    },
+    {
+      "name": "refine",
+      "argv": [
+        "research",
+        "refine",
+        "--title",
+        "Promotion draft evidence section",
+        "--summary",
+        "Keep PR payloads bounded and explicit.",
+        "--source-hypothesis",
+        "{latest_hypothesis_id}",
+        "--target-files",
+        "packages/core/src/harness/core/pr_generation.py",
+        "--expected-metric",
+        "PR body includes evidence checklist.",
+        "--validation-plan",
+        "Run workflow smoke plus focused tests.",
+        "--risk-level",
+        "low",
+        "--mode",
+        "improve",
+        "--subsystem",
+        "promotion",
+        "--rationale",
+        "PRs need clearer proof.",
+        "--expected-outcome",
+        "Promotion artifacts are more reviewable."
+      ],
+      "stdout_contains": ["Created promotion candidate"],
+      "files_exist": [".harness/research/promotions/{latest_promotion_candidate_id}/promotion_candidate.json"]
+    },
+    {
+      "name": "queue",
+      "argv": ["research", "queue"],
+      "stdout_contains": ["promotion_candid", "promo-promotion-draft-evidence-section", "opp-tighten-research-promotion"]
+    },
+    {
+      "name": "candidate-show",
+      "argv": ["research", "candidate", "show", "{latest_promotion_candidate_id}"],
+      "stdout_contains": ["Promotion draft evidence section", "packages/core/src/harness/core/pr_generation.py"]
+    },
+    {
+      "name": "promote",
+      "argv": [
+        "research",
+        "promote",
+        "--candidate",
+        "{latest_promotion_candidate_id}",
+        "--no-create-branch"
+      ],
+      "stdout_contains": ["Prepared promotion draft"],
+      "files_exist": [
+        ".harness/research/promotions/{latest_promotion_candidate_id}/promotion_draft.json",
+        ".harness/research/promotions/{latest_promotion_candidate_id}/PR_BODY.md"
+      ],
+      "file_contains": [
+        {
+          "path": ".harness/research/promotions/{latest_promotion_candidate_id}/PR_BODY.md",
+          "substring": "## Evidence Checklist"
+        }
+      ]
+    },
+    {
+      "name": "pr-payload",
+      "argv": [
+        "research",
+        "pr",
+        "--candidate",
+        "{latest_promotion_candidate_id}"
+      ],
+      "stdout_contains": ["Prepared PR payload"]
+    },
+    {
+      "name": "archive",
+      "argv": [
+        "research",
+        "archive",
+        "--kind",
+        "hypothesis",
+        "--id",
+        "{latest_hypothesis_id}",
+        "--reason",
+        "covered by promotion candidate"
+      ],
+      "stdout_contains": ["Archived hypothesis:"],
+      "files_exist": [".harness/research/archive/{latest_archive_id}/archive.json"]
+    },
+    {
+      "name": "resurrect",
+      "argv": [
+        "research",
+        "resurrect",
+        "{latest_archive_id}"
+      ],
+      "stdout_contains": ["Resurrected"]
+    }
+  ]
+}

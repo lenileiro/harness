@@ -1,0 +1,187 @@
+{
+  "description": "Exercise research memory management: themes, unknowns, citations, archive, and resurrection.",
+  "steps": [
+    {
+      "name": "vision-update",
+      "argv": [
+        "vision",
+        "update",
+        "--title",
+        "Research memory harness",
+        "--summary",
+        "Keep durable records for themes, unknowns, and linked publications.",
+        "--theme",
+        "research-memory",
+        "--success-metric",
+        "reusable published findings"
+      ],
+      "stdout_contains": ["Updated vision"]
+    },
+    {
+      "name": "add-theme",
+      "argv": [
+        "research",
+        "add-theme",
+        "--title",
+        "Memory graph",
+        "--description",
+        "Model citations and archive decisions.",
+        "--priority",
+        "high"
+      ],
+      "stdout_contains": ["Added theme"]
+    },
+    {
+      "name": "list-themes",
+      "argv": ["research", "list-themes"],
+      "stdout_contains": ["Memory graph", "high", "active"]
+    },
+    {
+      "name": "create-unknown",
+      "argv": [
+        "research",
+        "create-unknown",
+        "--theme-id",
+        "{latest_theme_id}",
+        "--question",
+        "How should archived findings stay discoverable?",
+        "--why-it-matters",
+        "Research should compound instead of being lost.",
+        "--confidence",
+        "0.4",
+        "--related-sections",
+        "research,archive"
+      ],
+      "stdout_contains": ["Created unknown"]
+    },
+    {
+      "name": "list-unknowns",
+      "argv": ["research", "list-unknowns", "--theme-id", "{latest_theme_id}"],
+      "stdout_contains": ["unknown-how-should-archived-findings-sta", "theme-memory-graph-"]
+    },
+    {
+      "name": "open-rabbithole-a",
+      "argv": [
+        "research",
+        "open",
+        "--title",
+        "Archive indexing",
+        "--question",
+        "How should archived findings stay searchable?",
+        "--scope",
+        "Inspect search and archive metadata.",
+        "--theme",
+        "research-memory",
+        "--related-sections",
+        "archive,search"
+      ],
+      "stdout_contains": ["Opened rabbit hole"]
+    },
+    {
+      "name": "publish-a",
+      "argv": [
+        "research",
+        "publish",
+        "--rabbit-hole",
+        "{latest_rabbit_hole_id}",
+        "--title",
+        "Archive indexing findings",
+        "--summary",
+        "Archive metadata should remain searchable.",
+        "--claim",
+        "Archived items need stable metadata.",
+        "--evidence",
+        "Search over archive reasons is useful."
+      ],
+      "stdout_contains": ["Published"]
+    },
+    {
+      "name": "open-rabbithole-b",
+      "argv": [
+        "research",
+        "open",
+        "--title",
+        "Citation graph",
+        "--question",
+        "How should later work build on archival findings?",
+        "--scope",
+        "Inspect citations and reuse paths.",
+        "--theme",
+        "research-memory",
+        "--related-sections",
+        "citations,publications"
+      ],
+      "stdout_contains": ["Opened rabbit hole"]
+    },
+    {
+      "name": "publish-b",
+      "argv": [
+        "research",
+        "publish",
+        "--rabbit-hole",
+        "{latest_rabbit_hole_id}",
+        "--title",
+        "Citation graph findings",
+        "--summary",
+        "Later findings should cite earlier archival work.",
+        "--claim",
+        "Citations preserve research lineage.",
+        "--evidence",
+        "Linking publications keeps context reusable."
+      ],
+      "stdout_contains": ["Published"]
+    },
+    {
+      "name": "cite",
+      "argv": [
+        "research",
+        "cite",
+        "--source-publication",
+        "{latest_publication_id}",
+        "--target-publication",
+        "{previous_publication_id}",
+        "--relationship",
+        "builds_on",
+        "--note",
+        "Newer citation work builds on archive indexing."
+      ],
+      "stdout_contains": ["Recorded citation"]
+    },
+    {
+      "name": "search-citation",
+      "argv": ["research", "search", "builds_on", "--kind", "citation"],
+      "stdout_contains": ["citation", "->", "bui"]
+    },
+    {
+      "name": "show-publication",
+      "argv": ["research", "show-publication", "{latest_publication_id}"],
+      "stdout_contains": ["Citation graph findings", "Citations preserve research lineage."]
+    },
+    {
+      "name": "reject-unknown",
+      "argv": [
+        "research",
+        "reject",
+        "--kind",
+        "unknown",
+        "--id",
+        "{latest_unknown_id}",
+        "--reason",
+        "covered by publication pair",
+        "--note",
+        "promoted into durable findings"
+      ],
+      "stdout_contains": ["Rejected and archived unknown"]
+    },
+    {
+      "name": "list-archive",
+      "argv": ["research", "list-archive"],
+      "stdout_contains": ["archive-unknown-", "unknown-how-should-archived-findi"]
+    },
+    {
+      "name": "resurrect",
+      "argv": ["research", "resurrect", "{latest_archive_id}"],
+      "stdout_contains": ["Resurrected"]
+    }
+  ]
+}

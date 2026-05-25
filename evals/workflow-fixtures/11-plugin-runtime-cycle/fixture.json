@@ -1,0 +1,39 @@
+{
+  "description": "Exercise plugin-provided domain and experience providers through the real run path.",
+  "harness_bin": "fake-harness",
+  "steps": [
+    {
+      "name": "run-plugin-domain",
+      "argv": [
+        "run",
+        "review the docs patch",
+        "--domain",
+        "plugin-review",
+        "--provider",
+        "ollama",
+        "--model",
+        "test-model",
+        "--in-memory",
+        "--yes",
+        "--verify",
+        "none"
+      ],
+      "stdout_contains": ["plugin runtime ok"],
+      "files_exist": [".harness/runtime-plugin-capture.json"],
+      "file_contains": [
+        {
+          "path": ".harness/runtime-plugin-capture.json",
+          "substring": "\"read_file\""
+        },
+        {
+          "path": ".harness/runtime-plugin-capture.json",
+          "substring": "PLUGIN REVIEW SYSTEM PROMPT"
+        },
+        {
+          "path": ".harness/runtime-plugin-capture.json",
+          "substring": "plugin guidance from experience provider"
+        }
+      ]
+    }
+  ]
+}

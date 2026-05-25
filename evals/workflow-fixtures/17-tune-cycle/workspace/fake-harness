@@ -1,0 +1,39 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import json
+
+from harness.cli import __main__ as cli_main
+from harness.core import Capabilities, Done, Message, TextDelta
+
+
+class FakeAdapter:
+    name = "ollama"
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+    async def capabilities(self) -> Capabilities:
+        return Capabilities(streaming=True, tool_use=True)
+
+    async def cancel(self, session_id: str) -> None:
+        return None
+
+    def stream(self, **kwargs):
+        return self._stream()
+
+    async def _stream(self):
+        payload = json.dumps(
+            {
+                "new_prompt": "Prefer the minimum diff that fixes the issue.",
+                "rationale": "tighten scope discipline",
+            }
+        )
+        yield TextDelta(text=payload)
+        yield Done(final_message=Message(role="assistant", content=payload))
+
+
+cli_main.OllamaAdapter = FakeAdapter
+
+if __name__ == "__main__":
+    cli_main.app()

@@ -1,0 +1,145 @@
+{
+  "description": "Exercise inspiration intake, experiment execution, and portfolio reporting.",
+  "steps": [
+    {
+      "name": "ingest-web",
+      "argv": [
+        "research",
+        "ingest-web",
+        "--title",
+        "Verifier routing note",
+        "--url",
+        "https://example.com/verifier-routing",
+        "--summary",
+        "Scoped routing reduces verifier noise.",
+        "--themes",
+        "autonomous-improvement",
+        "--related-sections",
+        "verification,runtime"
+      ],
+      "stdout_contains": ["Recorded inspiration"],
+      "files_exist": [".harness/research/inspiration/{latest_inspiration_id}/inspiration.json"]
+    },
+    {
+      "name": "scout",
+      "argv": ["research", "scout", "--source-kind", "web"],
+      "stdout_contains": ["insp-verifier-routing-note", "web"]
+    },
+    {
+      "name": "roles",
+      "append_cwd": false,
+      "argv": ["research", "roles"],
+      "stdout_contains": ["section-investigator", "promotion-agent"]
+    },
+    {
+      "name": "create-opportunity",
+      "argv": [
+        "research",
+        "create-opportunity",
+        "--title",
+        "Compare workflow checks",
+        "--summary",
+        "Run simple experiment commands and record results.",
+        "--related-sections",
+        "research,experiments",
+        "--change-modes",
+        "build_on",
+        "--theme",
+        "autonomous-improvement"
+      ],
+      "stdout_contains": ["Created opportunity"],
+      "files_exist": [".harness/research/opportunities/{latest_opportunity_id}/opportunity.json"]
+    },
+    {
+      "name": "hypothesize",
+      "argv": [
+        "research",
+        "hypothesize",
+        "--opportunity",
+        "{latest_opportunity_id}",
+        "--claim",
+        "Simple deterministic checks are enough to validate experiment storage.",
+        "--expected-win",
+        "Broader workflow eval coverage.",
+        "--risk-level",
+        "low",
+        "--change-mode",
+        "build_on"
+      ],
+      "stdout_contains": ["Created hypothesis"],
+      "files_exist": [".harness/research/hypotheses/{latest_hypothesis_id}/hypothesis.json"]
+    },
+    {
+      "name": "plan-experiment",
+      "argv": [
+        "research",
+        "plan-experiment",
+        "--hypothesis",
+        "{latest_hypothesis_id}",
+        "--plan",
+        "Run one deterministic check command and one deterministic eval command.",
+        "--checks",
+        "python -c \"print('workflow-check')\"",
+        "--eval-slices",
+        "python -c \"print('workflow-eval')\""
+      ],
+      "stdout_contains": ["Planned experiment"],
+      "files_exist": [".harness/research/experiment-plans/{latest_experiment_plan_id}/experiment_plan.json"]
+    },
+    {
+      "name": "experiment-run",
+      "argv": [
+        "research",
+        "experiment",
+        "run",
+        "--plan",
+        "{latest_experiment_plan_id}"
+      ],
+      "stdout_contains": ["Experiment", "passed"],
+      "files_exist": [".harness/research/experiments/{latest_experiment_id}/result.json"]
+    },
+    {
+      "name": "experiment-show",
+      "argv": [
+        "research",
+        "experiment",
+        "show",
+        "{latest_experiment_id}"
+      ],
+      "stdout_contains": ["status=passed", "python -c"]
+    },
+    {
+      "name": "experiment-run-second",
+      "argv": [
+        "research",
+        "experiment",
+        "run",
+        "--plan",
+        "{latest_experiment_plan_id}"
+      ],
+      "stdout_contains": ["Experiment", "passed"],
+      "files_exist": [".harness/research/experiments/{latest_experiment_id}/result.json"]
+    },
+    {
+      "name": "experiment-compare",
+      "argv": [
+        "research",
+        "experiment",
+        "compare",
+        "{previous_experiment_id}",
+        "{latest_experiment_id}"
+      ],
+      "stdout_contains": ["status", "duration_seconds", "commands"]
+    },
+    {
+      "name": "portfolio",
+      "argv": ["research", "portfolio"],
+      "stdout_contains": ["experiments", "inspiration_notes"]
+    },
+    {
+      "name": "rebalance",
+      "argv": ["research", "rebalance"],
+      "stdout_contains": ["open_unknowns", "promotion_candidates"]
+    }
+  ]
+}

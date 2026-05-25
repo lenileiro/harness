@@ -357,6 +357,7 @@ def eval_validate() -> None:
     review_runner = _load_eval_module("review_runner", evals_root)
     research_runner = _load_eval_module("research_runner", evals_root)
     docs_runner = _load_eval_module("docs_runner", evals_root)
+    workflow_runner = _load_eval_module("workflow_runner", evals_root)
     calibration = _load_eval_module("calibration", evals_root)
 
     fixture_sets = ("fixtures", "fixtures-mutated", "fixtures-holdout")
@@ -458,6 +459,27 @@ def eval_validate() -> None:
         )
         raise typer.Exit(1)
 
+    workflow_fixtures = workflow_runner.discover_workflow_fixtures(evals_root)
+    if not workflow_fixtures:
+        console.print("[red]No workflow fixtures discovered in workflow-fixtures.[/red]")
+        raise typer.Exit(1)
+    workflow_suite_path = suites_dir / "workflow-smoke.txt"
+    if not workflow_suite_path.exists():
+        console.print(f"[red]Missing suite file:[/red] {workflow_suite_path}")
+        raise typer.Exit(1)
+    workflow_members = {
+        line.strip()
+        for line in workflow_suite_path.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.strip().startswith("#")
+    }
+    workflow_names = {fixture.name for fixture in workflow_fixtures}
+    missing_workflow = sorted(workflow_members - workflow_names)
+    if missing_workflow:
+        console.print(
+            "[red]Workflow suite references unknown fixtures:[/red] " + ", ".join(missing_workflow)
+        )
+        raise typer.Exit(1)
+
     labels = calibration.load_gold_labels(evals_root / "gold")
     if not labels:
         console.print("[red]No gold labels found.[/red]")
@@ -484,6 +506,7 @@ def eval_validate() -> None:
     table.add_row("review-fixtures", str(len(review_fixtures)))
     table.add_row("research-fixtures", str(len(research_fixtures)))
     table.add_row("docs-fixtures", str(len(docs_fixtures)))
+    table.add_row("workflow-fixtures", str(len(workflow_fixtures)))
     table.add_row("gold labels", str(len(labels)))
     console.print(table)
 
@@ -888,6 +911,118 @@ def eval_docs_audit(
             str(result.findings_count),
             str(result.matched_expectations),
             str(result.matched_topics),
+            f"{result.duration_seconds:.1f}",
+        )
+    console.print(table)
+    console.print(f"[dim]report[/dim] {report_path}")
+
+
+@eval_app.command("workflow")
+def eval_workflow(
+    fixture_name: Annotated[
+        str | None,
+        typer.Argument(
+            help="Workflow fixture to run (e.g. 01-research-publication-cycle). Omit to run all."
+        ),
+    ] = None,
+    suite: Annotated[
+        str | None,
+        typer.Option(
+            "--suite",
+            help="Optional workflow suite file under evals/suites/ (for example: workflow-smoke).",
+        ),
+    ] = None,
+    output_dir: Annotated[
+        Path | None,
+        typer.Option(
+            "--output-dir",
+            help="Override the run artifact directory (default: evals/runs/<timestamp>-workflow).",
+        ),
+    ] = None,
+    timeout: Annotated[
+        int,
+        typer.Option("--timeout", help="Workflow command timeout per fixture in seconds."),
+    ] = 180,
+    json_out: Annotated[
+        bool,
+        typer.Option("--json-out", help="Print the full machine-readable workflow eval report."),
+    ] = False,
+) -> None:
+    """Run deterministic workflow eval fixtures against local CLI feature flows."""
+    evals_root = _find_evals_root()
+    if evals_root is None:
+        console.print("[red]No evals/fixtures/ directory found — run from the harness repo.[/red]")
+        raise typer.Exit(1)
+
+    workflow_runner = _load_eval_module("workflow_runner", evals_root)
+    fixtures = workflow_runner.discover_workflow_fixtures(evals_root)
+    if suite:
+        suite_path = evals_root / "suites" / f"{suite}.txt"
+        if not suite_path.exists():
+            console.print(f"[red]Suite not found:[/red] {suite_path}")
+            raise typer.Exit(1)
+        wanted = {
+            line.strip()
+            for line in suite_path.read_text(encoding="utf-8").splitlines()
+            if line.strip() and not line.strip().startswith("#")
+        }
+        fixtures = [fixture for fixture in fixtures if fixture.name in wanted]
+    if fixture_name:
+        fixtures = [fixture for fixture in fixtures if fixture.name == fixture_name]
+        if not fixtures:
+            console.print(f"[red]Workflow fixture not found:[/red] {fixture_name}")
+            raise typer.Exit(1)
+    if not fixtures:
+        console.print("[dim]No workflow fixtures to run.[/dim]")
+        return
+
+    run_id = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ") + "-workflow"
+    artifact_root = output_dir or (evals_root / "runs" / run_id)
+    artifact_root.mkdir(parents=True, exist_ok=True)
+
+    results: list[Any] = []
+    for fixture in fixtures:
+        console.print(f"\n[bold blue]▶ workflow {fixture.name}[/bold blue]")
+        result = workflow_runner.run_workflow_fixture(
+            fixture,
+            artifact_dir=artifact_root / fixture.name,
+            timeout=timeout,
+        )
+        results.append(result)
+        pass_label = "[green]PASS[/green]" if result.passed else "[red]FAIL[/red]"
+        console.print(
+            f"  {pass_label} steps={result.steps_passed}/{result.steps_total} "
+            f"secs={result.duration_seconds:.1f}"
+        )
+        if result.step_results and not result.passed:
+            failed_step = next((step for step in result.step_results if not step.passed), None)
+            if failed_step is not None and failed_step.failures:
+                console.print("  [dim]failed[/dim] " + ", ".join(failed_step.failures))
+        if result.artifact_dir is not None:
+            console.print(f"  [dim]artifacts[/dim] {result.artifact_dir}")
+
+    report = workflow_runner.WorkflowEvalReport(
+        run_id=run_id,
+        artifact_root=artifact_root,
+        results=results,
+    )
+    report_path = artifact_root / "report.json"
+    report_path.write_text(json.dumps(report.to_dict(), indent=2), encoding="utf-8")
+
+    if json_out:
+        console.print(json.dumps(report.to_dict(), indent=2))
+        return
+
+    table = Table(show_header=True, header_style="bold", title="Workflow eval")
+    table.add_column("Fixture", no_wrap=True)
+    table.add_column("Pass?", justify="center")
+    table.add_column("Steps", justify="right")
+    table.add_column("Seconds", justify="right")
+    for result in results:
+        table.add_row(
+            result.fixture_name,
+            "[green]PASS[/green]" if result.passed else "[red]FAIL[/red]",
+            f"{result.steps_passed}/{result.steps_total}",
             f"{result.duration_seconds:.1f}",
         )
     console.print(table)

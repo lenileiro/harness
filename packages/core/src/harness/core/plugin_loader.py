@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import importlib
 import os
+import sys
 import tomllib
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from importlib.metadata import entry_points
 from pathlib import Path
@@ -295,6 +297,63 @@ def _instantiate_provider(
     return instance
 
 
+def _plugin_import_roots(plugin: ProviderPlugin) -> list[Path]:
+    path = plugin.path
+    if path is None:
+        return []
+
+    roots: list[Path] = [path.parent]
+    path_parts = path.parts
+
+    if path.name == "plugin.toml":
+        roots.append(path.parent.parent)
+
+    if plugin.source == "workspace":
+        try:
+            harness_index = path_parts.index(".harness")
+        except ValueError:
+            pass
+        else:
+            if harness_index > 0:
+                roots.append(Path(*path_parts[:harness_index]))
+    elif plugin.source == "user":
+        try:
+            harness_index = path_parts.index("harness")
+        except ValueError:
+            pass
+        else:
+            if harness_index > 0:
+                roots.append(Path(*path_parts[: harness_index + 1]))
+
+    ordered: list[Path] = []
+    seen: set[Path] = set()
+    for root in roots:
+        resolved = root.resolve()
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        ordered.append(resolved)
+    return ordered
+
+
+@contextmanager
+def _plugin_import_context(plugin: ProviderPlugin):
+    roots = _plugin_import_roots(plugin)
+    inserted: list[str] = []
+    try:
+        for root in reversed(roots):
+            root_str = str(root)
+            if root_str in sys.path:
+                continue
+            sys.path.insert(0, root_str)
+            inserted.append(root_str)
+        yield
+    finally:
+        for root_str in inserted:
+            with suppress(ValueError):
+                sys.path.remove(root_str)
+
+
 def _load_provider(
     plugin: ProviderPlugin,
     *,
@@ -302,23 +361,24 @@ def _load_provider(
     label: str,
 ) -> object:
     importlib.invalidate_caches()
-    if ":" in plugin.provider_ref:
-        module_name, attr_name = plugin.provider_ref.split(":", 1)
-        module = importlib.import_module(module_name)
-        target = getattr(module, attr_name)
+    with _plugin_import_context(plugin):
+        if ":" in plugin.provider_ref:
+            module_name, attr_name = plugin.provider_ref.split(":", 1)
+            module = importlib.import_module(module_name)
+            target = getattr(module, attr_name)
+            return _instantiate_provider(
+                target,
+                provider_ref=plugin.provider_ref,
+                expected_type=expected_type,
+                label=label,
+            )
+        module = importlib.import_module(plugin.provider_ref)
         return _instantiate_provider(
-            target,
+            module,
             provider_ref=plugin.provider_ref,
             expected_type=expected_type,
             label=label,
         )
-    module = importlib.import_module(plugin.provider_ref)
-    return _instantiate_provider(
-        module,
-        provider_ref=plugin.provider_ref,
-        expected_type=expected_type,
-        label=label,
-    )
 
 
 def load_tool_provider(plugin: ToolProviderPlugin) -> ToolProvider:

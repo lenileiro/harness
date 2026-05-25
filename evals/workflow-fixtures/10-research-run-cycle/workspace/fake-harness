@@ -1,0 +1,72 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import asyncio
+import json
+import sys
+from pathlib import Path
+
+from harness.cli import __main__ as cli_main
+from harness.cli import research_commands as research_cli
+from harness.cli import run_commands as run_cli
+from harness.cli.config import HarnessConfig
+
+
+async def _fake_run_once(**kwargs: object) -> str:
+    cwd = Path(str(kwargs["cwd"]))
+    capture = cwd / ".harness" / "research-run-capture.json"
+    capture.parent.mkdir(parents=True, exist_ok=True)
+    serializable: dict[str, object] = {}
+    for key, value in kwargs.items():
+        if isinstance(value, Path):
+            serializable[key] = str(value)
+        elif isinstance(value, str | int | float | bool) or value is None:
+            serializable[key] = value
+        elif isinstance(value, list | tuple):
+            serializable[key] = [str(item) if isinstance(item, Path) else item for item in value]
+        elif isinstance(value, dict):
+            serializable[key] = {
+                str(item_key): (str(item_value) if isinstance(item_value, Path) else item_value)
+                for item_key, item_value in value.items()
+            }
+        else:
+            serializable[key] = repr(value)
+    capture.write_text(json.dumps(serializable, indent=2, sort_keys=True), encoding="utf-8")
+    return json.dumps(
+        {
+            "summary": "Verifier routing and promotion evidence should stay aligned.",
+            "findings": [
+                "Scoped verifier routing lowers noise.",
+                "Promotion artifacts need explicit evidence sections.",
+            ],
+            "open_questions": [
+                "How strict should promotion evidence be?",
+            ],
+            "sources": [
+                {
+                    "title": "verification routing",
+                    "url": "packages/core/src/harness/core/verification.py",
+                    "excerpt": "Scoped routing reduces verifier noise.",
+                },
+                {
+                    "title": "promotion drafting",
+                    "url": "packages/core/src/harness/core/pr_generation.py",
+                    "excerpt": "Evidence sections clarify promotion candidates.",
+                },
+            ],
+        }
+    )
+
+
+def _run_async(awaitable: object) -> object:
+    return asyncio.run(awaitable)  # type: ignore[arg-type]
+
+
+if len(sys.argv) >= 3 and sys.argv[1] == "research" and sys.argv[2] == "run":
+    run_cli.run_once = _fake_run_once
+    research_cli._resolve_chain = lambda **_kwargs: ["fake"]  # type: ignore[assignment]
+    research_cli._load_cli_config = lambda _path: HarnessConfig()  # type: ignore[assignment]
+    research_cli._run_async = _run_async  # type: ignore[assignment]
+
+if __name__ == "__main__":
+    cli_main.app()

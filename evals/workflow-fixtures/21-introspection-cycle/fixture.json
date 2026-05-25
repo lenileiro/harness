@@ -1,0 +1,27 @@
+{
+  "description": "Exercise provider and tool introspection commands through the real CLI.",
+  "steps": [
+    {
+      "name": "providers-list",
+      "argv": ["providers", "list"],
+      "append_cwd": false,
+      "stdout_contains": ["ollama", "openrouter"]
+    },
+    {
+      "name": "providers-capabilities",
+      "argv": ["providers", "capabilities", "ollama"],
+      "append_cwd": false,
+      "stdout_contains": ["streaming", "tool_use", "structured_output"]
+    },
+    {
+      "name": "tools-list-default",
+      "argv": ["tools", "list"],
+      "stdout_contains": ["read_file", "write_file", "shell", "auto", "prompt"]
+    },
+    {
+      "name": "tools-list-config-override",
+      "argv": ["tools", "list", "--config", "config.toml"],
+      "stdout_contains": ["shell", "deny"]
+    }
+  ]
+}
