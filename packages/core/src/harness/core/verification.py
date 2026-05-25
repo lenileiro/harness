@@ -51,6 +51,7 @@ ConsensusVerifier = _guards.ConsensusVerifier
 ChainedVerifier = _structural.ChainedVerifier
 ShellVerifier = _structural.ShellVerifier
 VerifyBeforeDoneVerifier = _structural.VerifyBeforeDoneVerifier
+ResearchPromotionFlowVerifier = _structural.ResearchPromotionFlowVerifier
 MinimalFixVerifier = _structural.MinimalFixVerifier
 PhaseGateVerifier = _structural.PhaseGateVerifier
 TestsBeforeEditVerifier = _structural.TestsBeforeEditVerifier
@@ -78,6 +79,7 @@ __all__ = [
     "NegativeConstraintVerifier",
     "PhaseGateVerifier",
     "PromptSurfaceRevertVerifier",
+    "ResearchPromotionFlowVerifier",
     "RuleVerifier",
     "ShellVerifier",
     "StateVerifier",

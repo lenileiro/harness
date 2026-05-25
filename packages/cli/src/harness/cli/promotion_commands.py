@@ -82,11 +82,19 @@ def pr_command(
         raise typer.BadParameter("--open requires --push so the branch exists on the remote")
     draft = build_promotion_draft(candidate, base_branch=base_branch)
     candidate_dir = store.promotion_candidates_dir / candidate.id
-    _json_path, body_path = write_promotion_draft(draft=draft, target_dir=candidate_dir)
     if push:
+        ensure_branch(cwd=working_dir, branch_name=draft.branch_name, base_branch=base_branch)
+    json_path, body_path = write_promotion_draft(draft=draft, target_dir=candidate_dir)
+    artifact_paths = (
+        str(json_path.relative_to(working_dir)),
+        str(body_path.relative_to(working_dir)),
+    )
+    if push:
+        commit_paths(cwd=working_dir, message=draft.commit_message, paths=artifact_paths)
         push_branch(cwd=working_dir, branch_name=draft.branch_name)
+    pr_url: str | None = None
     if open_pr:
-        create_pull_request(
+        pr_url = create_pull_request(
             cwd=working_dir,
             title=draft.pr_title,
             body_path=body_path,
@@ -98,6 +106,8 @@ def pr_command(
     console.print(f"title={draft.pr_title}")
     console.print(f"branch={draft.branch_name}")
     console.print(f"body={body_path}")
+    if pr_url:
+        console.print(f"pr_url={pr_url}")
 
 
 __all__ = ["pr_command", "promote_command", "show_candidate_command"]

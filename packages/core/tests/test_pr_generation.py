@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 from harness.core.pr_generation import (
     branch_name_for_candidate,
     build_promotion_draft,
+    create_pull_request,
     write_promotion_draft,
 )
 from harness.core.promotion_candidates import PromotionCandidate
@@ -51,3 +53,30 @@ def test_write_promotion_draft_persists_json_and_markdown(tmp_path: Path) -> Non
     assert json_path.is_file()
     assert body_path.is_file()
     assert "Promotion Candidate" in body_path.read_text(encoding="utf-8")
+
+
+def test_create_pull_request_returns_existing_pr_url(monkeypatch, tmp_path: Path) -> None:
+    def fake_run(*args, **kwargs):  # type: ignore[no-untyped-def]
+        raise subprocess.CalledProcessError(
+            1,
+            ["gh", "pr", "create"],
+            output="",
+            stderr=(
+                'a pull request for branch "research/demo" into branch "main" already exists:\n'
+                "https://github.com/example/repo/pull/123\n"
+            ),
+        )
+
+    monkeypatch.setattr("harness.core.pr_generation.subprocess.run", fake_run)
+
+    body_path = tmp_path / "PR_BODY.md"
+    body_path.write_text("demo", encoding="utf-8")
+    pr_url = create_pull_request(
+        cwd=tmp_path,
+        title="demo",
+        body_path=body_path,
+        base_branch="main",
+        head_branch="research/demo",
+        draft=True,
+    )
+    assert pr_url == "https://github.com/example/repo/pull/123"
