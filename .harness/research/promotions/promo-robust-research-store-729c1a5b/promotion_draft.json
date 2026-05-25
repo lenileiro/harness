@@ -1,0 +1,8 @@
+{
+  "candidate_id": "promo-robust-research-store-729c1a5b",
+  "branch_name": "research/promo-robust-research-store-729c1a5b",
+  "commit_message": "research: promote Robust Research Store",
+  "pr_title": "research: Robust Research Store",
+  "pr_body": "## Promotion Candidate\n- candidate: `promo-robust-research-store-729c1a5b`\n- branch: `research/promo-robust-research-store-729c1a5b`\n- base: `main`\n- risk: `low`\n\n## Summary\nImplement the hypothesis for more robust ResearchStore.\n\n## Source Hypotheses\n- `hyp-adding-comprehensive-error-handl-607c55ff`\n\n## Evidence Checklist\n- [ ] Targeted tests passed\n- [ ] Relevant eval slices passed\n- [ ] No unintended file-scope expansion\n- [ ] Risk remains acceptable for review\n",
+  "base_branch": "main"
+}
