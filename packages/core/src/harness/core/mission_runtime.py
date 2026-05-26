@@ -589,6 +589,28 @@ def write_mission_scheduled_run_record(
     return target
 
 
+def run_scheduled_mission_burst(
+    *,
+    store: MissionStore,
+    cwd: Path,
+    mission_id: str,
+    max_steps: int = 20,
+    auto_complete: bool = False,
+) -> tuple[MissionBurstResult, Path]:
+    result = execute_mission_burst(
+        store=store,
+        mission_id=mission_id,
+        max_steps=max_steps,
+        auto_complete=auto_complete,
+    )
+    record_dir = write_mission_scheduled_run_record(
+        store=store,
+        cwd=cwd,
+        result=result,
+    )
+    return result, record_dir
+
+
 __all__ = [
     "MissionBurstResult",
     "MissionExecutionResult",
@@ -599,5 +621,6 @@ __all__ = [
     "execute_mission_burst",
     "execute_mission_milestone",
     "execute_next_mission_feature",
+    "run_scheduled_mission_burst",
     "write_mission_scheduled_run_record",
 ]

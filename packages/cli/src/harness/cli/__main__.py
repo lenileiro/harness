@@ -69,6 +69,7 @@ from harness.cli.config import HarnessConfig, default_config_path
 from harness.cli.docs_commands import docs_audit_command as _docs_audit_command
 from harness.cli.evals import eval_app
 from harness.cli.experience_commands import experience_app
+from harness.cli.gateway_commands import gateway_app
 from harness.cli.introspection import plugins_app, providers_app, tools_app
 from harness.cli.lab_commands import lab_list_command as _lab_list_command
 from harness.cli.lab_commands import lab_resume_command as _lab_resume_command
@@ -139,6 +140,7 @@ from harness.cli.runtime_helpers import (
     resolve_runtime_strategy as _resolve_runtime_strategy,
 )
 from harness.cli.runtime_helpers import workspace_db
+from harness.cli.scheduler_commands import scheduler_app
 from harness.cli.sessions_commands import (
     sessions_diff_command as _sessions_diff_command,
 )
@@ -244,7 +246,9 @@ app.add_typer(sessions_app, name="sessions")
 app.add_typer(providers_app, name="providers")
 app.add_typer(tools_app, name="tools")
 app.add_typer(plugins_app, name="plugins")
+app.add_typer(gateway_app, name="gateway")
 app.add_typer(mission_app, name="mission")
+app.add_typer(scheduler_app, name="scheduler")
 app.add_typer(vision_app, name="vision")
 app.add_typer(research_app, name="research")
 

@@ -16,11 +16,12 @@ from harness.core.extensions import (
     CriticProvider,
     DomainProfileProvider,
     ExperienceProvider,
+    HookProvider,
     ToolProvider,
     VerifierProvider,
 )
 
-PluginKind = Literal["tool", "experience", "domain_profile", "verifier", "critic"]
+PluginKind = Literal["tool", "experience", "domain_profile", "verifier", "critic", "hook"]
 PluginSource = Literal["bundled", "workspace", "user", "entry_point"]
 
 _ENTRY_POINT_GROUPS: dict[PluginKind, str] = {
@@ -29,6 +30,7 @@ _ENTRY_POINT_GROUPS: dict[PluginKind, str] = {
     "domain_profile": "harness.domain_profile_providers",
     "verifier": "harness.verifier_providers",
     "critic": "harness.critic_providers",
+    "hook": "harness.hook_providers",
 }
 _VALID_KINDS = tuple(sorted(_ENTRY_POINT_GROUPS))
 
@@ -51,6 +53,7 @@ ExperienceProviderPlugin = ProviderPlugin
 DomainProfileProviderPlugin = ProviderPlugin
 VerifierProviderPlugin = ProviderPlugin
 CriticProviderPlugin = ProviderPlugin
+HookProviderPlugin = ProviderPlugin
 
 
 def default_user_plugins_dir() -> Path:
@@ -284,6 +287,26 @@ def resolve_critic_provider_plugins(
     )
 
 
+def resolve_hook_provider_plugins(
+    *,
+    cwd: Path,
+    bundled: list[HookProviderPlugin] | None = None,
+    enabled: set[str] | None = None,
+    disabled: set[str] | None = None,
+    include_entry_points: bool = False,
+    user_plugins_dir: Path | None = None,
+) -> list[HookProviderPlugin]:
+    return resolve_provider_plugins(
+        cwd=cwd,
+        kind="hook",
+        bundled=bundled,
+        enabled=enabled,
+        disabled=disabled,
+        include_entry_points=include_entry_points,
+        user_plugins_dir=user_plugins_dir,
+    )
+
+
 def _instantiate_provider(
     candidate: object,
     *,
@@ -417,6 +440,14 @@ def load_critic_provider(plugin: CriticProviderPlugin) -> CriticProvider:
     )
 
 
+def load_hook_provider(plugin: HookProviderPlugin) -> HookProvider:
+    return _load_provider(  # type: ignore[return-value]
+        plugin,
+        expected_type=HookProvider,
+        label="HookProvider",
+    )
+
+
 def load_provider_plugin(plugin: ProviderPlugin) -> object:
     if plugin.kind == "tool":
         return load_tool_provider(plugin)
@@ -428,6 +459,8 @@ def load_provider_plugin(plugin: ProviderPlugin) -> object:
         return load_verifier_provider(plugin)
     if plugin.kind == "critic":
         return load_critic_provider(plugin)
+    if plugin.kind == "hook":
+        return load_hook_provider(plugin)
     raise ValueError(f"unsupported plugin kind: {plugin.kind}")
 
 
@@ -539,10 +572,31 @@ def load_critic_providers(
     return [load_critic_provider(plugin) for plugin in plugins]
 
 
+def load_hook_providers(
+    *,
+    cwd: Path,
+    bundled: list[HookProviderPlugin] | None = None,
+    enabled: set[str] | None = None,
+    disabled: set[str] | None = None,
+    include_entry_points: bool = False,
+    user_plugins_dir: Path | None = None,
+) -> list[HookProvider]:
+    plugins = resolve_hook_provider_plugins(
+        cwd=cwd,
+        bundled=bundled,
+        enabled=enabled,
+        disabled=disabled,
+        include_entry_points=include_entry_points,
+        user_plugins_dir=user_plugins_dir,
+    )
+    return [load_hook_provider(plugin) for plugin in plugins]
+
+
 __all__ = [
     "CriticProviderPlugin",
     "DomainProfileProviderPlugin",
     "ExperienceProviderPlugin",
+    "HookProviderPlugin",
     "PluginKind",
     "PluginSource",
     "ProviderPlugin",
@@ -557,6 +611,8 @@ __all__ = [
     "load_domain_profile_providers",
     "load_experience_provider",
     "load_experience_providers",
+    "load_hook_provider",
+    "load_hook_providers",
     "load_provider_plugin",
     "load_tool_provider",
     "load_tool_providers",
@@ -565,6 +621,7 @@ __all__ = [
     "resolve_critic_provider_plugins",
     "resolve_domain_profile_provider_plugins",
     "resolve_experience_provider_plugins",
+    "resolve_hook_provider_plugins",
     "resolve_provider_plugins",
     "resolve_tool_provider_plugins",
     "resolve_verifier_provider_plugins",

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from typer.testing import CliRunner
@@ -1013,3 +1014,161 @@ def test_mission_can_emit_research_opportunity_and_candidate(tmp_path) -> None:
     candidates = research_store.list_promotion_candidates()
     assert len(candidates) == 1
     assert candidates[0].mission_feature_ids == (feature_id,)
+
+
+def test_scheduler_add_mission_run_now_and_list_runs(tmp_path) -> None:
+    runner = CliRunner()
+
+    created = runner.invoke(
+        cli_main.app,
+        [
+            "mission",
+            "create",
+            "--title",
+            "Mission scheduler demo",
+            "--goal",
+            "Run a scheduled mission job.",
+            "--cwd",
+            str(tmp_path),
+        ],
+    )
+    assert created.exit_code == 0, created.stdout
+    mission_id = next((tmp_path / ".harness" / "missions" / "missions").iterdir()).name
+
+    planned = runner.invoke(
+        cli_main.app,
+        [
+            "mission",
+            "plan",
+            "--mission",
+            mission_id,
+            "--contract-summary",
+            "Assertions define correctness before implementation.",
+            "--milestone",
+            "m1|Milestone 1|Ship a single validated slice.",
+            "--assertion",
+            "a1|Mission runs|The first mission feature can execute.|behavior|Run the mission loop.",
+            "--feature",
+            "f1|m1|Implement slice|Add the first mission slice.|worker|app/demo.py||a1",
+            "--cwd",
+            str(tmp_path),
+        ],
+    )
+    assert planned.exit_code == 0, planned.stdout
+
+    approved = runner.invoke(
+        cli_main.app,
+        ["mission", "approve", "--mission", mission_id, "--cwd", str(tmp_path)],
+    )
+    assert approved.exit_code == 0, approved.stdout
+
+    added = runner.invoke(
+        cli_main.app,
+        [
+            "scheduler",
+            "add-mission",
+            "--mission",
+            mission_id,
+            "--at",
+            "2026-05-26T12:00:00Z",
+            "--cwd",
+            str(tmp_path),
+        ],
+    )
+    assert added.exit_code == 0, added.stdout
+
+    jobs_root = tmp_path / ".harness" / "scheduler" / "jobs"
+    job_id = next(jobs_root.iterdir()).name
+
+    listed = runner.invoke(
+        cli_main.app,
+        ["scheduler", "list", "--cwd", str(tmp_path), "--json"],
+    )
+    assert listed.exit_code == 0, listed.stdout
+    listed_payload = json.loads(listed.stdout)
+    assert listed_payload[0]["kind"] == "mission.schedule_once"
+
+    ran = runner.invoke(
+        cli_main.app,
+        ["scheduler", "run-now", job_id, "--cwd", str(tmp_path)],
+    )
+    assert ran.exit_code == 0, ran.stdout
+    assert "mission.schedule_once" in ran.stdout
+
+    runs = runner.invoke(
+        cli_main.app,
+        ["scheduler", "list-runs", "--job", job_id, "--cwd", str(tmp_path), "--json"],
+    )
+    assert runs.exit_code == 0, runs.stdout
+    runs_payload = json.loads(runs.stdout)
+    assert runs_payload[0]["job_id"] == job_id
+
+
+def test_scheduler_start_once_executes_research_job_with_pause_resume(tmp_path) -> None:
+    runner = CliRunner()
+
+    created = runner.invoke(
+        cli_main.app,
+        [
+            "research",
+            "create-opportunity",
+            "--title",
+            "Scheduler research demo",
+            "--summary",
+            "Use the scheduler to advance research once.",
+            "--related-sections",
+            "README.md",
+            "--change-modes",
+            "improve",
+            "--theme",
+            "scheduler",
+            "--cwd",
+            str(tmp_path),
+        ],
+    )
+    assert created.exit_code == 0, created.stdout
+
+    due_at = (datetime.now(UTC) - timedelta(minutes=1)).isoformat(timespec="seconds")
+    added = runner.invoke(
+        cli_main.app,
+        [
+            "scheduler",
+            "add-research",
+            "--at",
+            due_at,
+            "--cwd",
+            str(tmp_path),
+        ],
+    )
+    assert added.exit_code == 0, added.stdout
+
+    jobs_root = tmp_path / ".harness" / "scheduler" / "jobs"
+    job_id = next(jobs_root.iterdir()).name
+
+    paused = runner.invoke(
+        cli_main.app,
+        ["scheduler", "pause", job_id, "--cwd", str(tmp_path)],
+    )
+    assert paused.exit_code == 0, paused.stdout
+
+    resumed = runner.invoke(
+        cli_main.app,
+        ["scheduler", "resume", job_id, "--cwd", str(tmp_path)],
+    )
+    assert resumed.exit_code == 0, resumed.stdout
+
+    started = runner.invoke(
+        cli_main.app,
+        ["scheduler", "start", "--once", "--cwd", str(tmp_path), "--json"],
+    )
+    assert started.exit_code == 0, started.stdout
+    payload = json.loads(started.stdout)
+    assert payload["jobs_executed"] == 1
+
+    runs = runner.invoke(
+        cli_main.app,
+        ["scheduler", "list-runs", "--job", job_id, "--cwd", str(tmp_path), "--json"],
+    )
+    assert runs.exit_code == 0, runs.stdout
+    runs_payload = json.loads(runs.stdout)
+    assert runs_payload[0]["job_id"] == job_id

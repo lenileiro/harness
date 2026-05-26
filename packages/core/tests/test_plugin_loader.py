@@ -4,9 +4,10 @@ from pathlib import Path
 
 import pytest
 
-from harness.core.extensions import ToolProvider
+from harness.core.extensions import HookProvider, ToolProvider
 from harness.core.plugin_loader import (
     CriticProviderPlugin,
+    HookProviderPlugin,
     ToolProviderPlugin,
     VerifierProviderPlugin,
     discover_entry_point_plugins,
@@ -14,12 +15,14 @@ from harness.core.plugin_loader import (
     load_critic_provider,
     load_domain_profile_provider,
     load_experience_provider,
+    load_hook_provider,
     load_provider_plugin,
     load_tool_provider,
     load_verifier_provider,
     resolve_critic_provider_plugins,
     resolve_domain_profile_provider_plugins,
     resolve_experience_provider_plugins,
+    resolve_hook_provider_plugins,
     resolve_tool_provider_plugins,
     resolve_verifier_provider_plugins,
     validate_provider_plugin,
@@ -147,6 +150,18 @@ def test_resolve_non_tool_plugins_respects_manifest_kind(tmp_path: Path) -> None
     assert [plugin.name for plugin in domains] == ["review-pack"]
     assert [plugin.name for plugin in verifiers] == ["verify-pack"]
     assert [plugin.name for plugin in critics] == ["critic-pack"]
+
+
+def test_resolve_hook_provider_plugins_respects_manifest_kind(tmp_path: Path) -> None:
+    workspace_plugins = tmp_path / ".harness" / "plugins"
+    workspace_plugins.mkdir(parents=True)
+    (workspace_plugins / "hook.toml").write_text(
+        'name = "hook-pack"\nkind = "hook"\nprovider = "hooks:Provider"\n',
+        encoding="utf-8",
+    )
+
+    hooks = resolve_hook_provider_plugins(cwd=tmp_path)
+    assert [plugin.name for plugin in hooks] == ["hook-pack"]
 
 
 def test_load_tool_provider_imports_provider(
@@ -287,6 +302,52 @@ class DemoProvider:
     critic_provider = load_critic_provider(critic_plugin)
     assert len(verifier_provider.verifiers()) == 1
     assert len(critic_provider.critics()) == 1
+
+
+def test_load_hook_provider(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    (tmp_path / "hook_provider.py").write_text(
+        """
+class DemoHook:
+    def on_scheduler_tick(self, **kwargs):
+        return None
+
+    def on_job_started(self, **kwargs):
+        return None
+
+    def on_job_completed(self, **kwargs):
+        return None
+
+    def on_gateway_message(self, **kwargs):
+        return None
+
+    def on_gateway_reply(self, **kwargs):
+        return None
+
+    def on_approval_requested(self, **kwargs):
+        return None
+
+    def on_approval_resolved(self, **kwargs):
+        return None
+
+
+class DemoProvider:
+    def hooks(self):
+        return [DemoHook()]
+""",
+        encoding="utf-8",
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+
+    hook_plugin = HookProviderPlugin(
+        name="hook",
+        provider_ref="hook_provider:DemoProvider",
+        source="workspace",
+        kind="hook",
+    )
+
+    hook_provider = load_hook_provider(hook_plugin)
+    assert isinstance(hook_provider, HookProvider)
+    assert len(hook_provider.hooks()) == 1
 
 
 def test_discover_entry_point_plugins_can_be_enabled(monkeypatch: pytest.MonkeyPatch) -> None:

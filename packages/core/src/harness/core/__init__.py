@@ -90,6 +90,15 @@ from harness.core.flow_checkpoint import (
     FlowCheckpoint,
     InMemoryCheckpointStore,
 )
+from harness.core.gateway_models import (
+    GatewayMessage,
+    GatewayReply,
+    GatewaySessionBinding,
+    default_gateway_root,
+)
+from harness.core.gateway_router import dispatch_gateway_message
+from harness.core.gateway_sessions import GatewaySessionStore
+from harness.core.gateway_whatsapp import extract_whatsapp_messages, send_whatsapp_text_message
 from harness.core.guardrails import Guardrail, GuardrailMode, GuardrailResult
 from harness.core.handoff import HandoffTool
 from harness.core.inspiration import ExternalSource, InspirationNote
@@ -122,6 +131,7 @@ from harness.core.mission_runtime import (
     execute_mission_burst,
     execute_mission_milestone,
     execute_next_mission_feature,
+    run_scheduled_mission_burst,
     write_mission_scheduled_run_record,
 )
 from harness.core.mission_store import MissionSearchHit, MissionStore, default_mission_root
@@ -223,6 +233,23 @@ from harness.core.role_contract import (
     validate_outputs,
 )
 from harness.core.runtime import Agent, fork_session
+from harness.core.scheduler_models import (
+    SchedulerJob,
+    SchedulerRunRecord,
+    ScheduleSpec,
+    default_scheduler_root,
+)
+from harness.core.scheduler_runtime import (
+    SchedulerTickResult,
+    compute_next_run_at,
+    create_scheduler_job,
+    parse_datetime_text,
+    parse_schedule_spec,
+    run_due_scheduler_jobs,
+    run_scheduler_job,
+    run_scheduler_loop,
+)
+from harness.core.scheduler_store import SchedulerStore
 from harness.core.schemas import (
     ApprovalDecision,
     Capabilities,
@@ -240,6 +267,12 @@ from harness.core.schemas import (
     VerificationResult,
 )
 from harness.core.secret_redaction import has_secrets, redact_secrets
+from harness.core.shared_queue import (
+    SharedWorkItem,
+    build_mission_work_queue,
+    build_research_work_queue,
+    build_shared_work_queue,
+)
 from harness.core.shell_safety import check_dangerous_command
 from harness.core.storage import Storage
 from harness.core.telemetry import configure_logging, get_logger, span
@@ -370,6 +403,10 @@ __all__ = [
     "Flow",
     "FlowCheckpoint",
     "FlowRunner",
+    "GatewayMessage",
+    "GatewayReply",
+    "GatewaySessionBinding",
+    "GatewaySessionStore",
     "Guardrail",
     "GuardrailMode",
     "GuardrailResult",
@@ -469,8 +506,14 @@ __all__ = [
     "RoleContract",
     "RuleVerifier",
     "RunRequest",
+    "ScheduleSpec",
+    "SchedulerJob",
+    "SchedulerRunRecord",
+    "SchedulerStore",
+    "SchedulerTickResult",
     "Session",
     "SessionStatus",
+    "SharedWorkItem",
     "ShellVerifier",
     "StallDetectedEvent",
     "StallError",
@@ -527,9 +570,12 @@ __all__ = [
     "branch_name_for_candidate",
     "build_ledger",
     "build_mission_summary_report",
+    "build_mission_work_queue",
     "build_portfolio_snapshot",
     "build_promotion_draft",
     "build_research_queue",
+    "build_research_work_queue",
+    "build_shared_work_queue",
     "canonicalize_tool_name",
     "check_dangerous_command",
     "classify",
@@ -537,21 +583,27 @@ __all__ = [
     "commit_paths",
     "compare_prediction",
     "complete_mission_feature",
+    "compute_next_run_at",
     "configure_logging",
     "correlate_defenses",
     "count_tokens",
     "create_pull_request",
+    "create_scheduler_job",
     "curate_procedures",
     "default_experience_roots",
+    "default_gateway_root",
     "default_mission_root",
     "default_procedure_paths",
     "default_research_root",
+    "default_scheduler_root",
+    "dispatch_gateway_message",
     "domain_profile_names",
     "ensure_branch",
     "evaluate_evidence",
     "execute_mission_burst",
     "execute_mission_milestone",
     "execute_next_mission_feature",
+    "extract_whatsapp_messages",
     "filter_tools_by_authority",
     "fork_session",
     "format_ledger",
@@ -563,11 +615,13 @@ __all__ = [
     "load_default_experience_provider",
     "load_mission_report",
     "make_multi_critic",
+    "parse_datetime_text",
     "parse_docs_audit_report",
     "parse_ledger_text",
     "parse_mined_tips",
     "parse_research_memo",
     "parse_review_report",
+    "parse_schedule_spec",
     "persist",
     "pr_body_for_candidate",
     "pr_title_for_candidate",
@@ -577,7 +631,12 @@ __all__ = [
     "redact_secrets",
     "render_mining_prompt",
     "router",
+    "run_due_scheduler_jobs",
+    "run_scheduled_mission_burst",
+    "run_scheduler_job",
+    "run_scheduler_loop",
     "scan_text",
+    "send_whatsapp_text_message",
     "span",
     "start",
     "summarize_publication",
