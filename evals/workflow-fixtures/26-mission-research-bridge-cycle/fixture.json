@@ -1,0 +1,106 @@
+{
+  "description": "Exercise the mission-to-research bridge by turning mission findings into opportunities and validated features into promotion candidates.",
+  "steps": [
+    {
+      "name": "mission-create",
+      "argv": [
+        "mission",
+        "create",
+        "--title",
+        "Bridge Mission",
+        "--goal",
+        "Turn mission outputs into research follow-up artifacts."
+      ],
+      "stdout_contains": ["Created mission"],
+      "files_exist": [".harness/missions/missions/{latest_mission_id}/mission.json"]
+    },
+    {
+      "name": "mission-plan",
+      "argv": [
+        "mission",
+        "plan",
+        "--mission",
+        "{latest_mission_id}",
+        "--contract-summary",
+        "Mission bridge assertions are declared before execution.",
+        "--milestone",
+        "m1|Milestone 1|Ship the bridge mission slice.",
+        "--assertion",
+        "a1|Bridge slice works|The mission slice should emit research follow-up work.|contract|Inspect mission and research artifacts.",
+        "--feature",
+        "f1|m1|Implement bridge feature|Create the first mission bridge feature.|worker|app/bridge.py||a1|publication-seed"
+      ],
+      "stdout_contains": ["Planned mission", "features=1", "assertions=1"],
+      "files_exist": [".harness/missions/features/{latest_mission_feature_id}/feature.json"]
+    },
+    {
+      "name": "mission-approve",
+      "argv": ["mission", "approve", "--mission", "{latest_mission_id}"],
+      "stdout_contains": ["Approved mission"]
+    },
+    {
+      "name": "mission-execute-next",
+      "argv": ["mission", "execute-next", "--mission", "{latest_mission_id}"],
+      "stdout_contains": ["dispatched", "feature_id=", "handoff_id="]
+    },
+    {
+      "name": "mission-validate-fail",
+      "argv": ["mission", "validate-milestone", "--mission", "{latest_mission_id}"],
+      "stdout_contains": ["failed", "findings_count=", "corrective_feature_id="],
+      "files_exist": [".harness/missions/findings/{latest_mission_finding_id}/finding.json"]
+    },
+    {
+      "name": "mission-create-opportunity",
+      "argv": [
+        "mission",
+        "create-opportunity",
+        "--mission",
+        "{latest_mission_id}",
+        "--finding",
+        "{latest_mission_finding_id}",
+        "--title",
+        "Mission validator follow-up",
+        "--summary",
+        "Convert mission validation findings into durable research follow-up."
+      ],
+      "stdout_contains": ["Created linked opportunity", "opp-"],
+      "files_exist": [".harness/research/opportunities/{latest_opportunity_id}/opportunity.json"]
+    },
+    {
+      "name": "mission-complete-feature",
+      "argv": [
+        "mission",
+        "complete-feature",
+        "--mission",
+        "{latest_mission_id}",
+        "--feature",
+        "{previous_mission_feature_id}",
+        "--completed-work",
+        "Implemented the bridge feature."
+      ],
+      "stdout_contains": ["recorded", "feature_id="]
+    },
+    {
+      "name": "mission-create-candidate",
+      "argv": [
+        "mission",
+        "create-candidate",
+        "--mission",
+        "{latest_mission_id}",
+        "--feature",
+        "{previous_mission_feature_id}",
+        "--title",
+        "Mission bridge candidate",
+        "--summary",
+        "Promote the validated bridge feature into the research lane."
+      ],
+      "stdout_contains": ["Created linked promotion candidate", "promo-"],
+      "files_exist": [".harness/research/promotions/{latest_promotion_candidate_id}/promotion_candidate.json"]
+    },
+    {
+      "name": "research-show-candidate",
+      "argv": ["research", "show-candidate", "{latest_promotion_candidate_id}"],
+      "stdout_contains": ["Mission bridge candidate", "Mission Features"]
+    }
+  ]
+}

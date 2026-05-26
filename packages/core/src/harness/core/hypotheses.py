@@ -17,6 +17,8 @@ class Hypothesis:
     expected_win: str
     risk_level: str
     change_mode: str
+    mission_id: str = ""
+    mission_feature_id: str = ""
     created_by: str = "human"
     created_at: str = field(default_factory=_utcnow)
 
@@ -28,6 +30,8 @@ class Hypothesis:
             "expected_win": self.expected_win,
             "risk_level": self.risk_level,
             "change_mode": self.change_mode,
+            "mission_id": self.mission_id,
+            "mission_feature_id": self.mission_feature_id,
             "created_by": self.created_by,
             "created_at": self.created_at,
         }
@@ -41,6 +45,8 @@ class Hypothesis:
             expected_win=str(data.get("expected_win") or "").strip(),
             risk_level=str(data.get("risk_level") or "").strip(),
             change_mode=str(data.get("change_mode") or "").strip(),
+            mission_id=str(data.get("mission_id") or "").strip(),
+            mission_feature_id=str(data.get("mission_feature_id") or "").strip(),
             created_by=str(data.get("created_by") or "human").strip() or "human",
             created_at=str(data.get("created_at") or _utcnow()),
         )

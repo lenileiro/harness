@@ -229,6 +229,37 @@ def test_context_for_workdir_exposes_previous_publication_id(tmp_path: Path) -> 
     assert context["previous_publication_id"] == "pub-older"
 
 
+def test_context_for_workdir_exposes_latest_mission_ids(tmp_path: Path) -> None:
+    mission_root = tmp_path / ".harness" / "missions"
+    mission_dir = mission_root / "missions" / "mission-demo"
+    feature_dir = mission_root / "features" / "feature-demo"
+    run_dir = mission_root / "runs" / "run-demo"
+    for path in (mission_dir, feature_dir, run_dir):
+        path.mkdir(parents=True)
+
+    context = workflow_runner._context_for_workdir(tmp_path)
+    assert context["latest_mission_id"] == "mission-demo"
+    assert context["latest_mission_feature_id"] == "feature-demo"
+    assert context["latest_mission_run_id"] == "run-demo"
+
+
+def test_context_for_workdir_exposes_previous_mission_feature_id(tmp_path: Path) -> None:
+    mission_root = tmp_path / ".harness" / "missions" / "features"
+    older = mission_root / "feature-older"
+    newer = mission_root / "feature-newer"
+    older.mkdir(parents=True)
+    newer.mkdir(parents=True)
+
+    older_time = 1_700_000_000
+    newer_time = 1_700_000_100
+    os.utime(older, (older_time, older_time))
+    os.utime(newer, (newer_time, newer_time))
+
+    context = workflow_runner._context_for_workdir(tmp_path)
+    assert context["latest_mission_feature_id"] == "feature-newer"
+    assert context["previous_mission_feature_id"] == "feature-older"
+
+
 def test_run_workflow_fixture_uses_fixture_local_harness_bin(tmp_path: Path) -> None:
     _write_fixture_with_wrapper(tmp_path, "02-wrapper")
     fixture = workflow_runner.discover_workflow_fixtures(tmp_path / "evals")[0]

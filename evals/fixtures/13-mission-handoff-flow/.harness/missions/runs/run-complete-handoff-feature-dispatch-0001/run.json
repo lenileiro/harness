@@ -1,0 +1,11 @@
+{
+  "id": "run-complete-handoff-feature-dispatch-0001",
+  "mission_id": "mission-handoff-system-0001",
+  "role": "worker",
+  "status": "completed",
+  "summary": "Dispatched feature 'Complete handoff feature' for mission execution. Use the persisted handoff as the bounded work brief.",
+  "related_feature_id": "feature-complete-handoff-feature-0001",
+  "related_milestone_id": "milestone-consume-handoff-0001",
+  "created_at": "2026-05-26T00:00:00+00:00",
+  "updated_at": "2026-05-26T00:00:00+00:00"
+}

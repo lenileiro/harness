@@ -25,6 +25,13 @@ def show_candidate_command(*, candidate_id: str, cwd: Path | None, console: Cons
         raise typer.BadParameter(f"unknown promotion candidate: {candidate_id!r}") from exc
     console.print(f"[bold]{candidate.title}[/bold]")
     console.print(candidate.summary)
+    if candidate.mission_id:
+        console.print("\n[bold]Mission[/bold]")
+        console.print(f"- {candidate.mission_id}")
+    if candidate.mission_feature_ids:
+        console.print("\n[bold]Mission Features[/bold]")
+        for item in candidate.mission_feature_ids:
+            console.print(f"- {item}")
     if candidate.target_files:
         console.print("\n[bold]Target Files[/bold]")
         for item in candidate.target_files:

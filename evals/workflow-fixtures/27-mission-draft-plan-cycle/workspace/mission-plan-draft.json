@@ -1,0 +1,58 @@
+{
+  "contract_summary": "Draft mission assertions are declared before execution.",
+  "milestones": [
+    {
+      "label": "m1",
+      "title": "Mission schema",
+      "summary": "Define the mission objects and storage shape."
+    },
+    {
+      "label": "m2",
+      "title": "Mission runtime",
+      "summary": "Dispatch feature work and validate milestone completion."
+    }
+  ],
+  "assertions": [
+    {
+      "label": "a1",
+      "title": "Draft mission object exists",
+      "description": "The drafted mission should define durable mission objects and storage layout.",
+      "kind": "contract",
+      "verification_method": "Inspect the stored mission and milestone artifacts."
+    },
+    {
+      "label": "a2",
+      "title": "Draft slice works",
+      "description": "The drafted runtime slice should dispatch feature work from the approved plan.",
+      "kind": "behavior",
+      "verification_method": "Inspect planned runtime feature coverage."
+    }
+  ],
+  "features": [
+    {
+      "label": "f1",
+      "milestone_label": "m1",
+      "title": "Define draft mission schema",
+      "summary": "Add durable mission, milestone, feature, contract, and handoff objects.",
+      "assigned_role": "planner",
+      "target_files": [
+        "packages/core/src/harness/core/mission_models.py",
+        "packages/core/src/harness/core/mission_store.py"
+      ],
+      "depends_on_labels": [],
+      "assertion_labels": ["a1"],
+      "research_refs": ["publication-seed"]
+    },
+    {
+      "label": "f2",
+      "milestone_label": "m2",
+      "title": "Implement draft mission runtime",
+      "summary": "Dispatch ready feature work and persist mission runs and handoffs.",
+      "assigned_role": "worker",
+      "target_files": ["packages/core/src/harness/core/mission_runtime.py"],
+      "depends_on_labels": ["f1"],
+      "assertion_labels": ["a2"],
+      "research_refs": []
+    }
+  ]
+}

@@ -14,6 +14,8 @@ class Opportunity:
     id: str
     title: str
     summary: str
+    mission_id: str = ""
+    mission_feature_id: str = ""
     related_sections: tuple[str, ...] = ()
     origin_observations: tuple[str, ...] = ()
     change_modes: tuple[str, ...] = ()
@@ -27,6 +29,8 @@ class Opportunity:
             "id": self.id,
             "title": self.title,
             "summary": self.summary,
+            "mission_id": self.mission_id,
+            "mission_feature_id": self.mission_feature_id,
             "related_sections": list(self.related_sections),
             "origin_observations": list(self.origin_observations),
             "change_modes": list(self.change_modes),
@@ -42,6 +46,8 @@ class Opportunity:
             id=str(data["id"]),
             title=str(data.get("title") or "").strip(),
             summary=str(data.get("summary") or "").strip(),
+            mission_id=str(data.get("mission_id") or "").strip(),
+            mission_feature_id=str(data.get("mission_feature_id") or "").strip(),
             related_sections=tuple(
                 str(item).strip() for item in data.get("related_sections") or []
             ),

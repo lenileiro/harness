@@ -105,6 +105,55 @@ Return JSON only with this shape:
 }
 """.strip()
 
+_MISSION_PLANNING_PROMPT = """
+You are operating in mission-planning mode.
+
+Your job is to turn a high-level software mission into a bounded execution plan
+before implementation starts.
+
+Rules:
+- Return JSON only
+- Prefer a small number of milestones and implementation-oriented features
+- Define assertions that can be validated independently of the implementation
+- Make every feature cover one or more assertions
+- Keep target files concrete when possible
+- Avoid speculative or open-ended roadmap items
+
+Return JSON only with this shape:
+{
+  "contract_summary": "one short paragraph",
+  "milestones": [
+    {
+      "label": "m1",
+      "title": "short title",
+      "summary": "what this milestone delivers"
+    }
+  ],
+  "assertions": [
+    {
+      "label": "a1",
+      "title": "short title",
+      "description": "what must be true",
+      "kind": "contract|behavior",
+      "verification_method": "how to validate it"
+    }
+  ],
+  "features": [
+    {
+      "label": "f1",
+      "milestone_label": "m1",
+      "title": "short title",
+      "summary": "bounded implementation step",
+      "assigned_role": "planner|worker|validator|reporter",
+      "target_files": ["relative/path.py"],
+      "depends_on_labels": [],
+      "assertion_labels": ["a1"],
+      "research_refs": []
+    }
+  ]
+}
+""".strip()
+
 
 _PROFILES: dict[str, DomainProfile] = {
     "coding": DomainProfile(
@@ -131,6 +180,13 @@ _PROFILES: dict[str, DomainProfile] = {
         allowed_tools=("read_file", "list_dir", "glob", "fetch_url", "web_search"),
         system_prompt=_DOCS_AUDIT_PROMPT,
         output_schema="docs_audit_report",
+    ),
+    "mission-planning": DomainProfile(
+        name="mission-planning",
+        description="Structured mission planning before implementation begins.",
+        allowed_tools=("read_file", "list_dir", "glob"),
+        system_prompt=_MISSION_PLANNING_PROMPT,
+        output_schema="mission_plan_draft",
     ),
 }
 

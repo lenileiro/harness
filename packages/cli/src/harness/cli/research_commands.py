@@ -1142,6 +1142,8 @@ def research_create_opportunity_command(
     *,
     title: str = typer.Option(..., "--title"),
     summary: str = typer.Option(..., "--summary"),
+    mission_id: str | None = typer.Option(None, "--mission"),
+    mission_feature_id: str | None = typer.Option(None, "--feature"),
     related_sections: str | None = typer.Option(None, "--related-sections"),
     origin_observations: str | None = typer.Option(None, "--origin-observations"),
     change_modes: str | None = typer.Option(None, "--change-modes"),
@@ -1156,6 +1158,8 @@ def research_create_opportunity_command(
         id=store.new_id("opp", title),
         title=title.strip(),
         summary=summary.strip(),
+        mission_id=(mission_id or "").strip(),
+        mission_feature_id=(mission_feature_id or "").strip(),
         related_sections=_split_csv(related_sections),
         origin_observations=_split_csv(origin_observations),
         change_modes=_split_csv(change_modes),
@@ -1231,7 +1235,7 @@ def research_hypothesize_command(
     working_dir = (cwd or Path.cwd()).resolve()
     store = ResearchStore(root=default_research_root(working_dir))
     try:
-        store.load_opportunity(opportunity_id)
+        opportunity = store.load_opportunity(opportunity_id)
     except FileNotFoundError as exc:
         raise typer.BadParameter(f"unknown opportunity: {opportunity_id!r}") from exc
     hypothesis = Hypothesis(
@@ -1241,6 +1245,8 @@ def research_hypothesize_command(
         expected_win=expected_win.strip(),
         risk_level=risk_level.strip(),
         change_mode=change_mode.strip(),
+        mission_id=opportunity.mission_id,
+        mission_feature_id=opportunity.mission_feature_id,
         created_by=created_by.strip() or "human",
     )
     target = store.add_hypothesis(hypothesis)
@@ -1287,6 +1293,8 @@ def _research_create_candidate_command(
     expected_metric: str | None = typer.Option(None, "--expected-metric"),
     validation_plan: str | None = typer.Option(None, "--validation-plan"),
     risk_level: str = typer.Option("medium", "--risk-level"),
+    mission_id: str | None = typer.Option(None, "--mission"),
+    mission_feature: list[str] = typer.Option([], "--feature"),
     created_by: str = typer.Option("human", "--created-by"),
     cwd: Path | None = typer.Option(None, "--cwd"),
     mode: str | None = typer.Option(None, "--mode"),
@@ -1297,6 +1305,8 @@ def _research_create_candidate_command(
 ) -> None:
     working_dir = (cwd or Path.cwd()).resolve()
     store = ResearchStore(root=default_research_root(working_dir))
+    resolved_mission_id = (mission_id or "").strip()
+    resolved_mission_features = tuple(item.strip() for item in mission_feature if item.strip())
     for publication_id in source_publication:
         try:
             store.load_publication(publication_id)
@@ -1304,9 +1314,16 @@ def _research_create_candidate_command(
             raise typer.BadParameter(f"unknown publication: {publication_id!r}") from exc
     for hypothesis_id in source_hypothesis:
         try:
-            store.load_hypothesis(hypothesis_id)
+            hypothesis = store.load_hypothesis(hypothesis_id)
         except FileNotFoundError as exc:
             raise typer.BadParameter(f"unknown hypothesis: {hypothesis_id!r}") from exc
+        if not resolved_mission_id and hypothesis.mission_id:
+            resolved_mission_id = hypothesis.mission_id
+        if (
+            hypothesis.mission_feature_id
+            and hypothesis.mission_feature_id not in resolved_mission_features
+        ):
+            resolved_mission_features = (*resolved_mission_features, hypothesis.mission_feature_id)
     try:
         change_intent = store.parse_change_intent(
             mode=mode,
@@ -1321,6 +1338,8 @@ def _research_create_candidate_command(
         id=store.new_id("promo", title),
         title=title.strip(),
         summary=summary.strip(),
+        mission_id=resolved_mission_id,
+        mission_feature_ids=resolved_mission_features,
         source_publications=tuple(item.strip() for item in source_publication if item.strip()),
         source_hypotheses=tuple(item.strip() for item in source_hypothesis if item.strip()),
         target_files=_split_csv(target_files),
@@ -1345,6 +1364,8 @@ def research_refine_command(
     expected_metric: str | None = typer.Option(None, "--expected-metric"),
     validation_plan: str | None = typer.Option(None, "--validation-plan"),
     risk_level: str = typer.Option("medium", "--risk-level"),
+    mission_id: str | None = typer.Option(None, "--mission"),
+    mission_feature: list[str] = typer.Option([], "--feature"),
     created_by: str = typer.Option("human", "--created-by"),
     cwd: Path | None = typer.Option(None, "--cwd"),
     mode: str | None = typer.Option(None, "--mode"),
@@ -1362,6 +1383,8 @@ def research_refine_command(
         expected_metric=expected_metric,
         validation_plan=validation_plan,
         risk_level=risk_level,
+        mission_id=mission_id,
+        mission_feature=mission_feature,
         created_by=created_by,
         cwd=cwd,
         mode=mode,
@@ -1386,6 +1409,8 @@ def research_create_candidate_command(
     expected_metric: str | None = typer.Option(None, "--expected-metric"),
     validation_plan: str | None = typer.Option(None, "--validation-plan"),
     risk_level: str = typer.Option("medium", "--risk-level"),
+    mission_id: str | None = typer.Option(None, "--mission"),
+    mission_feature: list[str] = typer.Option([], "--feature"),
     created_by: str = typer.Option("human", "--created-by"),
     cwd: Path | None = typer.Option(None, "--cwd"),
     mode: str | None = typer.Option(None, "--mode"),
@@ -1403,6 +1428,8 @@ def research_create_candidate_command(
         expected_metric=expected_metric,
         validation_plan=validation_plan,
         risk_level=risk_level,
+        mission_id=mission_id,
+        mission_feature=mission_feature,
         created_by=created_by,
         cwd=cwd,
         mode=mode,
@@ -1427,6 +1454,8 @@ def research_candidate_create_command(
     expected_metric: str | None = typer.Option(None, "--expected-metric"),
     validation_plan: str | None = typer.Option(None, "--validation-plan"),
     risk_level: str = typer.Option("medium", "--risk-level"),
+    mission_id: str | None = typer.Option(None, "--mission"),
+    mission_feature: list[str] = typer.Option([], "--feature"),
     created_by: str = typer.Option("human", "--created-by"),
     cwd: Path | None = typer.Option(None, "--cwd"),
     mode: str | None = typer.Option(None, "--mode"),
@@ -1444,6 +1473,8 @@ def research_candidate_create_command(
         expected_metric=expected_metric,
         validation_plan=validation_plan,
         risk_level=risk_level,
+        mission_id=mission_id,
+        mission_feature=mission_feature,
         created_by=created_by,
         cwd=cwd,
         mode=mode,

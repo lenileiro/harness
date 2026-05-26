@@ -1,0 +1,16 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import os
+import sys
+from pathlib import Path
+
+from harness.cli import __main__ as cli_main
+
+if len(sys.argv) >= 3 and sys.argv[1] == "mission" and sys.argv[2] == "draft-plan":
+    draft_path = Path(__file__).resolve().parent / "mission-plan-draft.json"
+    os.environ["HARNESS_MISSION_PLAN_DRAFT_FILE"] = str(draft_path)
+
+
+if __name__ == "__main__":
+    cli_main.app()

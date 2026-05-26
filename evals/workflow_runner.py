@@ -219,6 +219,7 @@ def _sorted_dir_names(path: Path) -> list[str]:
 
 def _context_for_workdir(work: Path) -> dict[str, str]:
     root = work / ".harness" / "research"
+    mission_root = work / ".harness" / "missions"
     mapping = {
         "latest_theme_id": root / "themes",
         "latest_unknown_id": root / "unknowns",
@@ -234,6 +235,13 @@ def _context_for_workdir(work: Path) -> dict[str, str]:
         "latest_experiment_id": root / "experiments",
         "latest_promotion_candidate_id": root / "promotions",
         "latest_archive_id": root / "archive",
+        "latest_mission_id": mission_root / "missions",
+        "latest_mission_milestone_id": mission_root / "milestones",
+        "latest_mission_feature_id": mission_root / "features",
+        "latest_mission_contract_id": mission_root / "contracts",
+        "latest_mission_handoff_id": mission_root / "handoffs",
+        "latest_mission_finding_id": mission_root / "findings",
+        "latest_mission_run_id": mission_root / "runs",
     }
     context: dict[str, str] = {}
     for key, path in mapping.items():
@@ -246,6 +254,9 @@ def _context_for_workdir(work: Path) -> dict[str, str]:
     experiment_ids = _sorted_dir_names(root / "experiments")
     if len(experiment_ids) > 1:
         context["previous_experiment_id"] = experiment_ids[1]
+    mission_feature_ids = _sorted_dir_names(mission_root / "features")
+    if len(mission_feature_ids) > 1:
+        context["previous_mission_feature_id"] = mission_feature_ids[1]
     return context
 
 

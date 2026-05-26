@@ -129,3 +129,104 @@ jobs:
         with:
           name: research-autonomy-smoke
           path: .artifacts/research-autonomy-smoke/
+
+  mission-autonomy-smoke:
+    name: mission autonomy smoke
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+          cache-dependency-glob: "**/uv.lock"
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Sync workspace
+        run: uv sync --all-extras --all-groups
+
+      - name: Run deterministic mission burst
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .artifacts/mission-autonomy-smoke/workspace
+          cat > .artifacts/mission-autonomy-smoke/config.toml <<'EOF'
+          [mission_scheduler]
+          max_steps = 10
+          auto_complete = true
+          EOF
+          uv run harness mission create \
+            --title "CI mission smoke" \
+            --goal "Exercise deterministic mission planning and validation in CI." \
+            --cwd .artifacts/mission-autonomy-smoke/workspace
+          mission_id="$(find .artifacts/mission-autonomy-smoke/workspace/.harness/missions/missions -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | head -n1)"
+          uv run harness mission plan \
+            --mission "$mission_id" \
+            --contract-summary "Mission assertions are declared before implementation in CI." \
+            --milestone "m1|Milestone 1|Ship the deterministic CI mission slice." \
+            --assertion "a1|Mission smoke passes|The deterministic mission slice should validate cleanly.|contract|Inspect mission validator output." \
+            --feature "f1|m1|Implement mission smoke slice|Create the deterministic CI mission slice.|worker|app/mission_smoke.py||a1" \
+            --cwd .artifacts/mission-autonomy-smoke/workspace
+          uv run harness mission approve \
+            --mission "$mission_id" \
+            --cwd .artifacts/mission-autonomy-smoke/workspace
+          uv run harness mission schedule-once \
+            --mission "$mission_id" \
+            --config .artifacts/mission-autonomy-smoke/config.toml \
+            --cwd .artifacts/mission-autonomy-smoke/workspace \
+            --json > .artifacts/mission-autonomy-smoke/run.json
+          uv run harness mission summarize \
+            --mission "$mission_id" \
+            --cwd .artifacts/mission-autonomy-smoke/workspace \
+            --json > .artifacts/mission-autonomy-smoke/summary.json
+          uv run harness mission list-runs \
+            --mission "$mission_id" \
+            --cwd .artifacts/mission-autonomy-smoke/workspace
+
+      - name: Write mission autonomy summary
+        shell: bash
+        run: |
+          uv run python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          payload = json.loads(Path(".artifacts/mission-autonomy-smoke/run.json").read_text())
+          result = payload.get("result") or {}
+          report_payload = json.loads(Path(".artifacts/mission-autonomy-smoke/summary.json").read_text())
+          report = report_payload.get("report") or {}
+          lines = [
+              "## Mission autonomy smoke",
+              "",
+              f"- status: `{result.get('status', 'unknown')}`",
+              f"- stop_reason: `{result.get('stop_reason', '')}`",
+              f"- steps: `{result.get('steps_run', 0)}`",
+              f"- mission_status: `{report.get('status', 'unknown')}`",
+              "",
+              "### Steps",
+          ]
+          for index, step in enumerate(result.get("steps") or [], start=1):
+              if not isinstance(step, dict):
+                  continue
+              detail = step.get("message", "")
+              if step.get("feature_id"):
+                  detail = f"{detail} (`{step['feature_id']}`)".strip()
+              lines.append(f"{index}. **{step.get('kind', 'step')} / {step.get('status', 'unknown')}** {detail}")
+          next_actions = report.get("next_actions") or []
+          if next_actions:
+              lines.extend(["", "### Next actions"])
+              for item in next_actions:
+                  lines.append(f"- {item}")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as handle:
+              handle.write("\n".join(lines) + "\n")
+          PY
+
+      - name: Upload mission autonomy artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: mission-autonomy-smoke
+          path: .artifacts/mission-autonomy-smoke/

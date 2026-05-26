@@ -94,6 +94,7 @@ from harness.cli.markdown_render import (
 from harness.cli.markdown_render import (
     _render_mermaid as _render_mermaid_impl,
 )
+from harness.cli.mission_commands import mission_app
 from harness.cli.render import (
     _approval_status_style,
     _render_approval,
@@ -243,6 +244,7 @@ app.add_typer(sessions_app, name="sessions")
 app.add_typer(providers_app, name="providers")
 app.add_typer(tools_app, name="tools")
 app.add_typer(plugins_app, name="plugins")
+app.add_typer(mission_app, name="mission")
 app.add_typer(vision_app, name="vision")
 app.add_typer(research_app, name="research")
 
@@ -691,7 +693,10 @@ def run(
         str,
         typer.Option(
             "--domain",
-            help="Task domain profile. Currently: coding, code-review, research, docs-audit.",
+            help=(
+                "Task domain profile. Currently: coding, code-review, research, "
+                "docs-audit, mission-planning."
+            ),
         ),
     ] = "coding",
     bare: Annotated[

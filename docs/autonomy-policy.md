@@ -61,7 +61,17 @@ Recommended defaults:
 Harness supports this through:
 - `harness research schedule-once`
 - `harness research list-runs`
+- `harness mission schedule-once`
+- `harness mission summarize`
+- `harness mission create-opportunity`
+- `harness mission create-candidate`
 - `[research_scheduler]` config defaults in TOML
+- `[mission_scheduler]` config defaults in TOML
+
+When mission validation finds blocking issues, preferred follow-up is:
+- convert findings into explicit research opportunities
+- convert validated mission features into bounded promotion candidates
+- preserve mission linkage so later agents can continue work without rereading transcripts
 
 ## Live CI mode
 
@@ -73,6 +83,15 @@ Recommended policy:
 - required provider secrets must be present or the job should fail fast
 - live mode should upload artifacts for later review instead of mutating the repo by default
 - if humans review work through GitHub PRs, live mode may post a concise summary comment only when explicitly enabled
+
+Mission autonomy follows the same deterministic-first principle.
+
+Recommended mission policy:
+- deterministic `mission schedule-once` runs on push / PR / cron by default
+- mission CI should seed a bounded plan with explicit assertions before execution
+- live provider-backed mission evals should remain manual and explicitly gated
+- workflow summaries should include mission status, stop reason, and next actions
+- uploaded artifacts should include both the scheduled run record and the mission summary report
 
 ## Mutation CI mode
 

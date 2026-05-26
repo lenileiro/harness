@@ -1,0 +1,221 @@
+name: mission-autonomy
+
+on:
+  workflow_dispatch:
+    inputs:
+      max_steps:
+        description: "Maximum bounded mission steps to run"
+        required: false
+        default: "10"
+      auto_complete:
+        description: "Allow deterministic auto-completion inside the bounded mission loop"
+        required: false
+        default: "true"
+      run_live_eval:
+        description: "Also run a secret-backed live canonical mission eval"
+        required: false
+        default: "false"
+      live_fixture:
+        description: "Canonical mission eval fixture to run in live mode"
+        required: false
+        default: "12-mission-planning-flow"
+      live_provider:
+        description: "Provider for live mission eval mode"
+        required: false
+        default: "openrouter"
+      live_model:
+        description: "Model for live mission eval mode"
+        required: false
+        default: "google/gemma-4-26b-a4b-it"
+  schedule:
+    - cron: "30 4 * * *"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  schedule-once:
+    name: schedule-once
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+          cache-dependency-glob: "**/uv.lock"
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Sync workspace
+        run: uv sync --all-extras --all-groups
+
+      - name: Run scheduled mission burst
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .artifacts/mission-autonomy/workspace
+          max_steps="${{ github.event.inputs.max_steps || '10' }}"
+          auto_complete="${{ github.event.inputs.auto_complete || 'true' }}"
+          cat > .artifacts/mission-autonomy/config.toml <<EOF
+          [mission_scheduler]
+          max_steps = ${max_steps}
+          auto_complete = ${auto_complete}
+          EOF
+          uv run harness mission create \
+            --title "Scheduled mission burst" \
+            --goal "Record one deterministic mission burst in CI." \
+            --cwd .artifacts/mission-autonomy/workspace
+          mission_id="$(find .artifacts/mission-autonomy/workspace/.harness/missions/missions -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | head -n1)"
+          uv run harness mission plan \
+            --mission "$mission_id" \
+            --contract-summary "Mission assertions are declared before implementation in CI." \
+            --milestone "m1|Milestone 1|Ship the first deterministic mission slice." \
+            --milestone "m2|Milestone 2|Validate the follow-up deterministic mission slice." \
+            --assertion "a1|First mission slice works|The first scheduled mission milestone should validate cleanly.|contract|Inspect mission validator output." \
+            --assertion "a2|Second mission slice works|The second scheduled mission milestone should validate cleanly.|contract|Inspect mission validator output." \
+            --feature "f1|m1|Implement first mission slice|Create the first deterministic mission slice.|worker|app/mission_one.py||a1" \
+            --feature "f2|m2|Implement second mission slice|Create the second deterministic mission slice.|worker|app/mission_two.py|f1|a2" \
+            --cwd .artifacts/mission-autonomy/workspace
+          uv run harness mission approve \
+            --mission "$mission_id" \
+            --cwd .artifacts/mission-autonomy/workspace
+          uv run harness mission schedule-once \
+            --mission "$mission_id" \
+            --config .artifacts/mission-autonomy/config.toml \
+            --cwd .artifacts/mission-autonomy/workspace \
+            --json > .artifacts/mission-autonomy/result.json
+          uv run harness mission summarize \
+            --mission "$mission_id" \
+            --cwd .artifacts/mission-autonomy/workspace \
+            --json > .artifacts/mission-autonomy/summary.json
+          uv run harness mission list-runs \
+            --mission "$mission_id" \
+            --cwd .artifacts/mission-autonomy/workspace
+
+      - name: Write scheduled mission summary
+        shell: bash
+        run: |
+          uv run python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          payload = json.loads(Path(".artifacts/mission-autonomy/result.json").read_text())
+          result = payload.get("result") or {}
+          report_payload = json.loads(Path(".artifacts/mission-autonomy/summary.json").read_text())
+          report = report_payload.get("report") or {}
+          lines = [
+              "## Scheduled mission burst",
+              "",
+              f"- status: `{result.get('status', 'unknown')}`",
+              f"- stop_reason: `{result.get('stop_reason', '')}`",
+              f"- steps: `{result.get('steps_run', 0)}`",
+              f"- mission_status: `{report.get('status', 'unknown')}`",
+              "",
+              "### Steps",
+          ]
+          for index, step in enumerate(result.get("steps") or [], start=1):
+              if not isinstance(step, dict):
+                  continue
+              detail = step.get("message", "")
+              if step.get("feature_id"):
+                  detail = f"{detail} (`{step['feature_id']}`)".strip()
+              lines.append(f"{index}. **{step.get('kind', 'step')} / {step.get('status', 'unknown')}** {detail}")
+          next_actions = report.get("next_actions") or []
+          if next_actions:
+              lines.extend(["", "### Next actions"])
+              for item in next_actions:
+                  lines.append(f"- {item}")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as handle:
+              handle.write("\n".join(lines) + "\n")
+          PY
+
+      - name: Upload mission autonomy artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: mission-autonomy
+          path: .artifacts/mission-autonomy/
+
+  live-mission-eval:
+    name: live mission eval
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.run_live_eval == 'true'
+    permissions:
+      contents: read
+    env:
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+          cache-dependency-glob: "**/uv.lock"
+
+      - name: Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: Sync workspace
+        run: uv sync --all-extras --all-groups
+
+      - name: Run secret-backed live canonical mission eval
+        shell: bash
+        run: |
+          set -euo pipefail
+          fixture="${{ github.event.inputs.live_fixture || '12-mission-planning-flow' }}"
+          provider="${{ github.event.inputs.live_provider || 'openrouter' }}"
+          model="${{ github.event.inputs.live_model || 'google/gemma-4-26b-a4b-it' }}"
+          if [[ "$provider" == "openrouter" && -z "${OPENROUTER_API_KEY:-}" ]]; then
+            echo "OPENROUTER_API_KEY is required for openrouter live mission eval mode" >&2
+            exit 1
+          fi
+          if [[ "$provider" == "anthropic" && -z "${ANTHROPIC_API_KEY:-}" ]]; then
+            echo "ANTHROPIC_API_KEY is required for anthropic live mission eval mode" >&2
+            exit 1
+          fi
+          mkdir -p .artifacts/mission-autonomy-live
+          uv run harness eval run "$fixture" \
+            --provider "$provider" \
+            --model "$model" \
+            --output-dir .artifacts/mission-autonomy-live \
+            --json-out \
+            > .artifacts/mission-autonomy-live/report.json
+
+      - name: Write live mission summary
+        shell: bash
+        run: |
+          uv run python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          payload = json.loads(Path(".artifacts/mission-autonomy-live/report.json").read_text())
+          results = payload.get("results") or []
+          lines = ["## Live mission eval", ""]
+          for item in results:
+              if not isinstance(item, dict):
+                  continue
+              fixture = item.get("fixture_name", "unknown")
+              overall = (item.get("overall") or {}).get("score", "n/a")
+              verify = (item.get("verification") or {}).get("score", "n/a")
+              lines.append(f"- `{fixture}` overall={overall} verification={verify}")
+          summary = "\n".join(lines) + "\n"
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as handle:
+              handle.write(summary)
+          PY
+
+      - name: Upload live mission eval artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: mission-autonomy-live
+          path: .artifacts/mission-autonomy-live/

@@ -1,0 +1,76 @@
+{
+  "description": "Exercise mission draft-plan end to end with a deterministic planner-output fixture.",
+  "harness_bin": "fake-harness",
+  "steps": [
+    {
+      "name": "mission-create",
+      "argv": [
+        "mission",
+        "create",
+        "--title",
+        "Drafted Mission",
+        "--goal",
+        "Generate a mission plan from a high-level goal."
+      ],
+      "stdout_contains": ["Created mission"],
+      "files_exist": [".harness/missions/missions/{latest_mission_id}/mission.json"]
+    },
+    {
+      "name": "mission-draft-plan",
+      "argv": [
+        "mission",
+        "draft-plan",
+        "--mission",
+        "{latest_mission_id}",
+        "--apply",
+        "--json"
+      ],
+      "stdout_contains": [
+        "\"contract_summary\": \"Draft mission assertions are declared before execution.\"",
+        "\"features\": 2"
+      ],
+      "files_exist": [
+        ".harness/missions/contracts/{latest_mission_contract_id}/contract.json",
+        ".harness/missions/features/{latest_mission_feature_id}/feature.json"
+      ]
+    },
+    {
+      "name": "mission-show-contract",
+      "argv": ["mission", "show-contract", "--mission", "{latest_mission_id}"],
+      "stdout_contains": ["Draft mission assertions are declared before execution.", "Draft slice works"]
+    },
+    {
+      "name": "mission-list-milestones",
+      "argv": ["mission", "list-milestones", "--mission", "{latest_mission_id}"],
+      "stdout_contains": ["Mission schema", "Mission runtime"]
+    },
+    {
+      "name": "mission-list-features",
+      "argv": ["mission", "list-features", "--mission", "{latest_mission_id}"],
+      "files_exist": [
+        ".harness/missions/features/{latest_mission_feature_id}/feature.json",
+        ".harness/missions/features/{previous_mission_feature_id}/feature.json"
+      ],
+      "file_contains": [
+        {
+          "path": ".harness/missions/features/{latest_mission_feature_id}/feature.json",
+          "substring": "\"title\": \"Implement draft mission runtime\""
+        },
+        {
+          "path": ".harness/missions/features/{previous_mission_feature_id}/feature.json",
+          "substring": "\"title\": \"Define draft mission schema\""
+        }
+      ]
+    },
+    {
+      "name": "mission-approve",
+      "argv": ["mission", "approve", "--mission", "{latest_mission_id}"],
+      "stdout_contains": ["Approved mission"]
+    },
+    {
+      "name": "mission-show",
+      "argv": ["mission", "show", "{latest_mission_id}"],
+      "stdout_contains": ["status=approved", "Drafted Mission"]
+    }
+  ]
+}

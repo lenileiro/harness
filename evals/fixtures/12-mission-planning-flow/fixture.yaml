@@ -1,0 +1,5 @@
+family: mission-planning-flow
+behavior_category: decomposition
+primary_dimension: decomposition
+expected_first_step: inspect workspace
+required_verification: pytest tests/ -v --tb=short --no-header

@@ -1,0 +1,16 @@
+{
+  "id": "mission-handoff-system-0001",
+  "title": "Mission Handoff System",
+  "goal": "Resume a mission from a structured planner handoff and complete it.",
+  "status": "running",
+  "created_by": "human",
+  "planner_model": "gpt-planner",
+  "worker_model": "gpt-worker",
+  "validator_model": "gpt-validator",
+  "reporter_model": "gpt-reporter",
+  "budget_tokens": 4000,
+  "budget_runtime_minutes": 30,
+  "current_milestone_id": "milestone-consume-handoff-0001",
+  "created_at": "2026-05-26T00:00:00+00:00",
+  "updated_at": "2026-05-26T00:00:00+00:00"
+}

@@ -450,6 +450,12 @@ class ResearchStore:
             "",
             f"- id: `{opportunity.id}`",
             f"- theme: `{opportunity.theme or '—'}`",
+            *([f"- mission_id: `{opportunity.mission_id}`"] if opportunity.mission_id else []),
+            *(
+                [f"- mission_feature_id: `{opportunity.mission_feature_id}`"]
+                if opportunity.mission_feature_id
+                else []
+            ),
             f"- priority: `{opportunity.priority}`",
             f"- created_by: `{opportunity.created_by}`",
             f"- created_at: `{opportunity.created_at}`",
@@ -483,6 +489,12 @@ class ResearchStore:
             f"# {hypothesis.id}",
             "",
             f"- opportunity_id: `{hypothesis.opportunity_id}`",
+            *([f"- mission_id: `{hypothesis.mission_id}`"] if hypothesis.mission_id else []),
+            *(
+                [f"- mission_feature_id: `{hypothesis.mission_feature_id}`"]
+                if hypothesis.mission_feature_id
+                else []
+            ),
             f"- change_mode: `{hypothesis.change_mode}`",
             f"- risk_level: `{hypothesis.risk_level}`",
             f"- created_by: `{hypothesis.created_by}`",
@@ -540,6 +552,7 @@ class ResearchStore:
             f"# {candidate.title}",
             "",
             f"- id: `{candidate.id}`",
+            *([f"- mission_id: `{candidate.mission_id}`"] if candidate.mission_id else []),
             f"- risk_level: `{candidate.risk_level}`",
             f"- created_by: `{candidate.created_by}`",
             f"- created_at: `{candidate.created_at}`",
@@ -558,6 +571,12 @@ class ResearchStore:
                 "",
                 "## Source Publications",
                 *[f"- {item}" for item in candidate.source_publications],
+            ]
+        if candidate.mission_feature_ids:
+            markdown += [
+                "",
+                "## Mission Features",
+                *[f"- {item}" for item in candidate.mission_feature_ids],
             ]
         if candidate.source_hypotheses:
             markdown += [

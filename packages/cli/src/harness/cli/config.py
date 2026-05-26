@@ -63,6 +63,26 @@ class ResearchSchedulerConfig:
 
 
 @dataclass(frozen=True, slots=True)
+class MissionSchedulerConfig:
+    max_steps: int | None = None
+    auto_complete: bool | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class MissionRoleConfig:
+    model: str | None = None
+    brief: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class MissionRoleDefaults:
+    planner: MissionRoleConfig = field(default_factory=MissionRoleConfig)
+    worker: MissionRoleConfig = field(default_factory=MissionRoleConfig)
+    validator: MissionRoleConfig = field(default_factory=MissionRoleConfig)
+    reporter: MissionRoleConfig = field(default_factory=MissionRoleConfig)
+
+
+@dataclass(frozen=True, slots=True)
 class HarnessConfig:
     """Resolved CLI configuration.
 
@@ -78,6 +98,8 @@ class HarnessConfig:
     plugins_disabled: tuple[str, ...] = ()
     include_plugin_entry_points: bool = False
     research_scheduler: ResearchSchedulerConfig = field(default_factory=ResearchSchedulerConfig)
+    mission_scheduler: MissionSchedulerConfig = field(default_factory=MissionSchedulerConfig)
+    mission_roles: MissionRoleDefaults = field(default_factory=MissionRoleDefaults)
 
     def provider(self, name: str) -> dict[str, Any]:
         """Return the per-provider settings dict (empty if unset)."""
@@ -171,6 +193,36 @@ def load_config(path: Path | None = None) -> HarnessConfig:
     if base_branch is not None and not isinstance(base_branch, str):
         raise ConfigError("`research_scheduler.base_branch` must be a string")
 
+    mission_scheduler_section = raw.get("mission_scheduler", {})
+    if not isinstance(mission_scheduler_section, dict):
+        raise ConfigError("`[mission_scheduler]` must be a table")
+
+    mission_max_steps = mission_scheduler_section.get("max_steps")
+    if mission_max_steps is not None and (
+        not isinstance(mission_max_steps, int) or mission_max_steps < 1
+    ):
+        raise ConfigError("`mission_scheduler.max_steps` must be a positive integer")
+
+    mission_auto_complete = mission_scheduler_section.get("auto_complete")
+    if mission_auto_complete is not None and not isinstance(mission_auto_complete, bool):
+        raise ConfigError("`mission_scheduler.auto_complete` must be a boolean")
+
+    mission_roles_section = raw.get("mission_roles", {})
+    if not isinstance(mission_roles_section, dict):
+        raise ConfigError("`[mission_roles]` must be a table")
+
+    def _mission_role_config(role: str) -> MissionRoleConfig:
+        section = mission_roles_section.get(role, {})
+        if not isinstance(section, dict):
+            raise ConfigError(f"`[mission_roles.{role}]` must be a table")
+        model = section.get("model")
+        if model is not None and not isinstance(model, str):
+            raise ConfigError(f"`mission_roles.{role}.model` must be a string")
+        brief = section.get("brief")
+        if brief is not None and not isinstance(brief, str):
+            raise ConfigError(f"`mission_roles.{role}.brief` must be a string")
+        return MissionRoleConfig(model=model, brief=brief)
+
     return HarnessConfig(
         default_provider=default_provider,
         default_model=default_model,
@@ -189,12 +241,25 @@ def load_config(path: Path | None = None) -> HarnessConfig:
             open_pr=_optional_bool("open_pr"),
             draft_pr=_optional_bool("draft_pr"),
         ),
+        mission_scheduler=MissionSchedulerConfig(
+            max_steps=mission_max_steps,
+            auto_complete=mission_auto_complete,
+        ),
+        mission_roles=MissionRoleDefaults(
+            planner=_mission_role_config("planner"),
+            worker=_mission_role_config("worker"),
+            validator=_mission_role_config("validator"),
+            reporter=_mission_role_config("reporter"),
+        ),
     )
 
 
 __all__ = [
     "ConfigError",
     "HarnessConfig",
+    "MissionRoleConfig",
+    "MissionRoleDefaults",
+    "MissionSchedulerConfig",
     "ResearchSchedulerConfig",
     "default_config_path",
     "load_config",

@@ -40,11 +40,11 @@ Each run writes a durable artifact bundle under `evals/runs/<run-id>/`:
 
 Current checked-in corpus:
 
-- `fixtures`: 4 canonical fixtures
+- `fixtures`: 14 canonical fixtures
 - `fixtures-mutated`: 12 deterministic mutated variants (3 seeds × 4 fixture families)
-- `fixtures-holdout`: 4 holdout variants
+- `fixtures-holdout`: 6 holdout variants
 
-That gives 20 runnable fixtures across public, mutated, and holdout sets.
+That gives 32 runnable fixtures across public, mutated, and holdout sets.
 
 ## CI guidance
 

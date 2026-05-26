@@ -78,6 +78,7 @@ class TestLoadConfig:
         assert cfg.plugins_disabled == ("legacy-tools",)
         assert cfg.include_plugin_entry_points is True
         assert cfg.research_scheduler.max_steps is None
+        assert cfg.mission_scheduler.max_steps is None
 
     def test_research_scheduler_config(self, tmp_path: Path) -> None:
         target = tmp_path / "config.toml"
@@ -104,6 +105,42 @@ class TestLoadConfig:
         assert cfg.research_scheduler.push is False
         assert cfg.research_scheduler.open_pr is False
         assert cfg.research_scheduler.draft_pr is True
+
+    def test_mission_scheduler_config(self, tmp_path: Path) -> None:
+        target = tmp_path / "config.toml"
+        target.write_text(
+            """
+            [mission_scheduler]
+            max_steps = 7
+            auto_complete = true
+            """,
+            encoding="utf-8",
+        )
+        cfg = load_config(target)
+        assert cfg.mission_scheduler.max_steps == 7
+        assert cfg.mission_scheduler.auto_complete is True
+
+    def test_mission_role_defaults_config(self, tmp_path: Path) -> None:
+        target = tmp_path / "config.toml"
+        target.write_text(
+            """
+            [mission_roles.planner]
+            model = "gpt-planner"
+            brief = "Plan before coding."
+
+            [mission_roles.worker]
+            model = "gpt-worker"
+
+            [mission_roles.validator]
+            brief = "Check assertions independently."
+            """,
+            encoding="utf-8",
+        )
+        cfg = load_config(target)
+        assert cfg.mission_roles.planner.model == "gpt-planner"
+        assert cfg.mission_roles.planner.brief == "Plan before coding."
+        assert cfg.mission_roles.worker.model == "gpt-worker"
+        assert cfg.mission_roles.validator.brief == "Check assertions independently."
 
     def test_invalid_approval_value_raises(self, tmp_path: Path) -> None:
         target = tmp_path / "config.toml"
@@ -151,4 +188,16 @@ class TestLoadConfig:
             encoding="utf-8",
         )
         with pytest.raises(ConfigError, match=r"research_scheduler\.max_steps"):
+            load_config(target)
+
+    def test_mission_scheduler_section_validates_types(self, tmp_path: Path) -> None:
+        target = tmp_path / "config.toml"
+        target.write_text(
+            """
+            [mission_scheduler]
+            max_steps = 0
+            """,
+            encoding="utf-8",
+        )
+        with pytest.raises(ConfigError, match=r"mission_scheduler\.max_steps"):
             load_config(target)

@@ -475,6 +475,44 @@ The research CLI supports the autonomous research stack:
 - `research archive`, `reject`, `list-archive`, `resurrect`
 - `research roles`, `portfolio`, `queue`, `rebalance`
 
+Mission-aware research bridge support includes:
+
+- `research create-opportunity --mission <mission_id> --feature <feature_id>`
+- mission-linked hypotheses propagated from linked opportunities
+- `research create-candidate --mission <mission_id> --feature <feature_id>`
+- mission-linked promotion candidates rendered through `research show-candidate`
+
+The mission CLI supports bounded planning and validation loops:
+
+- `mission create`, `show`, `list`
+- `mission plan`, `draft-plan`, `approve`, `show-contract`
+- `mission list-milestones`, `list-features`
+- `mission execute-next`, `complete-feature`, `validate-milestone`
+- `mission execute-milestone`, `execute-burst`, `schedule-once`
+- `mission summarize`, `list-reports`, `show-report`
+- `mission list-runs`, `show-run`, `list-handoffs`, `show-handoff`, `list-findings`
+
+Missions can also declare role-specific execution profiles at creation time:
+
+- `--planner-model`, `--worker-model`, `--validator-model`, `--reporter-model`
+- `--planner-brief`, `--worker-brief`, `--validator-brief`, `--reporter-brief`
+
+Those profiles are persisted into mission runs, handoffs, and mission reports so
+later agents can see which role was expected to do what.
+
+For high-level goals, missions can now draft a structured plan before any
+feature work is dispatched:
+
+```bash
+uv run harness mission create --title "Checkout revamp" --goal "Ship a safer checkout flow."
+uv run harness mission draft-plan --mission <mission_id> --apply --provider openrouter --model google/gemma-4-26b-a4b-it
+```
+
+Mission-to-research bridge commands include:
+
+- `mission create-opportunity`
+- `mission create-candidate`
+
 ## Evals
 
 Harness includes a behavioral eval stack under `evals/`.
@@ -672,6 +710,64 @@ mutation_open_pr      = false
 The mutation lane runs only on manual dispatch, uses a dedicated
 `autonomy-mutations` environment, gets write permissions only in that job, and
 can post the run summary back to a PR when `comment_on_pr=true`.
+
+### Mission autonomy in CI
+
+Harness also supports deterministic mission orchestration in CI through:
+
+```bash
+uv run harness mission schedule-once --mission mission-demo --config .mission-scheduler.toml --cwd /path/to/workspace
+uv run harness mission summarize --mission mission-demo --cwd /path/to/workspace --json
+```
+
+Scheduler defaults can live in TOML:
+
+```toml
+[mission_scheduler]
+max_steps = 10
+auto_complete = true
+
+[mission_roles.planner]
+model = "openai/gpt-5.5"
+brief = "Decompose the mission into milestones, features, and assertions before coding."
+
+[mission_roles.worker]
+model = "openai/gpt-5.4"
+brief = "Implement the bounded feature and leave a concrete handoff."
+
+[mission_roles.validator]
+model = "openai/gpt-5.5"
+brief = "Check milestone assertions independently and emit blocking findings when needed."
+
+[mission_roles.reporter]
+brief = "Summarize mission state, blockers, and next actions."
+```
+
+CI wiring now includes:
+
+- `.github/workflows/ci.yml`
+  deterministic `mission schedule-once` smoke coverage
+- `.github/workflows/mission-autonomy.yml`
+  manual and scheduled deterministic mission bursts with uploaded run artifacts
+  plus an optional secret-backed live canonical mission eval lane on manual
+  dispatch, with mission summary output in `GITHUB_STEP_SUMMARY`
+
+The mission CI lane seeds a bounded mission plan, approves it, runs
+`mission schedule-once`, persists a mission report, and publishes step-level
+status plus next actions in the GitHub workflow summary.
+
+Manual live mode for missions is opt-in and intended for provider-backed checks
+such as:
+
+```text
+run_live_eval = true
+live_fixture  = 12-mission-planning-flow
+live_provider = openrouter
+live_model    = google/gemma-4-26b-a4b-it
+```
+
+The live lane is disabled by default and requires the corresponding provider
+secret, for example `OPENROUTER_API_KEY`.
 
 ## Design Principles
 

@@ -23,7 +23,7 @@
       "name": "sessions-list",
       "argv": ["sessions", "list"],
       "append_cwd": false,
-      "stdout_contains": ["sess_workflow_eval"]
+      "stdout_contains": ["test-model", "ollama", "done"]
     },
     {
       "name": "sessions-show",

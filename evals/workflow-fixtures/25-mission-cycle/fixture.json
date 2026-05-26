@@ -1,0 +1,80 @@
+{
+  "description": "Exercise the mission planning, execution, and validation flow through the real CLI.",
+  "steps": [
+    {
+      "name": "mission-create",
+      "argv": [
+        "mission",
+        "create",
+        "--title",
+        "Workflow Mission",
+        "--goal",
+        "Drive a mission through planning, execution, and validation."
+      ],
+      "stdout_contains": ["Created mission"],
+      "files_exist": [".harness/missions/missions/{latest_mission_id}/mission.json"]
+    },
+    {
+      "name": "mission-plan",
+      "argv": [
+        "mission",
+        "plan",
+        "--mission",
+        "{latest_mission_id}",
+        "--contract-summary",
+        "Mission workflow assertions are declared before execution.",
+        "--milestone",
+        "m1|Milestone 1|Ship the workflow mission slice.",
+        "--assertion",
+        "a1|Workflow slice works|The mission slice should validate cleanly.|contract|Inspect mission validation output.",
+        "--feature",
+        "f1|m1|Implement workflow slice|Create the first workflow mission feature.|worker|app/workflow.py||a1"
+      ],
+      "stdout_contains": ["Planned mission", "milestones=1", "features=1", "assertions=1"],
+      "files_exist": [
+        ".harness/missions/features/{latest_mission_feature_id}/feature.json",
+        ".harness/missions/contracts/{latest_mission_contract_id}/contract.json"
+      ]
+    },
+    {
+      "name": "mission-approve",
+      "argv": ["mission", "approve", "--mission", "{latest_mission_id}"],
+      "stdout_contains": ["Approved mission"]
+    },
+    {
+      "name": "mission-execute-next",
+      "argv": ["mission", "execute-next", "--mission", "{latest_mission_id}"],
+      "stdout_contains": ["dispatched", "feature_id=", "handoff_id="],
+      "files_exist": [
+        ".harness/missions/handoffs/{latest_mission_handoff_id}/handoff.json",
+        ".harness/missions/runs/{latest_mission_run_id}/run.json"
+      ]
+    },
+    {
+      "name": "mission-complete-feature",
+      "argv": [
+        "mission",
+        "complete-feature",
+        "--mission",
+        "{latest_mission_id}",
+        "--feature",
+        "{latest_mission_feature_id}",
+        "--completed-work",
+        "Implemented the workflow mission slice.",
+        "--next-recommendation",
+        "Run milestone validation next."
+      ],
+      "stdout_contains": ["recorded", "feature_id="]
+    },
+    {
+      "name": "mission-validate",
+      "argv": ["mission", "validate-milestone", "--mission", "{latest_mission_id}"],
+      "stdout_contains": ["completed", "findings_count=0"]
+    },
+    {
+      "name": "mission-show",
+      "argv": ["mission", "show", "{latest_mission_id}"],
+      "stdout_contains": ["status=completed", "Workflow Mission"]
+    }
+  ]
+}

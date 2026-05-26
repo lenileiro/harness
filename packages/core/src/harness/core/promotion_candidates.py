@@ -16,6 +16,8 @@ class PromotionCandidate:
     id: str
     title: str
     summary: str
+    mission_id: str = ""
+    mission_feature_ids: tuple[str, ...] = ()
     source_publications: tuple[str, ...] = ()
     source_hypotheses: tuple[str, ...] = ()
     target_files: tuple[str, ...] = ()
@@ -31,6 +33,8 @@ class PromotionCandidate:
             "id": self.id,
             "title": self.title,
             "summary": self.summary,
+            "mission_id": self.mission_id,
+            "mission_feature_ids": list(self.mission_feature_ids),
             "source_publications": list(self.source_publications),
             "source_hypotheses": list(self.source_hypotheses),
             "target_files": list(self.target_files),
@@ -48,6 +52,10 @@ class PromotionCandidate:
             id=str(data["id"]),
             title=str(data.get("title") or "").strip(),
             summary=str(data.get("summary") or "").strip(),
+            mission_id=str(data.get("mission_id") or "").strip(),
+            mission_feature_ids=tuple(
+                str(item).strip() for item in data.get("mission_feature_ids") or []
+            ),
             source_publications=tuple(
                 str(item).strip() for item in data.get("source_publications") or []
             ),
