@@ -98,7 +98,14 @@ from harness.core.gateway_models import (
 )
 from harness.core.gateway_router import dispatch_gateway_message
 from harness.core.gateway_sessions import GatewaySessionStore
-from harness.core.gateway_whatsapp import extract_whatsapp_messages, send_whatsapp_text_message
+from harness.core.gateway_whatsapp import (
+    WhatsAppBridgeConfig,
+    WhatsAppBridgeStatus,
+    load_whatsapp_bridge_config,
+    read_whatsapp_bridge_status,
+    save_whatsapp_bridge_config,
+    send_whatsapp_text_message,
+)
 from harness.core.guardrails import Guardrail, GuardrailMode, GuardrailResult
 from harness.core.handoff import HandoffTool
 from harness.core.inspiration import ExternalSource, InspirationNote
@@ -603,7 +610,6 @@ __all__ = [
     "execute_mission_burst",
     "execute_mission_milestone",
     "execute_next_mission_feature",
-    "extract_whatsapp_messages",
     "filter_tools_by_authority",
     "fork_session",
     "format_ledger",
@@ -629,6 +635,7 @@ __all__ = [
     "push_branch",
     "rebalance_research_queue",
     "redact_secrets",
+    "save_whatsapp_bridge_config",
     "render_mining_prompt",
     "router",
     "run_due_scheduler_jobs",
@@ -641,10 +648,14 @@ __all__ = [
     "start",
     "summarize_publication",
     "tool_matches_phase",
+    "load_whatsapp_bridge_config",
+    "read_whatsapp_bridge_status",
     "validate_inputs",
     "validate_mission_milestone",
     "validate_outputs",
     "write_mission_scheduled_run_record",
     "write_mission_summary_report",
     "write_promotion_draft",
+    "WhatsAppBridgeConfig",
+    "WhatsAppBridgeStatus",
 ]

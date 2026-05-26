@@ -34,7 +34,7 @@ class WhatsAppNotificationHook:
         target = self._target(cwd)
         if not target:
             return
-        send_whatsapp_text_message(to=target, text=text)
+        send_whatsapp_text_message(cwd=cwd, to=target, text=text)
 
     def on_scheduler_tick(
         self,

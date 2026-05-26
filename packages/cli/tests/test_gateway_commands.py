@@ -7,7 +7,8 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 from harness.cli import __main__ as cli_main
-from harness.core import PendingApproval
+from harness.cli import gateway_commands
+from harness.core import PendingApproval, WhatsAppBridgeConfig, save_whatsapp_bridge_config
 from harness.storage.sqlite import SQLiteStorage
 
 
@@ -224,146 +225,142 @@ def test_gateway_dispatch_can_grant_approval(tmp_path: Path) -> None:
     assert asyncio.run(_load_status()) == "granted"
 
 
-def test_gateway_whatsapp_dispatch_routes_incoming_text_payload(tmp_path: Path) -> None:
+def test_gateway_whatsapp_setup_can_configure_self_chat_noninteractively(tmp_path: Path) -> None:
     runner = CliRunner()
-    payload_path = tmp_path / "whatsapp.json"
-    payload_path.write_text(
-        json.dumps(
-            {
-                "entry": [
-                    {
-                        "changes": [
-                            {
-                                "field": "messages",
-                                "value": {
-                                    "metadata": {"phone_number_id": "phone-123"},
-                                    "contacts": [
-                                        {
-                                            "wa_id": "15551234567",
-                                            "profile": {"name": "Tester"},
-                                        }
-                                    ],
-                                    "messages": [
-                                        {
-                                            "from": "15551234567",
-                                            "id": "wamid.1",
-                                            "timestamp": "1710000000",
-                                            "type": "text",
-                                            "text": {"body": "status"},
-                                        }
-                                    ],
-                                },
-                            }
-                        ]
-                    }
-                ]
-            }
+
+    result = runner.invoke(
+        cli_main.app,
+        [
+            "gateway",
+            "whatsapp",
+            "setup",
+            "--cwd",
+            str(tmp_path),
+            "--mode",
+            "self-chat",
+            "--allowed-user",
+            "15551234567",
+            "--no-install",
+            "--no-pair",
+            "--json",
+        ],
+    )
+    assert result.exit_code == 0, result.stdout
+    payload = json.loads(result.stdout)
+    assert payload["mode"] == "self-chat"
+    assert payload["allowed_users"] == ["15551234567"]
+    assert payload["paired"] is False
+    assert payload["enabled"] is False
+
+
+def test_gateway_whatsapp_status_reports_bridge_state(tmp_path: Path) -> None:
+    runner = CliRunner()
+    save_whatsapp_bridge_config(
+        tmp_path,
+        WhatsAppBridgeConfig(
+            enabled=True,
+            mode="bot",
+            allowed_users=["15550001111"],
+            bridge_port=9919,
         ),
-        encoding="utf-8",
     )
 
     result = runner.invoke(
         cli_main.app,
         [
             "gateway",
-            "whatsapp-dispatch",
-            "--payload",
-            str(payload_path),
+            "whatsapp",
+            "status",
             "--cwd",
             str(tmp_path),
-            "--in-memory",
             "--json",
         ],
     )
     assert result.exit_code == 0, result.stdout
     payload = json.loads(result.stdout)
-    assert payload[0]["message"]["transport"] == "whatsapp"
-    assert payload[0]["reply"]["command"] == "status"
-    assert payload[0]["session"]["user_id"] == "15551234567"
+    assert payload["enabled"] is True
+    assert payload["mode"] == "bot"
+    assert payload["allowed_users"] == ["15550001111"]
+    assert payload["bridge_port"] == 9919
 
 
-def test_gateway_whatsapp_dispatch_can_grant_approval(tmp_path: Path) -> None:
+def test_gateway_whatsapp_send_uses_local_bridge(tmp_path: Path) -> None:
     runner = CliRunner()
-    db_path = tmp_path / "whatsapp-gateway.db"
-
-    async def _seed() -> str:
-        storage = SQLiteStorage(path=db_path)
-        try:
-            saved = await storage.create_approval(
-                PendingApproval(
-                    session_id="sess_gateway",
-                    tool_call_id="tool_call_2",
-                    tool_name="shell",
-                    arguments={"cmd": "echo from whatsapp"},
-                )
-            )
-            return saved.id
-        finally:
-            await storage.close()
-
-    approval_id = asyncio.run(_seed())
-    payload_path = tmp_path / "whatsapp-approve.json"
-    payload_path.write_text(
-        json.dumps(
-            {
-                "entry": [
-                    {
-                        "changes": [
-                            {
-                                "field": "messages",
-                                "value": {
-                                    "metadata": {"phone_number_id": "phone-123"},
-                                    "contacts": [
-                                        {
-                                            "wa_id": "15551234567",
-                                            "profile": {"name": "Approver"},
-                                        }
-                                    ],
-                                    "messages": [
-                                        {
-                                            "from": "15551234567",
-                                            "id": "wamid.approve",
-                                            "timestamp": "1710000001",
-                                            "type": "text",
-                                            "text": {"body": f"approve {approval_id}"},
-                                        }
-                                    ],
-                                },
-                            }
-                        ]
-                    }
-                ]
-            }
-        ),
-        encoding="utf-8",
+    save_whatsapp_bridge_config(
+        tmp_path,
+        WhatsAppBridgeConfig(enabled=True, mode="self-chat", allowed_users=[], bridge_port=9907),
     )
 
-    result = runner.invoke(
-        cli_main.app,
-        [
-            "gateway",
-            "whatsapp-dispatch",
-            "--payload",
-            str(payload_path),
-            "--cwd",
-            str(tmp_path),
-            "--db",
-            str(db_path),
-            "--json",
-        ],
-    )
+    def _fake_send(*, cwd: Path | None = None, to: str, text: str, reply_to: str | None = None):
+        assert cwd == tmp_path
+        assert to == "15551234567"
+        assert text == "hello"
+        assert reply_to is None
+        return {"ok": True, "messageId": "wamid.local"}
+
+    original = gateway_commands.send_whatsapp_text_message
+    gateway_commands.send_whatsapp_text_message = _fake_send
+    try:
+        result = runner.invoke(
+            cli_main.app,
+            [
+                "gateway",
+                "whatsapp",
+                "send",
+                "--cwd",
+                str(tmp_path),
+                "--to",
+                "15551234567",
+                "--text",
+                "hello",
+                "--json",
+            ],
+        )
+    finally:
+        gateway_commands.send_whatsapp_text_message = original
     assert result.exit_code == 0, result.stdout
     payload = json.loads(result.stdout)
-    assert payload[0]["reply"]["command"] == "approve"
-    assert payload[0]["reply"]["status"] == "ok"
+    assert payload["ok"] is True
 
-    async def _load_status() -> str:
-        storage = SQLiteStorage(path=db_path)
-        try:
-            approval = await storage.get_approval(approval_id)
-            assert approval is not None
-            return approval.status
-        finally:
-            await storage.close()
 
-    assert asyncio.run(_load_status()) == "granted"
+def test_gateway_whatsapp_pair_marks_config_enabled(tmp_path: Path) -> None:
+    runner = CliRunner()
+    save_whatsapp_bridge_config(
+        tmp_path,
+        WhatsAppBridgeConfig(enabled=False, mode="self-chat", allowed_users=["15551234567"]),
+    )
+
+    original_pair = gateway_commands.run_whatsapp_pairing
+    original_is_paired = gateway_commands.is_whatsapp_paired
+
+    def _fake_pair(cwd: Path, **_: object) -> None:
+        session_dir = tmp_path / ".harness" / "gateway" / "whatsapp" / "session"
+        session_dir.mkdir(parents=True, exist_ok=True)
+        (session_dir / "creds.json").write_text("{}", encoding="utf-8")
+
+    def _fake_is_paired(cwd: Path) -> bool:
+        return (tmp_path / ".harness" / "gateway" / "whatsapp" / "session" / "creds.json").exists()
+
+    gateway_commands.run_whatsapp_pairing = _fake_pair
+    gateway_commands.is_whatsapp_paired = _fake_is_paired
+    try:
+        result = runner.invoke(
+            cli_main.app,
+            [
+                "gateway",
+                "whatsapp",
+                "pair",
+                "--cwd",
+                str(tmp_path),
+                "--no-install",
+                "--json",
+            ],
+        )
+    finally:
+        gateway_commands.run_whatsapp_pairing = original_pair
+        gateway_commands.is_whatsapp_paired = original_is_paired
+
+    assert result.exit_code == 0, result.stdout
+    payload = json.loads(result.stdout)
+    assert payload["paired"] is True
+    assert payload["enabled"] is True

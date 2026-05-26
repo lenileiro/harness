@@ -15,7 +15,18 @@ from harness.core import ApprovalStore, GatewayMessage, default_gateway_root
 from harness.core.extensions import LifecycleHook
 from harness.core.gateway_router import dispatch_gateway_message
 from harness.core.gateway_sessions import GatewaySessionStore
-from harness.core.gateway_whatsapp import extract_whatsapp_messages, send_whatsapp_text_message
+from harness.core.gateway_whatsapp import (
+    WhatsAppBridgeConfig,
+    clear_whatsapp_session,
+    install_whatsapp_bridge_dependencies,
+    is_whatsapp_paired,
+    load_whatsapp_bridge_config,
+    read_whatsapp_bridge_status,
+    run_whatsapp_pairing,
+    save_whatsapp_bridge_config,
+    send_whatsapp_text_message,
+    start_whatsapp_bridge,
+)
 from harness.core.scheduler_store import SchedulerStore
 
 console = Console()
@@ -25,6 +36,12 @@ gateway_app = typer.Typer(
     help="Dispatch transport-neutral remote control messages.",
     no_args_is_help=True,
 )
+whatsapp_app = typer.Typer(
+    name="whatsapp",
+    help="Manage local WhatsApp Web pairing and bridge runtime.",
+    no_args_is_help=True,
+)
+gateway_app.add_typer(whatsapp_app, name="whatsapp")
 
 
 def _emit_json(payload: object) -> None:
@@ -122,97 +139,165 @@ def gateway_list_sessions_command(
     console.print(table)
 
 
-@gateway_app.command("whatsapp-dispatch")
-def gateway_whatsapp_dispatch_command(
+def _normalize_allowed_users(values: list[str] | tuple[str, ...]) -> list[str]:
+    normalized: list[str] = []
+    for item in values:
+        for part in item.split(","):
+            value = part.strip().replace(" ", "")
+            if value:
+                normalized.append(value)
+    return normalized
+
+
+def _prompt_whatsapp_mode() -> str:
+    choice = typer.prompt(
+        "Choose WhatsApp mode: 1=personal number (self-chat), 2=separate bot number",
+        default="1",
+    ).strip()
+    return "bot" if choice == "2" else "self-chat"
+
+
+@whatsapp_app.command("setup")
+def gateway_whatsapp_setup_command(
     *,
-    payload_path: Path = typer.Option(..., "--payload"),
     cwd: Path | None = typer.Option(None, "--cwd"),
-    db: Path | None = typer.Option(None, "--db"),
-    in_memory: bool = typer.Option(False, "--in-memory"),
-    send: bool = typer.Option(False, "--send"),
-    phone_number_id: str | None = typer.Option(None, "--phone-number-id"),
-    access_token: str | None = typer.Option(None, "--access-token"),
-    api_version: str | None = typer.Option(None, "--api-version"),
+    mode: str | None = typer.Option(None, "--mode"),
+    allowed_user: list[str] | None = typer.Option(None, "--allowed-user"),
+    install: bool = typer.Option(True, "--install/--no-install"),
+    pair: bool = typer.Option(True, "--pair/--no-pair"),
+    force_repair: bool = typer.Option(False, "--force-repair"),
+    bridge_port: int | None = typer.Option(None, "--bridge-port"),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
     working_dir = (cwd or Path.cwd()).resolve()
-    payload = json.loads(payload_path.read_text(encoding="utf-8"))
-    incoming = extract_whatsapp_messages(payload)
-    hooks = _load_hooks(working_dir)
-    session_store = GatewaySessionStore(root=default_gateway_root(working_dir))
-    scheduler_store = SchedulerStore(root=working_dir / ".harness" / "scheduler")
-    storage = build_storage(db=db, in_memory=in_memory, cwd=working_dir)
-    approval_store = cast(ApprovalStore, storage)
+    existing = load_whatsapp_bridge_config(working_dir)
+    selected_mode = (mode or existing.mode or _prompt_whatsapp_mode()).strip() or "self-chat"
+    allowed_users = _normalize_allowed_users(allowed_user or [])
+    if not allowed_users and existing.allowed_users:
+        allowed_users = list(existing.allowed_users)
+    if not allowed_users and selected_mode == "self-chat":
+        owner = typer.prompt("Your personal WhatsApp number (digits, with country code)")
+        allowed_users = _normalize_allowed_users((owner,))
+    elif not allowed_users:
+        raw = typer.prompt(
+            "Allowed WhatsApp numbers (comma-separated, or * for anyone)",
+            default="",
+            show_default=False,
+        )
+        allowed_users = _normalize_allowed_users((raw,))
 
-    async def _go() -> list[dict[str, object]]:
-        replies: list[dict[str, object]] = []
-        for item in incoming:
-            reply, session = await dispatch_gateway_message(
-                cwd=working_dir,
-                session_store=session_store,
-                scheduler_store=scheduler_store,
-                message=item,
-                approval_store=approval_store,
-                hooks=hooks,
-            )
-            sent_payload: dict[str, object] | None = None
-            if send:
-                sent_payload = send_whatsapp_text_message(
-                    to=item.user_id,
-                    text=reply.text,
-                    phone_number_id=phone_number_id,
-                    access_token=access_token,
-                    api_version=api_version,
-                )
-            replies.append(
-                {
-                    "message": item.to_dict(),
-                    "reply": reply.to_dict(),
-                    "session": session.to_dict(),
-                    "sent": sent_payload,
-                }
-            )
-        return replies
+    config = WhatsAppBridgeConfig(
+        enabled=existing.enabled,
+        mode="bot" if selected_mode == "bot" else "self-chat",
+        allowed_users=allowed_users,
+        bridge_port=bridge_port or existing.bridge_port,
+        reply_prefix=existing.reply_prefix,
+    )
+    save_whatsapp_bridge_config(working_dir, config)
 
-    try:
-        results = asyncio.run(_go())
-        if json_output:
-            _emit_json(results)
-            return
-        if not results:
-            console.print("[dim]No WhatsApp text messages found in payload.[/dim]")
-            return
-        for item in results:
-            reply = item["reply"]
-            assert isinstance(reply, dict)
-            color = "green" if reply["status"] == "ok" else "red"
-            console.print(f"[{color}]{reply['command']}[/{color}] {reply['text']}")
-    finally:
-        if hasattr(storage, "close"):
-            asyncio.run(storage.close())  # type: ignore[attr-defined]
+    if force_repair:
+        clear_whatsapp_session(working_dir)
+
+    if install:
+        install_whatsapp_bridge_dependencies(working_dir)
+
+    paired_now = is_whatsapp_paired(working_dir)
+    if pair and (force_repair or not paired_now):
+        run_whatsapp_pairing(working_dir)
+        paired_now = is_whatsapp_paired(working_dir)
+
+    config.enabled = paired_now or existing.enabled
+    save_whatsapp_bridge_config(working_dir, config)
+    status = read_whatsapp_bridge_status(working_dir)
+    if json_output:
+        _emit_json(status.to_dict())
+        return
+    console.print(f"[green]mode[/green]={status.config.mode}")
+    console.print(f"[green]allowed_users[/green]={', '.join(status.config.allowed_users) or '-'}")
+    console.print(f"[green]paired[/green]={status.paired}")
+    console.print(f"[green]enabled[/green]={status.config.enabled}")
 
 
-@gateway_app.command("whatsapp-send")
+@whatsapp_app.command("status")
+def gateway_whatsapp_status_command(
+    *,
+    cwd: Path | None = typer.Option(None, "--cwd"),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    working_dir = (cwd or Path.cwd()).resolve()
+    status = read_whatsapp_bridge_status(working_dir)
+    if json_output:
+        _emit_json(status.to_dict())
+        return
+    table = Table("field", "value")
+    table.add_row("enabled", str(status.config.enabled))
+    table.add_row("mode", status.config.mode)
+    table.add_row("allowed_users", ", ".join(status.config.allowed_users) or "-")
+    table.add_row("paired", str(status.paired))
+    table.add_row("dependencies_installed", str(status.dependencies_installed))
+    table.add_row("bridge_running", str(status.bridge_running))
+    table.add_row("bridge_connected", str(status.bridge_connected))
+    table.add_row("bridge_port", str(status.config.bridge_port))
+    table.add_row("session_dir", str(status.session_dir))
+    console.print(table)
+
+
+@whatsapp_app.command("pair")
+def gateway_whatsapp_pair_command(
+    *,
+    cwd: Path | None = typer.Option(None, "--cwd"),
+    install: bool = typer.Option(True, "--install/--no-install"),
+    force_repair: bool = typer.Option(False, "--force-repair"),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    working_dir = (cwd or Path.cwd()).resolve()
+    if force_repair:
+        clear_whatsapp_session(working_dir)
+    if install:
+        install_whatsapp_bridge_dependencies(working_dir)
+    run_whatsapp_pairing(working_dir)
+    config = load_whatsapp_bridge_config(working_dir)
+    config.enabled = is_whatsapp_paired(working_dir)
+    save_whatsapp_bridge_config(working_dir, config)
+    status = read_whatsapp_bridge_status(working_dir)
+    if json_output:
+        _emit_json(status.to_dict())
+        return
+    console.print(f"[green]paired[/green]={status.paired}")
+
+
+@whatsapp_app.command("start")
+def gateway_whatsapp_start_command(
+    *,
+    cwd: Path | None = typer.Option(None, "--cwd"),
+    install: bool = typer.Option(True, "--install/--no-install"),
+) -> None:
+    working_dir = (cwd or Path.cwd()).resolve()
+    if install:
+        install_whatsapp_bridge_dependencies(working_dir)
+    start_whatsapp_bridge(working_dir)
+
+
+@whatsapp_app.command("send")
 def gateway_whatsapp_send_command(
     *,
     to: str = typer.Option(..., "--to"),
     text: str = typer.Option(..., "--text"),
-    phone_number_id: str | None = typer.Option(None, "--phone-number-id"),
-    access_token: str | None = typer.Option(None, "--access-token"),
-    api_version: str | None = typer.Option(None, "--api-version"),
+    cwd: Path | None = typer.Option(None, "--cwd"),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
-    payload = send_whatsapp_text_message(
-        to=to,
-        text=text,
-        phone_number_id=phone_number_id,
-        access_token=access_token,
-        api_version=api_version,
-    )
+    working_dir = (cwd or Path.cwd()).resolve()
+    payload = send_whatsapp_text_message(cwd=working_dir, to=to, text=text)
     if json_output:
         _emit_json(payload)
         return
     console.print(f"[green]sent[/green] to={to}")
 
 
-__all__ = ["gateway_app"]
+__all__ = [
+    "gateway_app",
+    "is_whatsapp_paired",
+    "run_whatsapp_pairing",
+    "send_whatsapp_text_message",
+    "whatsapp_app",
+]
