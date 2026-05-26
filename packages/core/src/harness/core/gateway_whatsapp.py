@@ -18,6 +18,8 @@ from harness.core.gateway_whatsapp_assets import (
 @dataclass(slots=True)
 class WhatsAppBridgeConfig:
     enabled: bool = False
+    provider: str = "ollama"
+    model: str = "gemma4:latest"
     mode: str = "self-chat"
     allowed_users: list[str] = field(default_factory=list)
     bridge_port: int = 8741
@@ -42,6 +44,8 @@ class WhatsAppBridgeStatus:
     def to_dict(self) -> dict[str, Any]:
         return {
             "enabled": self.config.enabled,
+            "provider": self.config.provider,
+            "model": self.config.model,
             "mode": self.config.mode,
             "allowed_users": list(self.config.allowed_users),
             "bridge_port": self.config.bridge_port,
@@ -84,6 +88,8 @@ def load_whatsapp_bridge_config(cwd: Path) -> WhatsAppBridgeConfig:
     payload = json.loads(path.read_text(encoding="utf-8"))
     return WhatsAppBridgeConfig(
         enabled=bool(payload.get("enabled", False)),
+        provider=str(payload.get("provider", "ollama")).strip() or "ollama",
+        model=str(payload.get("model", "gemma4:latest")).strip() or "gemma4:latest",
         mode=str(payload.get("mode", "self-chat")).strip() or "self-chat",
         allowed_users=[
             str(item).strip() for item in payload.get("allowed_users", []) if str(item).strip()
@@ -145,6 +151,8 @@ def build_whatsapp_bridge_env(cwd: Path) -> dict[str, str]:
         "HARNESS_WHATSAPP_MODE": config.mode,
         "HARNESS_WHATSAPP_ALLOWED_USERS": ",".join(config.allowed_users),
         "HARNESS_WHATSAPP_REPLY_PREFIX": config.reply_prefix,
+        "HARNESS_WHATSAPP_WORKSPACE_CWD": str(cwd.resolve()),
+        "HARNESS_WHATSAPP_UV_BIN": shutil.which("uv") or "uv",
     }
 
 

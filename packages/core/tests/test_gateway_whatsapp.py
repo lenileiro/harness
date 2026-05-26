@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 from harness.core.gateway_whatsapp import (
     WhatsAppBridgeConfig,
+    build_whatsapp_bridge_env,
     ensure_whatsapp_bridge_project,
     load_whatsapp_bridge_config,
     read_whatsapp_bridge_status,
@@ -17,6 +18,8 @@ from harness.core.gateway_whatsapp import (
 def test_whatsapp_bridge_config_roundtrip(tmp_path: Path) -> None:
     config = WhatsAppBridgeConfig(
         enabled=True,
+        provider="ollama",
+        model="gemma4:latest",
         mode="self-chat",
         allowed_users=["15551234567"],
         bridge_port=9901,
@@ -32,9 +35,43 @@ def test_ensure_whatsapp_bridge_project_writes_assets(tmp_path: Path) -> None:
     project_dir = ensure_whatsapp_bridge_project(tmp_path)
     assert (project_dir / "package.json").exists()
     assert (project_dir / "bridge.js").exists()
+    bridge_js = (project_dir / "bridge.js").read_text(encoding="utf-8")
+    assert "messages.upsert" in bridge_js
+    assert "'dispatch'" in bridge_js
+    assert "'converse'" in bridge_js
+
+
+def test_build_whatsapp_bridge_env_includes_workspace_and_uv(tmp_path: Path) -> None:
+    save_whatsapp_bridge_config(
+        tmp_path,
+        WhatsAppBridgeConfig(
+            enabled=True,
+            provider="ollama",
+            model="gemma4:latest",
+            mode="self-chat",
+            allowed_users=["15551234567"],
+            bridge_port=8741,
+        ),
+    )
+    env = build_whatsapp_bridge_env(tmp_path)
+    assert env["HARNESS_WHATSAPP_MODE"] == "self-chat"
+    assert env["HARNESS_WHATSAPP_ALLOWED_USERS"] == "15551234567"
+    assert env["HARNESS_WHATSAPP_WORKSPACE_CWD"] == str(tmp_path.resolve())
+    assert env["HARNESS_WHATSAPP_UV_BIN"]
 
 
 def test_read_whatsapp_bridge_status_reports_defaults(tmp_path: Path) -> None:
+    save_whatsapp_bridge_config(
+        tmp_path,
+        WhatsAppBridgeConfig(
+            enabled=False,
+            provider="ollama",
+            model="gemma4:latest",
+            mode="self-chat",
+            allowed_users=[],
+            bridge_port=19841,
+        ),
+    )
     status = read_whatsapp_bridge_status(tmp_path)
     assert status.config.mode == "self-chat"
     assert status.paired is False
@@ -45,7 +82,14 @@ def test_read_whatsapp_bridge_status_reports_defaults(tmp_path: Path) -> None:
 def test_send_whatsapp_text_message_posts_to_local_bridge(tmp_path: Path) -> None:
     save_whatsapp_bridge_config(
         tmp_path,
-        WhatsAppBridgeConfig(enabled=True, mode="self-chat", allowed_users=[], bridge_port=9912),
+        WhatsAppBridgeConfig(
+            enabled=True,
+            provider="ollama",
+            model="gemma4:latest",
+            mode="self-chat",
+            allowed_users=[],
+            bridge_port=9912,
+        ),
     )
     captured: dict[str, object] = {}
 

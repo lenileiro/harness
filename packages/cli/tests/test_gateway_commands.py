@@ -247,10 +247,40 @@ def test_gateway_whatsapp_setup_can_configure_self_chat_noninteractively(tmp_pat
     )
     assert result.exit_code == 0, result.stdout
     payload = json.loads(result.stdout)
+    assert payload["provider"] == "ollama"
+    assert payload["model"] == "gemma4:latest"
     assert payload["mode"] == "self-chat"
     assert payload["allowed_users"] == ["15551234567"]
     assert payload["paired"] is False
     assert payload["enabled"] is False
+
+
+def test_gateway_whatsapp_setup_defaults_openrouter_model(tmp_path: Path) -> None:
+    runner = CliRunner()
+
+    result = runner.invoke(
+        cli_main.app,
+        [
+            "gateway",
+            "whatsapp",
+            "setup",
+            "--cwd",
+            str(tmp_path),
+            "--provider",
+            "openrouter",
+            "--mode",
+            "self-chat",
+            "--allowed-user",
+            "15551234567",
+            "--no-install",
+            "--no-pair",
+            "--json",
+        ],
+    )
+    assert result.exit_code == 0, result.stdout
+    payload = json.loads(result.stdout)
+    assert payload["provider"] == "openrouter"
+    assert payload["model"] == "google/gemma-4-31b-it"
 
 
 def test_gateway_whatsapp_status_reports_bridge_state(tmp_path: Path) -> None:
@@ -364,3 +394,63 @@ def test_gateway_whatsapp_pair_marks_config_enabled(tmp_path: Path) -> None:
     payload = json.loads(result.stdout)
     assert payload["paired"] is True
     assert payload["enabled"] is True
+
+
+def test_gateway_converse_returns_chat_reply(tmp_path: Path) -> None:
+    runner = CliRunner()
+
+    async def _fake_converse(**kwargs: object) -> dict[str, object]:
+        assert kwargs["transport"] == "whatsapp"
+        assert kwargs["user_id"] == "15551234567"
+        assert kwargs["thread_id"] == "15551234567@s.whatsapp.net"
+        assert kwargs["message"] == "hello there"
+        return {
+            "reply": {
+                "session_id": "gw-test",
+                "command": "chat",
+                "status": "ok",
+                "text": "Hi from Harness",
+                "data": {"harness_session_id": "sess_test"},
+            },
+            "session": {
+                "id": "gw-test",
+                "transport": "whatsapp",
+                "user_id": "15551234567",
+                "thread_id": "15551234567@s.whatsapp.net",
+                "current_mission_id": "",
+                "last_job_id": "",
+                "last_run_id": "",
+                "last_command": "chat",
+                "updated_at": "2026-05-27T00:00:00+00:00",
+                "metadata": {"harness_session_id": "sess_test"},
+            },
+        }
+
+    original = gateway_commands._run_gateway_conversation
+    gateway_commands._run_gateway_conversation = _fake_converse
+    try:
+        result = runner.invoke(
+            cli_main.app,
+            [
+                "gateway",
+                "converse",
+                "--cwd",
+                str(tmp_path),
+                "--transport",
+                "whatsapp",
+                "--user",
+                "15551234567",
+                "--thread",
+                "15551234567@s.whatsapp.net",
+                "--message",
+                "hello there",
+                "--json",
+            ],
+        )
+    finally:
+        gateway_commands._run_gateway_conversation = original
+
+    assert result.exit_code == 0, result.stdout
+    payload = json.loads(result.stdout)
+    assert payload["reply"]["command"] == "chat"
+    assert payload["reply"]["text"] == "Hi from Harness"

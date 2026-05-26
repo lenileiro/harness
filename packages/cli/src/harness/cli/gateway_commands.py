@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+from dataclasses import replace
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
 
@@ -9,8 +11,27 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from harness.cli.common import (
+    _build_adapter,
+    _build_tools,
+    _load_cli_config,
+    _resolve_chain,
+)
+from harness.cli.common import (
+    console as common_console,
+)
 from harness.cli.plugins import load_cli_hook_providers
+from harness.cli.run_commands import run_once as _run_once_impl
+from harness.cli.runtime_helpers import (
+    build_critic as _build_critic,
+)
 from harness.cli.runtime_helpers import build_storage
+from harness.cli.runtime_helpers import (
+    build_verifier as _build_verifier,
+)
+from harness.cli.runtime_helpers import (
+    resolve_runtime_strategy as _resolve_runtime_strategy,
+)
 from harness.core import ApprovalStore, GatewayMessage, default_gateway_root
 from harness.core.extensions import LifecycleHook
 from harness.core.gateway_router import dispatch_gateway_message
@@ -30,6 +51,14 @@ from harness.core.gateway_whatsapp import (
 from harness.core.scheduler_store import SchedulerStore
 
 console = Console()
+
+
+def _default_gateway_model(provider: str) -> str:
+    normalized = provider.strip().lower()
+    if normalized == "openrouter":
+        return "google/gemma-4-31b-it"
+    return "gemma4:latest"
+
 
 gateway_app = typer.Typer(
     name="gateway",
@@ -53,6 +82,114 @@ def _load_hooks(cwd: Path) -> tuple[LifecycleHook, ...]:
     for provider in load_cli_hook_providers(cwd):
         hooks.extend(provider.hooks())
     return tuple(hooks)
+
+
+def _utcnow_text() -> str:
+    return datetime.now(UTC).isoformat(timespec="seconds")
+
+
+async def _noop_task_attachment(*_args: object, **_kwargs: object) -> tuple[None, None]:
+    return None, None
+
+
+async def _noop_print_defense_ledger(*_args: object, **_kwargs: object) -> None:
+    return None
+
+
+async def _run_gateway_conversation(
+    *,
+    cwd: Path,
+    session_store: GatewaySessionStore,
+    transport: str,
+    user_id: str,
+    thread_id: str,
+    message: str,
+    max_steps: int = 20,
+) -> dict[str, object]:
+    from harness.cli.__main__ import _DEFAULT_SYSTEM_PROMPT, _build_agent
+
+    wa_config = load_whatsapp_bridge_config(cwd)
+    session = session_store.get_or_create_session(
+        transport=transport,
+        user_id=user_id,
+        thread_id=thread_id,
+    )
+    harness_session_id = (
+        str(session.metadata.get("harness_session_id", "")).strip()
+        or f"sess_{session.id.replace('-', '_')}"
+    )
+    cfg = _load_cli_config(None)
+    provider = wa_config.provider or cfg.default_provider or "ollama"
+    chain = _resolve_chain(failover_flag=None, provider_flag=provider, config=cfg)
+    model = wa_config.model or cfg.default_model or _default_gateway_model(provider)
+    final_text = await _run_once_impl(
+        prompt=message,
+        model=model,
+        chain=chain,
+        base_url=None,
+        cwd=cwd,
+        max_steps=max_steps,
+        max_output_tokens=None,
+        session_id=harness_session_id,
+        task_ref=None,
+        db=None,
+        in_memory=False,
+        yes=False,
+        inbox=True,
+        verify=None,
+        verify_command=None,
+        critic=None,
+        require_tools=False,
+        goal=False,
+        max_context_tokens=None,
+        predict=False,
+        auto_compact=False,
+        max_repair=3,
+        profile="minimal",
+        domain="coding",
+        phases=None,
+        loop_detect=True,
+        contracts=True,
+        tips=True,
+        silent=True,
+        config=cfg,
+        build_storage=build_storage,
+        resolve_task_attachment=_noop_task_attachment,
+        resolve_runtime_strategy=_resolve_runtime_strategy,
+        build_verifier=_build_verifier,
+        build_critic=_build_critic,
+        build_adapter=_build_adapter,
+        build_tools=_build_tools,
+        build_agent=_build_agent,
+        print_defense_ledger=_noop_print_defense_ledger,
+        render=lambda _event: None,
+        default_system_prompt=_DEFAULT_SYSTEM_PROMPT,
+        console=common_console,
+    )
+    reply_text = (final_text or "").strip()
+    if not reply_text:
+        reply_text = (
+            "Harness could not generate a conversational reply. "
+            "Configure a working model/provider for chat runs, then try again."
+        )
+    updated = replace(
+        session,
+        last_command="chat",
+        updated_at=_utcnow_text(),
+        metadata={**session.metadata, "harness_session_id": harness_session_id},
+    )
+    session_store.save_session(updated)
+    reply = {
+        "session_id": updated.id,
+        "command": "chat",
+        "status": "ok",
+        "text": reply_text,
+        "data": {"harness_session_id": harness_session_id},
+    }
+    return {
+        "reply": reply,
+        "session": updated.to_dict(),
+    }
 
 
 @gateway_app.command("dispatch")
@@ -139,6 +276,38 @@ def gateway_list_sessions_command(
     console.print(table)
 
 
+@gateway_app.command("converse")
+def gateway_converse_command(
+    *,
+    message: str = typer.Option(..., "--message"),
+    transport: str = typer.Option("whatsapp", "--transport"),
+    user_id: str = typer.Option(..., "--user"),
+    thread_id: str = typer.Option("default", "--thread"),
+    cwd: Path | None = typer.Option(None, "--cwd"),
+    max_steps: int = typer.Option(20, "--max-steps"),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    working_dir = (cwd or Path.cwd()).resolve()
+    session_store = GatewaySessionStore(root=default_gateway_root(working_dir))
+    payload = asyncio.run(
+        _run_gateway_conversation(
+            cwd=working_dir,
+            session_store=session_store,
+            transport=transport,
+            user_id=user_id,
+            thread_id=thread_id,
+            message=message,
+            max_steps=max_steps,
+        )
+    )
+    if json_output:
+        _emit_json(payload)
+        return
+    reply = payload["reply"]
+    assert isinstance(reply, dict)
+    console.print(reply["text"])
+
+
 def _normalize_allowed_users(values: list[str] | tuple[str, ...]) -> list[str]:
     normalized: list[str] = []
     for item in values:
@@ -161,6 +330,8 @@ def _prompt_whatsapp_mode() -> str:
 def gateway_whatsapp_setup_command(
     *,
     cwd: Path | None = typer.Option(None, "--cwd"),
+    provider: str | None = typer.Option(None, "--provider"),
+    model: str | None = typer.Option(None, "--model"),
     mode: str | None = typer.Option(None, "--mode"),
     allowed_user: list[str] | None = typer.Option(None, "--allowed-user"),
     install: bool = typer.Option(True, "--install/--no-install"),
@@ -171,6 +342,13 @@ def gateway_whatsapp_setup_command(
 ) -> None:
     working_dir = (cwd or Path.cwd()).resolve()
     existing = load_whatsapp_bridge_config(working_dir)
+    selected_provider = (provider or existing.provider or "ollama").strip() or "ollama"
+    if model is not None:
+        selected_model = model.strip()
+    elif provider is not None and selected_provider != existing.provider:
+        selected_model = _default_gateway_model(selected_provider)
+    else:
+        selected_model = (existing.model or _default_gateway_model(selected_provider)).strip()
     selected_mode = (mode or existing.mode or _prompt_whatsapp_mode()).strip() or "self-chat"
     allowed_users = _normalize_allowed_users(allowed_user or [])
     if not allowed_users and existing.allowed_users:
@@ -188,6 +366,8 @@ def gateway_whatsapp_setup_command(
 
     config = WhatsAppBridgeConfig(
         enabled=existing.enabled,
+        provider=selected_provider,
+        model=selected_model or _default_gateway_model(selected_provider),
         mode="bot" if selected_mode == "bot" else "self-chat",
         allowed_users=allowed_users,
         bridge_port=bridge_port or existing.bridge_port,
@@ -213,6 +393,8 @@ def gateway_whatsapp_setup_command(
         _emit_json(status.to_dict())
         return
     console.print(f"[green]mode[/green]={status.config.mode}")
+    console.print(f"[green]provider[/green]={status.config.provider}")
+    console.print(f"[green]model[/green]={status.config.model}")
     console.print(f"[green]allowed_users[/green]={', '.join(status.config.allowed_users) or '-'}")
     console.print(f"[green]paired[/green]={status.paired}")
     console.print(f"[green]enabled[/green]={status.config.enabled}")
