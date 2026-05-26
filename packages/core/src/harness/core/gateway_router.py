@@ -72,7 +72,7 @@ def _format_runs(runs: list[dict[str, str]]) -> str:
     lines = ["Latest runs:"]
     for item in runs:
         lines.append(
-            f"- {item['id']} {item['kind']} -> {item['result_status']} " f"({item['finished_at']})"
+            f"- {item['id']} {item['kind']} -> {item['result_status']} ({item['finished_at']})"
         )
     return "\n".join(lines)
 
