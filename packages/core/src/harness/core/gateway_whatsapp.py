@@ -122,9 +122,6 @@ def install_whatsapp_bridge_dependencies(
     npm_bin: str = "npm",
 ) -> Path:
     project_dir = ensure_whatsapp_bridge_project(cwd)
-    node_modules = project_dir / "node_modules"
-    if node_modules.exists():
-        return project_dir
     subprocess.run(
         [npm_bin, "install", "--no-fund", "--no-audit", "--progress=false"],
         cwd=str(project_dir),

@@ -35,10 +35,14 @@ def test_ensure_whatsapp_bridge_project_writes_assets(tmp_path: Path) -> None:
     project_dir = ensure_whatsapp_bridge_project(tmp_path)
     assert (project_dir / "package.json").exists()
     assert (project_dir / "bridge.js").exists()
+    package_json = (project_dir / "package.json").read_text(encoding="utf-8")
     bridge_js = (project_dir / "bridge.js").read_text(encoding="utf-8")
+    assert "link-preview-js" in package_json
     assert "messages.upsert" in bridge_js
     assert "'dispatch'" in bridge_js
     assert "'converse'" in bridge_js
+    assert "ownIdentityCandidates" in bridge_js
+    assert "chatId.endsWith('@g.us')" in bridge_js
 
 
 def test_build_whatsapp_bridge_env_includes_workspace_and_uv(tmp_path: Path) -> None:

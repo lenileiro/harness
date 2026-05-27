@@ -3,12 +3,21 @@ from __future__ import annotations
 import asyncio
 import json
 from pathlib import Path
+from typing import Any, cast
 
 from typer.testing import CliRunner
 
 from harness.cli import __main__ as cli_main
 from harness.cli import gateway_commands
-from harness.core import PendingApproval, WhatsAppBridgeConfig, save_whatsapp_bridge_config
+from harness.core import (
+    GatewaySessionStore,
+    PendingApproval,
+    ToolCall,
+    ToolCallEvent,
+    WhatsAppBridgeConfig,
+    default_gateway_root,
+    save_whatsapp_bridge_config,
+)
 from harness.storage.sqlite import SQLiteStorage
 
 
@@ -454,3 +463,157 @@ def test_gateway_converse_returns_chat_reply(tmp_path: Path) -> None:
     payload = json.loads(result.stdout)
     assert payload["reply"]["command"] == "chat"
     assert payload["reply"]["text"] == "Hi from Harness"
+
+
+def test_run_gateway_conversation_auto_approves_tool_work(tmp_path: Path) -> None:
+    save_whatsapp_bridge_config(
+        tmp_path,
+        WhatsAppBridgeConfig(
+            enabled=True,
+            provider="openrouter",
+            model="google/gemma-4-31b-it",
+            mode="self-chat",
+            allowed_users=["15551234567"],
+        ),
+    )
+    session_store = GatewaySessionStore(root=default_gateway_root(tmp_path))
+    captured: dict[str, object] = {}
+
+    async def _fake_run_once(**kwargs: object) -> str:
+        captured.update(kwargs)
+        return "Done from chat"
+
+    original = gateway_commands.__dict__["_run_once_impl"]
+    gateway_commands.__dict__["_run_once_impl"] = _fake_run_once
+    try:
+        payload = cast(
+            dict[str, Any],
+            asyncio.run(
+                gateway_commands._run_gateway_conversation(
+                    cwd=tmp_path,
+                    session_store=session_store,
+                    transport="whatsapp",
+                    user_id="15551234567",
+                    thread_id="15551234567@s.whatsapp.net",
+                    message="write a file",
+                )
+            ),
+        )
+    finally:
+        gateway_commands.__dict__["_run_once_impl"] = original
+
+    assert payload["reply"]["text"] == "Done from chat"
+    assert captured["yes"] is True
+    assert captured["inbox"] is False
+
+
+def test_run_gateway_conversation_sends_event_driven_progress_updates(tmp_path: Path) -> None:
+    save_whatsapp_bridge_config(
+        tmp_path,
+        WhatsAppBridgeConfig(
+            enabled=True,
+            provider="openrouter",
+            model="google/gemma-4-31b-it",
+            mode="self-chat",
+            allowed_users=["15551234567"],
+        ),
+    )
+    session_store = GatewaySessionStore(root=default_gateway_root(tmp_path))
+    seeded = session_store.get_or_create_session(
+        transport="whatsapp",
+        user_id="15551234567",
+        thread_id="15551234567@s.whatsapp.net",
+    )
+    session_store.save_session(
+        seeded.__class__(
+            **{
+                **seeded.to_dict(),
+                "metadata": {
+                    **seeded.metadata,
+                    "thread_context": [
+                        "user: can you make the script?",
+                        "assistant: I am starting with the file layout.",
+                    ],
+                },
+            }
+        )
+    )
+    sent: list[str] = []
+
+    async def _fake_run_once(**kwargs: object) -> str:
+        render = cast(Any, kwargs)["render"]
+        assert callable(render)
+        render(
+            ToolCallEvent(
+                call=ToolCall(
+                    id="call_write",
+                    name="write_file",
+                    arguments={"path": "weather_tokyo.py", "content": "print('hi')"},
+                )
+            )
+        )
+        render(
+            ToolCallEvent(
+                call=ToolCall(
+                    id="call_verify",
+                    name="verify_work",
+                    arguments={"command": "uv run python weather_tokyo.py"},
+                )
+            )
+        )
+        await asyncio.sleep(0)
+        return "Completed."
+
+    def _fake_send(*, cwd: Path | None = None, to: str, text: str, reply_to: str | None = None):
+        assert cwd == tmp_path
+        assert to == "15551234567"
+        assert reply_to is None
+        sent.append(text)
+        return {"ok": True, "messageId": "wamid.local"}
+
+    async def _fake_progress_note(
+        *,
+        provider: str,
+        model: str,
+        config: Any,
+        thread_context: list[str],
+        user_prompt: str,
+        event_summary: str,
+        work_context: list[str],
+    ) -> str:
+        assert provider == "openrouter"
+        assert model == "google/gemma-4-31b-it"
+        assert thread_context
+        assert "assistant: I am starting with the file layout." in thread_context
+        assert user_prompt == "make the script"
+        assert work_context
+        assert "Writing weather_tokyo.py." in work_context
+        return f"LLM progress: {event_summary}"
+
+    original_run_once = gateway_commands.__dict__["_run_once_impl"]
+    original_send = gateway_commands.send_whatsapp_text_message
+    original_progress_note = gateway_commands._generate_progress_note
+    gateway_commands.__dict__["_run_once_impl"] = _fake_run_once
+    gateway_commands.send_whatsapp_text_message = _fake_send
+    gateway_commands._generate_progress_note = _fake_progress_note
+    try:
+        payload = cast(
+            dict[str, Any],
+            asyncio.run(
+                gateway_commands._run_gateway_conversation(
+                    cwd=tmp_path,
+                    session_store=session_store,
+                    transport="whatsapp",
+                    user_id="15551234567",
+                    thread_id="15551234567@s.whatsapp.net",
+                    message="make the script",
+                )
+            ),
+        )
+    finally:
+        gateway_commands.__dict__["_run_once_impl"] = original_run_once
+        gateway_commands.send_whatsapp_text_message = original_send
+        gateway_commands._generate_progress_note = original_progress_note
+
+    assert payload["reply"]["text"] == "Completed."
+    assert "LLM progress: Writing weather_tokyo.py." in sent

@@ -9,6 +9,7 @@ WHATSAPP_BRIDGE_PACKAGE_JSON = """{
     "@hapi/boom": "^10.0.1",
     "@whiskeysockets/baileys": "^6.7.18",
     "express": "^4.21.2",
+    "link-preview-js": "^3.1.0",
     "pino": "^9.9.0",
     "qrcode-terminal": "^0.12.0"
   }
@@ -76,9 +77,20 @@ function digitsOnly(value) {
   return String(value || '').replace(/[^\d]/g, '');
 }
 
+function identityDigits(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  const beforeAt = raw.split('@', 1)[0] || '';
+  const beforeDevice = beforeAt.split(':', 1)[0] || beforeAt;
+  return beforeDevice.replace(/[^\d]/g, '');
+}
+
 function extractMessageText(node) {
   const msg = node?.message;
   if (!msg) return '';
+  if (msg.deviceSentMessage?.message) {
+    return extractMessageText({ message: msg.deviceSentMessage.message });
+  }
   if (typeof msg.conversation === 'string' && msg.conversation) {
     return msg.conversation;
   }
@@ -100,12 +112,34 @@ function extractMessageText(node) {
   if (msg.viewOnceMessageV2?.message) {
     return extractMessageText({ message: msg.viewOnceMessageV2.message });
   }
+  if (msg.editedMessage?.message) {
+    return extractMessageText({ message: msg.editedMessage.message });
+  }
   return '';
+}
+
+function ownIdentityCandidates() {
+  return [
+    identityDigits(sock?.user?.id),
+    identityDigits(sock?.user?.lid),
+  ].filter(Boolean);
 }
 
 function isAllowedInbound(chatId, key) {
   if (MODE === 'self-chat') {
-    return true;
+    if (!chatId || chatId.endsWith('@g.us') || chatId === 'status@broadcast') {
+      return false;
+    }
+    const candidates = [
+      digitsOnly(chatId),
+      digitsOnly(key?.participant),
+      digitsOnly(key?.remoteJid),
+    ].filter(Boolean);
+    const ownIds = ownIdentityCandidates();
+    if (candidates.some((value) => ownIds.includes(value))) {
+      return true;
+    }
+    return candidates.some((value) => ALLOWED_USERS.includes(value));
   }
   if (ALLOWED_USERS.includes('*')) {
     return true;
@@ -204,6 +238,7 @@ async function dispatchInboundCommand({ chatId, userId, text, messageId }) {
     '--json',
   ];
   async function runGateway(args) {
+    console.log('🚀 gateway child', JSON.stringify({ cmd: UV_BIN, args }));
     return await new Promise((resolve) => {
       const child = spawn(UV_BIN, args, {
         cwd: WORKSPACE_CWD,
@@ -223,6 +258,14 @@ async function dispatchInboundCommand({ chatId, userId, text, messageId }) {
         resolve({ ok: false, error: String(error) });
       });
       child.on('close', (code) => {
+        console.log(
+          '🧾 gateway child exit',
+          JSON.stringify({
+            code,
+            stdout,
+            stderr,
+          }),
+        );
         if (code !== 0) {
           console.error('❌ Gateway command exited non-zero:', stderr || stdout);
           resolve({ ok: false, error: stderr || stdout || `exit ${code}` });
@@ -239,6 +282,7 @@ async function dispatchInboundCommand({ chatId, userId, text, messageId }) {
     });
   }
   const dispatched = await runGateway(dispatchArgs);
+  console.log('📬 dispatch result', JSON.stringify(dispatched));
   if (dispatched?.ok && dispatched?.payload?.reply?.command !== 'unknown') {
     return {
       ok: true,
@@ -247,7 +291,9 @@ async function dispatchInboundCommand({ chatId, userId, text, messageId }) {
       messageId,
     };
   }
+  console.log('💬 falling back to converse');
   const conversational = await runGateway(converseArgs);
+  console.log('🗨️ converse result', JSON.stringify(conversational));
   if (!conversational?.ok) {
     return conversational;
   }
@@ -311,13 +357,36 @@ async function startSocket() {
     for (const node of messages || []) {
       const chatId = String(node?.key?.remoteJid || '');
       const text = extractMessageText(node);
+      console.log(
+        '📨 inbound',
+        JSON.stringify({
+          chatId,
+          fromMe: Boolean(node?.key?.fromMe),
+          participant: String(node?.key?.participant || ''),
+          text,
+        }),
+      );
       if (shouldIgnoreInbound(node, text)) {
+        console.log('SKIP ignore', JSON.stringify({ chatId, text }));
         continue;
       }
-      if (!isAllowedInbound(chatId, node?.key)) {
+      const allowed = isAllowedInbound(chatId, node?.key);
+      console.log(
+        'ALLOW check',
+        JSON.stringify({
+          chatId,
+          userId: inboundUserId(chatId, node?.key),
+          allowed,
+          ownIds: ownIdentityCandidates(),
+          allowedUsers: ALLOWED_USERS,
+        }),
+      );
+      if (!allowed) {
+        console.log('SKIP disallowed', JSON.stringify({ chatId }));
         continue;
       }
       const userId = inboundUserId(chatId, node?.key);
+      console.log('ENTER dispatch', JSON.stringify({ chatId, userId, text: String(text || '').trim() }));
       const stopTyping = startTypingTicker(chatId);
       try {
         const result = await dispatchInboundCommand({

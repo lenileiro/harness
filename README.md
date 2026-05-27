@@ -66,6 +66,8 @@ packages/cli/src/harness/cli/
 ├── config.py                      # CLI config loading and models
 ├── evals.py                       # eval command family
 ├── experience_commands.py         # procedures + curator commands
+├── gateway_commands.py            # remote gateway + WhatsApp command family
+├── gateway_hooks.py               # built-in outbound notification hooks
 ├── introspection.py               # providers + tools command family
 ├── lab_commands.py                # multi-agent lab command family
 ├── lifecycle_commands.py          # phase / contracts / tips / resume
@@ -76,6 +78,7 @@ packages/cli/src/harness/cli/
 ├── run_commands.py                # one-shot run flow
 ├── runtime_agent.py               # runtime agent assembly
 ├── runtime_helpers.py             # verifier / critic / storage helpers
+├── scheduler_commands.py          # long-lived scheduler command family
 ├── sessions_commands.py           # session command family
 ├── tasks_commands.py              # task command family
 ├── tune_commands.py               # prompt tuning command family
@@ -225,6 +228,8 @@ Current top-level commands include:
 - `plugins`: inspect discovered plugin providers
 - `providers`: inspect provider configuration
 - `tools`: inspect built-in tools
+- `scheduler`: durable scheduled mission/research execution
+- `gateway`: remote command-and-control transport surface, including WhatsApp
 - `vision`: update and inspect the current research direction
 - `research`: manage rabbit holes, publications, opportunities, experiments, and promotion
 - `tasks`: durable task management
@@ -512,6 +517,82 @@ Mission-to-research bridge commands include:
 
 - `mission create-opportunity`
 - `mission create-candidate`
+
+## Scheduler and Gateway
+
+Harness now has a long-lived scheduler plus a transport-neutral gateway layer.
+
+The scheduler CLI supports durable jobs for bounded autonomy:
+
+- `scheduler add-mission`, `add-research`
+- `scheduler list`, `list-runs`
+- `scheduler pause`, `resume`, `run-now`
+- `scheduler start`
+
+Jobs persist under `.harness/scheduler/` so local runs can continue outside CI:
+
+- `jobs/`: durable job definitions
+- `runs/`: execution history and artifacts
+
+The gateway CLI supports two kinds of traffic:
+
+- control commands such as `status`, `runs`, `approve <id>`, and `report <mission_id>`
+- conversational messages that fall back to a normal Harness chat session
+
+Useful commands:
+
+```bash
+uv run harness gateway --help
+uv run harness gateway dispatch --transport whatsapp --user +37200000000 --thread +37200000000@s.whatsapp.net --message "status" --json
+uv run harness gateway converse --transport whatsapp --user +37200000000 --thread +37200000000@s.whatsapp.net --message "what can you do for me?" --json
+```
+
+### WhatsApp gateway
+
+Harness now targets a local WhatsApp Web bridge with QR pairing instead of the
+Meta Cloud API transport. The bridge is generated into the workspace, paired
+through the CLI, and used for both outbound notifications and inbound replies.
+
+Workspace-local storage lives under:
+
+- `.harness/gateway/whatsapp/config.json`
+- `.harness/gateway/whatsapp/bridge/`
+- `.harness/gateway/whatsapp/session/`
+- `.harness/gateway/whatsapp/bridge.log`
+
+Typical setup flow:
+
+```bash
+# configure the local bridge and default chat model/provider
+uv run harness gateway whatsapp setup --provider openrouter --mode self-chat --allowed-user +37200000000
+
+# pair your phone by scanning the terminal QR with WhatsApp > Linked Devices
+uv run harness gateway whatsapp pair
+
+# start the long-lived bridge
+export OPENROUTER_API_KEY="..."
+uv run harness gateway whatsapp start
+
+# inspect health and config
+uv run harness gateway whatsapp status --json
+
+# send a manual smoke-test message
+uv run harness gateway whatsapp send --to +37200000000 --text "Harness WhatsApp smoke test"
+```
+
+Notes:
+
+- conversational WhatsApp replies use the provider/model stored in
+  `.harness/gateway/whatsapp/config.json`
+- the current OpenRouter default for the WhatsApp chat path is
+  `google/gemma-4-31b-it`
+- while the model is thinking, the bridge sends WhatsApp typing presence so the
+  user sees an active writing bubble
+- control commands still work inside the same chat thread, so `status` and
+  `runs` do not need a separate transport
+
+For implementation details and scope notes, see
+[docs/whatsapp-qr-plan.md](docs/whatsapp-qr-plan.md).
 
 ## Evals
 

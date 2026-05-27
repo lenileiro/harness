@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections.abc import Callable
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 import typer
 from rich.console import Console
@@ -32,7 +33,14 @@ from harness.cli.runtime_helpers import (
 from harness.cli.runtime_helpers import (
     resolve_runtime_strategy as _resolve_runtime_strategy,
 )
-from harness.core import ApprovalStore, GatewayMessage, default_gateway_root
+from harness.core import (
+    ApprovalStore,
+    Done,
+    GatewayMessage,
+    Message,
+    TextDelta,
+    default_gateway_root,
+)
 from harness.core.extensions import LifecycleHook
 from harness.core.gateway_router import dispatch_gateway_message
 from harness.core.gateway_sessions import GatewaySessionStore
@@ -96,6 +104,183 @@ async def _noop_print_defense_ledger(*_args: object, **_kwargs: object) -> None:
     return None
 
 
+def _progress_summary_from_event(event: Any) -> str | None:
+    event_type = getattr(event, "type", "")
+    if event_type == "step_started":
+        description = str(getattr(event, "description", "") or "").strip()
+        if description:
+            return f"Working step {getattr(event, 'step', '?')}: {description}"
+        return f"Working step {getattr(event, 'step', '?')}."
+    if event_type == "tool_call":
+        call = getattr(event, "call", None)
+        tool_name = str(getattr(call, "name", "") or "").strip()
+        arguments = getattr(call, "arguments", {}) or {}
+        if tool_name == "write_file":
+            path = str(arguments.get("path", "")).strip()
+            return f"Writing {path}." if path else "Writing a file."
+        if tool_name == "edit_file":
+            path = str(arguments.get("path", "")).strip()
+            return f"Editing {path}." if path else "Editing a file."
+        if tool_name == "shell":
+            command = str(arguments.get("command", "")).strip()
+            if command:
+                compact = command if len(command) <= 80 else command[:77] + "..."
+                return f"Running: {compact}"
+            return "Running a shell command."
+        if tool_name == "verify_work":
+            return "Verifying the result."
+        if tool_name == "fetch_url":
+            url = str(arguments.get("url", "")).strip()
+            return f"Fetching {url}." if url else "Fetching data."
+        if tool_name:
+            return f"Using {tool_name}."
+    if event_type == "verification":
+        result = getattr(event, "result", None)
+        if result is None:
+            return "Verification finished."
+        if bool(getattr(result, "can_finish", False)):
+            return "Verification passed."
+        reason = str(getattr(result, "reason", "") or "").strip()
+        return (
+            f"Verification found an issue: {reason}" if reason else "Verification found an issue."
+        )
+    if event_type == "critique":
+        return "Revising the approach after a failed attempt."
+    if event_type == "error":
+        error_text = str(getattr(event, "error", "") or "").strip()
+        return f"Hit an error: {error_text}" if error_text else "Hit an error."
+    return None
+
+
+async def _stream_text_response(
+    *,
+    provider: str,
+    model: str,
+    config: Any,
+    messages: list[Message],
+) -> str:
+    adapter = _build_adapter(provider, base_url=None, config=config)
+    text_parts: list[str] = []
+    async for event in adapter.stream(
+        model=model, messages=messages, max_tokens=80, temperature=0.4
+    ):
+        if isinstance(event, TextDelta):
+            text_parts.append(event.text)
+        elif isinstance(event, Done):
+            if event.final_message and event.final_message.content:
+                return event.final_message.content.strip()
+            break
+    return "".join(text_parts).strip()
+
+
+async def _generate_progress_note(
+    *,
+    provider: str,
+    model: str,
+    config: Any,
+    thread_context: list[str],
+    user_prompt: str,
+    event_summary: str,
+    work_context: list[str],
+) -> str:
+    thread_lines = "\n".join(f"- {line}" for line in thread_context if line.strip())
+    context_lines = "\n".join(f"- {line}" for line in work_context if line.strip())
+    messages = [
+        Message(
+            role="system",
+            content=(
+                "You write short live progress updates for a user while an AI coding agent works. "
+                "Use the real observed work context. Write one sentence, under 24 words, plain text, "
+                "first person, no markdown, no promises, and no filler. Mention the concrete work being done."
+            ),
+        ),
+        Message(
+            role="user",
+            content=(
+                f"Recent conversation context:\n{thread_lines or '- no prior thread context'}\n"
+                f"Original user request: {user_prompt}\n"
+                f"Recent work context:\n{context_lines or '- no prior work yet'}\n"
+                f"Observed runtime event: {event_summary}\n"
+                "Write the progress update now."
+            ),
+        ),
+    ]
+    return await _stream_text_response(
+        provider=provider,
+        model=model,
+        config=config,
+        messages=messages,
+    )
+
+
+def _make_gateway_progress_renderer(
+    *,
+    cwd: Path,
+    transport: str,
+    user_id: str,
+    thread_id: str,
+    provider: str,
+    model: str,
+    config: Any,
+    thread_context: list[str],
+    user_prompt: str,
+) -> tuple[Callable[[Any], None], set[asyncio.Task[object]]]:
+    pending: set[asyncio.Task[object]] = set()
+    last_sent: dict[str, float] = {"ts": 0.0}
+    last_text: dict[str, str] = {"value": ""}
+    last_summary: dict[str, str] = {"value": ""}
+    recent_summaries: list[str] = []
+
+    def _schedule_message(summary: str) -> None:
+        if transport != "whatsapp":
+            return
+        normalized_summary = summary.strip()
+        if not normalized_summary:
+            return
+        loop = asyncio.get_running_loop()
+        now = loop.time()
+        if normalized_summary == last_summary["value"]:
+            return
+        if now - last_sent["ts"] < 2.5:
+            return
+        recent_summaries.append(normalized_summary)
+        del recent_summaries[:-5]
+        last_summary["value"] = normalized_summary
+        last_sent["ts"] = now
+
+        async def _send() -> None:
+            text = await _generate_progress_note(
+                provider=provider,
+                model=model,
+                config=config,
+                thread_context=thread_context,
+                user_prompt=user_prompt,
+                event_summary=normalized_summary,
+                work_context=list(recent_summaries),
+            )
+            final_text = text.strip() or normalized_summary
+            if final_text == last_text["value"]:
+                return
+            last_text["value"] = final_text
+            await asyncio.to_thread(
+                send_whatsapp_text_message,
+                cwd=cwd,
+                to=user_id,
+                text=final_text,
+            )
+
+        task = asyncio.create_task(_send())
+        pending.add(task)
+        task.add_done_callback(lambda finished: pending.discard(finished))
+
+    def _render(event: Any) -> None:
+        summary = _progress_summary_from_event(event)
+        if summary:
+            _schedule_message(summary)
+
+    return _render, pending
+
+
 async def _run_gateway_conversation(
     *,
     cwd: Path,
@@ -114,6 +299,12 @@ async def _run_gateway_conversation(
         user_id=user_id,
         thread_id=thread_id,
     )
+    raw_thread_context = session.metadata.get("thread_context", [])
+    thread_context = (
+        [str(item).strip() for item in raw_thread_context if str(item).strip()]
+        if isinstance(raw_thread_context, list)
+        else []
+    )
     harness_session_id = (
         str(session.metadata.get("harness_session_id", "")).strip()
         or f"sess_{session.id.replace('-', '_')}"
@@ -122,6 +313,17 @@ async def _run_gateway_conversation(
     provider = wa_config.provider or cfg.default_provider or "ollama"
     chain = _resolve_chain(failover_flag=None, provider_flag=provider, config=cfg)
     model = wa_config.model or cfg.default_model or _default_gateway_model(provider)
+    progress_render, progress_tasks = _make_gateway_progress_renderer(
+        cwd=cwd,
+        transport=transport,
+        user_id=user_id,
+        thread_id=thread_id,
+        provider=provider,
+        model=model,
+        config=cfg,
+        thread_context=list(thread_context),
+        user_prompt=message,
+    )
     final_text = await _run_once_impl(
         prompt=message,
         model=model,
@@ -134,8 +336,8 @@ async def _run_gateway_conversation(
         task_ref=None,
         db=None,
         in_memory=False,
-        yes=False,
-        inbox=True,
+        yes=True,
+        inbox=False,
         verify=None,
         verify_command=None,
         critic=None,
@@ -162,10 +364,12 @@ async def _run_gateway_conversation(
         build_tools=_build_tools,
         build_agent=_build_agent,
         print_defense_ledger=_noop_print_defense_ledger,
-        render=lambda _event: None,
+        render=progress_render,
         default_system_prompt=_DEFAULT_SYSTEM_PROMPT,
         console=common_console,
     )
+    if progress_tasks:
+        await asyncio.gather(*tuple(progress_tasks), return_exceptions=True)
     reply_text = (final_text or "").strip()
     if not reply_text:
         reply_text = (
@@ -176,7 +380,13 @@ async def _run_gateway_conversation(
         session,
         last_command="chat",
         updated_at=_utcnow_text(),
-        metadata={**session.metadata, "harness_session_id": harness_session_id},
+        metadata={
+            **session.metadata,
+            "harness_session_id": harness_session_id,
+            "thread_context": ([*thread_context, f"user: {message}", f"assistant: {reply_text}"])[
+                -8:
+            ],
+        },
     )
     session_store.save_session(updated)
     reply = {
