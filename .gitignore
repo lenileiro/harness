@@ -52,3 +52,5 @@ Thumbs.db
 *.db-journal
 *.db-wal
 *.db-shm
+.gstack/
+.harness/
