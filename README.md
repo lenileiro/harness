@@ -309,20 +309,6 @@ This command:
 
 Use `--json` when you want machine-readable output for CI or downstream tools.
 
-### GitHub Actions example
-
-A reference workflow lives at:
-
-```text
-examples/github-actions/review-pr.yml
-```
-
-It shows how to:
-
-- run `harness review` on pull requests
-- upload the raw JSON and rendered markdown as artifacts
-- post or update a sticky pull request comment
-
 Expected repository configuration:
 
 - `OPENROUTER_API_KEY` or `ANTHROPIC_API_KEY` in repository secrets
