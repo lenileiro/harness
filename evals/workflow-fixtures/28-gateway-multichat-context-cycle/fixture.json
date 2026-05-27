@@ -1,0 +1,92 @@
+{
+  "description": "Exercise shared user work and cross-thread gateway conversation context.",
+  "harness_bin": "fake-harness",
+  "steps": [
+    {
+      "name": "reminder-create-thread-a",
+      "argv": [
+        "gateway",
+        "dispatch",
+        "--transport",
+        "whatsapp",
+        "--user",
+        "15551234567",
+        "--thread",
+        "thread-a",
+        "--message",
+        "remind me in 5 minutes to continue the Tokyo weather follow-up",
+        "--json"
+      ],
+      "stdout_contains": [
+        "\"command\": \"reminder.create\"",
+        "I'll remind you in 5 minute(s): continue the Tokyo weather follow-up"
+      ],
+      "files_exist": [
+        ".harness/gateway/profiles/gwp-whatsapp-15551234567/profile.json",
+        ".harness/gateway/sessions/gw-whatsapp-thread-a/session.json"
+      ]
+    },
+    {
+      "name": "converse-thread-a",
+      "argv": [
+        "gateway",
+        "converse",
+        "--transport",
+        "whatsapp",
+        "--user",
+        "15551234567",
+        "--thread",
+        "thread-a",
+        "--message",
+        "I started the Tokyo weather work.",
+        "--json"
+      ],
+      "stdout_contains": [
+        "\"command\": \"chat\"",
+        "thread summary ok"
+      ]
+    },
+    {
+      "name": "converse-thread-b",
+      "argv": [
+        "gateway",
+        "converse",
+        "--transport",
+        "whatsapp",
+        "--user",
+        "15551234567",
+        "--thread",
+        "thread-b",
+        "--message",
+        "continue that work and also check New York",
+        "--json"
+      ],
+      "stdout_contains": [
+        "\"command\": \"chat\"",
+        "shared context ok"
+      ],
+      "files_exist": [
+        ".harness/gateway/sessions/gw-whatsapp-thread-b/session.json",
+        ".harness/gateway-converse-capture.json"
+      ],
+      "file_contains": [
+        {
+          "path": ".harness/gateway-converse-capture.json",
+          "substring": "Shared active work for this user:"
+        },
+        {
+          "path": ".harness/gateway-converse-capture.json",
+          "substring": "continue the Tokyo weather follow-up [reminder.once]"
+        },
+        {
+          "path": ".harness/gateway-converse-capture.json",
+          "substring": "Other recent chats for this user:"
+        },
+        {
+          "path": ".harness/gateway-converse-capture.json",
+          "substring": "thread-a: Latest user ask: I started the Tokyo weather work."
+        }
+      ]
+    }
+  ]
+}

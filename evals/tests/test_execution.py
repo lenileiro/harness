@@ -206,6 +206,68 @@ def test_copy_fixture_for_run_hides_eval_metadata(tmp_path: Path) -> None:
     assert not (dest / "fixture.yaml").exists()
 
 
+def test_metadata_only_fixture_uses_repo_workspace(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = tmp_path / "evals" / "fixtures" / "15-demo"
+    fixture.mkdir(parents=True)
+    (fixture / "TASK.md").write_text("Fix it.\n", encoding="utf-8")
+    (fixture / "EVAL.md").write_text("primary_dimension: verification\n", encoding="utf-8")
+    (fixture / "fixture.yaml").write_text("family: demo\n", encoding="utf-8")
+    repo_root = tmp_path / "repo"
+    (repo_root / "packages" / "core" / "src" / "harness" / "core").mkdir(parents=True)
+    (repo_root / "packages" / "core" / "src" / "harness" / "core" / "__init__.py").write_text(
+        "VALUE = 1\n",
+        encoding="utf-8",
+    )
+    (repo_root / "packages" / "cli" / "src" / "harness" / "cli").mkdir(parents=True)
+    (repo_root / "packages" / "cli" / "src" / "harness" / "cli" / "__init__.py").write_text(
+        "",
+        encoding="utf-8",
+    )
+    (repo_root / "evals" / "fixtures" / "secret-fixture").mkdir(parents=True)
+    (repo_root / "evals" / "fixtures" / "secret-fixture" / "EVAL.md").write_text(
+        "should stay hidden\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(runner, "_project_root", lambda: repo_root)
+
+    discovered = runner.discover_fixtures(tmp_path / "evals")[0]
+    dest = tmp_path / "copied-repo"
+
+    runner._prepare_workspace_for_run(discovered, dest)  # type: ignore[attr-defined]
+
+    assert (dest / "packages" / "core" / "src" / "harness" / "core" / "__init__.py").exists()
+    assert not (dest / "evals" / "fixtures").exists()
+
+
+def test_metadata_only_fixture_can_overlay_workspace_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = tmp_path / "evals" / "fixtures" / "16-demo"
+    (fixture / "workspace" / "extra").mkdir(parents=True)
+    (fixture / "TASK.md").write_text("Fix it.\n", encoding="utf-8")
+    (fixture / "EVAL.md").write_text("primary_dimension: verification\n", encoding="utf-8")
+    (fixture / "fixture.yaml").write_text("family: demo\n", encoding="utf-8")
+    (fixture / "workspace" / "extra" / "marker.txt").write_text("hello\n", encoding="utf-8")
+
+    repo_root = tmp_path / "repo"
+    (repo_root / "packages" / "core" / "src" / "harness" / "core").mkdir(parents=True)
+    (repo_root / "packages" / "core" / "src" / "harness" / "core" / "__init__.py").write_text(
+        "VALUE = 1\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(runner, "_project_root", lambda: repo_root)
+
+    discovered = runner.discover_fixtures(tmp_path / "evals")[0]
+    dest = tmp_path / "copied-repo-overlay"
+
+    runner._prepare_workspace_for_run(discovered, dest)  # type: ignore[attr-defined]
+
+    assert (dest / "packages" / "core" / "src" / "harness" / "core" / "__init__.py").exists()
+    assert (dest / "extra" / "marker.txt").read_text(encoding="utf-8").strip() == "hello"
+
+
 def test_eval_env_exposes_project_root_and_workspace(tmp_path: Path) -> None:
     env = runner._eval_env(work=tmp_path)  # type: ignore[attr-defined]
 

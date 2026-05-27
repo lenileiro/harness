@@ -46,7 +46,7 @@ _check_wrong_diagnosis_scope = _hard_checks.check_wrong_diagnosis_scope
 
 def _eval_env(*, work: Path) -> dict[str, str]:
     env = os.environ.copy()
-    env["HARNESS_EVAL_PROJECT_ROOT"] = str(Path(__file__).resolve().parents[1])
+    env["HARNESS_EVAL_PROJECT_ROOT"] = str(_project_root())
     env["HARNESS_EVAL_WORKSPACE"] = str(work)
     return env
 
@@ -62,6 +62,10 @@ def _git_env() -> dict[str, str]:
         }
     )
     return env
+
+
+def _project_root() -> Path:
+    return Path(__file__).resolve().parents[1]
 
 
 def _agent_cmd(
@@ -174,6 +178,60 @@ def _copy_fixture_for_run(src: Path, dest: Path) -> None:
     )
 
 
+def _fixture_has_workspace_payload(src: Path) -> bool:
+    ignored_names = {"TASK.md", "EVAL.md", "fixture.yaml", "workspace", "__pycache__"}
+    for child in src.iterdir():
+        if child.name in ignored_names:
+            continue
+        if child.name.endswith((".pyc", ".pyo")):
+            continue
+        return True
+    return False
+
+
+def _copy_repo_for_run(dest: Path) -> None:
+    project_root = _project_root()
+
+    def _ignore(current_dir: str, names: list[str]) -> set[str]:
+        current = Path(current_dir)
+        ignored: set[str] = set()
+        for name in names:
+            candidate = current / name
+            rel = candidate.relative_to(project_root)
+            rel_text = rel.as_posix()
+            if name in {".git", ".venv", ".harness", ".gstack", "__pycache__"}:
+                ignored.add(name)
+                continue
+            if name.endswith((".pyc", ".pyo")):
+                ignored.add(name)
+                continue
+            if rel_text in {
+                "evals/fixtures",
+                "evals/fixtures-mutated",
+                "evals/fixtures-holdout",
+                "evals/runs",
+                "evals/results",
+            }:
+                ignored.add(name)
+        return ignored
+
+    shutil.copytree(
+        project_root,
+        dest,
+        ignore=_ignore,
+    )
+
+
+def _prepare_workspace_for_run(fixture: FixtureMeta, work: Path) -> None:
+    if _fixture_has_workspace_payload(fixture.path):
+        _copy_fixture_for_run(fixture.path, work)
+        return
+    _copy_repo_for_run(work)
+    workspace_overlay = fixture.path / "workspace"
+    if workspace_overlay.is_dir():
+        shutil.copytree(workspace_overlay, work, dirs_exist_ok=True)
+
+
 def run_fixture(
     fixture: FixtureMeta,
     *,
@@ -189,7 +247,7 @@ def run_fixture(
     """Run one fixture end-to-end in an isolated temp directory."""
     with tempfile.TemporaryDirectory(prefix="harness_eval_") as tmp_str:
         work = Path(tmp_str) / fixture.name
-        _copy_fixture_for_run(fixture.path, work)
+        _prepare_workspace_for_run(fixture, work)
 
         git_env = _git_env()
 

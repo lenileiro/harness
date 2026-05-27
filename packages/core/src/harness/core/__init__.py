@@ -94,6 +94,8 @@ from harness.core.gateway_models import (
     GatewayMessage,
     GatewayReply,
     GatewaySessionBinding,
+    GatewayUserProfile,
+    GatewayWorkRef,
     default_gateway_root,
 )
 from harness.core.gateway_router import dispatch_gateway_message
@@ -414,6 +416,8 @@ __all__ = [
     "GatewayReply",
     "GatewaySessionBinding",
     "GatewaySessionStore",
+    "GatewayUserProfile",
+    "GatewayWorkRef",
     "Guardrail",
     "GuardrailMode",
     "GuardrailResult",

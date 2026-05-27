@@ -1,0 +1,6 @@
+family: gateway-multichat-context-flow
+behavior_category: scope
+primary_dimension: decomposition
+expected_first_step: inspect workspace
+verify_command: uv run pytest evals_fixture_tests/test_gateway_multichat_context_flow.py -q
+required_verification: uv run pytest evals_fixture_tests/test_gateway_multichat_context_flow.py -q

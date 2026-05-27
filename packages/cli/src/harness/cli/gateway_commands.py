@@ -96,6 +96,97 @@ def _utcnow_text() -> str:
     return datetime.now(UTC).isoformat(timespec="seconds")
 
 
+def _thread_context_from_session(session: Any) -> list[str]:
+    raw_thread_context = session.metadata.get("thread_context", [])
+    if not isinstance(raw_thread_context, list):
+        return []
+    return [str(item).strip() for item in raw_thread_context if str(item).strip()]
+
+
+def _linked_work_refs_from_session(session: Any) -> list[str]:
+    raw_linked = session.metadata.get("linked_work_items", [])
+    if not isinstance(raw_linked, list):
+        return []
+    return [str(item).strip() for item in raw_linked if str(item).strip()]
+
+
+def _thread_summary_for_session(session: Any) -> str:
+    return str(session.metadata.get("thread_summary", "")).strip()
+
+
+def _work_context_lines(
+    *,
+    session_store: GatewaySessionStore,
+    transport: str,
+    user_id: str,
+    thread_id: str,
+    linked_work_refs: list[str],
+) -> list[str]:
+    profile = session_store.get_or_create_profile(transport=transport, user_id=user_id)
+    active_by_ref = {item.ref: item for item in profile.active_work}
+    selected_refs = linked_work_refs or [item.ref for item in profile.active_work[-3:]]
+    lines: list[str] = []
+    for ref in selected_refs:
+        item = active_by_ref.get(ref)
+        if item is None:
+            continue
+        title = item.title or item.ref
+        summary = item.summary or item.status
+        suffix = ""
+        if item.source_thread_id and item.source_thread_id != thread_id:
+            suffix = f" from chat {item.source_thread_id}"
+        lines.append(f"{title} [{item.kind}] - {summary}{suffix}")
+    return lines[-4:]
+
+
+def _other_thread_context_lines(
+    *,
+    session_store: GatewaySessionStore,
+    transport: str,
+    user_id: str,
+    thread_id: str,
+) -> list[str]:
+    lines: list[str] = []
+    for item in session_store.list_user_sessions(transport=transport, user_id=user_id):
+        if item.thread_id == thread_id:
+            continue
+        summary = _thread_summary_for_session(item)
+        if not summary:
+            continue
+        lines.append(f"{item.thread_id}: {summary}")
+    return lines[-3:]
+
+
+def _contextualize_user_prompt(
+    *,
+    message: str,
+    thread_context: list[str],
+    work_context: list[str],
+    related_threads: list[str],
+) -> str:
+    sections: list[str] = []
+    if thread_context:
+        sections.append(
+            "Current chat context:\n" + "\n".join(f"- {line}" for line in thread_context[-6:])
+        )
+    if work_context:
+        sections.append(
+            "Shared active work for this user:\n" + "\n".join(f"- {line}" for line in work_context)
+        )
+    if related_threads:
+        sections.append(
+            "Other recent chats for this user:\n"
+            + "\n".join(f"- {line}" for line in related_threads)
+        )
+    if not sections:
+        return message
+    sections.append(
+        "Use the shared work and other chat context only when it is relevant. Do not merge unrelated threads."
+    )
+    sections.append(f"User message:\n{message}")
+    return "\n\n".join(sections)
+
+
 async def _noop_task_attachment(*_args: object, **_kwargs: object) -> tuple[None, None]:
     return None, None
 
@@ -299,11 +390,26 @@ async def _run_gateway_conversation(
         user_id=user_id,
         thread_id=thread_id,
     )
-    raw_thread_context = session.metadata.get("thread_context", [])
-    thread_context = (
-        [str(item).strip() for item in raw_thread_context if str(item).strip()]
-        if isinstance(raw_thread_context, list)
-        else []
+    thread_context = _thread_context_from_session(session)
+    linked_work_refs = _linked_work_refs_from_session(session)
+    work_context = _work_context_lines(
+        session_store=session_store,
+        transport=transport,
+        user_id=user_id,
+        thread_id=thread_id,
+        linked_work_refs=linked_work_refs,
+    )
+    related_threads = _other_thread_context_lines(
+        session_store=session_store,
+        transport=transport,
+        user_id=user_id,
+        thread_id=thread_id,
+    )
+    contextual_prompt = _contextualize_user_prompt(
+        message=message,
+        thread_context=thread_context,
+        work_context=work_context,
+        related_threads=related_threads,
     )
     harness_session_id = (
         str(session.metadata.get("harness_session_id", "")).strip()
@@ -325,7 +431,7 @@ async def _run_gateway_conversation(
         user_prompt=message,
     )
     final_text = await _run_once_impl(
-        prompt=message,
+        prompt=contextual_prompt,
         model=model,
         chain=chain,
         base_url=None,
@@ -386,9 +492,22 @@ async def _run_gateway_conversation(
             "thread_context": ([*thread_context, f"user: {message}", f"assistant: {reply_text}"])[
                 -8:
             ],
+            "thread_summary": (
+                f"Latest user ask: {message}. " f"Last reply: {' '.join(reply_text.split())[:180]}"
+            ).strip(),
         },
     )
     session_store.save_session(updated)
+    profile = session_store.get_or_create_profile(transport=transport, user_id=user_id)
+    recent_threads = [item for item in profile.recent_threads if item != thread_id]
+    recent_threads.append(thread_id)
+    session_store.save_profile(
+        replace(
+            profile,
+            recent_threads=recent_threads[-8:],
+            updated_at=updated.updated_at,
+        )
+    )
     reply = {
         "session_id": updated.id,
         "command": "chat",

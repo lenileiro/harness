@@ -18,6 +18,7 @@ from harness.core import (
     default_gateway_root,
     save_whatsapp_bridge_config,
 )
+from harness.core.gateway_models import GatewayUserProfile, GatewayWorkRef
 from harness.storage.sqlite import SQLiteStorage
 
 
@@ -508,6 +509,88 @@ def test_run_gateway_conversation_auto_approves_tool_work(tmp_path: Path) -> Non
     prompt = cast(str, captured["default_system_prompt"])
     assert "Execution-first policy" in prompt
     assert "Do not make the user ask you to run the thing you just created" in prompt
+
+
+def test_run_gateway_conversation_includes_shared_user_work_context(tmp_path: Path) -> None:
+    save_whatsapp_bridge_config(
+        tmp_path,
+        WhatsAppBridgeConfig(
+            enabled=True,
+            provider="openrouter",
+            model="google/gemma-4-31b-it",
+            mode="self-chat",
+            allowed_users=["15551234567"],
+        ),
+    )
+    session_store = GatewaySessionStore(root=default_gateway_root(tmp_path))
+    other_session = session_store.get_or_create_session(
+        transport="whatsapp",
+        user_id="15551234567",
+        thread_id="other-chat",
+    )
+    session_store.save_session(
+        other_session.__class__(
+            **{
+                **other_session.to_dict(),
+                "metadata": {
+                    **other_session.metadata,
+                    "thread_summary": "Working on a Tokyo weather script and a New York follow-up.",
+                },
+            }
+        )
+    )
+    profile = GatewayUserProfile(
+        id=session_store.get_or_create_profile(transport="whatsapp", user_id="15551234567").id,
+        transport="whatsapp",
+        user_id="15551234567",
+        active_work=[
+            GatewayWorkRef(
+                ref="job:weather",
+                kind="script",
+                title="Tokyo weather script",
+                summary="Built a weather fetcher and still need the New York/time follow-up.",
+                source_thread_id="other-chat",
+            )
+        ],
+        recent_threads=["other-chat"],
+    )
+    session_store.save_profile(profile)
+    captured: dict[str, object] = {}
+
+    async def _fake_run_once(**kwargs: object) -> str:
+        captured.update(kwargs)
+        return "Done from shared context"
+
+    original = gateway_commands.__dict__["_run_once_impl"]
+    gateway_commands.__dict__["_run_once_impl"] = _fake_run_once
+    try:
+        payload = cast(
+            dict[str, Any],
+            asyncio.run(
+                gateway_commands._run_gateway_conversation(
+                    cwd=tmp_path,
+                    session_store=session_store,
+                    transport="whatsapp",
+                    user_id="15551234567",
+                    thread_id="fresh-chat",
+                    message="continue that work and also check New York",
+                )
+            ),
+        )
+    finally:
+        gateway_commands.__dict__["_run_once_impl"] = original
+
+    assert payload["reply"]["text"] == "Done from shared context"
+    prompt = cast(str, captured["prompt"])
+    assert "Shared active work for this user:" in prompt
+    assert "Tokyo weather script [script]" in prompt
+    assert "Other recent chats for this user:" in prompt
+    assert "other-chat: Working on a Tokyo weather script" in prompt
+    assert "User message:\ncontinue that work and also check New York" in prompt
+    updated_profile = session_store.get_or_create_profile(
+        transport="whatsapp", user_id="15551234567"
+    )
+    assert updated_profile.recent_threads[-1] == "fresh-chat"
 
 
 def test_run_gateway_conversation_sends_event_driven_progress_updates(tmp_path: Path) -> None:

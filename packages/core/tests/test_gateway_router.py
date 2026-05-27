@@ -114,6 +114,11 @@ def test_gateway_router_can_schedule_reminder_intent(tmp_path: Path, monkeypatch
     assert job.payload["notify_to"] == "15551234567"
     assert job.payload["notify_chat_id"] == "15551234567@s.whatsapp.net"
     assert cast(list[str], launched["args"])[1:4] == ["run", "harness", "scheduler"]
+    profile = session_store.get_or_create_profile(transport="whatsapp", user_id="15551234567")
+    assert profile.recent_threads == ["15551234567@s.whatsapp.net"]
+    assert len(profile.active_work) == 1
+    assert profile.active_work[0].ref == f"job:{job.id}"
+    assert profile.active_work[0].summary.startswith("Okay. I'll remind you")
 
 
 def test_gateway_router_can_schedule_daily_reminder(tmp_path: Path, monkeypatch) -> None:

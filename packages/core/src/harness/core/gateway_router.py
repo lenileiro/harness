@@ -10,7 +10,12 @@ from pathlib import Path
 
 from harness.core.approval import ApprovalStore
 from harness.core.extensions import LifecycleHook
-from harness.core.gateway_models import GatewayMessage, GatewayReply, GatewaySessionBinding
+from harness.core.gateway_models import (
+    GatewayMessage,
+    GatewayReply,
+    GatewaySessionBinding,
+    GatewayWorkRef,
+)
 from harness.core.gateway_sessions import GatewaySessionStore
 from harness.core.mission_reporter import build_mission_summary_report
 from harness.core.mission_store import MissionStore, default_mission_root
@@ -321,6 +326,84 @@ def _dispatch_research_start(
     }, f"Started research burst: {record.result_status} ({record.result_stop_reason})."
 
 
+def _record_recent_thread(
+    profile_threads: list[str], *, thread_id: str, limit: int = 8
+) -> list[str]:
+    items = [item for item in profile_threads if item != thread_id]
+    items.append(thread_id)
+    return items[-limit:]
+
+
+def _upsert_active_work(
+    items: list[GatewayWorkRef],
+    *,
+    work: GatewayWorkRef,
+    limit: int = 8,
+) -> list[GatewayWorkRef]:
+    filtered = [item for item in items if item.ref != work.ref]
+    filtered.append(work)
+    return filtered[-limit:]
+
+
+def _save_shared_work(
+    *,
+    session_store: GatewaySessionStore,
+    session: GatewaySessionBinding,
+    ref: str,
+    kind: str,
+    title: str,
+    summary: str,
+    updated_at: str,
+) -> None:
+    profile = session_store.get_or_create_profile(
+        transport=session.transport,
+        user_id=session.user_id,
+    )
+    active_work = _upsert_active_work(
+        profile.active_work,
+        work=GatewayWorkRef(
+            ref=ref,
+            kind=kind,
+            title=title,
+            summary=summary,
+            source_thread_id=session.thread_id,
+            updated_at=updated_at,
+        ),
+    )
+    session_store.save_profile(
+        replace(
+            profile,
+            active_work=active_work,
+            recent_threads=_record_recent_thread(
+                profile.recent_threads, thread_id=session.thread_id
+            ),
+            updated_at=updated_at,
+        )
+    )
+
+
+def _link_session_work(
+    session: GatewaySessionBinding,
+    *,
+    refs: list[str],
+    updated_at: str,
+) -> GatewaySessionBinding:
+    raw_linked = session.metadata.get("linked_work_items", [])
+    linked = (
+        [str(item).strip() for item in raw_linked if str(item).strip()]
+        if isinstance(raw_linked, list)
+        else []
+    )
+    for ref in refs:
+        if ref not in linked:
+            linked.append(ref)
+    return replace(
+        session,
+        updated_at=updated_at,
+        metadata={**session.metadata, "linked_work_items": linked[-8:]},
+    )
+
+
 async def dispatch_gateway_message(
     *,
     cwd: Path,
@@ -409,7 +492,21 @@ async def dispatch_gateway_message(
             last_command="mission start",
             updated_at=_utcnow_text(),
         )
+        session = _link_session_work(
+            session,
+            refs=[f"mission:{mission_id}", f"job:{payload['job_id']}"],
+            updated_at=session.updated_at,
+        )
         session_store.save_session(session)
+        _save_shared_work(
+            session_store=session_store,
+            session=session,
+            ref=f"mission:{mission_id}",
+            kind="mission",
+            title=mission_id,
+            summary=text,
+            updated_at=session.updated_at,
+        )
         reply = GatewayReply(
             session_id=session.id,
             command="mission.start",
@@ -426,7 +523,21 @@ async def dispatch_gateway_message(
             last_command="research start",
             updated_at=_utcnow_text(),
         )
+        session = _link_session_work(
+            session,
+            refs=[f"job:{payload['job_id']}"],
+            updated_at=session.updated_at,
+        )
         session_store.save_session(session)
+        _save_shared_work(
+            session_store=session_store,
+            session=session,
+            ref=f"job:{payload['job_id']}",
+            kind="research",
+            title=payload["job_id"],
+            summary=text,
+            updated_at=session.updated_at,
+        )
         reply = GatewayReply(
             session_id=session.id,
             command="research.start",
@@ -456,10 +567,24 @@ async def dispatch_gateway_message(
             last_command="report",
             updated_at=_utcnow_text(),
         )
+        session = _link_session_work(
+            session,
+            refs=[f"mission:{mission_id}"],
+            updated_at=session.updated_at,
+        )
         session_store.save_session(session)
         text = report.summary
         if report.next_actions:
             text += "\nNext: " + "; ".join(report.next_actions)
+        _save_shared_work(
+            session_store=session_store,
+            session=session,
+            ref=f"mission:{mission_id}",
+            kind="mission-report",
+            title=mission_id,
+            summary=report.summary,
+            updated_at=session.updated_at,
+        )
         reply = GatewayReply(
             session_id=session.id,
             command="report",
@@ -484,7 +609,21 @@ async def dispatch_gateway_message(
             last_command="reminder.create",
             updated_at=_utcnow_text(),
         )
+        session = _link_session_work(
+            session,
+            refs=[f"job:{payload['job_id']}"],
+            updated_at=session.updated_at,
+        )
         session_store.save_session(session)
+        _save_shared_work(
+            session_store=session_store,
+            session=session,
+            ref=f"job:{payload['job_id']}",
+            kind="reminder",
+            title=reminder_text,
+            summary=text,
+            updated_at=session.updated_at,
+        )
         reply = GatewayReply(
             session_id=session.id,
             command="reminder.create",

@@ -100,9 +100,86 @@ class GatewaySessionBinding:
         )
 
 
+@dataclass(frozen=True, slots=True)
+class GatewayWorkRef:
+    ref: str
+    kind: str
+    title: str
+    summary: str
+    status: str = "active"
+    source_thread_id: str = ""
+    updated_at: str = field(default_factory=_utcnow)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "ref": self.ref,
+            "kind": self.kind,
+            "title": self.title,
+            "summary": self.summary,
+            "status": self.status,
+            "source_thread_id": self.source_thread_id,
+            "updated_at": self.updated_at,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> GatewayWorkRef:
+        return cls(
+            ref=str(payload.get("ref", "")).strip(),
+            kind=str(payload.get("kind", "")).strip(),
+            title=str(payload.get("title", "")).strip(),
+            summary=str(payload.get("summary", "")).strip(),
+            status=str(payload.get("status", "")).strip() or "active",
+            source_thread_id=str(payload.get("source_thread_id", "")).strip(),
+            updated_at=str(payload.get("updated_at", "")).strip() or _utcnow(),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class GatewayUserProfile:
+    id: str
+    transport: str
+    user_id: str
+    active_work: list[GatewayWorkRef] = field(default_factory=list)
+    recent_threads: list[str] = field(default_factory=list)
+    updated_at: str = field(default_factory=_utcnow)
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "transport": self.transport,
+            "user_id": self.user_id,
+            "active_work": [item.to_dict() for item in self.active_work],
+            "recent_threads": list(self.recent_threads),
+            "updated_at": self.updated_at,
+            "metadata": self.metadata,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> GatewayUserProfile:
+        raw_active_work = payload.get("active_work", [])
+        raw_recent_threads = payload.get("recent_threads", [])
+        raw_metadata = payload.get("metadata", {})
+        return cls(
+            id=str(payload.get("id", "")).strip(),
+            transport=str(payload.get("transport", "")).strip(),
+            user_id=str(payload.get("user_id", "")).strip(),
+            active_work=[
+                GatewayWorkRef.from_dict(item) for item in raw_active_work if isinstance(item, dict)
+            ],
+            recent_threads=[str(item).strip() for item in raw_recent_threads if str(item).strip()]
+            if isinstance(raw_recent_threads, list)
+            else [],
+            updated_at=str(payload.get("updated_at", "")).strip() or _utcnow(),
+            metadata=dict(raw_metadata) if isinstance(raw_metadata, dict) else {},
+        )
+
+
 __all__ = [
     "GatewayMessage",
     "GatewayReply",
     "GatewaySessionBinding",
+    "GatewayUserProfile",
+    "GatewayWorkRef",
     "default_gateway_root",
 ]

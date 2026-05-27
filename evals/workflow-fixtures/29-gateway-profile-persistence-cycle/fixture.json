@@ -1,0 +1,93 @@
+{
+  "description": "Exercise gateway profile persistence across reminder creation and cross-thread chat reuse.",
+  "harness_bin": "fake-harness",
+  "steps": [
+    {
+      "name": "reminder-create-thread-primary",
+      "argv": [
+        "gateway",
+        "dispatch",
+        "--transport",
+        "whatsapp",
+        "--user",
+        "15551234567",
+        "--thread",
+        "thread-primary",
+        "--message",
+        "remind me in 5 minutes to continue the Tokyo weather follow-up",
+        "--json"
+      ],
+      "stdout_contains": [
+        "\"command\": \"reminder.create\""
+      ]
+    },
+    {
+      "name": "converse-thread-primary",
+      "argv": [
+        "gateway",
+        "converse",
+        "--transport",
+        "whatsapp",
+        "--user",
+        "15551234567",
+        "--thread",
+        "thread-primary",
+        "--message",
+        "I started the Tokyo weather work.",
+        "--json"
+      ],
+      "stdout_contains": [
+        "thread summary ok"
+      ]
+    },
+    {
+      "name": "converse-thread-secondary",
+      "argv": [
+        "gateway",
+        "converse",
+        "--transport",
+        "whatsapp",
+        "--user",
+        "15551234567",
+        "--thread",
+        "thread-secondary",
+        "--message",
+        "continue that work and also check New York",
+        "--json"
+      ],
+      "stdout_contains": [
+        "shared context ok"
+      ],
+      "file_contains": [
+        {
+          "path": ".harness/gateway/profiles/gwp-whatsapp-15551234567/profile.json",
+          "substring": "\"recent_threads\": ["
+        },
+        {
+          "path": ".harness/gateway/profiles/gwp-whatsapp-15551234567/profile.json",
+          "substring": "\"thread-primary\""
+        },
+        {
+          "path": ".harness/gateway/profiles/gwp-whatsapp-15551234567/profile.json",
+          "substring": "\"thread-secondary\""
+        },
+        {
+          "path": ".harness/gateway/profiles/gwp-whatsapp-15551234567/profile.json",
+          "substring": "\"kind\": \"reminder.once\""
+        },
+        {
+          "path": ".harness/gateway/sessions/gw-whatsapp-thread-primary/session.json",
+          "substring": "\"linked_work_items\": ["
+        },
+        {
+          "path": ".harness/gateway/sessions/gw-whatsapp-thread-primary/session.json",
+          "substring": "\"job:"
+        },
+        {
+          "path": ".harness/gateway/sessions/gw-whatsapp-thread-secondary/session.json",
+          "substring": "\"thread_summary\": \"Latest user ask: continue that work and also check New York."
+        }
+      ]
+    }
+  ]
+}
