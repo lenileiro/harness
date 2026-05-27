@@ -144,12 +144,14 @@ def is_whatsapp_paired(cwd: Path) -> bool:
 
 def build_whatsapp_bridge_env(cwd: Path) -> dict[str, str]:
     config = load_whatsapp_bridge_config(cwd)
+    dotenv_path = cwd / ".env"
     return {
         "HARNESS_WHATSAPP_MODE": config.mode,
         "HARNESS_WHATSAPP_ALLOWED_USERS": ",".join(config.allowed_users),
         "HARNESS_WHATSAPP_REPLY_PREFIX": config.reply_prefix,
         "HARNESS_WHATSAPP_WORKSPACE_CWD": str(cwd.resolve()),
         "HARNESS_WHATSAPP_UV_BIN": shutil.which("uv") or "uv",
+        "HARNESS_WHATSAPP_ENV_FILE": str(dotenv_path.resolve()) if dotenv_path.is_file() else "",
     }
 
 

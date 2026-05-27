@@ -19,7 +19,7 @@ WHATSAPP_BRIDGE_PACKAGE_JSON = """{
 WHATSAPP_BRIDGE_JS = r"""#!/usr/bin/env node
 import express from 'express';
 import { spawn } from 'child_process';
-import { mkdirSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync } from 'fs';
 import path from 'path';
 import qrcode from 'qrcode-terminal';
 import pino from 'pino';
@@ -45,6 +45,7 @@ const PAIR_ONLY = args.includes('--pair-only');
 const REPLY_PREFIX = process.env.HARNESS_WHATSAPP_REPLY_PREFIX || '';
 const WORKSPACE_CWD = process.env.HARNESS_WHATSAPP_WORKSPACE_CWD || process.cwd();
 const UV_BIN = process.env.HARNESS_WHATSAPP_UV_BIN || 'uv';
+const ENV_FILE = process.env.HARNESS_WHATSAPP_ENV_FILE || '';
 const BRIDGE_STARTED_AT_MS = Date.now();
 const ALLOWED_USERS = (process.env.HARNESS_WHATSAPP_ALLOWED_USERS || '')
   .split(',')
@@ -220,6 +221,29 @@ function startTypingTicker(chatId) {
   };
 }
 
+function dotenvKeysToPrefer() {
+  if (!ENV_FILE || !existsSync(ENV_FILE)) {
+    return [];
+  }
+  const text = readFileSync(ENV_FILE, 'utf8');
+  const preferred = [];
+  for (const line of text.split(/\r?\n/)) {
+    const match = line.match(/^\s*([A-Z0-9_]+)\s*=/);
+    if (!match) continue;
+    const key = String(match[1] || '').trim();
+    if (!key) continue;
+    if (
+      key === 'OPENROUTER_API_KEY' ||
+      key === 'OPENAI_API_KEY' ||
+      key === 'ANTHROPIC_API_KEY' ||
+      key === 'TAVILY_API_KEY'
+    ) {
+      preferred.push(key);
+    }
+  }
+  return preferred;
+}
+
 async function dispatchInboundCommand({ chatId, userId, text, messageId }) {
   const dispatchArgs = [
     'run',
@@ -257,10 +281,14 @@ async function dispatchInboundCommand({ chatId, userId, text, messageId }) {
   ];
   async function runGateway(args) {
     console.log('🚀 gateway child', JSON.stringify({ cmd: UV_BIN, args }));
+    const childEnv = { ...process.env };
+    for (const key of dotenvKeysToPrefer()) {
+      delete childEnv[key];
+    }
     return await new Promise((resolve) => {
       const child = spawn(UV_BIN, args, {
         cwd: WORKSPACE_CWD,
-        env: process.env,
+        env: childEnv,
         stdio: ['ignore', 'pipe', 'pipe'],
       });
       let stdout = '';

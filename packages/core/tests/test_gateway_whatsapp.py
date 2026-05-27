@@ -64,6 +64,24 @@ def test_build_whatsapp_bridge_env_includes_workspace_and_uv(tmp_path: Path) -> 
     assert env["HARNESS_WHATSAPP_ALLOWED_USERS"] == "15551234567"
     assert env["HARNESS_WHATSAPP_WORKSPACE_CWD"] == str(tmp_path.resolve())
     assert env["HARNESS_WHATSAPP_UV_BIN"]
+    assert env["HARNESS_WHATSAPP_ENV_FILE"] == ""
+
+
+def test_build_whatsapp_bridge_env_exposes_dotenv_path_when_present(tmp_path: Path) -> None:
+    (tmp_path / ".env").write_text("OPENROUTER_API_KEY=test-key\n", encoding="utf-8")
+    save_whatsapp_bridge_config(
+        tmp_path,
+        WhatsAppBridgeConfig(
+            enabled=True,
+            provider="openrouter",
+            model="google/gemma-4-31b-it",
+            mode="self-chat",
+            allowed_users=["15551234567"],
+            bridge_port=8741,
+        ),
+    )
+    env = build_whatsapp_bridge_env(tmp_path)
+    assert env["HARNESS_WHATSAPP_ENV_FILE"] == str((tmp_path / ".env").resolve())
 
 
 def test_read_whatsapp_bridge_status_reports_defaults(tmp_path: Path) -> None:
