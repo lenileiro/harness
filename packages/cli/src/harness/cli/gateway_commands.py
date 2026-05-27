@@ -493,7 +493,7 @@ async def _run_gateway_conversation(
                 -8:
             ],
             "thread_summary": (
-                f"Latest user ask: {message}. " f"Last reply: {' '.join(reply_text.split())[:180]}"
+                f"Latest user ask: {message}. Last reply: {' '.join(reply_text.split())[:180]}"
             ).strip(),
         },
     )
