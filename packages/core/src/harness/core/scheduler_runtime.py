@@ -13,7 +13,12 @@ from harness.core.research_store import ResearchStore, default_research_root
 from harness.core.scheduler_models import SchedulerJob, SchedulerRunRecord, ScheduleSpec
 from harness.core.scheduler_store import SchedulerStore
 
-_JOB_KINDS = {"mission.schedule_once", "research.schedule_once"}
+_JOB_KINDS = {
+    "mission.schedule_once",
+    "research.schedule_once",
+    "reminder.once",
+    "reminder.recurring",
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -184,6 +189,9 @@ def create_scheduler_job(
 
 def _dispatch_job(job: SchedulerJob) -> tuple[str, str, str]:
     working_dir = Path(job.cwd)
+    if job.kind in {"reminder.once", "reminder.recurring"}:
+        reminder_text = str(job.payload.get("text", "")).strip() or "Reminder"
+        return "completed", reminder_text, ""
     if job.kind == "mission.schedule_once":
         mission_id = str(job.payload.get("mission_id", "")).strip()
         if not mission_id:

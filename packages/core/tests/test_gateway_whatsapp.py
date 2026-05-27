@@ -43,6 +43,8 @@ def test_ensure_whatsapp_bridge_project_writes_assets(tmp_path: Path) -> None:
     assert "'converse'" in bridge_js
     assert "ownIdentityCandidates" in bridge_js
     assert "chatId.endsWith('@g.us')" in bridge_js
+    assert "BRIDGE_STARTED_AT_MS" in bridge_js
+    assert "processedMessageIds" in bridge_js
 
 
 def test_build_whatsapp_bridge_env_includes_workspace_and_uv(tmp_path: Path) -> None:

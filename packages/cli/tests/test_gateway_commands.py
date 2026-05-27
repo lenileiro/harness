@@ -505,6 +505,9 @@ def test_run_gateway_conversation_auto_approves_tool_work(tmp_path: Path) -> Non
     assert payload["reply"]["text"] == "Done from chat"
     assert captured["yes"] is True
     assert captured["inbox"] is False
+    prompt = cast(str, captured["default_system_prompt"])
+    assert "Execution-first policy" in prompt
+    assert "Do not make the user ask you to run the thing you just created" in prompt
 
 
 def test_run_gateway_conversation_sends_event_driven_progress_updates(tmp_path: Path) -> None:

@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import os
+import re
+import shutil
+import subprocess
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from harness.core.approval import ApprovalStore
@@ -26,6 +30,189 @@ def _utcnow_text() -> str:
 
 def _tokenize(text: str) -> list[str]:
     return [part.strip() for part in text.strip().split() if part.strip()]
+
+
+def _weekday_to_cron(value: str) -> str | None:
+    mapping = {
+        "sunday": "0",
+        "monday": "1",
+        "tuesday": "2",
+        "wednesday": "3",
+        "thursday": "4",
+        "friday": "5",
+        "saturday": "6",
+    }
+    return mapping.get(value.strip().lower())
+
+
+def _current_time_cron(*, now: datetime) -> tuple[int, int]:
+    current = now.astimezone(UTC)
+    return current.minute, current.hour
+
+
+def _parse_reminder_intent(text: str) -> tuple[str, str, str, str] | None:
+    normalized = " ".join(text.strip().split())
+    patterns = (
+        r"^remind me in (?P<amount>\d+) (?P<unit>seconds?|secs?|minutes?|mins?|hours?|hrs?)"
+        r"(?: to| about)? (?P<body>.+)$",
+        r"^in (?P<amount>\d+) (?P<unit>seconds?|secs?|minutes?|mins?|hours?|hrs?),? "
+        r"remind me(?: to| about)? (?P<body>.+)$",
+    )
+    match = None
+    for pattern in patterns:
+        match = re.match(pattern, normalized, flags=re.IGNORECASE)
+        if match:
+            break
+    if match is None:
+        recurring_patterns = (
+            r"^remind me (?P<freq>daily|weekly|monthly)(?: to| about)? (?P<body>.+)$",
+            r"^remind me every (?P<freq>day|week|month)(?: to| about)? (?P<body>.+)$",
+            r"^remind me every (?P<weekday>monday|tuesday|wednesday|thursday|friday|saturday|sunday)"
+            r"(?: to| about)? (?P<body>.+)$",
+            r"^every (?P<weekday2>monday|tuesday|wednesday|thursday|friday|saturday|sunday),? "
+            r"remind me(?: to| about)? (?P<body2>.+)$",
+        )
+        recurring_match = None
+        for pattern in recurring_patterns:
+            recurring_match = re.match(pattern, normalized, flags=re.IGNORECASE)
+            if recurring_match:
+                break
+        if recurring_match is None:
+            return None
+        body = (
+            (
+                recurring_match.groupdict().get("body")
+                or recurring_match.groupdict().get("body2")
+                or ""
+            )
+            .strip()
+            .rstrip(".")
+        )
+        if not body:
+            return None
+        now = datetime.now(UTC)
+        minute, hour = _current_time_cron(now=now)
+        weekday_name = (
+            recurring_match.groupdict().get("weekday")
+            or recurring_match.groupdict().get("weekday2")
+            or ""
+        ).strip()
+        if weekday_name:
+            weekday = _weekday_to_cron(weekday_name)
+            if weekday is None:
+                return None
+            return (
+                "reminder.recurring",
+                f"{minute} {hour} * * {weekday}",
+                body,
+                f"every {weekday_name.lower()}",
+            )
+        freq = str(recurring_match.groupdict().get("freq", "")).strip().lower()
+        if freq in {"daily", "day"}:
+            return ("reminder.recurring", f"{minute} {hour} * * *", body, "every day")
+        if freq in {"weekly", "week"}:
+            weekday = str((now.weekday() + 1) % 7)
+            return ("reminder.recurring", f"{minute} {hour} * * {weekday}", body, "every week")
+        if freq in {"monthly", "month"}:
+            day_of_month = now.day
+            return (
+                "reminder.recurring",
+                f"{minute} {hour} {day_of_month} * *",
+                body,
+                "every month",
+            )
+        return None
+    amount = int(match.group("amount"))
+    unit = match.group("unit").lower()
+    body = match.group("body").strip().rstrip(".")
+    if amount < 1 or not body:
+        return None
+    if unit.startswith(("second", "sec")):
+        multiplier = 1
+    elif unit.startswith(("minute", "min")):
+        multiplier = 60
+    else:
+        multiplier = 3600
+    wait_seconds = amount * multiplier
+    if unit.startswith(("second", "sec")):
+        label = f"in {wait_seconds} second(s)"
+    elif unit.startswith(("minute", "min")):
+        label = f"in {amount} minute(s)"
+    else:
+        label = f"in {amount} hour(s)"
+    return ("reminder.once", str(wait_seconds), body, label)
+
+
+def _launch_scheduler_watcher(*, cwd: Path, wait_seconds: int, recurring: bool = False) -> None:
+    uv_bin = shutil.which("uv") or "uv"
+    poll_interval = 5.0 if wait_seconds >= 30 else 1.0
+    command = [
+        uv_bin,
+        "run",
+        "harness",
+        "scheduler",
+        "start",
+        "--cwd",
+        str(cwd),
+        "--poll-interval",
+        str(poll_interval),
+    ]
+    if not recurring:
+        max_ticks = max(6, int(wait_seconds / poll_interval) + 12)
+        command.extend(["--max-ticks", str(max_ticks)])
+    subprocess.Popen(
+        command,
+        cwd=str(cwd),
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        stdin=subprocess.DEVNULL,
+        start_new_session=True,
+        env=os.environ.copy(),
+    )
+
+
+def _dispatch_reminder_create(
+    *,
+    cwd: Path,
+    scheduler_store: SchedulerStore,
+    message: GatewayMessage,
+    kind: str,
+    schedule_value: str,
+    reminder_text: str,
+    schedule_label: str,
+) -> tuple[dict[str, str], str]:
+    if kind == "reminder.once":
+        wait_seconds = int(schedule_value)
+        schedule = parse_schedule_spec(
+            at=(datetime.now(UTC) + timedelta(seconds=wait_seconds)).isoformat(timespec="seconds")
+        )
+        recurring = False
+    else:
+        wait_seconds = 60
+        schedule = parse_schedule_spec(cron=schedule_value)
+        recurring = True
+    job = create_scheduler_job(
+        store=scheduler_store,
+        kind=kind,
+        cwd=cwd,
+        schedule=schedule,
+        payload={
+            "text": reminder_text,
+            "notify_transport": message.transport,
+            "notify_to": message.user_id,
+            "notify_chat_id": message.thread_id,
+        },
+        title=f"reminder-{reminder_text[:40]}",
+    )
+    scheduler_store.add_job(job)
+    _launch_scheduler_watcher(cwd=cwd, wait_seconds=wait_seconds, recurring=recurring)
+    return {
+        "job_id": job.id,
+        "schedule_kind": schedule.kind,
+        "schedule_value": schedule.value,
+        "next_run_at": job.next_run_at,
+        "text": reminder_text,
+    }, f"Okay. I'll remind you {schedule_label}: {reminder_text}"
 
 
 async def _pending_approval_count(store: ApprovalStore | None) -> int:
@@ -280,6 +467,31 @@ async def dispatch_gateway_message(
             text=text,
             data=report.to_dict(),
         )
+    elif reminder := _parse_reminder_intent(message.text):
+        kind, schedule_value, reminder_text, schedule_label = reminder
+        payload, text = _dispatch_reminder_create(
+            cwd=cwd,
+            scheduler_store=scheduler_store,
+            message=message,
+            kind=kind,
+            schedule_value=schedule_value,
+            reminder_text=reminder_text,
+            schedule_label=schedule_label,
+        )
+        session = replace(
+            session,
+            last_job_id=payload["job_id"],
+            last_command="reminder.create",
+            updated_at=_utcnow_text(),
+        )
+        session_store.save_session(session)
+        reply = GatewayReply(
+            session_id=session.id,
+            command="reminder.create",
+            status="ok",
+            text=text,
+            data=payload,
+        )
     else:
         reply = GatewayReply(
             session_id=session.id,
@@ -290,7 +502,13 @@ async def dispatch_gateway_message(
                 "mission start <id>, research start, approve <id>, report <mission_id>."
             ),
         )
-    if reply.command not in {"mission.start", "research.start", "approve", "report"}:
+    if reply.command not in {
+        "mission.start",
+        "research.start",
+        "approve",
+        "report",
+        "reminder.create",
+    }:
         session = replace(session, last_command=reply.command, updated_at=_utcnow_text())
         session_store.save_session(session)
     for hook in hooks:

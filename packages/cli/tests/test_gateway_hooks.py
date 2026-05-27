@@ -77,3 +77,50 @@ def test_whatsapp_notification_hook_uses_latest_workspace_session(tmp_path, monk
     assert captured["to"] == "15550000002"
     assert "Harness scheduled run completed." in captured["text"]
     assert "mission.schedule_once" in captured["text"]
+
+
+def test_whatsapp_notification_hook_sends_reminder_to_chat_id(tmp_path, monkeypatch) -> None:
+    captured: dict[str, str] = {}
+
+    def _fake_send(*, to: str, text: str, **kwargs):
+        captured["to"] = to
+        captured["text"] = text
+        return {"messages": [{"id": "wamid.2"}]}
+
+    monkeypatch.setattr("harness.cli.gateway_hooks.send_whatsapp_text_message", _fake_send)
+
+    hook = WhatsAppNotificationHook()
+    hook.on_job_completed(
+        cwd=tmp_path,
+        job=SchedulerJob(
+            id="sched-job-reminder",
+            kind="reminder.once",
+            cwd=str(tmp_path),
+            status="active",
+            schedule=ScheduleSpec(kind="at", value="2026-05-26T12:00:00+00:00"),
+            next_run_at="2026-05-26T12:00:00+00:00",
+            payload={
+                "text": "check the build",
+                "notify_chat_id": "172125595893921@lid",
+                "notify_to": "15550000001",
+            },
+        ),
+        trigger="scheduled",
+        record=SchedulerRunRecord(
+            id="schedrun-reminder",
+            job_id="sched-job-reminder",
+            kind="reminder.once",
+            cwd=str(tmp_path),
+            trigger="scheduled",
+            status="completed",
+            result_status="completed",
+            result_stop_reason="check the build",
+            started_at=datetime(2026, 5, 26, 12, 0, tzinfo=UTC).isoformat(timespec="seconds"),
+            finished_at=datetime(2026, 5, 26, 12, 5, tzinfo=UTC).isoformat(timespec="seconds"),
+            record_dir="",
+            summary="reminder.once -> completed (check the build)",
+        ),
+    )
+
+    assert captured["to"] == "172125595893921@lid"
+    assert captured["text"] == "Reminder: check the build"

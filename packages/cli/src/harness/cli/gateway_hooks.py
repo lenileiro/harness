@@ -66,6 +66,19 @@ class WhatsAppNotificationHook:
         trigger: str,
         record: SchedulerRunRecord,
     ) -> None:
+        if job.kind in {"reminder.once", "reminder.recurring"}:
+            target = (
+                str(job.payload.get("notify_chat_id", "")).strip()
+                or str(job.payload.get("notify_to", "")).strip()
+            )
+            reminder_text = str(job.payload.get("text", "")).strip() or "Reminder"
+            if target:
+                send_whatsapp_text_message(
+                    cwd=cwd,
+                    to=target,
+                    text=f"Reminder: {reminder_text}",
+                )
+            return
         self._send(
             cwd=cwd,
             text=(

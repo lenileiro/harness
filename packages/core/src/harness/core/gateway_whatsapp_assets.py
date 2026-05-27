@@ -45,6 +45,7 @@ const PAIR_ONLY = args.includes('--pair-only');
 const REPLY_PREFIX = process.env.HARNESS_WHATSAPP_REPLY_PREFIX || '';
 const WORKSPACE_CWD = process.env.HARNESS_WHATSAPP_WORKSPACE_CWD || process.cwd();
 const UV_BIN = process.env.HARNESS_WHATSAPP_UV_BIN || 'uv';
+const BRIDGE_STARTED_AT_MS = Date.now();
 const ALLOWED_USERS = (process.env.HARNESS_WHATSAPP_ALLOWED_USERS || '')
   .split(',')
   .map((value) => value.trim().replace(/[^\d*]/g, ''))
@@ -58,6 +59,7 @@ app.use(express.json({ limit: '2mb' }));
 
 let sock = null;
 let connectionState = 'disconnected';
+const processedMessageIds = new Set();
 
 function normalizeChatId(value) {
   const raw = String(value || '').trim();
@@ -156,9 +158,25 @@ function inboundUserId(chatId, key) {
   return digitsOnly(key?.participant) || digitsOnly(chatId) || String(chatId || 'whatsapp-user');
 }
 
+function messageTimestampMs(node) {
+  const raw = node?.messageTimestamp;
+  if (raw == null) return 0;
+  const numeric = Number(raw);
+  if (!Number.isFinite(numeric) || numeric <= 0) return 0;
+  return numeric < 1000000000000 ? numeric * 1000 : numeric;
+}
+
 function shouldIgnoreInbound(node, text) {
   const chatId = String(node?.key?.remoteJid || '');
   if (!chatId || chatId === 'status@broadcast') {
+    return true;
+  }
+  const messageId = String(node?.key?.id || '').trim();
+  if (messageId && processedMessageIds.has(messageId)) {
+    return true;
+  }
+  const timestamp = messageTimestampMs(node);
+  if (timestamp && timestamp < BRIDGE_STARTED_AT_MS - 5000) {
     return true;
   }
   const trimmed = String(text || '').trim();
@@ -384,6 +402,16 @@ async function startSocket() {
       if (!allowed) {
         console.log('SKIP disallowed', JSON.stringify({ chatId }));
         continue;
+      }
+      const messageId = String(node?.key?.id || '').trim();
+      if (messageId) {
+        processedMessageIds.add(messageId);
+        if (processedMessageIds.size > 200) {
+          const oldest = processedMessageIds.values().next().value;
+          if (oldest) {
+            processedMessageIds.delete(oldest);
+          }
+        }
       }
       const userId = inboundUserId(chatId, node?.key);
       console.log('ENTER dispatch', JSON.stringify({ chatId, userId, text: String(text || '').trim() }));
