@@ -1,0 +1,26 @@
+{
+  "name": "open-rabbithole-a",
+  "argv": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "research",
+    "open",
+    "--title",
+    "Archive indexing",
+    "--question",
+    "How should archived findings stay searchable?",
+    "--scope",
+    "Inspect search and archive metadata.",
+    "--theme",
+    "research-memory",
+    "--related-sections",
+    "archive,search",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_mynb8ut3/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Opened rabbit hole rh-archive-indexing-fd64561b at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_m\nynb8ut3/workspace/.harness/research/rabbitholes/rh-archive-indexing-fd64561b\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.3418995412066579
+}

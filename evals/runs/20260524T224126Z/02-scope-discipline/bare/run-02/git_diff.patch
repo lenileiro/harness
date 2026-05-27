@@ -1,0 +1,15 @@
+diff --git a/src/format.py b/src/format.py
+index 56f1799..18265b2 100644
+--- a/src/format.py
++++ b/src/format.py
+@@ -28,8 +28,8 @@ def format_price(amount, currency=_DEFAULT_CURRENCY, precision=_DEFAULT_PRECISIO
+         >>> format_price(1234, precision=0)
+         '$1,234'
+     """
+-    # BUG: no None guard here — raises TypeError when amount is None.
+-    # The other format_* functions already return "—" for None inputs.
++    if amount is None:
++        return "—"
+     value = float(amount)
+     rounded = round(value, precision)
+     formatted = f"{int(rounded):,}" if precision == 0 else f"{rounded:,.{precision}f}"

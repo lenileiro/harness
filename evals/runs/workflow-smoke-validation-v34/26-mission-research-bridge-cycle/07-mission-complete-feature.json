@@ -1,0 +1,22 @@
+{
+  "name": "mission-complete-feature",
+  "argv": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "mission",
+    "complete-feature",
+    "--mission",
+    "mission-bridge-mission-7dd40f83",
+    "--feature",
+    "feature-implement-bridge-feature-0780e3d1",
+    "--completed-work",
+    "Implemented the bridge feature.",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_j3fwxtn0/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "recorded Recorded completion for feature 'Implement bridge feature'.\nfeature_id=feature-implement-bridge-feature-0780e3d1\nmilestone_id=milestone-milestone-1-9e652576\nrun_id=run-implement-bridge-feature-6c0fe588\nhandoff_id=handoff-implement-bridge-feature-715e671f\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.38062508404254913
+}

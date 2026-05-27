@@ -1,0 +1,199 @@
+{
+  "fixture_name": "26-mission-research-bridge-cycle",
+  "passed": false,
+  "steps_total": 9,
+  "steps_passed": 8,
+  "step_results": [
+    {
+      "name": "mission-create",
+      "argv": [
+        "/Users/leiro/workspace/harness/.venv/bin/harness",
+        "mission",
+        "create",
+        "--title",
+        "Bridge Mission",
+        "--goal",
+        "Turn mission outputs into research follow-up artifacts.",
+        "--cwd",
+        "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_4t649z_5/workspace"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "Created mission mission-bridge-mission-838ecc55 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_4\nt649z_5/workspace/.harness/missions/missions/mission-bridge-mission-838ecc55\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.4438872910104692
+    },
+    {
+      "name": "mission-plan",
+      "argv": [
+        "/Users/leiro/workspace/harness/.venv/bin/harness",
+        "mission",
+        "plan",
+        "--mission",
+        "mission-bridge-mission-838ecc55",
+        "--contract-summary",
+        "Mission bridge assertions are declared before execution.",
+        "--milestone",
+        "m1|Milestone 1|Ship the bridge mission slice.",
+        "--assertion",
+        "a1|Bridge slice works|The mission slice should emit research follow-up work.|contract|Inspect mission and research artifacts.",
+        "--feature",
+        "f1|m1|Implement bridge feature|Create the first mission bridge feature.|worker|app/bridge.py||a1|publication-seed",
+        "--cwd",
+        "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_4t649z_5/workspace"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "Planned mission mission-bridge-mission-838ecc55\nmilestones=1\nfeatures=1\nassertions=1\ncurrent_milestone_id=milestone-milestone-1-c29882bb\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.41573129198513925
+    },
+    {
+      "name": "mission-approve",
+      "argv": [
+        "/Users/leiro/workspace/harness/.venv/bin/harness",
+        "mission",
+        "approve",
+        "--mission",
+        "mission-bridge-mission-838ecc55",
+        "--cwd",
+        "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_4t649z_5/workspace"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "Approved mission mission-bridge-mission-838ecc55\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.39680020813830197
+    },
+    {
+      "name": "mission-execute-next",
+      "argv": [
+        "/Users/leiro/workspace/harness/.venv/bin/harness",
+        "mission",
+        "execute-next",
+        "--mission",
+        "mission-bridge-mission-838ecc55",
+        "--cwd",
+        "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_4t649z_5/workspace"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "dispatched Dispatched feature 'Implement bridge feature'.\nmilestone_id=milestone-milestone-1-c29882bb\nfeature_id=feature-implement-bridge-feature-d5f6e81c\nrun_id=run-implement-bridge-feature-bea8a262\nhandoff_id=handoff-implement-bridge-feature-3a112326\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.3842815840616822
+    },
+    {
+      "name": "mission-validate-fail",
+      "argv": [
+        "/Users/leiro/workspace/harness/.venv/bin/harness",
+        "mission",
+        "validate-milestone",
+        "--mission",
+        "mission-bridge-mission-838ecc55",
+        "--cwd",
+        "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_4t649z_5/workspace"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "failed Mission validation found blocking issues and created corrective follow-up\nwork.\nmilestone_id=milestone-milestone-1-c29882bb\nrun_id=run-validate-milestone-1-dd06696a\nfindings_count=2\ncorrective_feature_id=feature-corrective-implement-bridge-feat-2a3df98a\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.3790597920306027
+    },
+    {
+      "name": "mission-create-opportunity",
+      "argv": [
+        "/Users/leiro/workspace/harness/.venv/bin/harness",
+        "mission",
+        "create-opportunity",
+        "--mission",
+        "mission-bridge-mission-838ecc55",
+        "--finding",
+        "finding-bridge-slice-works-0eb89669",
+        "--title",
+        "Mission validator follow-up",
+        "--summary",
+        "Convert mission validation findings into durable research follow-up.",
+        "--cwd",
+        "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_4t649z_5/workspace"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "Created linked opportunity opp-mission-validator-follow-up-04ba651f at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_4\nt649z_5/workspace/.harness/research/opportunities/opp-mission-validator-follow-u\np-04ba651f\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.38873574999161065
+    },
+    {
+      "name": "mission-complete-feature",
+      "argv": [
+        "/Users/leiro/workspace/harness/.venv/bin/harness",
+        "mission",
+        "complete-feature",
+        "--mission",
+        "mission-bridge-mission-838ecc55",
+        "--feature",
+        "feature-implement-bridge-feature-d5f6e81c",
+        "--completed-work",
+        "Implemented the bridge feature.",
+        "--cwd",
+        "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_4t649z_5/workspace"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "recorded Recorded completion for feature 'Implement bridge feature'.\nfeature_id=feature-implement-bridge-feature-d5f6e81c\nmilestone_id=milestone-milestone-1-c29882bb\nrun_id=run-implement-bridge-feature-9bbf0e46\nhandoff_id=handoff-implement-bridge-feature-3a44adff\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.4082757921423763
+    },
+    {
+      "name": "mission-create-candidate",
+      "argv": [
+        "/Users/leiro/workspace/harness/.venv/bin/harness",
+        "mission",
+        "create-candidate",
+        "--mission",
+        "mission-bridge-mission-838ecc55",
+        "--feature",
+        "feature-implement-bridge-feature-d5f6e81c",
+        "--title",
+        "Mission bridge candidate",
+        "--summary",
+        "Promote the validated bridge feature into the research lane.",
+        "--cwd",
+        "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_4t649z_5/workspace"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "Created linked promotion candidate promo-mission-bridge-candidate-4486e77d at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_4\nt649z_5/workspace/.harness/research/promotions/promo-mission-bridge-candidate-44\n86e77d\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.4400517500471324
+    },
+    {
+      "name": "research-show-candidate",
+      "argv": [
+        "/Users/leiro/workspace/harness/.venv/bin/harness",
+        "research",
+        "show-candidate",
+        "promo-mission-bridge-candidate-4486e77d",
+        "--cwd",
+        "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_4t649z_5/workspace"
+      ],
+      "passed": false,
+      "returncode": 0,
+      "stdout": "Mission bridge candidate\nPromote the validated bridge feature into the research lane.\n\nTarget Files\n- app/bridge.py\n",
+      "stderr": "",
+      "failures": [
+        "stdout~Mission Features"
+      ],
+      "duration_seconds": 0.40530020790174603
+    }
+  ],
+  "artifact_dir": "evals/runs/workflow-mission-research-bridge-v2/26-mission-research-bridge-cycle",
+  "duration_seconds": 3.6808585829567164
+}

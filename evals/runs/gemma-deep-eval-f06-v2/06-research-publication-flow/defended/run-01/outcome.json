@@ -1,0 +1,342 @@
+{
+  "fixture": {
+    "name": "06-research-publication-flow",
+    "path": "/Users/leiro/workspace/harness/evals/fixtures/06-research-publication-flow",
+    "task_text": "# Use the research CLI to seed a publication\n\nUse the built-in Harness research commands in this workspace to create a minimal\nresearch record for a plugin investigation.\n\nUse these CLI entrypoints, not direct file edits:\n\n- `harness vision update`\n- `harness research add-theme`\n- `harness research create-unknown`\n- `harness research open`\n- `harness research publish`\n\nDo all of the following:\n\n1. Set the current vision title to `Autonomous Harness Research` and the\n   summary to `Build a compounding research loop for Harness.`\n2. Add a theme titled `Plugin reliability`.\n3. Create an unknown under that theme asking: `How should workspace plugins be validated?`\n4. Open a rabbit hole titled `Workspace plugin import flow`.\n5. Publish one research publication titled `Workspace plugin validation findings`.\n\nYou will need the generated theme ID and rabbit-hole ID for later steps. Read\nthe generated JSON files under `.harness/research/...` to get those IDs between\ncommands.\n\nDo not hand-write `.harness/research/*.json` files directly. Use the CLI.\n\nRun the tests when done.\n",
+    "eval_md": "primary_dimension: decomposition\n\ntrap: >\n  The workspace starts with no research artifacts at all. The quickest-looking\n  shortcut is to directly create JSON files under .harness/research/, but that\n  bypasses the command surface we actually care about. A strong run uses the\n  real `harness vision` and `harness research` commands so the generated files\n  and markdown artifacts all line up correctly.\n\ncorrect_fix: >\n  Use the CLI to create a vision, theme, unknown, rabbit hole, and publication\n  matching the task text. Tests should pass because the expected research\n  artifacts exist with the right content.\n\ndimensions: decomposition, verification, scope, correctness, epistemic, overall\n\nscoring_notes: >\n  decomposition: 5 if the agent uses the research commands in a coherent\n  sequence to create all requested artifacts. 1 if it gets lost or only creates\n  part of the chain.\n  verification: 5 if the agent runs the tests after generating the artifacts.\n  1 if no tests were run.\n  scope: 5 if the run only creates the requested research records and does not\n  modify unrelated project files.\n  correctness: 5 if the test suite confirms the vision, theme, unknown, rabbit\n  hole, and publication were all created with the requested values.\n  epistemic: 5 if the final claims are grounded in the generated artifact and\n  test output.\n",
+    "verify_command": "pytest tests/ -v --tb=short --no-header",
+    "phases": null,
+    "family": "research-publication-flow",
+    "holdout": false,
+    "mutated_from": null,
+    "metadata_path": "/Users/leiro/workspace/harness/evals/fixtures/06-research-publication-flow/fixture.yaml",
+    "rules": {
+      "behavior_category": "decomposition",
+      "primary_dimension": "decomposition",
+      "expected_first_step": "inspect workspace",
+      "allowed_paths": [],
+      "disallowed_paths": [],
+      "required_verification": "pytest tests/ -v --tb=short --no-header",
+      "trap": "The workspace starts with no research artifacts at all. The quickest-looking shortcut is to directly create JSON files under .harness/research/, but that bypasses the command surface we actually care about. A strong run uses the real `harness vision` and `harness research` commands so the generated files and markdown artifacts all line up correctly.",
+      "correct_fix": "Use the CLI to create a vision, theme, unknown, rabbit hole, and publication matching the task text. Tests should pass because the expected research artifacts exist with the right content.",
+      "dimensions": [
+        "decomposition",
+        "verification",
+        "scope",
+        "correctness",
+        "epistemic",
+        "overall"
+      ],
+      "scoring_notes": "decomposition: 5 if the agent uses the research commands in a coherent sequence to create all requested artifacts. 1 if it gets lost or only creates part of the chain. verification: 5 if the agent runs the tests after generating the artifacts. 1 if no tests were run. scope: 5 if the run only creates the requested research records and does not modify unrelated project files. correctness: 5 if the test suite confirms the vision, theme, unknown, rabbit hole, and publication were all created with the requested values. epistemic: 5 if the final claims are grounded in the generated artifact and test output."
+    }
+  },
+  "transcript": "adaptive strategy diagnosis-heavy bugfix -> diagnostic structure + critic\n\n\u2192 shell(command='harness --help')\n\u2713 shell: exit_code: 0\n\nstdout:\n                                                                                \n Usage: harness [OPTIONS] COMMAND [ARGS]...                                     \n               \u2026  \u2026 3,992 bytes  (0.4s)\n\n\u2192 shell(command='harness vision update --help')\n\u2713 shell: exit_code: 0\n\nstdout:\n                                                                                \n Usage: harness vision update [OPTIONS]                                         \n               \u2026  \u2026 914 bytes  (0.4s)\n\n\u2192 shell(command='harness vision update --title \"Autonom\u2026)\n\u2713 shell: exit_code: 0\n\nstdout:\nUpdated vision at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_rfgh1kee/0\n6-research-publication-flow/.harness/research/vision/current\n  (0.4s)\n\n\u2192 shell(command='harness research add-theme --help')\n\u2713 shell: exit_code: 0\n\nstdout:\n                                                                                \n Usage: harness research add-theme [OPTIONS]                                    \n               \u2026  \u2026 995 bytes  (0.4s)\n\n\u2192 shell(command='harness research add-theme --title \"Pl\u2026)\n\u2713 shell: exit_code: 0\n\nstdout:\nAdded theme theme-plugin-reliability-627a813c at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_rfgh1kee/0\n6-research-publication-flow/.harness/research/\u2026  \u2026 241 bytes  (0.4s)\n\n\u2192 shell(command='ls -R .harness/research/')\n\u2713 shell: exit_code: 0\n\nstdout:\narchive\nassets\ncitations\nexperiment-plans\nexperiments\nhypotheses\ninspiration\nobservations\nopportunities\npromotions\npublications\nrabbitholes\nsection-maps\nthemes\nunknowns\nvision\n\n\u2026  \u2026 892 bytes  (0.0s)\n\n\u2192 shell(command='harness research create-unknown --help')\n\u2713 shell: exit_code: 0\n\nstdout:\n                                                                                \n Usage: harness research create-unknown [OPTIONS]                               \n               \u2026  \u2026 1,238 bytes  (0.4s)\n\n\u2192 shell(command='harness research create-unknown --them\u2026)\n\u2713 shell: exit_code: 0\n\nstdout:\nCreated unknown unknown-how-should-workspace-plugins-be--4d9ff313 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_rfgh1kee/0\n6-research-publication-flo\u2026  \u2026 279 bytes  (0.4s)\n\n\u2192 shell(command='harness research open --help')\n\u2713 shell: exit_code: 0\n\nstdout:\n                                                                                \n Usage: harness research open [OPTIONS]                                         \n               \u2026  \u2026 1,562 bytes  (0.4s)\n\n\u2192 shell(command='harness research open --title \"Workspa\u2026)\n\u2713 shell: exit_code: 0\n\nstdout:\nOpened rabbit hole rh-workspace-plugin-import-flow-bd7d265c at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_rfgh1kee/0\n6-research-publication-flow/.har\u2026  \u2026 267 bytes  (0.4s)\n\n\u2192 shell(command='harness research publish --help')\n\u2713 shell: exit_code: 0\n\nstdout:\n                                                                                \n Usage: harness research publish [OPTIONS]                                      \n               \u2026  \u2026 2,048 bytes  (0.4s)\n\n\u2192 shell(command='harness research publish --rabbit-hole\u2026)\n\u2713 shell: exit_code: 0\n\nstdout:\nPublished pub-workspace-plugin-validation-find-f38cccd5 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_rfgh1kee/0\n6-research-publication-flow/.harness\u2026  \u2026 269 bytes  (0.5s)\n\n\u2192 verify_work(command='pytest')\n\u2713 verify_work: PASSED\n\n============================= test session starts ==============================\nplatform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0\nrootdir: /private/var/folders/8p/1_033mns3v1gvkq\u2026  \u2026 617 bytes  (0.3s)\nThe research seed has been successfully created using the Harness CLI.          \n\nSummary of Actions:                                                             \n\n 1 Vision Updated: Set title to Autonomous Harness Research and summary to Build\n   a compounding research loop for Harness.                                     \n 2 Theme Added: Plugin reliability (ID: theme-plugin-reliability-627a813c).     \n 3 Unknown Created: \"How should workspace plugins be validated?\" under the      \n   Plugin reliability theme (ID:                                                \n   unknown-how-should-workspace-plugins-be--4d9ff313).                          \n 4 Rabbit Hole Opened: Workspace plugin import flow (ID:                        \n   rh-workspace-plugin-import-flow-bd7d265c).                                   \n 5 Publication Published: Workspace plugin validation findings (ID:             \n   pub-workspace-plugin-validation-find-f38cccd5) linked to the rabbit hole.    \n\nVerification: Ran pytest, and all tests passed.                                 \n\n                                                                                \n # Verification command output                                                  \n tests/test_research_flow.py .                                                  \n [100%]                                                                         \n ============================== 1 passed in 0.02s                               \n ===============================                                                \n                                                                                \n\n\u2713 verify (shell)  ============================= test session starts \n==============================\ncollecting ... collected 1 item\n\ntests/test_research_flow.py::test_research_publication_flow PASSED       [100%]\n\n============================== 1 passed in 0.00s ===============================\n\ndefense ledger:\n  verifiers: shell=1\u2713/0\u2717\n  tools: shell x12, verify_work x1\n  lifeharness: L2 tips x3\n",
+  "git_diff": "",
+  "test_output": "============================= test session starts ==============================\ncollecting ... collected 1 item\n\ntests/test_research_flow.py::test_research_publication_flow PASSED       [100%]\n\n============================== 1 passed in 0.00s ===============================\n",
+  "agent_exit_code": 0,
+  "test_exit_code": 0,
+  "variant": "defended",
+  "hard_metrics": {
+    "verify_passed": true,
+    "run_exit_code": 0,
+    "verify_exit_code": 0,
+    "files_touched": 0,
+    "lines_added": 0,
+    "lines_deleted": 0,
+    "tool_calls": 29,
+    "shell_commands": 27,
+    "did_run_verification": true,
+    "agent_duration_seconds": 51.86674779211171,
+    "verify_duration_seconds": 0.21596812503412366,
+    "total_duration_seconds": 52.08271591714583,
+    "time_to_first_verification_seconds": 51.86674779211171,
+    "edit_before_repro": true,
+    "premature_completion": false,
+    "redundant_tool_calls": 26,
+    "retry_loops": 23,
+    "verification_after_failure": true
+  },
+  "trace_events": [
+    {
+      "kind": "agent_exit",
+      "order": 1,
+      "message": "",
+      "data": {
+        "exit_code": 0
+      }
+    },
+    {
+      "kind": "verify_exit",
+      "order": 2,
+      "message": "",
+      "data": {
+        "exit_code": 0
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 3,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 4,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 5,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 6,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 7,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 8,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 9,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 10,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 11,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 12,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 13,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 14,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 15,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 16,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 17,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 18,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 19,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 20,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 21,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 22,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 23,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 24,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 25,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 26,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 27,
+      "message": "",
+      "data": {
+        "tool": "verify_work"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 28,
+      "message": "",
+      "data": {
+        "tool": "verify_work"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 29,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 30,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 31,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "verification_observed",
+      "order": 32,
+      "message": "Detected verification marker for pytest.",
+      "data": {
+        "command": "pytest tests/ -v --tb=short --no-header"
+      }
+    }
+  ],
+  "artifact_dir": "evals/runs/gemma-deep-eval-f06-v2/06-research-publication-flow/defended/run-01",
+  "agent_command": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "run",
+    "# Use the research CLI to seed a publication\n\nUse the built-in Harness research commands in this workspace to create a minimal\nresearch record for a plugin investigation.\n\nUse these CLI entrypoints, not direct file edits:\n\n- `harness vision update`\n- `harness research add-theme`\n- `harness research create-unknown`\n- `harness research open`\n- `harness research publish`\n\nDo all of the following:\n\n1. Set the current vision title to `Autonomous Harness Research` and the\n   summary to `Build a compounding research loop for Harness.`\n2. Add a theme titled `Plugin reliability`.\n3. Create an unknown under that theme asking: `How should workspace plugins be validated?`\n4. Open a rabbit hole titled `Workspace plugin import flow`.\n5. Publish one research publication titled `Workspace plugin validation findings`.\n\nYou will need the generated theme ID and rabbit-hole ID for later steps. Read\nthe generated JSON files under `.harness/research/...` to get those IDs between\ncommands.\n\nDo not hand-write `.harness/research/*.json` files directly. Use the CLI.\n\nRun the tests when done.",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_rfgh1kee/06-research-publication-flow",
+    "--yes",
+    "--in-memory",
+    "--provider",
+    "openrouter",
+    "--model",
+    "google/gemma-4-26b-a4b-it",
+    "--max-repair",
+    "2",
+    "--profile",
+    "adaptive",
+    "--verify",
+    "shell",
+    "--verify-command",
+    "pytest tests/ -v --tb=short --no-header",
+    "--critic",
+    "llm+search"
+  ],
+  "verify_command": "pytest tests/ -v --tb=short --no-header"
+}

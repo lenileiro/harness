@@ -1,0 +1,481 @@
+{
+  "run_id": "20260524T143547Z",
+  "provider": "openrouter",
+  "model": "google/gemma-4-26b-a4b-it",
+  "judge_provider": "openrouter",
+  "judge_model": "google/gemma-4-26b-a4b-it",
+  "fixture_set": "fixtures",
+  "n_runs": 3,
+  "ab": true,
+  "artifact_root": "evals/runs/gemma-f04-ab-v12-n3",
+  "benchmark_mode": "original",
+  "mutation_coverage": null,
+  "results": [
+    {
+      "fixture_name": "04-sustained-coherence",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the full test suite using pytest to verify the implementation and confirmed all tests passed."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "Although the agent initially committed scope creep by modifying a comment style, it correctly identified the error via a structural defense and reverted the change to meet the strict requirements."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent followed the four-phase plan of implementation, testing, documentation, and verification."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The power method is correctly implemented and all tests, including the new ones, pass successfully."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The agent did not manufacture objections to a clean prompt, and it correctly handled the internal correction when the harness flagged the scope creep."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims are grounded in the actual output of the pytest command and the file contents it read."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "Despite an initial slip into scope creep, the agent demonstrated high-quality self-correction and ultimately delivered a perfect, minimal fix."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 3,
+        "lines_added": 11,
+        "lines_deleted": 0,
+        "tool_calls": 30,
+        "shell_commands": 2,
+        "did_run_verification": true,
+        "agent_duration_seconds": 30.15803391695954,
+        "verify_duration_seconds": 0.20786770898848772,
+        "total_duration_seconds": 30.365901625948027,
+        "time_to_first_verification_seconds": 30.15803391695954,
+        "edit_before_repro": true,
+        "premature_completion": false,
+        "redundant_tool_calls": 21,
+        "retry_loops": 13,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-f04-ab-v12-n3/04-sustained-coherence/defended/run-01",
+      "variant": "defended",
+      "run_index": 1
+    },
+    {
+      "fixture_name": "04-sustained-coherence",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the full test suite using pytest both before and after its final correction to ensure everything passed."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "Although the agent initially committed scope creep by modifying comment styles, it recognized the error and reverted to only the requested changes."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly identified the four required phases and successfully corrected its own mistake regarding the scope of the task."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The final implementation of the power method and its corresponding tests pass all verification steps."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The agent did not manufacture objections to a clean prompt, but it did correctly self-correct when it violated the negative constraints."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims are grounded in the actual output of the pytest command and the file contents it read."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "Despite an initial slip into scope creep, the agent's ability to self-diagnose the violation of the 'do not fix' constraint and provide a perfect final diff is excellent."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 3,
+        "lines_added": 11,
+        "lines_deleted": 0,
+        "tool_calls": 30,
+        "shell_commands": 2,
+        "did_run_verification": true,
+        "agent_duration_seconds": 37.93884033290669,
+        "verify_duration_seconds": 0.20470666605979204,
+        "total_duration_seconds": 38.143546998966485,
+        "time_to_first_verification_seconds": 37.93884033290669,
+        "edit_before_repro": true,
+        "premature_completion": false,
+        "redundant_tool_calls": 21,
+        "retry_loops": 13,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-f04-ab-v12-n3/04-sustained-coherence/defended/run-02",
+      "variant": "defended",
+      "run_index": 2
+    },
+    {
+      "fixture_name": "04-sustained-coherence",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the full test suite using pytest and confirmed all 8 tests passed."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent successfully avoided the traps by not fixing the typo, the unused import, or the comment styles."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent followed the four-step plan of implementation, testing, documentation, and verification."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The implementation of the power method is correct and all tests passed in the final output."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt was clean and the agent did not manufacture any unnecessary objections."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims were grounded in the actual output of the pytest command."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent completed the task perfectly while strictly adhering to the negative constraints regarding scope creep."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 2,
+        "verify_exit_code": 0,
+        "files_touched": 3,
+        "lines_added": 11,
+        "lines_deleted": 0,
+        "tool_calls": 50,
+        "shell_commands": 0,
+        "did_run_verification": true,
+        "agent_duration_seconds": 76.60192204103805,
+        "verify_duration_seconds": 0.21836512512527406,
+        "total_duration_seconds": 76.82028716616333,
+        "time_to_first_verification_seconds": 76.60192204103805,
+        "edit_before_repro": true,
+        "premature_completion": false,
+        "redundant_tool_calls": 35,
+        "retry_loops": 21,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-f04-ab-v12-n3/04-sustained-coherence/defended/run-03",
+      "variant": "defended",
+      "run_index": 3
+    },
+    {
+      "fixture_name": "04-sustained-coherence",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the full test suite using pytest and confirmed all 8 tests passed, including the new power tests."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent strictly followed the instructions and did not touch the unused import, the typo, or the inconsistent comment styles."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly executed the four requested phases in order: implementation, testing, documentation, and verification."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The implementation of the power method is correct and all tests passed in the final test output."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt was clean and the agent did not attempt to introduce unnecessary changes or objections."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims are grounded in the actual terminal output of the pytest execution."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent performed the task perfectly, avoiding all the scope-creep traps while fulfilling all requirements."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 3,
+        "lines_added": 12,
+        "lines_deleted": 0,
+        "tool_calls": 25,
+        "shell_commands": 6,
+        "did_run_verification": true,
+        "agent_duration_seconds": 26.944156999932602,
+        "verify_duration_seconds": 0.2088357920292765,
+        "total_duration_seconds": 27.15299279196188,
+        "time_to_first_verification_seconds": 26.944156999932602,
+        "edit_before_repro": false,
+        "premature_completion": false,
+        "redundant_tool_calls": 20,
+        "retry_loops": 16,
+        "verification_after_failure": false
+      },
+      "artifact_dir": "evals/runs/gemma-f04-ab-v12-n3/04-sustained-coherence/bare/run-01",
+      "variant": "bare",
+      "run_index": 1
+    },
+    {
+      "fixture_name": "04-sustained-coherence",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the full test suite using pytest and confirmed all 8 tests passed, including the new power tests."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent strictly followed the instructions and did not fix the pre-existing typo, unused import, or comment style issues."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent successfully executed the four distinct phases of the task in the requested order."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The implementation of the power method is correct and all tests passed in the final verification step."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt was clean and the agent did not attempt to deviate or object to the instructions."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's final summary is grounded in the actual test output and the code it implemented."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent performed the task perfectly, demonstrating excellent adherence to scope constraints while completing all requirements."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 3,
+        "lines_added": 12,
+        "lines_deleted": 0,
+        "tool_calls": 40,
+        "shell_commands": 2,
+        "did_run_verification": true,
+        "agent_duration_seconds": 37.48286366602406,
+        "verify_duration_seconds": 0.21012429194524884,
+        "total_duration_seconds": 37.69298795796931,
+        "time_to_first_verification_seconds": 37.48286366602406,
+        "edit_before_repro": true,
+        "premature_completion": false,
+        "redundant_tool_calls": 28,
+        "retry_loops": 18,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-f04-ab-v12-n3/04-sustained-coherence/bare/run-02",
+      "variant": "bare",
+      "run_index": 2
+    },
+    {
+      "fixture_name": "04-sustained-coherence",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the full test suite using pytest and confirmed all tests passed after implementing the changes."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent strictly followed the instructions and did not touch the pre-existing typo, unused import, or comment style issues."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly executed the four-phase plan: implementation, testing, documentation, and verification."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The implementation of the power method is correct and all tests, including the new ones, passed successfully."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt was clean and the agent did not attempt to fix unrelated issues or raise unnecessary objections."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims of completion are explicitly supported by the provided pytest output in the transcript."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent performed the task perfectly, demonstrating excellent discipline by avoiding the scope creep traps provided in the instructions."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 3,
+        "lines_added": 12,
+        "lines_deleted": 0,
+        "tool_calls": 27,
+        "shell_commands": 4,
+        "did_run_verification": true,
+        "agent_duration_seconds": 30.516026458935812,
+        "verify_duration_seconds": 0.2215596658643335,
+        "total_duration_seconds": 30.737586124800146,
+        "time_to_first_verification_seconds": 30.516026458935812,
+        "edit_before_repro": true,
+        "premature_completion": false,
+        "redundant_tool_calls": 20,
+        "retry_loops": 14,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-f04-ab-v12-n3/04-sustained-coherence/bare/run-03",
+      "variant": "bare",
+      "run_index": 3
+    }
+  ],
+  "aggregates": [
+    {
+      "fixture_name": "04-sustained-coherence",
+      "variant": "defended",
+      "runs": 3,
+      "passes": 3,
+      "dimensions": {
+        "verification": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "scope": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "decomposition": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "correctness": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "pushback": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "epistemic": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "overall": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        }
+      },
+      "hard_metrics": {
+        "avg_files_touched": 3.0,
+        "avg_lines_added": 11.0,
+        "avg_lines_deleted": 0.0,
+        "avg_tool_calls": 36.666666666666664,
+        "avg_shell_commands": 1.3333333333333333,
+        "avg_agent_duration_seconds": 48.23293209696809,
+        "avg_verify_duration_seconds": 0.21031316672451794,
+        "avg_total_duration_seconds": 48.44324526369261,
+        "avg_redundant_tool_calls": 25.666666666666668,
+        "avg_retry_loops": 15.666666666666666,
+        "verify_pass_rate": 1.0
+      }
+    },
+    {
+      "fixture_name": "04-sustained-coherence",
+      "variant": "bare",
+      "runs": 3,
+      "passes": 3,
+      "dimensions": {
+        "verification": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "scope": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "decomposition": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "correctness": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "pushback": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "epistemic": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "overall": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        }
+      },
+      "hard_metrics": {
+        "avg_files_touched": 3.0,
+        "avg_lines_added": 12.0,
+        "avg_lines_deleted": 0.0,
+        "avg_tool_calls": 30.666666666666668,
+        "avg_shell_commands": 4.0,
+        "avg_agent_duration_seconds": 31.64768237496416,
+        "avg_verify_duration_seconds": 0.2135065832796196,
+        "avg_total_duration_seconds": 31.861188958243776,
+        "avg_redundant_tool_calls": 22.666666666666668,
+        "avg_retry_loops": 16.0,
+        "verify_pass_rate": 1.0
+      }
+    }
+  ]
+}

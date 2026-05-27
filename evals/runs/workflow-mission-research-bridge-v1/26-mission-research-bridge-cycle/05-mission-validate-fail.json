@@ -1,0 +1,18 @@
+{
+  "name": "mission-validate-fail",
+  "argv": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "mission",
+    "validate-milestone",
+    "--mission",
+    "mission-bridge-mission-504eb009",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_l3wor6eb/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "failed Mission validation found blocking issues and created corrective follow-up\nwork.\nmilestone_id=milestone-milestone-1-713559dc\nrun_id=run-validate-milestone-1-96ad8504\nfindings_count=2\ncorrective_feature_id=feature-corrective-implement-bridge-feat-03a6d7cb\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.38826925004832447
+}

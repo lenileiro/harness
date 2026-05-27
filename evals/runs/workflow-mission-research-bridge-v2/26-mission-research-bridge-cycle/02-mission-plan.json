@@ -1,0 +1,26 @@
+{
+  "name": "mission-plan",
+  "argv": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "mission",
+    "plan",
+    "--mission",
+    "mission-bridge-mission-838ecc55",
+    "--contract-summary",
+    "Mission bridge assertions are declared before execution.",
+    "--milestone",
+    "m1|Milestone 1|Ship the bridge mission slice.",
+    "--assertion",
+    "a1|Bridge slice works|The mission slice should emit research follow-up work.|contract|Inspect mission and research artifacts.",
+    "--feature",
+    "f1|m1|Implement bridge feature|Create the first mission bridge feature.|worker|app/bridge.py||a1|publication-seed",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_4t649z_5/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Planned mission mission-bridge-mission-838ecc55\nmilestones=1\nfeatures=1\nassertions=1\ncurrent_milestone_id=milestone-milestone-1-c29882bb\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.41573129198513925
+}

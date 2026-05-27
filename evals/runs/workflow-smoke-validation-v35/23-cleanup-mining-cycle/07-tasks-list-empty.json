@@ -1,0 +1,16 @@
+{
+  "name": "tasks-list-empty",
+  "argv": [
+    "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_0a8mubwf/workspace/fake-harness",
+    "tasks",
+    "list",
+    "--db",
+    ".harness/harness.db"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "No tasks.\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.40337104187346995
+}

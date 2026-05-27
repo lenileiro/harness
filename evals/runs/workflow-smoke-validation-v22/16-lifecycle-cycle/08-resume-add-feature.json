@@ -1,0 +1,21 @@
+{
+  "name": "resume-add-feature",
+  "argv": [
+    "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_njz_cri7/workspace/fake-harness",
+    "resume",
+    "add-feature",
+    "beta",
+    "--description",
+    "Ship beta",
+    "--phases",
+    "implement,test",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_njz_cri7/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Added 'beta' to \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_n\njz_cri7/workspace/.harness/resume.json\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.41095308284275234
+}

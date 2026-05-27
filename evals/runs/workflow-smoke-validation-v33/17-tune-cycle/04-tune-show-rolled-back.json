@@ -1,0 +1,17 @@
+{
+  "name": "tune-show-rolled-back",
+  "argv": [
+    "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_zir_7vc7/workspace/fake-harness",
+    "tune",
+    "show",
+    "minimal_fix_verifier",
+    "--cwd",
+    "."
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "minimal_fix_verifier v1\ninitial\n\nseed prompt\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.48071254091337323
+}

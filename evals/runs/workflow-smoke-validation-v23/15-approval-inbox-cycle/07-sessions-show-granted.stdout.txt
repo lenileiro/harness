@@ -1,0 +1,26 @@
+╭────────────────────────────────── session ───────────────────────────────────╮
+│ sess_inbox  done  ollama/test-model                                          │
+│ created 2s ago, updated 0s ago                                               │
+│ cwd:                                                                         │
+│ /private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_ev │
+│ al_ff43uo6y/workspace                                                        │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭──── user ─────╮
+│ read the file │
+╰───────────────╯
+╭──────────── assistant ─────────────╮
+│ → read_file(path='note.txt')  (c1) │
+╰────────────────────────────────────╯
+╭─ tool: read_file  (c1) ─╮
+│ the answer is 42        │
+│                         │
+╰─────────────────────────╯
+╭──────── assistant ────────╮
+│ queued; will resume later │
+╰───────────────────────────╯
+╭────── user ───────╮
+│ what does it say? │
+╰───────────────────╯
+╭──── assistant ─────╮
+│ now I know it's 42 │
+╰────────────────────╯

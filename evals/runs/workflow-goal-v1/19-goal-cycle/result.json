@@ -1,0 +1,77 @@
+{
+  "fixture_name": "19-goal-cycle",
+  "passed": true,
+  "steps_total": 3,
+  "steps_passed": 3,
+  "step_results": [
+    {
+      "name": "goal-basic",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_q_gdghzh/workspace/fake-harness",
+        "goal",
+        "greet the user",
+        "--in-memory",
+        "--cwd",
+        ".",
+        "--yes",
+        "--provider",
+        "ollama",
+        "--model",
+        "test-model"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "\n\u25cf Step 1/2: Write a greeting\nHello from step 1                                                               \n\n\u25cf Step 2/2: Summarize it\nSummary done                                                                    \n\n\u2713 verify (verify_before_done)  No modifying tool calls detected \u2014 verification \nnot required.\n\ndefense ledger:\n  verifiers: verify_before_done=1\u2713/0\u2717\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 1.167095165932551
+    },
+    {
+      "name": "run-goal-flag",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_q_gdghzh/workspace/fake-harness",
+        "run",
+        "--goal",
+        "accomplish something",
+        "--in-memory",
+        "--cwd",
+        ".",
+        "--yes",
+        "--provider",
+        "ollama",
+        "--model",
+        "test-model"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "adaptive strategy default adaptive path -> minimal structure\ndone                                                                            \n\n\u2713 verify (claim_grounding)  no completed tool events \u2014 nothing to ground claims \nagainst  (confidence 0.40)\n\ndefense ledger:\n  verifiers: claim_grounding=1\u2713/0\u2717\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.4224427919834852
+    },
+    {
+      "name": "goal-bad-plan-fallback",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_q_gdghzh/workspace/fake-harness",
+        "goal",
+        "do the thing",
+        "--in-memory",
+        "--cwd",
+        ".",
+        "--yes",
+        "--provider",
+        "ollama",
+        "--model",
+        "test-model"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "executed anyway                                                                 \n\n\u2713 verify (verify_before_done)  No modifying tool calls detected \u2014 verification \nnot required.\n\ndefense ledger:\n  verifiers: verify_before_done=1\u2713/0\u2717\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.4400478748138994
+    }
+  ],
+  "artifact_dir": "evals/runs/workflow-goal-v1/19-goal-cycle",
+  "duration_seconds": 2.032709375023842
+}

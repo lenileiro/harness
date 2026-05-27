@@ -1,0 +1,26 @@
+{
+  "name": "hypothesize",
+  "argv": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "research",
+    "hypothesize",
+    "--opportunity",
+    "opp-tighten-research-promotion-a446e848",
+    "--claim",
+    "A promotion draft should always include explicit evidence sections.",
+    "--expected-win",
+    "Higher signal PRs.",
+    "--risk-level",
+    "low",
+    "--change-mode",
+    "improve",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_2iditu3f/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Created hypothesis hyp-a-promotion-draft-should-always--e578d8f2 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_2\niditu3f/workspace/.harness/research/hypotheses/hyp-a-promotion-draft-should-alwa\nys--e578d8f2\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.4609137501101941
+}

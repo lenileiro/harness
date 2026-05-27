@@ -1,0 +1,10 @@
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ ID                         ┃ Kind  ┃ Title        ┃ Summary                  ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ insp-hermes-agent-fdd4052b │ repo  │ Hermes Agent │ External agent platform  │
+│                            │       │              │ with plugin and memory   │
+│                            │       │              │ ideas.                   │
+│ insp-reflexion-8795f76c    │ paper │ Reflexion    │ Agents benefit from      │
+│                            │       │              │ explicit reflective      │
+│                            │       │              │ loops.                   │
+└────────────────────────────┴───────┴──────────────┴──────────────────────────┘

@@ -1,0 +1,17 @@
+{
+  "name": "resurrect",
+  "argv": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "research",
+    "resurrect",
+    "archive-unknown-unknown-how-should-archi-02f1889a",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_jtn__052/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Resurrected archive-unknown-unknown-how-should-archi-02f1889a to \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_j\ntn__052/workspace/.harness/research/unknowns/unknown-how-should-archived-finding\ns-sta-aae6c8e6\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.42762979213148355
+}

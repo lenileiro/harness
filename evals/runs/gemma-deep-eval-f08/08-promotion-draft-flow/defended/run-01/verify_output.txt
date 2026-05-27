@@ -1,0 +1,15 @@
+============================= test session starts ==============================
+collecting ... collected 1 item
+
+tests/test_promotion_flow.py::test_promotion_draft_flow FAILED           [100%]
+
+=================================== FAILURES ===================================
+__________________________ test_promotion_draft_flow ___________________________
+tests/test_promotion_flow.py:43: in test_promotion_draft_flow
+    assert len(candidate_dir_matches) == 1, candidate_dir_matches
+E   AssertionError: [PosixPath('/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_louyt6sq/08-promotion-draft-flow/.harness/research/promotions/promo-promotion-draft-evidence-section-0ebd3b37'), PosixPath('/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_louyt6sq/08-promotion-draft-flow/.harness/research/promotions/promo-promotion-draft-evidence-section-42397b70')]
+E   assert 2 == 1
+E    +  where 2 = len([PosixPath('/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_louyt6sq/08-promotion-draft-flow/.harness/research/promotions/promo-promotion-draft-evidence-section-0ebd3b37'), PosixPath('/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_louyt6sq/08-promotion-draft-flow/.harness/research/promotions/promo-promotion-draft-evidence-section-42397b70')])
+=========================== short test summary info ============================
+FAILED tests/test_promotion_flow.py::test_promotion_draft_flow - AssertionErr...
+============================== 1 failed in 0.02s ===============================

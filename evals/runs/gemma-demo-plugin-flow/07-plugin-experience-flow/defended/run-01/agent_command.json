@@ -1,0 +1,23 @@
+[
+  "/Users/leiro/workspace/harness/.venv/bin/harness",
+  "run",
+  "# Create and validate a workspace experience plugin\n\nUse the workspace plugin mechanism in this fixture directory to add one\nexperience provider plugin, then validate it through the real Harness CLI.\n\nDo not edit files under the repo root. Work only inside this copied fixture\nworkspace.\n\nCreate these two files:\n\n1. `.harness/plugins/workspace-experience.toml`\n2. `workspace_plugin.py`\n\nRequirements:\n\n- The manifest must declare:\n  - `name = \"workspace-experience\"`\n  - `kind = \"experience\"`\n  - `provider = \"workspace_plugin:WorkspaceExperienceProvider\"`\n- `workspace_plugin.py` must define `WorkspaceExperienceProvider`\n- Use this import:\n  - `from harness.core.tips_models import Tip`\n- `WorkspaceExperienceProvider.query()` should return exactly one tip when the\n  task text mentions `plugin`\n- That tip text must be:\n  `Use plugin validation before runtime experiments.`\n- For unrelated task text, return no tips\n\nUse this exact provider shape:\n\n```python\nfrom harness.core.tips_models import Tip\n\n\nclass WorkspaceExperienceProvider:\n    def query(self, task_text: str, *, top_k: int = 3):\n        if \"plugin\" not in task_text.lower():\n            return []\n        return [\n            Tip(\n                text=\"Use plugin validation before runtime experiments.\",\n                triggers=(\"plugin\",),\n                weight=2.0,\n            )\n        ]\n```\n\nAfter creating the files, run:\n\n- `harness plugins validate --kind experience`\n\nThen run the tests.\n\nDo not search the repo for other provider implementations. The exact pattern\nabove is sufficient.",
+  "--cwd",
+  "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_jyusj411/07-plugin-experience-flow",
+  "--yes",
+  "--in-memory",
+  "--provider",
+  "openrouter",
+  "--model",
+  "google/gemma-4-26b-a4b-it",
+  "--max-repair",
+  "2",
+  "--profile",
+  "adaptive",
+  "--verify",
+  "shell",
+  "--verify-command",
+  "pytest tests/ -v --tb=short --no-header",
+  "--critic",
+  "llm+search"
+]

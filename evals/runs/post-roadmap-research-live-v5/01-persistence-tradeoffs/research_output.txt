@@ -1,0 +1,27 @@
+{
+  "summary": "The workspace uses SQLite as its default persistence layer, 
+optimized for local development and single-user workflows.",
+  "findings": [
+    "SQLite is selected to provide zero-setup local storage and high portability
+across developer laptops and CI environments.",
+    "The default choice facilitates easy database inspection and simple backup 
+processes.",
+    "The primary architectural tradeoff is limited concurrency for writes, which
+may become a bottleneck compared to client/server databases."
+  ],
+  "open_questions": [
+    "What is the specific migration path or configuration required to switch to 
+a networked store like Postgres for team deployments?",
+    "Are there existing benchmarks within the workspace evaluating the 
+performance limits of the current SQLite implementation?"
+  ],
+  "sources": [
+    {
+      "title": "Persistence Documentation",
+      "url": "docs/persistence.md",
+      "excerpt": "Harness uses SQLite by default for local development and 
+single-user workflows. Why: zero-setup local storage, easy portability... 
+Tradeoffs: limited concurrent writes compared with a client/server database."
+    }
+  ]
+}

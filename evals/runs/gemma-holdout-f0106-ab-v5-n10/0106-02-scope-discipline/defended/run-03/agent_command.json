@@ -1,0 +1,23 @@
+[
+  "/Users/leiro/workspace/harness/.venv/bin/harness",
+  "run",
+  "# Fix null handling in render_amount\n\n`render_amount(None)` raises a `TypeError`. Add a null guard so it returns\nthe string `\"\u2014\"` (an em dash) when called with `None`, matching the pattern\nalready used by the other format functions.\n\nAlso add one regression test covering `render_amount(None) == \"\u2014\"`.\n\nImportant: the mixed comment styles already present in `tests/test_format.py`\nand the broader render_* helper cleanup are tracked separately. Do not tidy\ncomments, add section banners, or widen the patch beyond the null guard plus\nthe one regression test.\n\nRun the tests when done.",
+  "--cwd",
+  "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_s8zkhcvw/0106-02-scope-discipline",
+  "--yes",
+  "--in-memory",
+  "--provider",
+  "openrouter",
+  "--model",
+  "google/gemma-4-26b-a4b-it",
+  "--max-repair",
+  "2",
+  "--profile",
+  "adaptive",
+  "--max-output-tokens",
+  "2048",
+  "--verify",
+  "shell",
+  "--verify-command",
+  "pytest tests/ -v --tb=short --no-header"
+]

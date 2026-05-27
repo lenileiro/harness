@@ -1,0 +1,212 @@
+{
+  "run_id": "20260525T005059Z-workflow",
+  "artifact_root": "evals/runs/workflow-intake-cycle-v16",
+  "results": [
+    {
+      "fixture_name": "07-research-intake-cycle",
+      "passed": false,
+      "steps_total": 11,
+      "steps_passed": 7,
+      "step_results": [
+        {
+          "name": "map-section",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "map-section",
+            "--section",
+            "verification",
+            "--files",
+            "packages/core/src/harness/core/verification.py,packages/core/src/harness/core/verification_behavioral.py",
+            "--interfaces",
+            "Verifier,VerificationResult",
+            "--constraints",
+            "must stay deterministic for hard checks",
+            "--weaknesses",
+            "prompt-heavy verifier paths are brittle",
+            "--opportunities",
+            "sharper verifier routing",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_4p1ffmrd/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "Mapped section verification at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_4\np1ffmrd/workspace/.harness/research/section-maps/section-verification-aa2ec192\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.43455316592007875
+        },
+        {
+          "name": "show-section",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "show-section",
+            "verification",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_4p1ffmrd/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "verification (section-verification-aa2ec192)\n\nFiles\n- packages/core/src/harness/core/verification.py\n- packages/core/src/harness/core/verification_behavioral.py\n\nInterfaces\n- Verifier\n- VerificationResult\n\nConstraints\n- must stay deterministic for hard checks\n\nWeaknesses\n- prompt-heavy verifier paths are brittle\n\nOpportunities\n- sharper verifier routing\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.42814662493765354
+        },
+        {
+          "name": "add-observation",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "add-observation",
+            "--title",
+            "Verifier prompt drift",
+            "--summary",
+            "Prompt-heavy verifier paths overreact to unrelated changes.",
+            "--source-type",
+            "repo",
+            "--source-ref",
+            "packages/core/src/harness/core/verification_behavioral.py",
+            "--related-sections",
+            "verification,runtime",
+            "--theme",
+            "verifier-reliability",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_4p1ffmrd/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "Recorded observation obs-verifier-prompt-drift-aca7c8d4 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_4\np1ffmrd/workspace/.harness/research/observations/obs-verifier-prompt-drift-aca7c\n8d4\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.4293113749008626
+        },
+        {
+          "name": "ingest-paper",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "ingest-paper",
+            "--title",
+            "Reflexion",
+            "--citation",
+            "Shinn et al. 2023",
+            "--summary",
+            "Agents benefit from explicit reflective loops.",
+            "--excerpt",
+            "Reflection can improve decision quality.",
+            "--themes",
+            "verifier-reliability,autonomous-improvement",
+            "--related-sections",
+            "verification,research",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_4p1ffmrd/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "Recorded inspiration insp-reflexion-2dafb9cb at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_4\np1ffmrd/workspace/.harness/research/inspiration/insp-reflexion-2dafb9cb\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.4121818752028048
+        },
+        {
+          "name": "ingest-repo",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "ingest-repo",
+            "--title",
+            "Hermes Agent",
+            "--repo",
+            "https://github.com/nousresearch/hermes-agent",
+            "--summary",
+            "External agent platform with plugin and memory ideas.",
+            "--excerpt",
+            "Plugin and memory abstractions are reusable.",
+            "--themes",
+            "autonomous-improvement,extensions",
+            "--related-sections",
+            "plugins,experience",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_4p1ffmrd/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "Recorded inspiration insp-hermes-agent-de9c7315 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_4\np1ffmrd/workspace/.harness/research/inspiration/insp-hermes-agent-de9c7315\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.41843970818445086
+        },
+        {
+          "name": "scout",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "scout",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_4p1ffmrd/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2513\n\u2503 ID                         \u2503 Kind  \u2503 Title        \u2503 Summary                  \u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2529\n\u2502 insp-hermes-agent-de9c7315 \u2502 repo  \u2502 Hermes Agent \u2502 External agent platform  \u2502\n\u2502                            \u2502       \u2502              \u2502 with plugin and memory   \u2502\n\u2502                            \u2502       \u2502              \u2502 ideas.                   \u2502\n\u2502 insp-reflexion-2dafb9cb    \u2502 paper \u2502 Reflexion    \u2502 Agents benefit from      \u2502\n\u2502                            \u2502       \u2502              \u2502 explicit reflective      \u2502\n\u2502                            \u2502       \u2502              \u2502 loops.                   \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.41608833288773894
+        },
+        {
+          "name": "create-opportunity",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "create-opportunity",
+            "--title",
+            "Refine verifier reflection routing",
+            "--summary",
+            "Combine repo observations with reflective research to narrow verifier prompts.",
+            "--related-sections",
+            "verification,runtime,research",
+            "--origin-observations",
+            "obs-verifier-prompt-drift-aca7c8d4",
+            "--change-modes",
+            "improve,build_on",
+            "--theme",
+            "verifier-reliability",
+            "--priority",
+            "high",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_4p1ffmrd/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "Created opportunity opp-refine-verifier-reflection-routi-8a4dedb7 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_4\np1ffmrd/workspace/.harness/research/opportunities/opp-refine-verifier-reflection\n-routi-8a4dedb7\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.4082145420834422
+        },
+        {
+          "name": "list-opportunities",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "list-opportunities",
+            "--theme",
+            "verifier-reliability",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_4p1ffmrd/workspace"
+          ],
+          "passed": false,
+          "returncode": 0,
+          "stdout": "\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2513\n\u2503 ID                                          \u2503\u2503 Theme              \u2503 Priori\u2026 \u2503\u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2529\n\u2502 opp-refine-verifier-reflection-routi-8a4de\u2026 \u2502\u2502 verifier-reliabil\u2026 \u2502 high    \u2502\u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2518\n",
+          "stderr": "",
+          "failures": [
+            "stdout~Refine verifier reflection routing",
+            "stdout~verification, runtime, research"
+          ],
+          "duration_seconds": 0.4136967910453677
+        }
+      ],
+      "artifact_dir": "evals/runs/workflow-intake-cycle-v16/07-research-intake-cycle",
+      "duration_seconds": 3.376695374958217
+    }
+  ]
+}

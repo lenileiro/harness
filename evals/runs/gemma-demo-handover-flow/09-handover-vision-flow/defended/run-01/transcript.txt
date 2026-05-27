@@ -1,0 +1,218 @@
+adaptive strategy feature task -> keep structure light
+
+→ shell(command='harness vision update --title "Autonom…)
+✓ shell: exit_code: 0
+
+stdout:
+Updated vision at 
+/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_isbfwe_b/0
+9-handover-vision-flow/.harness/research/vision/current
+  (0.5s)
+
+→ shell(command='harness research add-theme --title "Ag…)
+✓ shell: exit_code: 0
+
+stdout:
+Added theme theme-agent-continuity-7aba1bd1 at 
+/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_isbfwe_b/0
+9-handover-vision-flow/.harness/research/themes/…  … 231 bytes  (0.4s)
+
+→ shell(command='harness research create-unknown --them…)
+✓ shell: exit_code: 0
+
+stdout:
+Created unknown unknown-what-context-must-a-handover-alw-115bc5ee at 
+/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_isbfwe_b/0
+9-handover-vision-flow/.ha…  … 274 bytes  (0.4s)
+
+→ shell(command='harness research open --rabbit-hole-qu…)
+✗ shell: exit_code: 2
+
+stderr:
+Usage: harness research open [OPTIONS]
+Try 'harness research open --help' for help.
+╭─ Error ──────────────────────────────────────────────────────────────────────╮
+│ No such op…  … 349 bytes  (0.4s)
+
+→ shell(command='harness research open --help')
+✓ shell: exit_code: 0
+
+stdout:
+                                                                                
+ Usage: harness research open [OPTIONS]                                         
+               …  … 1,562 bytes  (0.4s)
+
+→ shell(command='harness research open --title "Handove…)
+✓ shell: exit_code: 0
+
+stdout:
+Opened rabbit hole rh-handover-artifact-checklist-45935aae at 
+/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_isbfwe_b/0
+9-handover-vision-flow/.harness/r…  … 260 bytes  (0.4s)
+
+→ shell(command='harness research publish --rabbit-hole…)
+✗ shell: exit_code: 2
+
+stderr:
+Usage: harness research publish [OPTIONS]
+Try 'harness research publish --help' for help.
+╭─ Error ──────────────────────────────────────────────────────────────────────╮
+│ No s…  … 355 bytes  (0.4s)
+
+→ shell(command='harness research publish --help')
+✓ shell: exit_code: 0
+
+stdout:
+                                                                                
+ Usage: harness research publish [OPTIONS]                                      
+               …  … 2,048 bytes  (0.4s)
+
+→ shell(command='harness research publish --rabbit-hole…)
+✓ shell: exit_code: 0
+
+stdout:
+Published pub-handover-checklist-findings-6eea8d51 at 
+/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_isbfwe_b/0
+9-handover-vision-flow/.harness/research/…  … 254 bytes  (0.4s)
+
+→ shell(command='harness resume init --description "Cap…)
+✓ shell: exit_code: 0
+
+stdout:
+Wrote 
+/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_isbfwe_b/0
+9-handover-vision-flow/.harness/resume.json
+  (0.4s)
+
+→ shell(command='harness resume add-feature --name "han…)
+✗ shell: exit_code: 2
+
+stderr:
+Usage: harness resume add-feature [OPTIONS] NAME
+Try 'harness resume add-feature --help' for help.
+╭─ Error ─────────────────────────────────────────────────────────────────────… 
+… 364 bytes  (0.4s)
+
+→ shell(command='harness resume add-feature --help')
+✓ shell: exit_code: 0
+
+stdout:
+                                                                                
+ Usage: harness resume add-feature [OPTIONS] NAME                               
+               …  … 1,238 bytes  (0.4s)
+
+→ shell(command='harness resume add-feature "handover-c…)
+✓ shell: exit_code: 0
+
+stdout:
+Added 'handover-checklist' to 
+/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_isbfwe_b/0
+9-handover-vision-flow/.harness/resume.json
+  (0.4s)
+
+→ shell(command='harness resume add-feature --name "han…)
+✗ shell: exit_code: 2
+
+stderr:
+Usage: harness resume add-feature [OPTIONS] NAME
+Try 'harness resume add-feature --help' for help.
+╭─ Error ─────────────────────────────────────────────────────────────────────… 
+… 364 bytes  (0.4s)
+
+→ shell(command='harness resume add-feature "handover-c…)
+✓ shell: exit_code: 0
+
+stdout:
+Added 'handover-consumption' to 
+/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_isbfwe_b/0
+9-handover-vision-flow/.harness/resume.json
+  (0.4s)
+
+→ shell(command='harness resume set-current "handover-c…)
+✓ shell: exit_code: 0
+
+stdout:
+Current feature is now 'handover-consumption'
+  (0.5s)
+
+→ verify_work(command='pytest tests/')
+✗ verify_work: FAILED (exit 1)
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0
+rootdir: /private/var/folders/8p/1_033m…  … 3,524 bytes  (0.3s)
+
+→ read_file(path='.harness/resume.json')
+✓ read_file: {
+  "current": "handover-consumption",
+  "features": [
+    {
+      "name": "first-feature",
+      "description": "Capture the checklist for what a durable handover must 
+contain.",
+      "status": "in…  … 776 bytes  (0.0s)
+
+→ shell(command='harness resume init --description "Cap…)
+✗ shell: exit_code: 1
+
+stdout:
+/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_isbfwe_b/0
+9-handover-vision-flow/.harness/resume.json already exists. Use `resume show`.
+  (0.4s)
+
+→ shell(command='rm .harness/resume.json')
+✓ shell: exit_code: 0
+
+(no output)  (0.0s)
+
+→ shell(command='harness resume init --description "Cap…)
+✓ shell: exit_code: 0
+
+stdout:
+Wrote 
+/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_isbfwe_b/0
+9-handover-vision-flow/.harness/resume.json
+  (0.4s)
+
+→ shell(command='harness resume add-feature "handover-c…)
+✓ shell: exit_code: 0
+
+stdout:
+Added 'handover-checklist' to 
+/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_isbfwe_b/0
+9-handover-vision-flow/.harness/resume.json
+  (0.4s)
+
+→ shell(command='harness resume add-feature "handover-c…)
+✓ shell: exit_code: 0
+
+stdout:
+Added 'handover-consumption' to 
+/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_isbfwe_b/0
+9-handover-vision-flow/.harness/resume.json
+  (0.4s)
+
+→ shell(command='harness resume set-current "handover-c…)
+✓ shell: exit_code: 0
+
+stdout:
+Current feature is now 'handover-consumption'
+  (0.4s)
+
+→ verify_work(command='pytest tests/')
+✗ verify_work: FAILED (exit 1)
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0
+rootdir: /private/var/folders/8p/1_033m…  … 3,524 bytes  (0.2s)
+2026-05-25T20:09:06.732127Z [warning  ] agent.step.error               attempt=0 error='exceeded max_steps=25 without final answer' kind=internal provider=openrouter
+2026-05-25T20:09:06.732237Z [error    ] agent.run.failed               error='exceeded max_steps=25 without final answer' kind=internal
+
+Error (internal): exceeded max_steps=25 without final answer
+
+defense ledger:
+  tools: shell x22 (err x5), verify_work x2 (err x2), read_file x1
+  lifeharness: L2 tips x3
+an error occurred during closing of asynchronous generator <async_generator object AsyncClient.stream at 0x109fdef20>
+asyncgen: <async_generator object AsyncClient.stream at 0x109fdef20>
+RuntimeError: aclose(): asynchronous generator is already running

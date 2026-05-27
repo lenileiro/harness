@@ -1,0 +1,9 @@
+┏━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━┓
+┃ ID              ┃ Name        ┃ Domain  ┃ Confidence ┃ Triggers     ┃ Source ┃
+┡━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━┩
+│ proc_0ed2db1e91 │ Scope       │ general │        1.0 │ format_pric… │ human  │
+│                 │ discipline  │         │            │ minimal fix  │        │
+│                 │ duplicate   │         │            │              │        │
+│ proc_07739bc2a9 │ Scope       │ general │        1.0 │ format_pric… │ human  │
+│                 │ discipline  │         │            │ minimal fix  │        │
+└─────────────────┴─────────────┴─────────┴────────────┴──────────────┴────────┘

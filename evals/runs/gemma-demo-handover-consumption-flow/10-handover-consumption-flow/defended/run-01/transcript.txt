@@ -1,0 +1,253 @@
+adaptive strategy diagnosis-heavy bugfix -> diagnostic structure + critic
+
+→ shell(command='harness vision show && harness resume …)
+✓ shell: exit_code: 0
+
+stdout:
+Autonomous Handover System
+Leave structured continuation state for the next agent.
+ cross-session state for this run:
+  current feature: handover-consumption (status=pending)
+  …  … 399 bytes  (0.9s)
+
+→ shell(command='ls -R .harness/research/')
+✓ shell: exit_code: 0
+
+stdout:
+archive
+assets
+citations
+experiment-plans
+experiments
+hypotheses
+inspiration
+observations
+opportunities
+promotions
+publications
+rabbitholes
+section-maps
+themes
+unknowns
+vision
+
+…  … 1,334 bytes  (0.0s)
+
+→ read_file(path='.harness/research/publications/pub-han…)
+✓ read_file: {
+  "id": "pub-handover-checklist-findings-2f01dafa",
+  "rabbit_hole_id": "rh-handover-artifact-checklist-20f72070",
+  "title": "Handover checklist findings",
+  "summary": "A handover should preserve…  … 889 bytes  (0.0s)
+
+→ shell(command='harness research create-opportunity --…)
+✗ shell: exit_code: 2
+
+stderr:
+Usage: harness research create-opportunity [OPTIONS]
+Try 'harness research create-opportunity --help' for help.
+╭─ Error ────────────────────────────────────────────────────────…  … 377 bytes 
+(0.4s)
+
+→ shell(command='harness research create-opportunity --…)
+✓ shell: exit_code: 0
+
+stdout:
+Created opportunity opp-handover-verification-checklist-e206abe5 at 
+/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval__swp3bbu/1
+0-handover-consumption-flow…  … 278 bytes  (0.4s)
+
+→ read_file(path='.harness/research/opportunities/opp-ha…)
+✗ read_file: path does not exist: 
+.harness/research/opportunities/opp-handover-verification-checklist-e206abe5.jso
+n  (0.0s)
+
+→ shell(command='ls .harness/research/opportunities/')
+✓ shell: exit_code: 0
+
+stdout:
+opp-handover-verification-checklist-e206abe5
+  (0.0s)
+
+→ read_file(path='.harness/research/opportunities/opp-ha…)
+✓ read_file: {
+  "id": "opp-handover-verification-checklist-e206abe5",
+  "title": "Handover verification checklist",
+  "summary": "The next agent should verify that a handover names the next 
+feature, the source p…  … 426 bytes  (0.0s)
+
+→ shell(command='harness research hypothesize --opportu…)
+✗ shell: exit_code: 2
+
+stderr:
+Usage: harness research hypothesize [OPTIONS]
+Try 'harness research hypothesize --help' for help.
+╭─ Error ──────────────────────────────────────────────────────────────────────…
+… 363 bytes  (0.6s)
+
+→ shell(command='harness research hypothesize --opportu…)
+✓ shell: exit_code: 0
+
+stdout:
+Created hypothesis hyp-a-verification-checklist-will-ma-047c6557 at 
+/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval__swp3bbu/1
+0-handover-consumption-flow…  … 276 bytes  (0.4s)
+
+→ read_file(path='.harness/research/hypotheses/hyp-a-ver…)
+✓ read_file: {
+  "id": "hyp-a-verification-checklist-will-ma-047c6557",
+  "opportunity_id": "opp-handover-verification-checklist-e206abe5",
+  "claim": "A verification checklist will make handovers safer for the n…  … 429
+bytes  (0.0s)
+
+→ shell(command='harness research refine --hypothesis-i…)
+✗ shell: exit_code: 2
+
+stderr:
+Usage: harness research refine [OPTIONS]
+Try 'harness research refine --help' for help.
+╭─ Error ──────────────────────────────────────────────────────────────────────╮
+│ No suc…  … 353 bytes  (0.4s)
+
+→ shell(command='harness research refine --source-hypot…)
+✗ shell: exit_code: 2
+
+stderr:
+Usage: harness research refine [OPTIONS]
+Try 'harness research refine --help' for help.
+╭─ Error ──────────────────────────────────────────────────────────────────────╮
+│ No suc…  … 353 bytes  (0.4s)
+
+→ shell(command='harness research refine --help')
+✓ shell: exit_code: 0
+
+stdout:
+                                                                                
+ Usage: harness research refine [OPTIONS]                                       
+               …  … 1,724 bytes  (0.4s)
+
+→ shell(command='harness research refine --title "Hando…)
+✓ shell: exit_code: 0
+
+stdout:
+Created promotion candidate promo-handover-verification-handoff-d4948cec at 
+/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval__swp3bbu/1
+0-handover-consumpt…  … 283 bytes  (0.4s)
+
+→ read_file(path='.harness/research/promotions/promo-han…)
+✗ read_file: path does not exist: 
+.harness/research/promotions/promo-handover-verification-handoff-d4948cec/promot
+ion.json  (0.0s)
+
+→ shell(command='ls -R .harness/research/promotions/')
+✓ shell: exit_code: 0
+
+stdout:
+promo-handover-verification-handoff-d4948cec
+
+.harness/research/promotions//promo-handover-verification-handoff-d4948cec:
+PROMOTION.md
+promotion_candidate.json
+  (0.0s)
+
+→ read_file(path='.harness/research/promotions/promo-han…)
+✓ read_file: {
+  "id": "promo-handover-verification-handoff-d4948cec",
+  "title": "Handover verification handoff",
+  "summary": "Promote a verification-oriented continuation step after the 
+handover is consumed.",…  … 703 bytes  (0.0s)
+
+→ shell(command='harness resume add-feature --descripti…)
+✗ shell: exit_code: 2
+
+stderr:
+Usage: harness resume add-feature [OPTIONS] NAME
+Try 'harness resume add-feature --help' for help.
+╭─ Error ─────────────────────────────────────────────────────────────────────… 
+… 364 bytes  (0.4s)
+
+→ shell(command='harness resume add-feature --descripti…)
+✓ shell: exit_code: 0
+
+stdout:
+Added 'handover-verification' to 
+/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval__swp3bbu/1
+0-handover-consumption-flow/.harness/resume.json
+  (0.4s)
+
+→ shell(command='harness resume set-current handover-ve…)
+✓ shell: exit_code: 0
+
+stdout:
+Current feature is now 'handover-verification'
+  (0.4s)
+
+→ shell(command='harness resume show')
+✓ shell: exit_code: 0
+
+stdout:
+ cross-session state for this run:
+  current feature: handover-verification (status=pending)
+  description: Verify the handover contract before the next continuation step.
+  pha…  … 333 bytes  (0.4s)
+
+→ verify_work(command='pytest tests/')
+✓ verify_work: PASSED
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0
+rootdir: /private/var/folders/8p/1_033mns3v1gvkq…  … 698 bytes  (0.3s)
+The existing vision and resume contract were inspected, and the current handover
+(publication pub-handover-checklist-findings-2f01dafa) was identified.          
+
+The following steps were performed:                                             
+
+ 1 Created Opportunity: Handover verification checklist                         
+   (opp-handover-verification-checklist-e206abe5) with the specified summary.   
+ 2 Created Hypothesis: Linked to the new opportunity, with the specified claim, 
+   expected win, risk level, and change mode.                                   
+ 3 Refined Promotion Candidate: Handover verification handoff                   
+   (promo-handover-verification-handoff-d4948cec) was created using the existing
+   publication and the new hypothesis, including the specified summary, expected
+   metric, and validation plan.                                                 
+ 4 Added Resume Feature: handover-verification with description Verify the      
+   handover contract before the next continuation step. and phases              
+   inspect,verify,continue.                                                     
+ 5 Updated Resume Contract: Switched the current feature to                     
+   handover-verification.                                                       
+
+All tasks were completed using the CLI entrypoints, and the work was verified   
+with pytest.                                                                    
+
+                                                                                
+ graph TD                                                                       
+     subgraph Research Artifacts                                                
+         Pub[Publication: handover-checklist-findings] --> Opp[Opportunity:     
+ Handover verification checklist]                                               
+         Opp --> Hyp[Hypothesis: A verification checklist...]                   
+         Hyp --> Promo[Promotion: Handover verification handoff]                
+         Pub -.-> Promo                                                         
+     end                                                                        
+                                                                                
+     subgraph Resume Contract                                                   
+         Roadmap[Roadmap: handover-checklist, handover-consumption] -->         
+ Current[Current Feature: handover-verification]                                
+     end                                                                        
+                                                                                
+     Promo -.-> Current                                                         
+                                                                                
+
+✓ verify (shell)  ============================= test session starts 
+==============================
+collecting ... collected 2 items
+
+tests/test_handover_consumption_flow.py::test_handover_consumption_flow PASSED [
+50%]
+tests/test_smoke.py::test_smoke PASSED                                   [100%]
+
+============================== 2 passed in 0.01s ===============================
+
+defense ledger:
+  verifiers: shell=1✓/0✗
+  tools: shell x16 (err x5), read_file x6 (err x2), verify_work x1
+  lifeharness: L2 tips x3

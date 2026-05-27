@@ -1,0 +1,50 @@
+[
+  {
+    "id": "adj_3399ed877d",
+    "kind": "verify_loop",
+    "text": "After a failed verification, rerun the targeted check after each repair and do not declare completion until it passes.",
+    "triggers": [
+      "none",
+      "hyphenated",
+      "user",
+      "lookup",
+      "get_user",
+      "returns",
+      "like",
+      "simple"
+    ],
+    "weight": 1.8,
+    "source_fixture_name": "01-reproduce-before-repair",
+    "source_variant": "defended",
+    "source_artifact_dir": "evals/runs/post-reorg-smoke-01/01-reproduce-before-repair/defended/run-01",
+    "rationale": "The trace required at least one verification retry loop.",
+    "evidence": {
+      "verification_after_failure": true,
+      "retry_loops": 10
+    }
+  },
+  {
+    "id": "adj_f146ccea59",
+    "kind": "family_pattern",
+    "text": "Keep reproduce-before-repair fixes in the production lookup path; do not broaden normalization or patch adjacent validation code.",
+    "triggers": [
+      "none",
+      "hyphenated",
+      "user",
+      "lookup",
+      "get_user",
+      "returns",
+      "like",
+      "simple"
+    ],
+    "weight": 2.2,
+    "source_fixture_name": "01-reproduce-before-repair",
+    "source_variant": "defended",
+    "source_artifact_dir": "evals/runs/post-reorg-smoke-01/01-reproduce-before-repair/defended/run-01",
+    "rationale": "Successful run stayed in the target production path without extra normalization.",
+    "evidence": {
+      "family": "reproduce-before-repair",
+      "verify_passed": true
+    }
+  }
+]

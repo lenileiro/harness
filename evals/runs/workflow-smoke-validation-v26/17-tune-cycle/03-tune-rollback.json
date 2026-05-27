@@ -1,0 +1,17 @@
+{
+  "name": "tune-rollback",
+  "argv": [
+    "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_vd3z_35q/workspace/fake-harness",
+    "tune",
+    "rollback",
+    "minimal_fix_verifier",
+    "--cwd",
+    "."
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Rolled back v2. Current is now v1.\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.3661014169920236
+}

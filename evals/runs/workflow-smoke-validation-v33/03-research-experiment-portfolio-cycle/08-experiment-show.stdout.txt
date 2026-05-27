@@ -1,0 +1,8 @@
+exp-plan-hyp-simple-deterministic-ch-8ac30595 
+plan=plan-hyp-simple-deterministic-checks--e5725d40 status=passed
+┏━━━━━━━┳━━━━━━┳━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Kind  ┃ Exit ┃ Seconds ┃ Command                             ┃
+┡━━━━━━━╇━━━━━━╇━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ check │ 0    │ 0.02    │ python -c "print('workflow-check')" │
+│ eval  │ 0    │ 0.02    │ python -c "print('workflow-eval')"  │
+└───────┴──────┴─────────┴─────────────────────────────────────┘

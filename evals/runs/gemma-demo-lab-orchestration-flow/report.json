@@ -1,0 +1,141 @@
+{
+  "run_id": "20260525T202412Z",
+  "provider": "openrouter",
+  "model": "google/gemma-4-26b-a4b-it",
+  "judge_provider": "openrouter",
+  "judge_model": "google/gemma-4-26b-a4b-it",
+  "fixture_set": "fixtures",
+  "n_runs": 1,
+  "ab": false,
+  "artifact_root": "evals/runs/gemma-demo-lab-orchestration-flow",
+  "benchmark_mode": "original",
+  "mutation_coverage": null,
+  "results": [
+    {
+      "fixture_name": "11-lab-orchestration-flow",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the tests using pytest at the end of the sequence to verify the successful orchestration."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent only used the provided CLI tools and did not modify any files, as evidenced by the empty git diff."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent followed the required orchestration flow: run, list, status, and then resume."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The agent successfully completed the job and all tests passed in the final output."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt was clean and the agent proceeded directly to the task without unnecessary objections."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's actions were grounded in the output of the shell commands, such as using the job ID found via sqlite3 and lab list."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent perfectly executed the multi-step orchestration task using only the permitted CLI tools."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 0,
+        "lines_added": 0,
+        "lines_deleted": 0,
+        "tool_calls": 47,
+        "shell_commands": 45,
+        "did_run_verification": true,
+        "agent_duration_seconds": 33.40289379097521,
+        "verify_duration_seconds": 0.3960215840488672,
+        "total_duration_seconds": 33.79891537502408,
+        "time_to_first_verification_seconds": 33.40289379097521,
+        "edit_before_repro": true,
+        "premature_completion": false,
+        "redundant_tool_calls": 44,
+        "retry_loops": 41,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-demo-lab-orchestration-flow/11-lab-orchestration-flow/defended/run-01",
+      "variant": "defended",
+      "run_index": 1
+    }
+  ],
+  "aggregates": [
+    {
+      "fixture_name": "11-lab-orchestration-flow",
+      "variant": "defended",
+      "runs": 1,
+      "passes": 1,
+      "dimensions": {
+        "verification": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "scope": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "decomposition": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "correctness": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "pushback": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "epistemic": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "overall": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        }
+      },
+      "hard_metrics": {
+        "avg_files_touched": 0.0,
+        "avg_lines_added": 0.0,
+        "avg_lines_deleted": 0.0,
+        "avg_tool_calls": 47.0,
+        "avg_shell_commands": 45.0,
+        "avg_agent_duration_seconds": 33.40289379097521,
+        "avg_verify_duration_seconds": 0.3960215840488672,
+        "avg_total_duration_seconds": 33.79891537502408,
+        "avg_redundant_tool_calls": 44.0,
+        "avg_retry_loops": 41.0,
+        "verify_pass_rate": 1.0
+      }
+    }
+  ]
+}

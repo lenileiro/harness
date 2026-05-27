@@ -1,0 +1,11 @@
+╭────────────── approval ───────────────╮
+│ appr_c888ac5e9a4c  pending  read_file │
+│ session: sess_inbox                   │
+│ tool_call_id: c1                      │
+│ requested 0s ago                      │
+╰───────────────────────────────────────╯
+╭───── arguments ──────╮
+│ {                    │
+│   "path": "note.txt" │
+│ }                    │
+╰──────────────────────╯

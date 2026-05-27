@@ -1,0 +1,22 @@
+{
+  "name": "goal-bad-plan-fallback",
+  "argv": [
+    "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_racs9sa4/workspace/fake-harness",
+    "goal",
+    "do the thing",
+    "--in-memory",
+    "--cwd",
+    ".",
+    "--yes",
+    "--provider",
+    "ollama",
+    "--model",
+    "test-model"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "executed anyway                                                                 \n\n\u2713 verify (verify_before_done)  No modifying tool calls detected \u2014 verification \nnot required.\n\ndefense ledger:\n  verifiers: verify_before_done=1\u2713/0\u2717\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.41344595793634653
+}

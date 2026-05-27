@@ -1,0 +1,18 @@
+============================= test session starts ==============================
+collecting ... collected 0 items / 1 error
+
+==================================== ERRORS ====================================
+____________________ ERROR collecting tests/test_format.py _____________________
+ImportError while importing test module '/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_mncimy8s/02-scope-discipline/tests/test_format.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/Users/leiro/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/importlib/__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_format.py:3: in <module>
+    from format import (
+E   ImportError: cannot import name 'format_change' from 'format' (/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_mncimy8s/02-scope-discipline/src/format.py)
+=========================== short test summary info ============================
+ERROR tests/test_format.py
+!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+=============================== 1 error in 0.05s ===============================

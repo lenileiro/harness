@@ -1,0 +1,19 @@
+{
+  "name": "tips-add",
+  "argv": [
+    "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_g45fwn2l/workspace/fake-harness",
+    "tips",
+    "add",
+    "Prefer the smallest possible diff.",
+    "--triggers",
+    "minimal fix",
+    "--scope",
+    "repo"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Added tip tip_f6516276a9 to \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_g\n45fwn2l/workspace/.harness/tips.jsonl\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.4266413750592619
+}

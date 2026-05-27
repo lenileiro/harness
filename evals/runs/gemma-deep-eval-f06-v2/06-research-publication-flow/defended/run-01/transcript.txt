@@ -1,0 +1,157 @@
+adaptive strategy diagnosis-heavy bugfix -> diagnostic structure + critic
+
+→ shell(command='harness --help')
+✓ shell: exit_code: 0
+
+stdout:
+                                                                                
+ Usage: harness [OPTIONS] COMMAND [ARGS]...                                     
+               …  … 3,992 bytes  (0.4s)
+
+→ shell(command='harness vision update --help')
+✓ shell: exit_code: 0
+
+stdout:
+                                                                                
+ Usage: harness vision update [OPTIONS]                                         
+               …  … 914 bytes  (0.4s)
+
+→ shell(command='harness vision update --title "Autonom…)
+✓ shell: exit_code: 0
+
+stdout:
+Updated vision at 
+/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_rfgh1kee/0
+6-research-publication-flow/.harness/research/vision/current
+  (0.4s)
+
+→ shell(command='harness research add-theme --help')
+✓ shell: exit_code: 0
+
+stdout:
+                                                                                
+ Usage: harness research add-theme [OPTIONS]                                    
+               …  … 995 bytes  (0.4s)
+
+→ shell(command='harness research add-theme --title "Pl…)
+✓ shell: exit_code: 0
+
+stdout:
+Added theme theme-plugin-reliability-627a813c at 
+/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_rfgh1kee/0
+6-research-publication-flow/.harness/research/…  … 241 bytes  (0.4s)
+
+→ shell(command='ls -R .harness/research/')
+✓ shell: exit_code: 0
+
+stdout:
+archive
+assets
+citations
+experiment-plans
+experiments
+hypotheses
+inspiration
+observations
+opportunities
+promotions
+publications
+rabbitholes
+section-maps
+themes
+unknowns
+vision
+
+…  … 892 bytes  (0.0s)
+
+→ shell(command='harness research create-unknown --help')
+✓ shell: exit_code: 0
+
+stdout:
+                                                                                
+ Usage: harness research create-unknown [OPTIONS]                               
+               …  … 1,238 bytes  (0.4s)
+
+→ shell(command='harness research create-unknown --them…)
+✓ shell: exit_code: 0
+
+stdout:
+Created unknown unknown-how-should-workspace-plugins-be--4d9ff313 at 
+/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_rfgh1kee/0
+6-research-publication-flo…  … 279 bytes  (0.4s)
+
+→ shell(command='harness research open --help')
+✓ shell: exit_code: 0
+
+stdout:
+                                                                                
+ Usage: harness research open [OPTIONS]                                         
+               …  … 1,562 bytes  (0.4s)
+
+→ shell(command='harness research open --title "Workspa…)
+✓ shell: exit_code: 0
+
+stdout:
+Opened rabbit hole rh-workspace-plugin-import-flow-bd7d265c at 
+/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_rfgh1kee/0
+6-research-publication-flow/.har…  … 267 bytes  (0.4s)
+
+→ shell(command='harness research publish --help')
+✓ shell: exit_code: 0
+
+stdout:
+                                                                                
+ Usage: harness research publish [OPTIONS]                                      
+               …  … 2,048 bytes  (0.4s)
+
+→ shell(command='harness research publish --rabbit-hole…)
+✓ shell: exit_code: 0
+
+stdout:
+Published pub-workspace-plugin-validation-find-f38cccd5 at 
+/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_rfgh1kee/0
+6-research-publication-flow/.harness…  … 269 bytes  (0.5s)
+
+→ verify_work(command='pytest')
+✓ verify_work: PASSED
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0
+rootdir: /private/var/folders/8p/1_033mns3v1gvkq…  … 617 bytes  (0.3s)
+The research seed has been successfully created using the Harness CLI.          
+
+Summary of Actions:                                                             
+
+ 1 Vision Updated: Set title to Autonomous Harness Research and summary to Build
+   a compounding research loop for Harness.                                     
+ 2 Theme Added: Plugin reliability (ID: theme-plugin-reliability-627a813c).     
+ 3 Unknown Created: "How should workspace plugins be validated?" under the      
+   Plugin reliability theme (ID:                                                
+   unknown-how-should-workspace-plugins-be--4d9ff313).                          
+ 4 Rabbit Hole Opened: Workspace plugin import flow (ID:                        
+   rh-workspace-plugin-import-flow-bd7d265c).                                   
+ 5 Publication Published: Workspace plugin validation findings (ID:             
+   pub-workspace-plugin-validation-find-f38cccd5) linked to the rabbit hole.    
+
+Verification: Ran pytest, and all tests passed.                                 
+
+                                                                                
+ # Verification command output                                                  
+ tests/test_research_flow.py .                                                  
+ [100%]                                                                         
+ ============================== 1 passed in 0.02s                               
+ ===============================                                                
+                                                                                
+
+✓ verify (shell)  ============================= test session starts 
+==============================
+collecting ... collected 1 item
+
+tests/test_research_flow.py::test_research_publication_flow PASSED       [100%]
+
+============================== 1 passed in 0.00s ===============================
+
+defense ledger:
+  verifiers: shell=1✓/0✗
+  tools: shell x12, verify_work x1
+  lifeharness: L2 tips x3

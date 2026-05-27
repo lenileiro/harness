@@ -1,0 +1,26 @@
+{
+  "name": "create-unknown",
+  "argv": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "research",
+    "create-unknown",
+    "--theme-id",
+    "theme-verifier-reliability-aeeac92a",
+    "--question",
+    "Which verifier routing refinements reduce false positives?",
+    "--why-it-matters",
+    "False positives create noise in defended runs.",
+    "--confidence",
+    "0.5",
+    "--related-sections",
+    "verification,runtime",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_98mwslas/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Created unknown unknown-which-verifier-routing-refinemen-6905dfe0 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_9\n8mwslas/workspace/.harness/research/unknowns/unknown-which-verifier-routing-refi\nnemen-6905dfe0\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.46150429197587073
+}

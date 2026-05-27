@@ -1,0 +1,17 @@
+{
+  "name": "eval-export-adjustments",
+  "argv": [
+    "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_491oetfo/workspace/fake-harness",
+    "eval",
+    "export-adjustments",
+    "adjustments.jsonl",
+    "--root",
+    "evals/runs"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Exported 1 adjustment(s) to adjustments.jsonl\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.5721687090117484
+}

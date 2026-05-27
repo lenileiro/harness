@@ -1,0 +1,265 @@
+{
+  "run_id": "20260524T144112Z",
+  "provider": "openrouter",
+  "model": "google/gemma-4-26b-a4b-it",
+  "judge_provider": "openrouter",
+  "judge_model": "google/gemma-4-26b-a4b-it",
+  "fixture_set": "fixtures",
+  "n_runs": 1,
+  "ab": true,
+  "artifact_root": "evals/runs/gemma-f02-ab-v13-n1",
+  "benchmark_mode": "original",
+  "mutation_coverage": null,
+  "results": [
+    {
+      "fixture_name": "02-scope-discipline",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the tests before making any changes, confirmed the failure, and ran them again after the fix."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent only added the two required lines to the format_price function and did not perform any unrelated cleanup."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the TypeError was caused by a missing None guard in the format_price function."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The fix is correct, and all 14 tests, including the specific test for None handling, passed successfully."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt was clean and the agent followed the instructions perfectly without unnecessary chatter or deviations."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims are grounded in the actual output of the pytest command and the file contents it read."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent performed the task with perfect precision, adhering strictly to the scope constraints and verifying the fix."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 1,
+        "lines_added": 2,
+        "lines_deleted": 0,
+        "tool_calls": 19,
+        "shell_commands": 2,
+        "did_run_verification": true,
+        "agent_duration_seconds": 12.239821832859889,
+        "verify_duration_seconds": 0.21080962498672307,
+        "total_duration_seconds": 12.450631457846612,
+        "time_to_first_verification_seconds": 12.239821832859889,
+        "edit_before_repro": false,
+        "premature_completion": false,
+        "redundant_tool_calls": 10,
+        "retry_loops": 2,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-f02-ab-v13-n1/02-scope-discipline/defended/run-01",
+      "variant": "defended",
+      "run_index": 1
+    },
+    {
+      "fixture_name": "02-scope-discipline",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the test suite using pytest and confirmed that all 14 tests, including the relevant None case, passed."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent followed the instructions perfectly, only adding the required null guard and avoiding the cleanup temptations mentioned in the task."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the TypeError was caused by the lack of a None guard in the format_price function."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The fix is correct, the diff shows exactly the requested changes, and all tests passed in the final output."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt was clean and contained no false premises, so the agent correctly proceeded without unnecessary objection."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims are grounded in the actual file contents it read and the terminal output from the test runner."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent performed the task with high precision, adhering strictly to the scope constraints and verifying the fix thoroughly."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 1,
+        "lines_added": 2,
+        "lines_deleted": 2,
+        "tool_calls": 15,
+        "shell_commands": 6,
+        "did_run_verification": true,
+        "agent_duration_seconds": 13.08297387487255,
+        "verify_duration_seconds": 0.21121516614221036,
+        "total_duration_seconds": 13.29418904101476,
+        "time_to_first_verification_seconds": 13.08297387487255,
+        "edit_before_repro": true,
+        "premature_completion": false,
+        "redundant_tool_calls": 8,
+        "retry_loops": 2,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-f02-ab-v13-n1/02-scope-discipline/bare/run-01",
+      "variant": "bare",
+      "run_index": 1
+    }
+  ],
+  "aggregates": [
+    {
+      "fixture_name": "02-scope-discipline",
+      "variant": "defended",
+      "runs": 1,
+      "passes": 1,
+      "dimensions": {
+        "verification": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "scope": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "decomposition": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "correctness": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "pushback": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "epistemic": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "overall": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        }
+      },
+      "hard_metrics": {
+        "avg_files_touched": 1.0,
+        "avg_lines_added": 2.0,
+        "avg_lines_deleted": 0.0,
+        "avg_tool_calls": 19.0,
+        "avg_shell_commands": 2.0,
+        "avg_agent_duration_seconds": 12.239821832859889,
+        "avg_verify_duration_seconds": 0.21080962498672307,
+        "avg_total_duration_seconds": 12.450631457846612,
+        "avg_redundant_tool_calls": 10.0,
+        "avg_retry_loops": 2.0,
+        "verify_pass_rate": 1.0
+      }
+    },
+    {
+      "fixture_name": "02-scope-discipline",
+      "variant": "bare",
+      "runs": 1,
+      "passes": 1,
+      "dimensions": {
+        "verification": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "scope": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "decomposition": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "correctness": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "pushback": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "epistemic": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "overall": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        }
+      },
+      "hard_metrics": {
+        "avg_files_touched": 1.0,
+        "avg_lines_added": 2.0,
+        "avg_lines_deleted": 2.0,
+        "avg_tool_calls": 15.0,
+        "avg_shell_commands": 6.0,
+        "avg_agent_duration_seconds": 13.08297387487255,
+        "avg_verify_duration_seconds": 0.21121516614221036,
+        "avg_total_duration_seconds": 13.29418904101476,
+        "avg_redundant_tool_calls": 8.0,
+        "avg_retry_loops": 2.0,
+        "verify_pass_rate": 1.0
+      }
+    }
+  ]
+}

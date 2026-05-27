@@ -1,0 +1,17 @@
+{
+  "name": "phase-complete",
+  "argv": [
+    "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_kg6mdu13/workspace/fake-harness",
+    "phase",
+    "complete",
+    "implement",
+    "--db",
+    "phase.db"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "completed phase 'implement'  (session sess_34dfdc5c8ab1)\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.33083770889788866
+}

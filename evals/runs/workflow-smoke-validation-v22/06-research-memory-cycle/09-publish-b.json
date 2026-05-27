@@ -1,0 +1,26 @@
+{
+  "name": "publish-b",
+  "argv": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "research",
+    "publish",
+    "--rabbit-hole",
+    "rh-citation-graph-46eb6882",
+    "--title",
+    "Citation graph findings",
+    "--summary",
+    "Later findings should cite earlier archival work.",
+    "--claim",
+    "Citations preserve research lineage.",
+    "--evidence",
+    "Linking publications keeps context reusable.",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_sel2x2h4/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Published pub-citation-graph-findings-2172075a at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_s\nel2x2h4/workspace/.harness/research/publications/pub-citation-graph-findings-217\n2075a\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.44849116588011384
+}

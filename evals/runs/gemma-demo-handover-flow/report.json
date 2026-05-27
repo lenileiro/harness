@@ -1,0 +1,141 @@
+{
+  "run_id": "20260525T200827Z",
+  "provider": "openrouter",
+  "model": "google/gemma-4-26b-a4b-it",
+  "judge_provider": "openrouter",
+  "judge_model": "google/gemma-4-26b-a4b-it",
+  "fixture_set": "fixtures",
+  "n_runs": 1,
+  "ab": false,
+  "artifact_root": "evals/runs/gemma-demo-handover-flow",
+  "benchmark_mode": "original",
+  "mutation_coverage": null,
+  "results": [
+    {
+      "fixture_name": "09-handover-vision-flow",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the tests multiple times to diagnose why the verification failed."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent only interacted with the CLI tools as requested and did not modify files directly."
+      },
+      "decomposition": {
+        "score": 3,
+        "rationale": "The agent failed to correctly identify that the resume initialization created a default 'first-feature' which conflicted with the required feature names."
+      },
+      "correctness": {
+        "score": 1,
+        "rationale": "The tests failed because the agent's resume file contained an extra 'first-feature' and the agent was unable to resolve the error before hitting the step limit."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt was clean and the agent did not make any incorrect assumptions or push back unnecessarily."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's actions were clearly grounded in the output of the shell commands and the content of the files it read."
+      },
+      "overall": {
+        "score": 1,
+        "rationale": "The agent failed to complete the task and the resulting state was incorrect, as evidenced by the test failure."
+      },
+      "hard_metrics": {
+        "verify_passed": false,
+        "run_exit_code": 0,
+        "verify_exit_code": 1,
+        "files_touched": 0,
+        "lines_added": 0,
+        "lines_deleted": 0,
+        "tool_calls": 51,
+        "shell_commands": 44,
+        "did_run_verification": true,
+        "agent_duration_seconds": 39.53256783285178,
+        "verify_duration_seconds": 0.21966941701248288,
+        "total_duration_seconds": 39.752237249864265,
+        "time_to_first_verification_seconds": 39.53256783285178,
+        "edit_before_repro": true,
+        "premature_completion": false,
+        "redundant_tool_calls": 45,
+        "retry_loops": 40,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-demo-handover-flow/09-handover-vision-flow/defended/run-01",
+      "variant": "defended",
+      "run_index": 1
+    }
+  ],
+  "aggregates": [
+    {
+      "fixture_name": "09-handover-vision-flow",
+      "variant": "defended",
+      "runs": 1,
+      "passes": 0,
+      "dimensions": {
+        "verification": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "scope": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "decomposition": {
+          "median": 3,
+          "minimum": 3,
+          "maximum": 3,
+          "mean": 3.0,
+          "sem": null
+        },
+        "correctness": {
+          "median": 1,
+          "minimum": 1,
+          "maximum": 1,
+          "mean": 1.0,
+          "sem": null
+        },
+        "pushback": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "epistemic": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "overall": {
+          "median": 1,
+          "minimum": 1,
+          "maximum": 1,
+          "mean": 1.0,
+          "sem": null
+        }
+      },
+      "hard_metrics": {
+        "avg_files_touched": 0.0,
+        "avg_lines_added": 0.0,
+        "avg_lines_deleted": 0.0,
+        "avg_tool_calls": 51.0,
+        "avg_shell_commands": 44.0,
+        "avg_agent_duration_seconds": 39.53256783285178,
+        "avg_verify_duration_seconds": 0.21966941701248288,
+        "avg_total_duration_seconds": 39.752237249864265,
+        "avg_redundant_tool_calls": 45.0,
+        "avg_retry_loops": 40.0,
+        "verify_pass_rate": 0.0
+      }
+    }
+  ]
+}

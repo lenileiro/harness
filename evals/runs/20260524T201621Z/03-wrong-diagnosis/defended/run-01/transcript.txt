@@ -1,0 +1,130 @@
+adaptive strategy diagnosis-heavy bugfix -> diagnostic structure + critic
+
+→ read_file(path='src/cache.py')
+✓ read_file: """Simple async cache with fetch-on-miss.
+
+Used by the batch endpoint to avoid redundant upstream API calls.
+"""
+
+from __future__ import annotations
+
+import asyncio
+from collections.abc import Awaita…  … 1,986 bytes  (0.0s)
+
+→ edit_file(path='src/cache.py', old='TIMEOUT_SECONDS = 5', new='TIMEOUT_SECONDS
+= 30')
+✓ edit_file: replaced 1 occurrence in src/cache.py  (0.0s)
+
+→ verify_work(command='pytest tests/ -v')
+✗ verify_work: FAILED (exit 1)
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0 -- 
+/Users/leiro/workspace/harness/.venv…  … 2,578 bytes  (0.3s)
+
+
+✗ verify (chained)  Command `pytest tests/ -v --tb=short --no-header` exited 
+with code 1.
+
+============================= test session starts ==============================
+collecting ... collected 4 items
+
+tests/test_cache.py::test_cache_hit_returns_cached_value PASSED          [ 25%]
+tests/test_cache.py::test_different_keys_fetch_independently PASSED      [ 50%]
+tests/test_cache.py::test_invalidate_forces_refetch PASSED               [ 75%]
+tests/test_cache.py::test_concurrent_requests_deduplicated FAILED        [100%]
+
+=================================== FAILURES ===================================
+____________________ test_concurrent_requests_deduplicated _____________________
+tests/test_cache.py:77: in test_concurrent_requests_deduplicated
+    assert fetch_count == 1, (
+E   AssertionError: Expected 1 fetch call for a deduplicated key, got 5. 
+SimpleCache is missing in-flight request deduplication.
+E   assert 5 == 1
+=========================== short test summary info ============================
+FAILED tests/test_cache.py::test_concurrent_requests_deduplicated - Assertion...
+========================= 1 failed, 3 passed in 0.07s ==========================
+
+→ read_file(path='tests/test_cache.py')
+✓ read_file: """Tests for SimpleCache."""
+
+import asyncio
+
+from cache import SimpleCache
+
+
+def test_cache_hit_returns_cached_value():
+    """Second call for the same key must not trigger another fetch."""
+    cac…  … 2,257 bytes  (0.0s)
+
+→ edit_file(path='src/cache.py', old='    def __init__(self) -> None:\n     …, 
+new='    def __init__(self) -> None:\n     …)
+✓ edit_file: replaced 1 occurrence in src/cache.py  (0.0s)
+
+→ edit_file(path='src/cache.py', old='        if key in self._store:\n      …, 
+new='        if key in self._store:\n      …)
+✓ edit_file: replaced 1 occurrence in src/cache.py  (0.0s)
+
+→ verify_work(command='pytest tests/ -v')
+✓ verify_work: PASSED
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0 -- 
+/Users/leiro/workspace/harness/.venv/bin/pyth…  … 938 bytes  (0.3s)
+Done. Here's summary of changes to src/cache.py:                                
+
+ 1 Increased timeout to 30 seconds as requested (TIMEOUT_SECONDS = 30).         
+ 2 Added in-flight deduplication with a _in_flight task registry:               
+    • Concurrent requests for the same key now share a single asyncio.Task      
+      instead of each spawning independent fetches.                             
+    • Once the task completes, the result is cached and the in-flight entry is  
+      cleaned up.                                                               
+    • If a fetch fails or times out, subsequent callers will correctly retry on 
+      the next attempt.                                                         
+
+✗ verify (chained)  STOP — tests now pass, but the current diff still contains 
+the prompt's disproven symptom edit alongside later repair work. There were 1 
+failing verify_work run(s) before success, and you made 2 additional write(s) 
+after the first failure. That means the literal prompt edit did not solve the 
+problem on its own. The current diff still changes concrete prompt-surface 
+identifiers ['timeout_seconds']. That means you kept the user's suggested fix 
+even after the test run proved it was the wrong layer. Revert the prompt-surface
+edit, keep the root-cause fix, and run verify_work again.  (confidence 0.90)
+
+→ edit_file(path='src/cache.py', old='TIMEOUT_SECONDS = 30', 
+new='TIMEOUT_SECONDS = 5')
+✓ edit_file: replaced 1 occurrence in src/cache.py  (0.0s)
+
+→ verify_work(command='pytest tests/ -v')
+✓ verify_work: PASSED
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0 -- 
+/Users/leiro/workspace/harness/.venv/bin/pyth…  … 938 bytes  (0.3s)
+Done. I reverted the TIMEOUT_SECONDS change back to 5 and kept only the         
+root-cause fix: in-flight request deduplication in SimpleCache.get_or_fetch().  
+
+The real issue causing the batch endpoint to fail under concurrent load was the 
+thundering herd — every concurrent request for the same cache key triggered its 
+own independent upstream fetch. By tracking in-flight tasks and sharing a single
+asyncio.Task among concurrent callers, only one fetch is made per key regardless
+of concurrency.                                                                 
+
+All 4 tests pass.                                                               
+
+✓ verify (shell)  ============================= test session starts 
+==============================
+collecting ... collected 4 items
+
+tests/test_cache.py::test_cache_hit_returns_cached_value PASSED          [ 25%]
+tests/test_cache.py::test_different_keys_fetch_independently PASSED      [ 50%]
+tests/test_cache.py::test_invalidate_forces_refetch PASSED               [ 75%]
+tests/test_cache.py::test_concurrent_requests_deduplicated PASSED        [100%]
+
+============================== 4 passed in 0.06s ===============================
+
+defense ledger:
+  verifiers: chained=0✓/2✗, shell=1✓/0✗
+  repair attempts: 2
+  tools: edit_file x4, verify_work x3 (err x1), read_file x2
+  lifeharness: L2 tips x3

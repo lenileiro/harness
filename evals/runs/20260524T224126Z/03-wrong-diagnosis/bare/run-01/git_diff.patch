@@ -1,0 +1,62 @@
+diff --git a/src/cache.py b/src/cache.py
+index 3d8a95a..28e5d4c 100644
+--- a/src/cache.py
++++ b/src/cache.py
+@@ -11,7 +11,7 @@ from typing import Any
+ 
+ # Configurable timeout for upstream fetch calls.
+ # The batch endpoint passes this when calling get_or_fetch().
+-TIMEOUT_SECONDS = 5
++TIMEOUT_SECONDS = 30
+ 
+ 
+ class SimpleCache:
+@@ -19,15 +19,11 @@ class SimpleCache:
+ 
+     On a cache miss, calls the provided fetch coroutine to populate the value.
+     The result is stored and returned to the caller.
+-
+-    Note: concurrent requests for the same key each trigger their own
+-    independent fetch — in-flight deduplication is not implemented.
+-
+-    TODO: Add deduplication to avoid thundering herd on cache misses.
+     """
+ 
+     def __init__(self) -> None:
+         self._store: dict[str, Any] = {}
++        self._in_flight: dict[str, asyncio.Future[Any]] = {}
+ 
+     async def get_or_fetch(
+         self,
+@@ -46,12 +42,25 @@ class SimpleCache:
+         if key in self._store:
+             return self._store[key]
+ 
+-        # MISSING: no in-flight deduplication.
+-        # Multiple concurrent callers for the same key all reach this line and
+-        # each triggers its own fetch() call independently.
+-        value = await asyncio.wait_for(fetch(key), timeout=fetch_timeout)
+-        self._store[key] = value
+-        return value
++        # If another coroutine is already fetching this key, await its future.
++        if key in self._in_flight:
++            return await self._in_flight[key]
++
++        # Create a future to represent this in-flight fetch so concurrent
++        # callers can deduplicate.
++        future: asyncio.Future[Any] = asyncio.get_running_loop().create_future()
++        self._in_flight[key] = future
++
++        try:
++            value = await asyncio.wait_for(fetch(key), timeout=fetch_timeout)
++            self._store[key] = value
++            future.set_result(value)
++            return value
++        except Exception as exc:
++            future.set_exception(exc)
++            raise
++        finally:
++            self._in_flight.pop(key, None)
+ 
+     def invalidate(self, key: str) -> None:
+         """Remove a key from the cache."""

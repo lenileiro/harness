@@ -1,0 +1,151 @@
+{
+  "fixture_name": "25-mission-cycle",
+  "passed": true,
+  "steps_total": 7,
+  "steps_passed": 7,
+  "step_results": [
+    {
+      "name": "mission-create",
+      "argv": [
+        "/Users/leiro/workspace/harness/.venv/bin/harness",
+        "mission",
+        "create",
+        "--title",
+        "Workflow Mission",
+        "--goal",
+        "Drive a mission through planning, execution, and validation.",
+        "--cwd",
+        "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_z8rpnnin/workspace"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "Created mission mission-workflow-mission-8d7caba1 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_z\n8rpnnin/workspace/.harness/missions/missions/mission-workflow-mission-8d7caba1\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.40779870795086026
+    },
+    {
+      "name": "mission-plan",
+      "argv": [
+        "/Users/leiro/workspace/harness/.venv/bin/harness",
+        "mission",
+        "plan",
+        "--mission",
+        "mission-workflow-mission-8d7caba1",
+        "--contract-summary",
+        "Mission workflow assertions are declared before execution.",
+        "--milestone",
+        "m1|Milestone 1|Ship the workflow mission slice.",
+        "--assertion",
+        "a1|Workflow slice works|The mission slice should validate cleanly.|contract|Inspect mission validation output.",
+        "--feature",
+        "f1|m1|Implement workflow slice|Create the first workflow mission feature.|worker|app/workflow.py||a1",
+        "--cwd",
+        "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_z8rpnnin/workspace"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "Planned mission mission-workflow-mission-8d7caba1\nmilestones=1\nfeatures=1\nassertions=1\ncurrent_milestone_id=milestone-milestone-1-0db88c8b\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.39459316595457494
+    },
+    {
+      "name": "mission-approve",
+      "argv": [
+        "/Users/leiro/workspace/harness/.venv/bin/harness",
+        "mission",
+        "approve",
+        "--mission",
+        "mission-workflow-mission-8d7caba1",
+        "--cwd",
+        "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_z8rpnnin/workspace"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "Approved mission mission-workflow-mission-8d7caba1\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.3996270829811692
+    },
+    {
+      "name": "mission-execute-next",
+      "argv": [
+        "/Users/leiro/workspace/harness/.venv/bin/harness",
+        "mission",
+        "execute-next",
+        "--mission",
+        "mission-workflow-mission-8d7caba1",
+        "--cwd",
+        "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_z8rpnnin/workspace"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "dispatched Dispatched feature 'Implement workflow slice'.\nmilestone_id=milestone-milestone-1-0db88c8b\nfeature_id=feature-implement-workflow-slice-a2f31fc1\nrun_id=run-implement-workflow-slice-8f27073c\nhandoff_id=handoff-implement-workflow-slice-8731ab3e\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.4064532080665231
+    },
+    {
+      "name": "mission-complete-feature",
+      "argv": [
+        "/Users/leiro/workspace/harness/.venv/bin/harness",
+        "mission",
+        "complete-feature",
+        "--mission",
+        "mission-workflow-mission-8d7caba1",
+        "--feature",
+        "feature-implement-workflow-slice-a2f31fc1",
+        "--completed-work",
+        "Implemented the workflow mission slice.",
+        "--next-recommendation",
+        "Run milestone validation next.",
+        "--cwd",
+        "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_z8rpnnin/workspace"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "recorded Recorded completion for feature 'Implement workflow slice'.\nfeature_id=feature-implement-workflow-slice-a2f31fc1\nmilestone_id=milestone-milestone-1-0db88c8b\nrun_id=run-implement-workflow-slice-0826fd11\nhandoff_id=handoff-implement-workflow-slice-f514842f\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.41078362497501075
+    },
+    {
+      "name": "mission-validate",
+      "argv": [
+        "/Users/leiro/workspace/harness/.venv/bin/harness",
+        "mission",
+        "validate-milestone",
+        "--mission",
+        "mission-workflow-mission-8d7caba1",
+        "--cwd",
+        "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_z8rpnnin/workspace"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "completed Mission validation passed and milestone assertions are satisfied.\nmilestone_id=milestone-milestone-1-0db88c8b\nrun_id=run-validate-milestone-1-8fbef1f8\nfindings_count=0\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.40208766609430313
+    },
+    {
+      "name": "mission-show",
+      "argv": [
+        "/Users/leiro/workspace/harness/.venv/bin/harness",
+        "mission",
+        "show",
+        "mission-workflow-mission-8d7caba1",
+        "--cwd",
+        "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_z8rpnnin/workspace"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "Workflow Mission\nid=mission-workflow-mission-8d7caba1\nstatus=completed\ncreated_by=human\n\nGoal\nDrive a mission through planning, execution, and validation.\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.40808537509292364
+    }
+  ],
+  "artifact_dir": "evals/runs/workflow-smoke-validation-v33/25-mission-cycle",
+  "duration_seconds": 2.8409912090282887
+}

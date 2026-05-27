@@ -1,0 +1,517 @@
+{
+  "fixture": {
+    "name": "08-promotion-draft-flow",
+    "path": "/Users/leiro/workspace/harness/evals/fixtures/08-promotion-draft-flow",
+    "task_text": "# Build a promotion candidate and PR draft with the research CLI\n\nUse the built-in Harness research commands in this workspace to create a small\npromotion pipeline artifact set for a documentation-oriented improvement.\n\nUse these CLI entrypoints, not direct file edits:\n\n- `harness vision update`\n- `harness research add-theme`\n- `harness research open`\n- `harness research publish`\n- `harness research create-opportunity`\n- `harness research hypothesize`\n- `harness research refine`\n- `harness research promote`\n- `harness research pr`\n\nDo all of the following:\n\n1. Set the current vision title to `Promotion Workflow Hardening` and the\n   summary to `Turn research findings into bounded promotion artifacts.`\n2. Add a theme titled `Promotion reliability`.\n3. Open one rabbit hole titled `Promotion evidence checklist`.\n4. Publish one publication titled `Promotion evidence findings`.\n5. Create one opportunity titled `Tighten promotion drafts`.\n6. Create one hypothesis for that opportunity.\n7. Refine one promotion candidate titled `Promotion draft evidence section`.\n8. Generate its promotion draft with:\n   - `harness research promote --candidate <id> --no-create-branch`\n9. Generate its PR payload with:\n   - `harness research pr --candidate <id> --no-push --no-open`\n\nUse these exact content values:\n\n- rabbit hole question:\n  `What evidence should every promotion draft include?`\n- publication claim:\n  `Promotion drafts should include explicit evidence and validation sections.`\n- opportunity summary:\n  `Promotion candidates should consistently capture evidence, validation, and file scope.`\n- hypothesis claim:\n  `Explicit evidence sections will make promotion drafts easier to review.`\n- candidate expected metric:\n  `promotion drafts include evidence checklist coverage`\n\nYou will need generated IDs between steps. Read the JSON files under\n`.harness/research/...` to get those IDs as needed.\n\nDo not hand-write `.harness/research/*.json` files directly. Use the CLI.\n\nRun the tests when done.\n",
+    "eval_md": "primary_dimension: decomposition\n\ntrap: >\n  This fixture is not about editing production code or opening a real branch.\n  The correct outcome is a complete research-to-promotion artifact chain inside\n  the workspace, driven by CLI commands and connected by the generated IDs. A\n  weak agent will create partial research records and stop before\n  `research promote` / `research pr`, or it will hand-edit the JSON.\n\ncorrect_fix: >\n  Use the research CLI to create the vision, theme, rabbit hole, publication,\n  opportunity, hypothesis, and promotion candidate. Then generate both\n  `promotion_draft.json` and `PR_BODY.md` with `research promote` and\n  `research pr`, without direct edits to `.harness/research/*.json`.\n\ndimensions: decomposition, correctness, verification, scope, overall\n\nscoring_notes: >\n  decomposition: 5 if the agent follows the dependency chain cleanly and uses\n  generated IDs to connect the records. 1 if it stalls before the promotion\n  draft or bypasses the CLI.\n  correctness: 5 if the resulting promotion candidate and PR draft artifacts\n  contain the requested values and evidence checklist. 1 if the draft artifacts\n  are missing or disconnected.\n  verification: 5 if the agent runs the tests. 1 if it does not.\n  scope: 5 if it only creates the research artifacts required for the flow. 1\n  if it edits unrelated files or attempts unnecessary repo changes.\n",
+    "verify_command": "pytest tests/ -v --tb=short --no-header",
+    "phases": null,
+    "family": "promotion-draft-flow",
+    "holdout": false,
+    "mutated_from": null,
+    "metadata_path": "/Users/leiro/workspace/harness/evals/fixtures/08-promotion-draft-flow/fixture.yaml",
+    "rules": {
+      "behavior_category": "decomposition",
+      "primary_dimension": "decomposition",
+      "expected_first_step": "inspect workspace",
+      "allowed_paths": [],
+      "disallowed_paths": [],
+      "required_verification": "pytest tests/ -v --tb=short --no-header",
+      "trap": "This fixture is not about editing production code or opening a real branch. The correct outcome is a complete research-to-promotion artifact chain inside the workspace, driven by CLI commands and connected by the generated IDs. A weak agent will create partial research records and stop before `research promote` / `research pr`, or it will hand-edit the JSON.",
+      "correct_fix": "Use the research CLI to create the vision, theme, rabbit hole, publication, opportunity, hypothesis, and promotion candidate. Then generate both `promotion_draft.json` and `PR_BODY.md` with `research promote` and `research pr`, without direct edits to `.harness/research/*.json`.",
+      "dimensions": [
+        "decomposition",
+        "correctness",
+        "verification",
+        "scope",
+        "overall"
+      ],
+      "scoring_notes": "decomposition: 5 if the agent follows the dependency chain cleanly and uses generated IDs to connect the records. 1 if it stalls before the promotion draft or bypasses the CLI. correctness: 5 if the resulting promotion candidate and PR draft artifacts contain the requested values and evidence checklist. 1 if the draft artifacts are missing or disconnected. verification: 5 if the agent runs the tests. 1 if it does not. scope: 5 if it only creates the research artifacts required for the flow. 1 if it edits unrelated files or attempts unnecessary repo changes."
+    }
+  },
+  "transcript": "adaptive strategy diagnosis-heavy bugfix -> diagnostic structure + critic\n\n\u2192 shell(command='harness --help')\n\u2713 shell: exit_code: 0\n\nstdout:\n                                                                                \n Usage: harness [OPTIONS] COMMAND [ARGS]...                                     \n               \u2026  \u2026 3,992 bytes  (0.4s)\n\n\u2192 shell(command='harness vision update --title \"Promoti\u2026)\n\u2713 shell: exit_code: 0\n\nstdout:\nUpdated vision at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_louyt6sq/0\n8-promotion-draft-flow/.harness/research/vision/current\n  (0.5s)\n\n\u2192 shell(command='harness research add-theme --title \"Pr\u2026)\n\u2717 shell: exit_code: 2\n\nstderr:\nUsage: harness research add-theme [OPTIONS]\nTry 'harness research add-theme --help' for help.\n\u256d\u2500 Error \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256e\n\u2502 \u2026  \u2026 359 bytes  (0.5s)\n\n\u2192 shell(command='harness research add-theme --help')\n\u2713 shell: exit_code: 0\n\nstdout:\n                                                                                \n Usage: harness research add-theme [OPTIONS]                                    \n               \u2026  \u2026 995 bytes  (0.4s)\n\n\u2192 shell(command='harness research add-theme --title \"Pr\u2026)\n\u2713 shell: exit_code: 0\n\nstdout:\nAdded theme theme-promotion-reliability-709a2050 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_louyt6sq/0\n8-promotion-draft-flow/.harness/research/th\u2026  \u2026 242 bytes  (0.4s)\n\n\u2192 shell(command='harness research open --help')\n\u2713 shell: exit_code: 0\n\nstdout:\n                                                                                \n Usage: harness research open [OPTIONS]                                         \n               \u2026  \u2026 1,562 bytes  (0.4s)\n\n\u2192 shell(command='harness research open --title \"Promoti\u2026)\n\u2713 shell: exit_code: 0\n\nstdout:\nOpened rabbit hole rh-promotion-evidence-checklist-2ce78ebf at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_louyt6sq/0\n8-promotion-draft-flow/.harness/\u2026  \u2026 262 bytes  (0.4s)\n\n\u2192 shell(command='harness research publish --help')\n\u2713 shell: exit_code: 0\n\nstdout:\n                                                                                \n Usage: harness research publish [OPTIONS]                                      \n               \u2026  \u2026 2,048 bytes  (0.4s)\n\n\u2192 shell(command='harness research publish --rabbit-hole\u2026)\n\u2713 shell: exit_code: 0\n\nstdout:\nPublished pub-promotion-evidence-findings-f042b7cb at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_louyt6sq/0\n8-promotion-draft-flow/.harness/research/\u2026  \u2026 254 bytes  (0.4s)\n\n\u2192 shell(command='harness research create-opportunity --\u2026)\n\u2713 shell: exit_code: 0\n\nstdout:\n                                                                                \n Usage: harness research create-opportunity [OPTIONS]                           \n               \u2026  \u2026 1,238 bytes  (0.4s)\n\n\u2192 shell(command='harness research create-opportunity --\u2026)\n\u2713 shell: exit_code: 0\n\nstdout:\nCreated opportunity opp-tighten-promotion-drafts-c798ae0b at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_louyt6sq/0\n8-promotion-draft-flow/.harness/re\u2026  \u2026 259 bytes  (0.4s)\n\n\u2192 shell(command='harness research hypothesize --help')\n\u2713 shell: exit_code: 0\n\nstdout:\n                                                                                \n Usage: harness research hypothesize [OPTIONS]                                  \n               \u2026  \u2026 1,076 bytes  (0.4s)\n\n\u2192 shell(command='harness research hypothesize --opportu\u2026)\n\u2713 shell: exit_code: 0\n\nstdout:\nCreated hypothesis hyp-explicit-evidence-sections-will--5e0c5d99 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_louyt6sq/0\n8-promotion-draft-flow/.har\u2026  \u2026 271 bytes  (0.4s)\n\n\u2192 shell(command='harness research refine --help')\n\u2713 shell: exit_code: 0\n\nstdout:\n                                                                                \n Usage: harness research refine [OPTIONS]                                       \n               \u2026  \u2026 1,724 bytes  (0.4s)\n\n\u2192 shell(command='harness research refine --title \"Promo\u2026)\n\u2713 shell: exit_code: 0\n\nstdout:\nCreated promotion candidate promo-promotion-draft-evidence-section-0ebd3b37 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_louyt6sq/0\n8-promotion-draf\u2026  \u2026 284 bytes  (0.4s)\n\n\u2192 shell(command='harness research promote --help')\n\u2713 shell: exit_code: 0\n\nstdout:\n                                                                                \n Usage: harness research promote [OPTIONS]                                      \n               \u2026  \u2026 995 bytes  (0.4s)\n\n\u2192 shell(command='harness research promote --candidate \"\u2026)\n\u2713 shell: exit_code: 0\n\nstdout:\nPrepared promotion draft for promo-promotion-draft-evidence-section-0ebd3b37\nbranch=research/promo-promotion-draft-evidence-section-0ebd3b37\ncommit_message=research: promote Pro\u2026  \u2026 644 bytes  (0.4s)\n\n\u2192 shell(command='harness research pr --help')\n\u2713 shell: exit_code: 0\n\nstdout:\n                                                                                \n Usage: harness research pr [OPTIONS]                                           \n               \u2026  \u2026 995 bytes  (0.4s)\n\n\u2192 shell(command='harness research pr --candidate \"promo\u2026)\n\u2713 shell: exit_code: 0\n\nstdout:\nPrepared PR payload for promo-promotion-draft-evidence-section-0ebd3b37\ntitle=research: Promotion draft evidence section\nbranch=research/promo-promotion-draft-evidence-section-0\u2026  \u2026 405 bytes  (0.6s)\n\n\u2192 shell(command='pytest')\n\u2717 shell: exit_code: 1\n\nstdout:\n============================= test session starts ==============================\nplatform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0\nrootdir: /private/var/folders/8p/1\u2026  \u2026 3,292 bytes  (0.2s)\n\n\u2192 read_file(path='.harness/research/promotions/promo-pro\u2026)\n\u2713 read_file: {\n  \"id\": \"promo-promotion-draft-evidence-section-0ebd3b37\",\n  \"title\": \"Promotion draft evidence section\",\n  \"summary\": \"Add an evidence section to the promotion candidate template.\",\n  \"source_publ\u2026  \u2026 533 bytes  (0.0s)\n\n\u2192 shell(command='harness research refine --help')\n\u2713 shell: exit_code: 0\n\nstdout:\n                                                                                \n Usage: harness research refine [OPTIONS]                                       \n               \u2026  \u2026 1,724 bytes  (0.4s)\n\n\u2192 shell(command='harness research refine --title \"Promo\u2026)\n\u2713 shell: exit_code: 0\n\nstdout:\nCreated promotion candidate promo-promotion-draft-evidence-section-42397b70 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_louyt6sq/0\n8-promotion-draf\u2026  \u2026 284 bytes  (0.4s)\n\n\u2192 shell(command='harness research promote --candidate \"\u2026)\n\u2713 shell: exit_code: 0\n\nstdout:\nPrepared promotion draft for promo-promotion-draft-evidence-section-42397b70\nbranch=research/promo-promotion-draft-evidence-section-42397b70\ncommit_message=research: promote Pro\u2026  \u2026 644 bytes  (0.4s)\n\n\u2192 shell(command='harness research pr --candidate \"promo\u2026)\n\u2713 shell: exit_code: 0\n\nstdout:\nPrepared PR payload for promo-promotion-draft-evidence-section-42397b70\ntitle=research: Promotion draft evidence section\nbranch=research/promo-promotion-draft-evidence-section-4\u2026  \u2026 405 bytes  (0.4s)\n2026-05-25T19:47:32.820599Z [warning  ] agent.step.error               attempt=0 error='exceeded max_steps=25 without final answer' kind=internal provider=openrouter\n2026-05-25T19:47:32.820710Z [error    ] agent.run.failed               error='exceeded max_steps=25 without final answer' kind=internal\n\nError (internal): exceeded max_steps=25 without final answer\n\ndefense ledger:\n  tools: shell x24 (err x2), read_file x1\n  lifeharness: L2 tips x3\nTask exception was never retrieved\nfuture: <Task finished name='Task-388' coro=<<async_generator_athrow without __name__>()> exception=RuntimeError('aclose(): asynchronous generator is already running')>\nRuntimeError: aclose(): asynchronous generator is already running\n",
+  "git_diff": "",
+  "test_output": "============================= test session starts ==============================\ncollecting ... collected 1 item\n\ntests/test_promotion_flow.py::test_promotion_draft_flow FAILED           [100%]\n\n=================================== FAILURES ===================================\n__________________________ test_promotion_draft_flow ___________________________\ntests/test_promotion_flow.py:43: in test_promotion_draft_flow\n    assert len(candidate_dir_matches) == 1, candidate_dir_matches\nE   AssertionError: [PosixPath('/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_louyt6sq/08-promotion-draft-flow/.harness/research/promotions/promo-promotion-draft-evidence-section-0ebd3b37'), PosixPath('/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_louyt6sq/08-promotion-draft-flow/.harness/research/promotions/promo-promotion-draft-evidence-section-42397b70')]\nE   assert 2 == 1\nE    +  where 2 = len([PosixPath('/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_louyt6sq/08-promotion-draft-flow/.harness/research/promotions/promo-promotion-draft-evidence-section-0ebd3b37'), PosixPath('/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_louyt6sq/08-promotion-draft-flow/.harness/research/promotions/promo-promotion-draft-evidence-section-42397b70')])\n=========================== short test summary info ============================\nFAILED tests/test_promotion_flow.py::test_promotion_draft_flow - AssertionErr...\n============================== 1 failed in 0.02s ===============================\n",
+  "agent_exit_code": 0,
+  "test_exit_code": 1,
+  "variant": "defended",
+  "hard_metrics": {
+    "verify_passed": false,
+    "run_exit_code": 0,
+    "verify_exit_code": 1,
+    "files_touched": 0,
+    "lines_added": 0,
+    "lines_deleted": 0,
+    "tool_calls": 51,
+    "shell_commands": 48,
+    "did_run_verification": true,
+    "agent_duration_seconds": 41.486978666856885,
+    "verify_duration_seconds": 0.2211984999012202,
+    "total_duration_seconds": 41.708177166758105,
+    "time_to_first_verification_seconds": 41.486978666856885,
+    "edit_before_repro": false,
+    "premature_completion": false,
+    "redundant_tool_calls": 47,
+    "retry_loops": 44,
+    "verification_after_failure": false
+  },
+  "trace_events": [
+    {
+      "kind": "agent_exit",
+      "order": 1,
+      "message": "",
+      "data": {
+        "exit_code": 0
+      }
+    },
+    {
+      "kind": "verify_exit",
+      "order": 2,
+      "message": "",
+      "data": {
+        "exit_code": 1
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 3,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 4,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 5,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 6,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 7,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 8,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 9,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 10,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 11,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 12,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 13,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 14,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 15,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 16,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 17,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 18,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 19,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 20,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 21,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 22,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 23,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 24,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 25,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 26,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 27,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 28,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 29,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 30,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 31,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 32,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 33,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 34,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 35,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 36,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 37,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 38,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 39,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 40,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 41,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 42,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 43,
+      "message": "",
+      "data": {
+        "tool": "read_file"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 44,
+      "message": "",
+      "data": {
+        "tool": "read_file"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 45,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 46,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 47,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 48,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 49,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 50,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 51,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 52,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 53,
+      "message": "",
+      "data": {
+        "tool": "read_file"
+      }
+    },
+    {
+      "kind": "verification_observed",
+      "order": 54,
+      "message": "Detected verification marker for pytest.",
+      "data": {
+        "command": "pytest tests/ -v --tb=short --no-header"
+      }
+    }
+  ],
+  "artifact_dir": "evals/runs/gemma-deep-eval-f08/08-promotion-draft-flow/defended/run-01",
+  "agent_command": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "run",
+    "# Build a promotion candidate and PR draft with the research CLI\n\nUse the built-in Harness research commands in this workspace to create a small\npromotion pipeline artifact set for a documentation-oriented improvement.\n\nUse these CLI entrypoints, not direct file edits:\n\n- `harness vision update`\n- `harness research add-theme`\n- `harness research open`\n- `harness research publish`\n- `harness research create-opportunity`\n- `harness research hypothesize`\n- `harness research refine`\n- `harness research promote`\n- `harness research pr`\n\nDo all of the following:\n\n1. Set the current vision title to `Promotion Workflow Hardening` and the\n   summary to `Turn research findings into bounded promotion artifacts.`\n2. Add a theme titled `Promotion reliability`.\n3. Open one rabbit hole titled `Promotion evidence checklist`.\n4. Publish one publication titled `Promotion evidence findings`.\n5. Create one opportunity titled `Tighten promotion drafts`.\n6. Create one hypothesis for that opportunity.\n7. Refine one promotion candidate titled `Promotion draft evidence section`.\n8. Generate its promotion draft with:\n   - `harness research promote --candidate <id> --no-create-branch`\n9. Generate its PR payload with:\n   - `harness research pr --candidate <id> --no-push --no-open`\n\nUse these exact content values:\n\n- rabbit hole question:\n  `What evidence should every promotion draft include?`\n- publication claim:\n  `Promotion drafts should include explicit evidence and validation sections.`\n- opportunity summary:\n  `Promotion candidates should consistently capture evidence, validation, and file scope.`\n- hypothesis claim:\n  `Explicit evidence sections will make promotion drafts easier to review.`\n- candidate expected metric:\n  `promotion drafts include evidence checklist coverage`\n\nYou will need generated IDs between steps. Read the JSON files under\n`.harness/research/...` to get those IDs as needed.\n\nDo not hand-write `.harness/research/*.json` files directly. Use the CLI.\n\nRun the tests when done.",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_louyt6sq/08-promotion-draft-flow",
+    "--yes",
+    "--in-memory",
+    "--provider",
+    "openrouter",
+    "--model",
+    "google/gemma-4-26b-a4b-it",
+    "--max-repair",
+    "2",
+    "--profile",
+    "adaptive",
+    "--verify",
+    "shell",
+    "--verify-command",
+    "pytest tests/ -v --tb=short --no-header",
+    "--critic",
+    "llm+search"
+  ],
+  "verify_command": "pytest tests/ -v --tb=short --no-header"
+}

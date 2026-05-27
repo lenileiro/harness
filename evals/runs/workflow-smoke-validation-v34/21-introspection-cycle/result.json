@@ -1,0 +1,73 @@
+{
+  "fixture_name": "21-introspection-cycle",
+  "passed": true,
+  "steps_total": 4,
+  "steps_passed": 4,
+  "step_results": [
+    {
+      "name": "providers-list",
+      "argv": [
+        "/Users/leiro/workspace/harness/.venv/bin/harness",
+        "providers",
+        "list"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2513\n\u2503 Provider   \u2503 Status                     \u2503 Notes                            \u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2529\n\u2502 ollama     \u2502 ready                      \u2502 base_url: http://localhost:11434 \u2502\n\u2502 openrouter \u2502 missing OPENROUTER_API_KEY \u2502 \u2014                                \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.41988387517631054
+    },
+    {
+      "name": "providers-capabilities",
+      "argv": [
+        "/Users/leiro/workspace/harness/.venv/bin/harness",
+        "providers",
+        "capabilities",
+        "ollama"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n\u2502 streaming          \u2502 True  \u2502\n\u2502 tool_use           \u2502 True  \u2502\n\u2502 structured_output  \u2502 False \u2502\n\u2502 max_context_tokens \u2502 \u2014     \u2502\n\u2502 models             \u2502 \u2014     \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.38053733413107693
+    },
+    {
+      "name": "tools-list-default",
+      "argv": [
+        "/Users/leiro/workspace/harness/.venv/bin/harness",
+        "tools",
+        "list",
+        "--cwd",
+        "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_t4fap3bl/workspace"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2513\n\u2503 Tool       \u2503 Approval \u2503 Description                                          \u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2529\n\u2502 read_file  \u2502 auto     \u2502 Read the UTF-8 text contents of a file. The `path`   \u2502\n\u2502            \u2502          \u2502 argument is resolved relativ\u2026                        \u2502\n\u2502 write_file \u2502 prompt   \u2502 Create or overwrite a UTF-8 text file. The `path` is \u2502\n\u2502            \u2502          \u2502 resolved relative to cwd a\u2026                          \u2502\n\u2502 edit_file  \u2502 prompt   \u2502 Replace one occurrence of `old` with `new` inside a  \u2502\n\u2502            \u2502          \u2502 UTF-8 text file. Fails if `\u2026                         \u2502\n\u2502 list_dir   \u2502 auto     \u2502 List directory entries. Returns one entry per line.  \u2502\n\u2502            \u2502          \u2502 Directories are suffixed wi\u2026                         \u2502\n\u2502 glob       \u2502 auto     \u2502 List files under cwd that match a glob pattern (e.g. \u2502\n\u2502            \u2502          \u2502 '**/*.py'). Returns paths \u2026                          \u2502\n\u2502 shell      \u2502 prompt   \u2502 Execute a shell command in the session's working     \u2502\n\u2502            \u2502          \u2502 directory. Returns the exit co\u2026                      \u2502\n\u2502 web_search \u2502 auto     \u2502 Search the internet using Tavily. Returns titles,    \u2502\n\u2502            \u2502          \u2502 snippets, and URLs for the mo\u2026                       \u2502\n\u2502 fetch_url  \u2502 prompt   \u2502 GET an http(s) URL and return the response body as   \u2502\n\u2502            \u2502          \u2502 text. Refuses non-http(s) sc\u2026                        \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.383358916034922
+    },
+    {
+      "name": "tools-list-config-override",
+      "argv": [
+        "/Users/leiro/workspace/harness/.venv/bin/harness",
+        "tools",
+        "list",
+        "--config",
+        "config.toml",
+        "--cwd",
+        "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_t4fap3bl/workspace"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2513\n\u2503 Tool       \u2503 Approval \u2503 Description                                          \u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2529\n\u2502 read_file  \u2502 auto     \u2502 Read the UTF-8 text contents of a file. The `path`   \u2502\n\u2502            \u2502          \u2502 argument is resolved relativ\u2026                        \u2502\n\u2502 write_file \u2502 prompt   \u2502 Create or overwrite a UTF-8 text file. The `path` is \u2502\n\u2502            \u2502          \u2502 resolved relative to cwd a\u2026                          \u2502\n\u2502 edit_file  \u2502 prompt   \u2502 Replace one occurrence of `old` with `new` inside a  \u2502\n\u2502            \u2502          \u2502 UTF-8 text file. Fails if `\u2026                         \u2502\n\u2502 list_dir   \u2502 auto     \u2502 List directory entries. Returns one entry per line.  \u2502\n\u2502            \u2502          \u2502 Directories are suffixed wi\u2026                         \u2502\n\u2502 glob       \u2502 auto     \u2502 List files under cwd that match a glob pattern (e.g. \u2502\n\u2502            \u2502          \u2502 '**/*.py'). Returns paths \u2026                          \u2502\n\u2502 shell      \u2502 deny     \u2502 Execute a shell command in the session's working     \u2502\n\u2502            \u2502          \u2502 directory. Returns the exit co\u2026                      \u2502\n\u2502 web_search \u2502 auto     \u2502 Search the internet using Tavily. Returns titles,    \u2502\n\u2502            \u2502          \u2502 snippets, and URLs for the mo\u2026                       \u2502\n\u2502 fetch_url  \u2502 prompt   \u2502 GET an http(s) URL and return the response body as   \u2502\n\u2502            \u2502          \u2502 text. Refuses non-http(s) sc\u2026                        \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.38799783401191235
+    }
+  ],
+  "artifact_dir": "evals/runs/workflow-smoke-validation-v34/21-introspection-cycle",
+  "duration_seconds": 1.5763647081330419
+}

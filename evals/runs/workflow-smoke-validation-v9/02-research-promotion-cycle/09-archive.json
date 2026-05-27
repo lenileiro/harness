@@ -1,0 +1,22 @@
+{
+  "name": "archive",
+  "argv": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "research",
+    "archive",
+    "--kind",
+    "hypothesis",
+    "--id",
+    "hyp-a-promotion-draft-should-always--8d707f3f",
+    "--reason",
+    "covered by promotion candidate",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_6k52xtwv/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Archived hypothesis:hyp-a-promotion-draft-should-always--8d707f3f at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_6\nk52xtwv/workspace/.harness/research/archive/archive-hypothesis-hyp-a-promotion-d\nraft-479573a0\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.40792254195548594
+}

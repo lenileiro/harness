@@ -1,0 +1,328 @@
+{
+  "run_id": "20260525T004836Z-workflow",
+  "artifact_root": "evals/runs/workflow-memory-cycle-v14",
+  "results": [
+    {
+      "fixture_name": "06-research-memory-cycle",
+      "passed": false,
+      "steps_total": 15,
+      "steps_passed": 13,
+      "step_results": [
+        {
+          "name": "vision-update",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "vision",
+            "update",
+            "--title",
+            "Research memory harness",
+            "--summary",
+            "Keep durable records for themes, unknowns, and linked publications.",
+            "--theme",
+            "research-memory",
+            "--success-metric",
+            "reusable published findings",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_lch6p7m0/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "Updated vision at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_l\nch6p7m0/workspace/.harness/research/vision/current\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.4263541658874601
+        },
+        {
+          "name": "add-theme",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "add-theme",
+            "--title",
+            "Memory graph",
+            "--description",
+            "Model citations and archive decisions.",
+            "--priority",
+            "high",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_lch6p7m0/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "Added theme theme-memory-graph-7576b3e1 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_l\nch6p7m0/workspace/.harness/research/themes/theme-memory-graph-7576b3e1\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.42612087493762374
+        },
+        {
+          "name": "list-themes",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "list-themes",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_lch6p7m0/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2513\n\u2503 ID                          \u2503 Title        \u2503 Priority \u2503 Status \u2503 Vision  \u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2529\n\u2502 theme-memory-graph-7576b3e1 \u2502 Memory graph \u2502 high     \u2502 active \u2502 current \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.4100347920320928
+        },
+        {
+          "name": "create-unknown",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "create-unknown",
+            "--theme-id",
+            "theme-memory-graph-7576b3e1",
+            "--question",
+            "How should archived findings stay discoverable?",
+            "--why-it-matters",
+            "Research should compound instead of being lost.",
+            "--confidence",
+            "0.4",
+            "--related-sections",
+            "research,archive",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_lch6p7m0/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "Created unknown unknown-how-should-archived-findings-sta-76951ef6 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_l\nch6p7m0/workspace/.harness/research/unknowns/unknown-how-should-archived-finding\ns-sta-76951ef6\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.4179315420333296
+        },
+        {
+          "name": "list-unknowns",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "list-unknowns",
+            "--theme-id",
+            "theme-memory-graph-7576b3e1",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_lch6p7m0/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2533\u2513\n\u2503 ID                                          \u2503 Theme                \u2503  \u2503 Co\u2026 \u2503\u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2547\u2529\n\u2502 unknown-how-should-archived-findings-sta-7\u2026 \u2502 theme-memory-graph-\u2026 \u2502  \u2502 0.\u2026 \u2502\u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2534\u2518\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.40921154199168086
+        },
+        {
+          "name": "open-rabbithole-a",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "open",
+            "--title",
+            "Archive indexing",
+            "--question",
+            "How should archived findings stay searchable?",
+            "--scope",
+            "Inspect search and archive metadata.",
+            "--theme",
+            "research-memory",
+            "--related-sections",
+            "archive,search",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_lch6p7m0/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "Opened rabbit hole rh-archive-indexing-de627a07 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_l\nch6p7m0/workspace/.harness/research/rabbitholes/rh-archive-indexing-de627a07\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.40970833296887577
+        },
+        {
+          "name": "publish-a",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "publish",
+            "--rabbit-hole",
+            "rh-archive-indexing-de627a07",
+            "--title",
+            "Archive indexing findings",
+            "--summary",
+            "Archive metadata should remain searchable.",
+            "--claim",
+            "Archived items need stable metadata.",
+            "--evidence",
+            "Search over archive reasons is useful.",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_lch6p7m0/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "Published pub-archive-indexing-findings-3dfd3734 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_l\nch6p7m0/workspace/.harness/research/publications/pub-archive-indexing-findings-3\ndfd3734\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.41863149986602366
+        },
+        {
+          "name": "open-rabbithole-b",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "open",
+            "--title",
+            "Citation graph",
+            "--question",
+            "How should later work build on archival findings?",
+            "--scope",
+            "Inspect citations and reuse paths.",
+            "--theme",
+            "research-memory",
+            "--related-sections",
+            "citations,publications",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_lch6p7m0/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "Opened rabbit hole rh-citation-graph-e4108980 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_l\nch6p7m0/workspace/.harness/research/rabbitholes/rh-citation-graph-e4108980\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.40690649999305606
+        },
+        {
+          "name": "publish-b",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "publish",
+            "--rabbit-hole",
+            "rh-citation-graph-e4108980",
+            "--title",
+            "Citation graph findings",
+            "--summary",
+            "Later findings should cite earlier archival work.",
+            "--claim",
+            "Citations preserve research lineage.",
+            "--evidence",
+            "Linking publications keeps context reusable.",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_lch6p7m0/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "Published pub-citation-graph-findings-0e4598e5 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_l\nch6p7m0/workspace/.harness/research/publications/pub-citation-graph-findings-0e4\n598e5\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.4092740840278566
+        },
+        {
+          "name": "cite",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "cite",
+            "--source-publication",
+            "pub-citation-graph-findings-0e4598e5",
+            "--target-publication",
+            "pub-archive-indexing-findings-3dfd3734",
+            "--relationship",
+            "builds_on",
+            "--note",
+            "Newer citation work builds on archive indexing.",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_lch6p7m0/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "Recorded citation cite-pub-citation-graph-findings-0e45-59cbe79d at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_l\nch6p7m0/workspace/.harness/research/citations/cite-pub-citation-graph-findings-0\ne45-59cbe79d\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.4090320421382785
+        },
+        {
+          "name": "search-citation",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "search",
+            "builds_on",
+            "--kind",
+            "citation",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_lch6p7m0/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2513\n\u2503          \u2503                                                \u2503     \u2503 Sum \u2503      \u2503\n\u2503          \u2503                                                \u2503     \u2503 mar \u2503      \u2503\n\u2503 Kind     \u2503 ID                                             \u2503 Ti\u2026 \u2503 y   \u2503 Path \u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2529\n\u2502 citation \u2502 cite-pub-citation-graph-findings-0e45-59cbe79d \u2502 pu\u2026 \u2502 bui \u2502 /pri \u2502\n\u2502          \u2502                                                \u2502 ->  \u2502 lds \u2502 vate \u2502\n\u2502          \u2502                                                \u2502 pu\u2026 \u2502 _on \u2502 /var \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 /fol \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 ders \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 /8p/ \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 1_03 \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 3mns \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 3v1g \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 vkq9 \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 5_wf \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 x4xr \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 0000 \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 gn/T \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 /har \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 ness \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 _wor \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 kflo \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 w_ev \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 al_l \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 ch6p \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 7m0/ \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 work \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 spac \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 e/.h \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 arne \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 ss/r \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 esea \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 rch/ \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 cita \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 tion \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 s/ci \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 te-p \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 ub-c \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 itat \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 ion- \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 grap \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 h-fi \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 ndin \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 gs-0 \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 e45- \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 59cb \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 e79d \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.4033014588057995
+        },
+        {
+          "name": "show-publication",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "show-publication",
+            "pub-citation-graph-findings-0e4598e5",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_lch6p7m0/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "Citation graph findings\nLater findings should cite earlier archival work.\nclaim: Citations preserve research lineage.\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.412084124982357
+        },
+        {
+          "name": "reject-unknown",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "reject",
+            "--kind",
+            "unknown",
+            "--id",
+            "unknown-how-should-archived-findings-sta-76951ef6",
+            "--reason",
+            "covered by publication pair",
+            "--note",
+            "promoted into durable findings",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_lch6p7m0/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "Rejected and archived unknown:unknown-how-should-archived-findings-sta-76951ef6 \nat \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_l\nch6p7m0/workspace/.harness/research/archive/archive-unknown-unknown-how-should-a\nrchi-8c46f484\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.4147923330310732
+        },
+        {
+          "name": "list-archive",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "list-archive",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_lch6p7m0/workspace"
+          ],
+          "passed": false,
+          "returncode": 0,
+          "stdout": "\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2513\n\u2503 Archive ID                            \u2503\u2503 Original ID                        \u2503\u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2529\n\u2502 archive-unknown-unknown-how-should-a\u2026 \u2502\u2502 unknown-how-should-archived-findi\u2026 \u2502\u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2518\n",
+          "stderr": "",
+          "failures": [
+            "stdout~covered by publication pair"
+          ],
+          "duration_seconds": 0.4131058328785002
+        }
+      ],
+      "artifact_dir": "evals/runs/workflow-memory-cycle-v14/06-research-memory-cycle",
+      "duration_seconds": 5.816321082878858
+    }
+  ]
+}

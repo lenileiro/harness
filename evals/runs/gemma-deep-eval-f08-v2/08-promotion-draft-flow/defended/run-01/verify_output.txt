@@ -1,0 +1,6 @@
+============================= test session starts ==============================
+collecting ... collected 1 item
+
+tests/test_promotion_flow.py::test_promotion_draft_flow PASSED           [100%]
+
+============================== 1 passed in 0.01s ===============================

@@ -1,0 +1,23 @@
+[
+  "/Users/leiro/workspace/harness/.venv/bin/harness",
+  "run",
+  "# Orchestrate a multi-agent job and resume it to completion\n\nThis fixture includes a local Harness CLI wrapper at `./fake-harness`. Use that\nentrypoint for all commands in this task.\n\nUse CLI entrypoints only. Do not hand-edit the SQLite database or fixture files\ndirectly.\n\nUse these commands:\n\n- `./fake-harness lab run`\n- `./fake-harness lab list`\n- `./fake-harness lab status`\n- `./fake-harness lab resume`\n\nDo all of the following:\n\n1. Start a multi-agent job with `./fake-harness lab run`.\n2. Inspect the stored jobs with `./fake-harness lab list`.\n3. Inspect the created job with `./fake-harness lab status`.\n4. Resume the same job with `./fake-harness lab resume`.\n5. Run the tests when done.\n\nUse these exact command shapes:\n\n- `./fake-harness lab run \"Plan, execute, and summarize the seeded work\" --cwd . --db lab.db --no-judge`\n- `./fake-harness lab list --db lab.db`\n- `./fake-harness lab status <job-id> --db lab.db`\n- `./fake-harness lab resume <job-id> --db lab.db --no-judge`\n\nImportant:\n\n- The job id is created by the run step. Discover it from `lab list` or the\n  persisted database state before calling `lab status` / `lab resume`.\n- Do not bypass the orchestration flow by creating the reporter artifact\n  yourself. The lab resume step should leave the final report behind.\n\nRun the tests when done.",
+  "--cwd",
+  "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval__zin5o6p/11-lab-orchestration-flow",
+  "--yes",
+  "--in-memory",
+  "--provider",
+  "openrouter",
+  "--model",
+  "google/gemma-4-26b-a4b-it",
+  "--max-repair",
+  "2",
+  "--profile",
+  "adaptive",
+  "--verify",
+  "shell",
+  "--verify-command",
+  "pytest tests/ -v --tb=short --no-header",
+  "--critic",
+  "llm+search"
+]

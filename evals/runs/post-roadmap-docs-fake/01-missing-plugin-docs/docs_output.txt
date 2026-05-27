@@ -1,0 +1,6 @@
+2026-05-24T22:09:57.863647Z [warning  ] agent.step.error               attempt=0 error='Ollama returned 404 — model likely not pulled. Body: {"error":{"message":"model \'fake\' not found","type":"not_found_error","param":null,"code":null}}\n' kind=model_unavailable provider=ollama
+2026-05-24T22:09:57.863735Z [error    ] agent.run.failed               error='Ollama returned 404 — model likely not pulled. Body: {"error":{"message":"model \'fake\' not found","type":"not_found_error","param":null,"code":null}}\n' kind=model_unavailable
+
+Error (model_unavailable): Ollama returned 404 — model likely not pulled. Body: 
+{"error":{"message":"model 'fake' not 
+found","type":"not_found_error","param":null,"code":null}}

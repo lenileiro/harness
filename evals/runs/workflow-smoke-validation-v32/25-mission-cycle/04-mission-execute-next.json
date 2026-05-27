@@ -1,0 +1,18 @@
+{
+  "name": "mission-execute-next",
+  "argv": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "mission",
+    "execute-next",
+    "--mission",
+    "mission-workflow-mission-8e867939",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_1ac_amkh/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "dispatched Dispatched feature 'Implement workflow slice'.\nmilestone_id=milestone-milestone-1-a14b74d5\nfeature_id=feature-implement-workflow-slice-162552e4\nrun_id=run-implement-workflow-slice-58842b49\nhandoff_id=handoff-implement-workflow-slice-f249feb4\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.3985410409513861
+}

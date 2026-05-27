@@ -1,0 +1,81 @@
+{
+  "fixture_name": "18-lab-cycle",
+  "passed": true,
+  "steps_total": 4,
+  "steps_passed": 4,
+  "step_results": [
+    {
+      "name": "lab-run",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_1fu9xq0_/workspace/fake-harness",
+        "lab",
+        "run",
+        "do work",
+        "--cwd",
+        ".",
+        "--no-judge",
+        "--db",
+        "lab.db"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "harness lab run \u2014 2 workers  max-steps=20\nprovider=ollama  model=llama3.2\n\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.6498877911362797
+    },
+    {
+      "name": "lab-list",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_1fu9xq0_/workspace/fake-harness",
+        "lab",
+        "list",
+        "--db",
+        "lab.db"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "in_progress   task_root_eval  2026-05-25 23:03  1/1 items  Root job\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.41928545804694295
+    },
+    {
+      "name": "lab-status",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_1fu9xq0_/workspace/fake-harness",
+        "lab",
+        "status",
+        "task_root_eval",
+        "--db",
+        "lab.db"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "Job task_root_eval \u2014 1 work items\n\n  done         T-002  Child task  finished work\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.3915126249194145
+    },
+    {
+      "name": "lab-resume",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_1fu9xq0_/workspace/fake-harness",
+        "lab",
+        "resume",
+        "task_root_eval",
+        "--db",
+        "lab.db",
+        "--no-judge"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "harness lab resume task_root_eval  \u2014 2 workers\nprovider=ollama  worker-model=llama3.2\n\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.39221120811998844
+    }
+  ],
+  "artifact_dir": "evals/runs/workflow-smoke-validation-v32/18-lab-cycle",
+  "duration_seconds": 1.85754191596061
+}

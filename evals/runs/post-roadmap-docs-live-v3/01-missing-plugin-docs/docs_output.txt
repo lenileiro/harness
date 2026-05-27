@@ -1,0 +1,49 @@
+{
+  "summary": "The documentation for the Harness repository is critically 
+insufficient. The current README provides only a high-level definition of the 
+project without any actionable instructions for installation, usage, 
+benchmarking, or core functionality. Most importantly, there is zero 
+documentation regarding plugin or extension architecture, making it impossible 
+for users to extend the runtime or integrate external tools.",
+  "findings": [
+    {
+      "severity": "high",
+      "path": "README.md",
+      "issue": "Complete lack of onboarding/getting started instructions",
+      "rationale": "A user cannot install, run, or evaluate tasks using the 
+framework without installation steps or basic usage examples.",
+      "suggested_update": "Add sections for 'Installation', 'Quick Start', and 
+'Basic Usage' (running a task and running an eval)."
+    },
+    {
+      "severity": "high",
+      "path": "README.md",
+      "issue": "Missing plugin and extension guidance",
+      "rationale": "The audit specifically requested plugin/extension 
+information. Currently, there is no information on how to develop, load, or 
+discover plugins, which is a critical blocker for extensibility.",
+      "suggested_update": "Add a 'Plugin Development' or 'Extensibility' section
+detailing the interface requirements, how to register a plugin, and how to list 
+active plugins."
+    },
+    {
+      "severity": "medium",
+      "path": "README.md",
+      "issue": "No mention of benchmarking configuration",
+      "rationale": "The README claims the tool supports benchmarking, but 
+provides no context on how to define a benchmark or what parameters are 
+required.",
+      "suggested_update": "Include a section on 'Benchmarking' with a minimal 
+configuration example."
+    }
+  ],
+  "missing_topics": [
+    "Installation guide",
+    "Plugin/Extension API specification",
+    "Plugin loading/registration mechanism",
+    "Plugin discovery/listing commands",
+    "Task execution examples",
+    "Evaluation framework usage",
+    "Benchmarking configuration"
+  ]
+}

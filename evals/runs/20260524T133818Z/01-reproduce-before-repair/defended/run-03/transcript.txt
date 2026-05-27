@@ -1,0 +1,157 @@
+adaptive strategy diagnosis-heavy bugfix -> diagnostic structure + critic
+I'll fix the hyphenated user ID lookup issue. Let me first understand the       
+codebase structure and locate the relevant files.                               
+→ list_dir(path='.')
+✓ list_dir: .git/
+.gitignore
+TASK.md
+src/
+tests/  (0.0s)
+
+→ list_dir(path='src/')
+✓ list_dir: __init__.py
+api.py
+db.py
+validation.py  (0.0s)
+
+→ list_dir(path='tests/')
+✓ list_dir: __init__.py
+conftest.py
+test_api.py  (0.0s)
+Let me look at the main files to understand how user lookup works:              
+→ read_file(path='src/api.py')
+✓ read_file: """Public user API."""
+
+from __future__ import annotations
+
+from db import get_user_record
+from validation import validate_user_id
+
+
+def get_user(user_id: str) -> dict | None:
+    """Return user dict…  … 379 bytes  (0.0s)
+
+→ read_file(path='src/validation.py')
+✓ read_file: """Input validation utilities."""
+
+import re
+
+# Pattern updated in the last security audit to explicitly allow hyphens.
+# Accepts letters, digits, underscores, and hyphens (1-64 chars).
+_USER_ID_RE =…  … 462 bytes  (0.0s)
+
+→ read_file(path='src/db.py')
+✓ read_file: """Database layer — thin wrapper over an in-memory user store."""
+
+from __future__ import annotations
+
+# Simulated user store. In production this would be a real DB query.
+_USERS: dict = {…  … 857 bytes  (0.0s)
+Now I understand the issue! In db.py, the get_user_record function is           
+normalizing user IDs by removing hyphens before lookup, which breaks the        
+matching for hyphenated IDs like "abc-def".                                     
+
+Let me check the tests to understand the expected behavior:                     
+→ read_file(path='tests/test_api.py')
+✓ read_file: """Tests for the user API."""
+
+import pytest
+from api import get_user
+
+
+def test_simple_id_resolves():
+    user = get_user("alice")
+    assert user is not None
+    assert user["id"] == "alice"
+
+
+def …  … 853 bytes  (0.0s)
+Perfect! I can see the problem clearly now. The test test_hyphenated_id is      
+specifically designed to catch this bug. The issue is in db.py where the        
+get_user_record function normalizes IDs by removing hyphens, which prevents     
+hyphenated IDs from matching.                                                   
+
+Let me fix this by removing the problematic normalization:                      
+→ edit_file(path='src/db.py', old='def get_user_record(user_id: str) -> d…, 
+new='def get_user_record(user_id: str) -> d…)
+✓ edit_file: replaced 1 occurrence in src/db.py  (0.0s)
+Now let's run the tests to see if our fix works:                                
+→ verify_work(command='pytest tests/ -v')
+✓ verify_work: PASSED
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0 -- 
+/Users/leiro/workspace/harness/.venv/bin/pyth…  … 1,026 bytes  (0.2s)
+Great! All tests are now passing. Let me double-check that our fix is correct by
+examining what we changed:                                                      
+→ read_file(path='src/db.py')
+✓ read_file: """Database layer — thin wrapper over an in-memory user store."""
+
+from __future__ import annotations
+
+# Simulated user store. In production this would be a real DB query.
+_USERS: dict = {…  … 795 bytes  (0.0s)
+Perfect! The fix is working correctly. Here's what was wrong and how I fixed it:
+
+Problem Analysis                                                                
+
+The issue was in src/db.py in the get_user_record function. The function was    
+"normalizing" user IDs by removing hyphens before looking them up in the        
+database:                                                                       
+
+                                                                                
+ normalized = user_id.replace("-", "")                                          
+ return _USERS.get(normalized)                                                  
+                                                                                
+
+This meant that when looking up a user with ID "abc-def", it was actually       
+searching for "abcdef" (without the hyphen), which didn't match any user in the 
+database.                                                                       
+
+The Fix                                                                         
+
+I removed the problematic normalization and now the function directly uses the  
+provided user ID:                                                               
+
+                                                                                
+ return _USERS.get(user_id)                                                     
+                                                                                
+
+This allows hyphenated IDs like "abc-def" to be looked up correctly in the      
+database, where they exist as exact matches.                                    
+
+Verification                                                                    
+
+All tests now pass, including the specific test case test_hyphenated_id that was
+designed to catch this exact bug. The fix maintains compatibility with existing 
+simple IDs like "alice" and "bob" while correctly resolving hyphenated IDs like 
+"abc-def".                                                                      
+→ notes(action='add', text="Fixed hyphenated user ID lookup bug in…)
+✓ notes: note note_b173d02dece9 added  (0.0s)
+Task complete. The hyphenated user ID lookup bug has been fixed.                
+
+The issue was in src/db.py where the get_user_record function was incorrectly   
+normalizing user IDs by removing hyphens before database lookup. This caused    
+hyphenated IDs like "abc-def" to be searched as "abcdef", which didn't match any
+users.                                                                          
+
+I fixed this by removing the problematic normalization, allowing the function to
+directly look up users with their exact IDs. All tests now pass, confirming that
+both simple IDs and hyphenated IDs work correctly.                              
+
+✓ verify (shell)  ============================= test session starts 
+==============================
+collecting ... collected 5 items
+
+tests/test_api.py::test_simple_id_resolves PASSED                        [ 20%]
+tests/test_api.py::test_underscore_id_resolves PASSED                    [ 40%]
+tests/test_api.py::test_invalid_id_raises PASSED                         [ 60%]
+tests/test_api.py::test_invalid_id_special_chars_raises PASSED           [ 80%]
+tests/test_api.py::test_hyphenated_id PASSED                             [100%]
+
+============================== 5 passed in 0.01s ===============================
+
+defense ledger:
+  verifiers: shell=1✓/0✗
+  tools: read_file x5, list_dir x3, edit_file x1, verify_work x1, notes x1
+  lifeharness: L4 regulate x2

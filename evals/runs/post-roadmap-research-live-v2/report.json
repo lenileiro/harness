@@ -1,0 +1,24 @@
+{
+  "run_id": "20260524T222901Z-research",
+  "provider": "openrouter",
+  "model": "google/gemma-4-26b-a4b-it",
+  "artifact_root": "evals/runs/post-roadmap-research-live-v2",
+  "results": [
+    {
+      "fixture_name": "01-persistence-tradeoffs",
+      "passed": false,
+      "findings_count": 0,
+      "source_count": 0,
+      "matched_findings": 0,
+      "matched_sources": 0,
+      "missing_expectations": [
+        "research output was not valid JSON"
+      ],
+      "summary": "",
+      "artifact_dir": "evals/runs/post-roadmap-research-live-v2/01-persistence-tradeoffs",
+      "raw_output": "{\n  \"summary\": \"The workspace uses SQLite as the default persistence layer to \nfacilitate low-friction local development and portable workflows.\",\n  \"findings\": [\n    \"SQLite is the default choice because it provides zero-setup local storage, \nhigh portability across different environments (laptops, CI/CD), and ease of \ninspection/backup.\",\n    \"The primary tradeoff for using SQLite is limited concurrency for write \noperations compared to client-server database systems.\",\n    \"A known architectural limit is that SQLite may not be suitable for shared \nor team-based deployments, where a networked database like PostgreSQL would be \nmore appropriate.\"\n  ],\n  \"open_questions\": [\n    \"Is there a specific abstraction layer (e.g., an ORM or Repository pattern) \nimplemented to allow seamless switching from SQLite to PostgreSQL?\",\n    \"Are there specific performance benchmarks or migration paths defined for \nmoving from SQLite to a networked store?\"\n  ],\n  \"sources\": [\n    {\n      \"title\": \"Persistence documentation\",\n      \"url\": \"docs/persistence.md\",\n      \"excerpt\": \"Harness uses SQLite by default for local development and \nsingle-user workflows... Tradeoffs: limited concurrent writes compared with a \nclient/server database.\"\n    }\n  ]\n}",
+      "memo": null,
+      "duration_seconds": 12.213468041969463
+    }
+  ]
+}

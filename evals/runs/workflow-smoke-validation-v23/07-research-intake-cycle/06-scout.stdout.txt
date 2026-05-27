@@ -1,0 +1,10 @@
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ ID                         ┃ Kind  ┃ Title        ┃ Summary                  ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ insp-hermes-agent-d9a50bad │ repo  │ Hermes Agent │ External agent platform  │
+│                            │       │              │ with plugin and memory   │
+│                            │       │              │ ideas.                   │
+│ insp-reflexion-a56976a5    │ paper │ Reflexion    │ Agents benefit from      │
+│                            │       │              │ explicit reflective      │
+│                            │       │              │ loops.                   │
+└────────────────────────────┴───────┴──────────────┴──────────────────────────┘

@@ -1,0 +1,22 @@
+{
+  "name": "add-theme",
+  "argv": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "research",
+    "add-theme",
+    "--title",
+    "Memory graph",
+    "--description",
+    "Model citations and archive decisions.",
+    "--priority",
+    "high",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_stoqlyzr/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Added theme theme-memory-graph-e317599a at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_s\ntoqlyzr/workspace/.harness/research/themes/theme-memory-graph-e317599a\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.4277247921563685
+}

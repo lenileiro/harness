@@ -1,0 +1,293 @@
+{
+  "fixture": {
+    "name": "01-reproduce-before-repair",
+    "path": "/Users/leiro/workspace/harness/evals/fixtures/01-reproduce-before-repair",
+    "task_text": "# Fix hyphenated user ID lookup\n\n`get_user()` returns `None` for hyphenated IDs like `'abc-def'`. Simple IDs\nlike `'alice'` and `'bob'` work fine.\n\nThe validation regex was recently audited and updated to explicitly allow\nhyphens. The bug is likely somewhere downstream of validation.\n\nFix it so hyphenated IDs resolve correctly. Run the tests when done.\n",
+    "eval_md": "primary_dimension: verification\n\ntrap: >\n  TASK.md says \"the validation regex was recently audited.\" The regex in\n  validation.py already allows hyphens. The real bug is in db.py:\n  get_user_record() calls user_id.replace(\"-\", \"\") before the dict lookup,\n  stripping hyphens so \"abc-def\" becomes \"abcdef\" which doesn't match any key.\n  An agent that only reads code will probably patch the regex (wrong layer).\n  An agent that runs tests first will see the real failure stack and find db.py.\n\ncorrect_fix: >\n  Remove the replace(\"-\", \"\") call in db.py get_user_record().\n  The fix is one line in db.py. validation.py must NOT be touched.\n\ndimensions: verification, decomposition, scope, correctness, overall\n\nscoring_notes: >\n  verification: 5 if agent ran the tests before or during diagnosis.\n  3 if tests were run only after fixing. 1 if no tests were run.\n  decomposition: 5 if agent traced api -> db -> replace() and fixed db.py.\n  1 if agent patched validation.py (wrong layer).\n  scope: 5 if only db.py changed. 1 if validation.py or api.py were also changed.\n  correctness: 5 if test_hyphenated_id passes in test output. 1 if it still fails.\n",
+    "verify_command": "pytest tests/ -v --tb=short --no-header",
+    "phases": null,
+    "family": "reproduce-before-repair",
+    "holdout": false,
+    "mutated_from": null,
+    "metadata_path": "/Users/leiro/workspace/harness/evals/fixtures/01-reproduce-before-repair/fixture.yaml",
+    "rules": {
+      "behavior_category": "verification",
+      "primary_dimension": "verification",
+      "expected_first_step": "run tests",
+      "allowed_paths": [],
+      "disallowed_paths": [
+        "validation.py"
+      ],
+      "required_verification": "pytest tests/ -v --tb=short --no-header",
+      "trap": "TASK.md says \"the validation regex was recently audited.\" The regex in validation.py already allows hyphens. The real bug is in db.py: get_user_record() calls user_id.replace(\"-\", \"\") before the dict lookup, stripping hyphens so \"abc-def\" becomes \"abcdef\" which doesn't match any key. An agent that only reads code will probably patch the regex (wrong layer). An agent that runs tests first will see the real failure stack and find db.py.",
+      "correct_fix": "Remove the replace(\"-\", \"\") call in db.py get_user_record(). The fix is one line in db.py. validation.py must NOT be touched.",
+      "dimensions": [
+        "verification",
+        "decomposition",
+        "scope",
+        "correctness",
+        "overall"
+      ],
+      "scoring_notes": "verification: 5 if agent ran the tests before or during diagnosis. 3 if tests were run only after fixing. 1 if no tests were run. decomposition: 5 if agent traced api -> db -> replace() and fixed db.py. 1 if agent patched validation.py (wrong layer). scope: 5 if only db.py changed. 1 if validation.py or api.py were also changed. correctness: 5 if test_hyphenated_id passes in test output. 1 if it still fails."
+    }
+  },
+  "transcript": "adaptive strategy diagnosis-heavy bugfix -> diagnostic structure + critic; \nimplicit critic=llm\nI'll help you fix the issue with hyphenated user ID lookup. Let's start by      \nunderstanding the codebase and locating the relevant files.                     \n\u2192 glob(pattern='**/*.py')\n\u2713 glob: src/__init__.py\nsrc/api.py\nsrc/db.py\nsrc/validation.py\ntests/__init__.py\ntests/conftest.py\ntests/test_api.py  (0.0s)\nLet's first check the total size of the source files to determine if we need to \nspawn agents or can read directly:                                              \n\u2192 shell(command=\"find src tests -name '*.py' | xargs wc\u2026)\n\u2713 shell: exit_code: 0\n\nstdout:\n    2734 total\n  (0.1s)\nThe total size is small enough to read the files directly. Let's start by       \nlooking at the validation module since the prompt mentioned the validation regex\nwas recently updated:                                                           \n\u2192 read_file(path='src/validation.py')\n\u2713 read_file: \"\"\"Input validation utilities.\"\"\"\n\nimport re\n\n# Pattern updated in the last security audit to explicitly allow hyphens.\n# Accepts letters, digits, underscores, and hyphens (1-64 chars).\n_USER_ID_RE =\u2026  \u2026 462 bytes  (0.0s)\nNow let's check the database module since that's likely where the get_user()    \nfunction is implemented:                                                        \n\u2192 read_file(path='src/db.py')\n\u2713 read_file: \"\"\"Database layer \u2014 thin wrapper over an in-memory user store.\"\"\"\n\nfrom __future__ import annotations\n\n# Simulated user store. In production this would be a real DB query.\n_USERS: dict = {\u2026  \u2026 857 bytes  (0.0s)\nLet's also check the API module to understand how get_user() is used:           \n\u2192 read_file(path='src/api.py')\n\u2713 read_file: \"\"\"Public user API.\"\"\"\n\nfrom __future__ import annotations\n\nfrom db import get_user_record\nfrom validation import validate_user_id\n\n\ndef get_user(user_id: str) -> dict | None:\n    \"\"\"Return user dict\u2026  \u2026 379 bytes  (0.0s)\nNow let's look at the tests to understand what's expected:                      \n\u2192 read_file(path='tests/test_api.py')\n\u2713 read_file: \"\"\"Tests for the user API.\"\"\"\n\nimport pytest\nfrom api import get_user\n\n\ndef test_simple_id_resolves():\n    user = get_user(\"alice\")\n    assert user is not None\n    assert user[\"id\"] == \"alice\"\n\n\ndef \u2026  \u2026 853 bytes  (0.0s)\nNow I understand the issue. In src/db.py, the get_user_record function          \nnormalizes user IDs by removing hyphens before lookup:                          \n\n                                                                                \n # BUG: this strips hyphens, so \"abc-def\" becomes \"abcdef\" \u2014 no match.          \n normalized = user_id.replace(\"-\", \"\")                                          \n                                                                                \n\nThis was likely meant to handle legacy systems but breaks the lookup for        \nlegitimate hyphenated IDs that are stored with their hyphens intact.            \n\nLet's fix this by removing the normalization that strips hyphens:               \n\u2192 edit_file(path='src/db.py', old='def get_user_record(user_id: str) -> d\u2026, \nnew='def get_user_record(user_id: str) -> d\u2026)\n\u2713 edit_file: replaced 1 occurrence in src/db.py  (0.0s)\nNow let's run the tests to verify our fix:                                      \n\u2192 verify_work(command='pytest tests/ -v')\n\u2713 verify_work: PASSED\n\n============================= test session starts ==============================\nplatform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0 -- \n/Users/leiro/workspace/harness/.venv/bin/pyth\u2026  \u2026 1,026 bytes  (0.2s)\nGreat! All tests are now passing, including the test_hyphenated_id test that was\npreviously failing.                                                             \n\nLet's summarize what we did to fix the issue:                                   \n\n 1 Problem Identification: The bug was in src/db.py in the get_user_record      \n   function, which was incorrectly removing hyphens from user IDs before lookup.\n   This caused hyphenated IDs like \"abc-def\" to be normalized to \"abcdef\", which\n   didn't match the actual stored user ID.                                      \n 2 Root Cause: The comment indicated this normalization was meant to handle     \n   legacy system quirks, but it was preventing proper lookup of legitimate      \n   hyphenated IDs that are stored exactly as they are (e.g., \"abc-def\" in the   \n   _USERS dictionary).                                                          \n 3 Fix: We removed the normalization logic that stripped hyphens, allowing the  \n   function to look up user IDs exactly as provided, which correctly matches the\n   stored hyphenated IDs.                                                       \n 4 Verification: All tests pass, including the specific test for hyphenated IDs \n   that was previously failing.                                                 \n\nThe fix was simple but important - removing the problematic normalization while \nmaintaining all other functionality. The validation still properly allows       \nhyphens (as updated in the recent security audit), and now the lookup works     \ncorrectly for hyphenated IDs.                                                   \n\n\u2717 verify (chained)  STOP \u2014 this bugfix prompt did not ask for source comment \nupdates, but the current diff adds new source comment lines (src/db.py: # Look \nup the user ID directly without normalization., src/db.py: # Hyphenated IDs like\n\"abc-def\" should match exactly as stored.). Remove the explanatory comment \nrewrite and keep only the code change.  (confidence 0.90)\nYou're right. Let me fix this by removing the explanatory comments I added and  \nkeeping only the essential code change.                                         \n\u2192 edit_file(path='src/db.py', old='def get_user_record(user_id: str) -> d\u2026, \nnew='def get_user_record(user_id: str) -> d\u2026)\n\u2713 edit_file: replaced 1 occurrence in src/db.py  (0.0s)\nNow let's verify our fix again:                                                 \n\u2192 verify_work(command='pytest tests/ -v')\n\u2713 verify_work: PASSED\n\n============================= test session starts ==============================\nplatform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0 -- \n/Users/leiro/workspace/harness/.venv/bin/pyth\u2026  \u2026 1,026 bytes  (0.2s)\nPerfect! The fix is working correctly. Let me explain what was done:            \n\n 1 Problem: The get_user_record function in src/db.py was incorrectly removing  \n   hyphens from user IDs before lookup, causing hyphenated IDs like \"abc-def\" to\n   be converted to \"abcdef\" which didn't match the actual stored ID.            \n 2 Solution: I removed the line normalized = user_id.replace(\"-\", \"\") and       \n   changed the return statement to directly use user_id instead of normalized.  \n   This allows hyphenated IDs to be looked up exactly as they're stored in the  \n   database.                                                                    \n 3 Result: All tests now pass, including the test_hyphenated_id test that was   \n   previously failing.                                                          \n\nThe fix was simple but effective - removing the problematic normalization that  \nwas preventing proper lookup of legitimate hyphenated user IDs.                 \n\n\u2713 verify (shell)  ============================= test session starts \n==============================\ncollecting ... collected 5 items\n\ntests/test_api.py::test_simple_id_resolves PASSED                        [ 20%]\ntests/test_api.py::test_underscore_id_resolves PASSED                    [ 40%]\ntests/test_api.py::test_invalid_id_raises PASSED                         [ 60%]\ntests/test_api.py::test_invalid_id_special_chars_raises PASSED           [ 80%]\ntests/test_api.py::test_hyphenated_id PASSED                             [100%]\n\n============================== 5 passed in 0.01s ===============================\n\ndefense ledger:\n  verifiers: chained=0\u2713/1\u2717, shell=1\u2713/0\u2717\n  repair attempts: 1\n  tools: read_file x4, edit_file x2, verify_work x2, glob x1, shell x1\n  lifeharness: L2 tips x3\n",
+  "git_diff": "diff --git a/src/db.py b/src/db.py\nindex 7f5b5a6..b3f0f6b 100644\n--- a/src/db.py\n+++ b/src/db.py\n@@ -13,7 +13,4 @@ _USERS: dict[str, dict] = {\n \n def get_user_record(user_id: str) -> dict | None:\n     \"\"\"Fetch a raw user record by id. Returns None if not found.\"\"\"\n-    # Normalize the ID before lookup to handle legacy system quirks.\n-    # BUG: this strips hyphens, so \"abc-def\" becomes \"abcdef\" \u2014 no match.\n-    normalized = user_id.replace(\"-\", \"\")\n-    return _USERS.get(normalized)\n+    return _USERS.get(user_id)\n",
+  "test_output": "============================= test session starts ==============================\ncollecting ... collected 5 items\n\ntests/test_api.py::test_simple_id_resolves PASSED                        [ 20%]\ntests/test_api.py::test_underscore_id_resolves PASSED                    [ 40%]\ntests/test_api.py::test_invalid_id_raises PASSED                         [ 60%]\ntests/test_api.py::test_invalid_id_special_chars_raises PASSED           [ 80%]\ntests/test_api.py::test_hyphenated_id PASSED                             [100%]\n\n============================== 5 passed in 0.01s ===============================\n\nbehavioral hard check passed: direct db.py lookup with no extra normalization\n",
+  "agent_exit_code": 0,
+  "test_exit_code": 0,
+  "variant": "defended",
+  "hard_metrics": {
+    "verify_passed": true,
+    "run_exit_code": 0,
+    "verify_exit_code": 0,
+    "files_touched": 1,
+    "lines_added": 1,
+    "lines_deleted": 4,
+    "tool_calls": 23,
+    "shell_commands": 4,
+    "did_run_verification": true,
+    "agent_duration_seconds": 27.27561491704546,
+    "verify_duration_seconds": 0.19999962486326694,
+    "total_duration_seconds": 27.475614541908726,
+    "time_to_first_verification_seconds": 27.27561491704546,
+    "edit_before_repro": true,
+    "premature_completion": false,
+    "redundant_tool_calls": 14,
+    "retry_loops": 6,
+    "verification_after_failure": true
+  },
+  "trace_events": [
+    {
+      "kind": "agent_exit",
+      "order": 1,
+      "message": "",
+      "data": {
+        "exit_code": 0
+      }
+    },
+    {
+      "kind": "verify_exit",
+      "order": 2,
+      "message": "",
+      "data": {
+        "exit_code": 0
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 3,
+      "message": "",
+      "data": {
+        "tool": "glob"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 4,
+      "message": "",
+      "data": {
+        "tool": "glob"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 5,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 6,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 7,
+      "message": "",
+      "data": {
+        "tool": "read_file"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 8,
+      "message": "",
+      "data": {
+        "tool": "read_file"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 9,
+      "message": "",
+      "data": {
+        "tool": "read_file"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 10,
+      "message": "",
+      "data": {
+        "tool": "read_file"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 11,
+      "message": "",
+      "data": {
+        "tool": "read_file"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 12,
+      "message": "",
+      "data": {
+        "tool": "read_file"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 13,
+      "message": "",
+      "data": {
+        "tool": "read_file"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 14,
+      "message": "",
+      "data": {
+        "tool": "read_file"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 15,
+      "message": "",
+      "data": {
+        "tool": "edit_file"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 16,
+      "message": "",
+      "data": {
+        "tool": "edit_file"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 17,
+      "message": "",
+      "data": {
+        "tool": "verify_work"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 18,
+      "message": "",
+      "data": {
+        "tool": "verify_work"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 19,
+      "message": "",
+      "data": {
+        "tool": "edit_file"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 20,
+      "message": "",
+      "data": {
+        "tool": "edit_file"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 21,
+      "message": "",
+      "data": {
+        "tool": "verify_work"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 22,
+      "message": "",
+      "data": {
+        "tool": "verify_work"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 23,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 24,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 25,
+      "message": "",
+      "data": {
+        "tool": "read_file"
+      }
+    },
+    {
+      "kind": "verification_observed",
+      "order": 26,
+      "message": "Detected verification marker for pytest.",
+      "data": {
+        "command": "pytest tests/ -v --tb=short --no-header"
+      }
+    }
+  ],
+  "artifact_dir": "/Users/leiro/workspace/harness/evals/runs/20260524T224124Z/01-reproduce-before-repair/defended/run-03",
+  "agent_command": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "run",
+    "# Fix hyphenated user ID lookup\n\n`get_user()` returns `None` for hyphenated IDs like `'abc-def'`. Simple IDs\nlike `'alice'` and `'bob'` work fine.\n\nThe validation regex was recently audited and updated to explicitly allow\nhyphens. The bug is likely somewhere downstream of validation.\n\nFix it so hyphenated IDs resolve correctly. Run the tests when done.",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_sqgloibr/01-reproduce-before-repair",
+    "--yes",
+    "--in-memory",
+    "--provider",
+    "openrouter",
+    "--model",
+    "qwen/qwen3-coder",
+    "--max-repair",
+    "2",
+    "--profile",
+    "adaptive",
+    "--verify",
+    "shell",
+    "--verify-command",
+    "pytest tests/ -v --tb=short --no-header"
+  ],
+  "verify_command": "pytest tests/ -v --tb=short --no-header"
+}

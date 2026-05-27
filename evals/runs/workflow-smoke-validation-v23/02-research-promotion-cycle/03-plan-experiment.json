@@ -1,0 +1,26 @@
+{
+  "name": "plan-experiment",
+  "argv": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "research",
+    "plan-experiment",
+    "--hypothesis",
+    "hyp-a-promotion-draft-should-always--1a89952a",
+    "--plan",
+    "Create a bounded promotion candidate and inspect the generated PR payload.",
+    "--target-files",
+    "packages/core/src/harness/core/pr_generation.py",
+    "--checks",
+    "pytest,pyright",
+    "--eval-slices",
+    "workflow-smoke",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_6mnmhgo2/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Planned experiment plan-hyp-a-promotion-draft-should-alw-3482fe81 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_6\nmnmhgo2/workspace/.harness/research/experiment-plans/plan-hyp-a-promotion-draft-\nshould-alw-3482fe81\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.40904904203489423
+}

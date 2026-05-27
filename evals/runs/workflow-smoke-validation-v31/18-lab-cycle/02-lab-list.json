@@ -1,0 +1,16 @@
+{
+  "name": "lab-list",
+  "argv": [
+    "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_np6sh_i2/workspace/fake-harness",
+    "lab",
+    "list",
+    "--db",
+    "lab.db"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "in_progress   task_root_eval  2026-05-25 07:38  1/1 items  Root job\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.3725207920651883
+}

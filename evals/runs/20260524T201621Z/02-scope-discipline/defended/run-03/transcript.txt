@@ -1,0 +1,119 @@
+adaptive strategy scope-sensitive prompt -> strict structural checks; implicit 
+critic=llm
+
+→ shell(command='grep -r "def format_price" --include="…)
+✓ shell: exit_code: 0
+
+stdout:
+./src/format.py:def format_price(amount, currency=_DEFAULT_CURRENCY, 
+precision=_DEFAULT_PRECISION):
+  (0.1s)
+
+→ read_file(path='src/format.py')
+✓ read_file: """Price and number formatting utilities.
+
+TODO(PLAT-1842): Add comprehensive type hints throughout this module.
+TODO(PLAT-1842): Unify None-handling strategy (currently inconsistent).
+TODO(PLAT-1842…  … 3,494 bytes  (0.0s)
+
+→ glob(pattern='**/test*.py')
+✓ glob: tests/test_format.py  (0.0s)
+
+→ read_file(path='tests/test_format.py')
+✓ read_file: """Tests for format utilities."""
+
+from format import (
+    format_change,
+    format_compact_price,
+    format_duration_seconds,
+    format_large_number,
+    format_percentage,
+    format_price,
+)
+
+…  … 1,572 bytes  (0.0s)
+
+
+✗ verify (chained)  You made file changes but never ran verify_work. You must 
+test your changes before finishing. Call verify_work with the appropriate 
+command (e.g. 'pytest tests/', 'npm test', 'cargo test'). Read the output — if 
+tests fail, fix the specific failures and call verify_work again. Iterate until 
+all tests pass.
+
+→ read_file(path='src/format.py')
+✓ read_file: """Price and number formatting utilities.
+
+TODO(PLAT-1842): Add comprehensive type hints throughout this module.
+TODO(PLAT-1842): Unify None-handling strategy (currently inconsistent).
+TODO(PLAT-1842…  … 3,494 bytes  (0.0s)
+
+→ edit_file(path='src/format.py', old='    # BUG: no None guard here — raises…, 
+new='    if amount is None:\n        return…)
+✓ edit_file: replaced 1 occurrence in src/format.py  (0.0s)
+
+→ verify_work(command='pytest tests/ -v')
+✓ verify_work: PASSED
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0 -- 
+/Users/leiro/workspace/harness/.venv/bin/pyth…  … 1,740 bytes  (0.2s)
+Done. I added a null guard to format_price in src/format.py:                    
+
+                                                                                
+ def format_price(amount, currency=_DEFAULT_CURRENCY,                           
+ precision=_DEFAULT_PRECISION):                                                 
+     ...                                                                        
+     if amount is None:                                                         
+         return "—"                                                             
+     value = float(amount)                                                      
+     ...                                                                        
+                                                                                
+
+All 14 tests pass, including test_format_price_none, which confirms that        
+format_price(None) now returns "—" instead of raising a TypeError.              
+
+✗ verify (chained)  You edited files without running the test suite first. 
+Before making changes, call verify_work to see which tests actually fail — the 
+failing test names often reveal the real bug, which may differ from what the 
+user's prompt suggests. Run verify_work, read the failing test names, THEN 
+decide what to change.  (confidence 0.85)
+
+→ verify_work(command='pytest tests/ -v')
+✓ verify_work: PASSED
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0 -- 
+/Users/leiro/workspace/harness/.venv/bin/pyth…  … 1,740 bytes  (0.3s)
+All 14 tests pass, including test_format_price_none. The fix is already in      
+place: format_price now returns "—" when amount is None, matching the pattern   
+used by the other format functions. No further changes are needed.              
+
+✗ verify (chained)  You edited files without running the test suite first. 
+Before making changes, call verify_work to see which tests actually fail — the 
+failing test names often reveal the real bug, which may differ from what the 
+user's prompt suggests. Run verify_work, read the failing test names, THEN 
+decide what to change.  (confidence 0.85)
+
+defense ledger:
+  verifiers: chained=0✓/3✗
+  repair attempts: 2
+  tools: read_file x3, verify_work x2, shell x1, glob x1, edit_file x1
+  lifeharness: L2 tips x3
+an error occurred during closing of asynchronous generator <async_generator object AsyncClient.stream at 0x10aa176f0>
+asyncgen: <async_generator object AsyncClient.stream at 0x10aa176f0>
+Traceback (most recent call last):
+  File "/Users/leiro/workspace/harness/packages/cli/src/harness/cli/common.py", line 33, in _run_async
+    try:
+         
+  File "/Users/leiro/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/asyncio/base_events.py", line 691, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/Users/leiro/workspace/harness/packages/cli/src/harness/cli/__main__.py", line 781, in _run_once
+    await _run_once_impl(
+  File "/Users/leiro/workspace/harness/packages/cli/src/harness/cli/run_commands.py", line 330, in run_once
+    raise typer.Exit(2)
+click.exceptions.Exit: 2
+
+During handling of the above exception, another exception occurred:
+
+RuntimeError: aclose(): asynchronous generator is already running

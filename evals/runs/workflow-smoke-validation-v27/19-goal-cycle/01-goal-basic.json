@@ -1,0 +1,22 @@
+{
+  "name": "goal-basic",
+  "argv": [
+    "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_2spw2t6d/workspace/fake-harness",
+    "goal",
+    "greet the user",
+    "--in-memory",
+    "--cwd",
+    ".",
+    "--yes",
+    "--provider",
+    "ollama",
+    "--model",
+    "test-model"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "\n\u25cf Step 1/2: Write a greeting\nHello from step 1                                                               \n\n\u25cf Step 2/2: Summarize it\nSummary done                                                                    \n\n\u2713 verify (verify_before_done)  No modifying tool calls detected \u2014 verification \nnot required.\n\ndefense ledger:\n  verifiers: verify_before_done=1\u2713/0\u2717\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.714793125167489
+}

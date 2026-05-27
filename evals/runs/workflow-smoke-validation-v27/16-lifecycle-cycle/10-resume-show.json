@@ -1,0 +1,16 @@
+{
+  "name": "resume-show",
+  "argv": [
+    "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_oi62jmuj/workspace/fake-harness",
+    "resume",
+    "show",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_oi62jmuj/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": " cross-session state for this run:\n  current feature: beta (status=pending)\n  description: Ship beta\n  phases: implement, test\n  roadmap (do not touch this session): alpha(in_progress)\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.34006233303807676
+}

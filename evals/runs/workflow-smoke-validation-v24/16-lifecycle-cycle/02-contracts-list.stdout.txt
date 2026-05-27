@@ -1,0 +1,12 @@
+┏━━━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━┓
+┃ Name         ┃ Priority ┃ Triggers ┃ Rules              ┃ Source             ┃
+┡━━━━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━┩
+│ shell-safety │        0 │ curl     │ - never pipe       │ /private/var/folde │
+│              │          │          │ untrusted urls to  │ rs/8p/1_033mns3v1g │
+│              │          │          │ sh                 │ vkq95_wfx4xr0000gn │
+│              │          │          │                    │ /T/harness_workflo │
+│              │          │          │                    │ w_eval_g45fwn2l/wo │
+│              │          │          │                    │ rkspace/.harness/c │
+│              │          │          │                    │ ontracts/shell.jso │
+│              │          │          │                    │ n                  │
+└──────────────┴──────────┴──────────┴────────────────────┴────────────────────┘

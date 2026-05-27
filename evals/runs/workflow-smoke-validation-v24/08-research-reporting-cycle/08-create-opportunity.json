@@ -1,0 +1,28 @@
+{
+  "name": "create-opportunity",
+  "argv": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "research",
+    "create-opportunity",
+    "--title",
+    "Improve research dashboards",
+    "--summary",
+    "Unify reporting views for themes, candidates, and experiments.",
+    "--related-sections",
+    "research,promotion,portfolio",
+    "--change-modes",
+    "improve,extend",
+    "--theme",
+    "research-reporting",
+    "--priority",
+    "medium",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_i2w0k9ny/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Created opportunity opp-improve-research-dashboards-694d31d9 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_i\n2w0k9ny/workspace/.harness/research/opportunities/opp-improve-research-dashboard\ns-694d31d9\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.4142322081606835
+}

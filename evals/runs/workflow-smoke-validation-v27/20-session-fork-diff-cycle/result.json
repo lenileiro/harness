@@ -1,0 +1,101 @@
+{
+  "fixture_name": "20-session-fork-diff-cycle",
+  "passed": true,
+  "steps_total": 5,
+  "steps_passed": 5,
+  "step_results": [
+    {
+      "name": "sessions-diff-parent",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_s40i2cez/workspace/fake-harness",
+        "sessions",
+        "diff",
+        "sess_parent_eval",
+        "--db",
+        "sessions.db"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 write_file  notes.txt \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n--- a/notes.txt\n+++ b/notes.txt\n@@ -0,0 +1 @@\n+seeded note\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 shell \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n  echo seeded > notes.txt  exit_code=0\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.6602532500401139
+    },
+    {
+      "name": "sessions-fork-static",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_s40i2cez/workspace/fake-harness",
+        "sessions",
+        "fork",
+        "sess_parent_eval",
+        "--session",
+        "sess_branch_eval",
+        "--db",
+        "sessions.db"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "Forked sess_parent_eval \u2192 sess_branch_eval\nResume with: harness sessions resume sess_branch_eval \"<prompt>\"\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.3346272921189666
+    },
+    {
+      "name": "sessions-show-forked",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_s40i2cez/workspace/fake-harness",
+        "sessions",
+        "show",
+        "sess_branch_eval",
+        "--db",
+        "sessions.db"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "\u256d\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 session \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256e\n\u2502 sess_branch_eval  pending  ollama/test-model                                 \u2502\n\u2502 created 0s ago, updated 0s ago                                               \u2502\n\u2502 cwd:                                                                         \u2502\n\u2502 /private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_ev \u2502\n\u2502 al_s40i2cez/workspace                                                        \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\n\u256d\u2500\u2500\u2500\u2500 user \u2500\u2500\u2500\u2500\u2500\u256e\n\u2502 parent prompt \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\n\u256d\u2500\u2500 assistant \u2500\u2500\u256e\n\u2502 parent answer \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.3319416670128703
+    },
+    {
+      "name": "sessions-fork-live",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_s40i2cez/workspace/fake-harness",
+        "sessions",
+        "fork",
+        "sess_parent_eval",
+        "continue from fork",
+        "--session",
+        "sess_branch_live_eval",
+        "--db",
+        "sessions.db",
+        "--yes"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "Forked sess_parent_eval \u2192 sess_branch_live_eval\nfork response live                                                              \n\n\u2713 verify (verify_before_done)  No modifying tool calls detected \u2014 verification \nnot required.\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.3470133750233799
+    },
+    {
+      "name": "sessions-show-live-fork",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_s40i2cez/workspace/fake-harness",
+        "sessions",
+        "show",
+        "sess_branch_live_eval",
+        "--db",
+        "sessions.db"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "\u256d\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 session \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256e\n\u2502 sess_branch_live_eval  done  ollama/test-model                               \u2502\n\u2502 created 0s ago, updated 0s ago                                               \u2502\n\u2502 cwd:                                                                         \u2502\n\u2502 /private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_ev \u2502\n\u2502 al_s40i2cez/workspace                                                        \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\n\u256d\u2500\u2500\u2500\u2500 user \u2500\u2500\u2500\u2500\u2500\u256e\n\u2502 parent prompt \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\n\u256d\u2500\u2500 assistant \u2500\u2500\u256e\n\u2502 parent answer \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\n\u256d\u2500\u2500\u2500\u2500\u2500\u2500\u2500 user \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256e\n\u2502 continue from fork \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\n\u256d\u2500\u2500\u2500\u2500 assistant \u2500\u2500\u2500\u2500\u2500\u256e\n\u2502 fork response live \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.33520337496884167
+    }
+  ],
+  "artifact_dir": "evals/runs/workflow-smoke-validation-v27/20-session-fork-diff-cycle",
+  "duration_seconds": 2.0138834591489285
+}

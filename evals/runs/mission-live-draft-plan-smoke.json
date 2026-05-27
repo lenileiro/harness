@@ -1,0 +1,12 @@
+{
+  "workspace": "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/mission_live_plan_adijpgdu",
+  "mission_id": "at",
+  "create_rc": 0,
+  "plan_rc": 2,
+  "payload_error": "JSONDecodeError('Expecting value: line 1 column 1 (char 0)')",
+  "raw_stdout": "",
+  "contract_rc": 2,
+  "milestones_rc": 0,
+  "features_rc": 0,
+  "show_rc": 2
+}

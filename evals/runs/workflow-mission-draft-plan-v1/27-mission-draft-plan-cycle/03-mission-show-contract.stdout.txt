@@ -1,0 +1,11 @@
+contract-drafted-mission-a1f04acb
+mission_id=mission-drafted-mission-daee04e2
+
+Summary
+Draft mission assertions are declared before execution.
+
+Assertions
+- assertion-draft-mission-object-exists-d75708fe: Draft mission object exists  
+-> Inspect the stored mission and milestone artifacts.
+- assertion-draft-slice-works-96899541: Draft slice works  -> Inspect planned 
+runtime feature coverage.

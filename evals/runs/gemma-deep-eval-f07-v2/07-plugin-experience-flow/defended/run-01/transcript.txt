@@ -1,0 +1,143 @@
+adaptive strategy feature task -> keep structure light
+
+→ list_dir(path='.')
+✓ list_dir: .git/
+.gitignore
+TASK.md
+tests/  (0.0s)
+
+→ list_dir(path='fixture_workspace')
+✗ list_dir: path does not exist: fixture_workspace  (0.0s)
+
+→ shell(command="find . -maxdepth 2 -not -path '*/.*'")
+✓ shell: exit_code: 0
+
+stdout:
+.
+./tests
+./tests/__init__.py
+./tests/test_plugin_flow.py
+./TASK.md
+  (0.0s)
+
+→ read_file(path='TASK.md')
+✓ read_file: # Create and validate a workspace experience plugin
+
+Use the workspace plugin mechanism in this fixture directory to add one
+experience provider plugin, then validate it through the real Harness CLI.…  … 
+1,567 bytes  (0.0s)
+
+→ shell(command='ls -R')
+✓ shell: exit_code: 0
+
+stdout:
+TASK.md
+tests
+
+./tests:
+__init__.py
+test_plugin_flow.py
+  (0.0s)
+
+→ shell(command='ls -a')
+✓ shell: exit_code: 0
+
+stdout:
+.
+..
+.git
+.gitignore
+TASK.md
+tests
+  (0.0s)
+
+→ shell(command='mkdir -p .harness/plugins')
+✓ shell: exit_code: 0
+
+(no output)  (0.0s)
+
+→ write_file(content='name = "workspace-experience"\nkind = …, 
+path='.harness/plugins/workspace-experience.…)
+✓ write_file: wrote 108 bytes to .harness/plugins/workspace-experience.toml  
+(0.0s)
+
+→ write_file(content='from harness.core.tips_models import T…, 
+path='workspace_plugin.py')
+✓ write_file: wrote 400 bytes to workspace_plugin.py  (0.0s)
+
+→ shell(command='harness plugins validate --kind experi…)
+✓ shell: exit_code: 0
+
+stdout:
+┏━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━━┓
+┃ Plugin               ┃ Kind       ┃ Source    ┃ Status ┃ Detail ┃
+┡━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━…  … 362 bytes  (0.4s)
+
+→ shell(command='pytest tests/test_plugin_flow.py')
+✓ shell: exit_code: 0
+
+stdout:
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0
+rootdir: /private/var/folders/8p/1…  … 629 bytes  (1.5s)
+I have successfully created the workspace experience plugin and validated it.   
+
+ 1 Created .harness/plugins/workspace-experience.toml with the required         
+   manifest.                                                                    
+ 2 Created workspace_plugin.py with the specified WorkspaceExperienceProvider   
+   implementation.                                                              
+ 3 Validated the plugin using harness plugins validate --kind experience, which 
+   returned ok.                                                                 
+ 4 Ran the tests using pytest tests/test_plugin_flow.py, which passed.          
+
+                                                                                
+ $ harness plugins validate --kind experience                                   
+ ┏━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━━┓            
+ ┃ Plugin               ┃ Kind       ┃ Source    ┃ Status ┃ Detail ┃            
+ ┡━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━╇━━━━━━━━╇┩                    
+ │ workspace-experience │ experience │ workspace │ ok     │ ok     │            
+ └──────────────────────┴────────────┴───────────┴────────┴────────┘            
+                                                                                
+ $ pytest tests/test_plugin_flow.py                                             
+ ============================== 1 passed in 1.20s                               
+ ===============================                                                
+                                                                                
+
+✗ verify (chained)  You made file changes but never ran verify_work. You must 
+test your changes before finishing. Call verify_work with the appropriate 
+command (e.g. 'pytest tests/', 'npm test', 'cargo test'). Read the output — if 
+tests fail, fix the specific failures and call verify_work again. Iterate until 
+all tests pass.
+
+→ verify_work(command='pytest tests/test_plugin_flow.py')
+✓ verify_work: PASSED
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0
+rootdir: /private/var/folders/8p/1_033mns3v1gvkq…  … 614 bytes  (1.4s)
+The task is complete. I have created the plugin files, validated them with the  
+Harness CLI, and verified the implementation with the test suite.               
+
+ 1 Created .harness/plugins/workspace-experience.toml with the required         
+   configuration.                                                               
+ 2 Created workspace_plugin.py with the WorkspaceExperienceProvider class as    
+   specified.                                                                   
+ 3 Validated the plugin using harness plugins validate --kind experience.       
+ 4 Verified the implementation by running pytest tests/test_plugin_flow.py,     
+   which passed.                                                                
+
+✓ verify (shell)  ============================= test session starts 
+==============================
+collecting ... collected 1 item
+
+tests/test_plugin_flow.py::test_workspace_experience_plugin_loads_and_queries 
+PASSED [100%]
+
+============================== 1 passed in 1.16s ===============================
+
+defense ledger:
+  verifiers: chained=0✓/1✗, shell=1✓/0✗
+  repair attempts: 1
+  tools: shell x6, list_dir x2 (err x1), write_file x2, read_file x1, 
+verify_work x1
+  lifeharness: L2 tips x3

@@ -1,0 +1,153 @@
+╭───────────────────── Traceback (most recent call last) ──────────────────────╮
+│ /Users/leiro/workspace/harness/packages/cli/src/harness/cli/research_command │
+│ s.py:242 in research_run_command                                             │
+│                                                                              │
+│    239 ) -> None:                                                            │
+│    240 │   from harness.cli.run_commands import run_once as _run_once        │
+│    241 │                                                                     │
+│ ❱  242 │   research_command(                                                 │
+│    243 │   │   topic=topic,                                                  │
+│    244 │   │   model=model,                                                  │
+│    245 │   │   provider=provider,                                            │
+│                                                                              │
+│ /Users/leiro/workspace/harness/packages/cli/src/harness/cli/research_command │
+│ s.py:175 in research_command                                                 │
+│                                                                              │
+│    172 │   effective_model = model or cfg.default_model or "llama3.2"        │
+│    173 │                                                                     │
+│    174 │   prompt = build_research_prompt(topic=topic)                       │
+│ ❱  175 │   final_text = run_async(                                           │
+│    176 │   │   run_once(                                                     │
+│    177 │   │   │   prompt=prompt,                                            │
+│    178 │   │   │   model=effective_model,                                    │
+│                                                                              │
+│ /private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_ev │
+│ al_39a3hkoy/workspace/fake-harness:53 in _run_async                          │
+│                                                                              │
+│   50                                                                         │
+│   51                                                                         │
+│   52 def _run_async(awaitable: object) -> object:                            │
+│ ❱ 53 │   return asyncio.run(awaitable)  # type: ignore[arg-type]             │
+│   54                                                                         │
+│   55                                                                         │
+│   56 if len(sys.argv) >= 3 and sys.argv[1] == "research" and sys.argv[2] ==  │
+│      "run":                                                                  │
+│                                                                              │
+│ /Users/leiro/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/p │
+│ ython3.12/asyncio/runners.py:195 in run                                      │
+│                                                                              │
+│   192 │   │   │   "asyncio.run() cannot be called from a running event       │
+│       loop")                                                                 │
+│   193 │                                                                      │
+│   194 │   with Runner(debug=debug, loop_factory=loop_factory) as runner:     │
+│ ❱ 195 │   │   return runner.run(main)                                        │
+│   196                                                                        │
+│   197                                                                        │
+│   198 def _cancel_all_tasks(loop):                                           │
+│                                                                              │
+│ /Users/leiro/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/p │
+│ ython3.12/asyncio/runners.py:118 in run                                      │
+│                                                                              │
+│   115 │   │                                                                  │
+│   116 │   │   self._interrupt_count = 0                                      │
+│   117 │   │   try:                                                           │
+│ ❱ 118 │   │   │   return self._loop.run_until_complete(task)                 │
+│   119 │   │   except exceptions.CancelledError:                              │
+│   120 │   │   │   if self._interrupt_count > 0:                              │
+│   121 │   │   │   │   uncancel = getattr(task, "uncancel", None)             │
+│                                                                              │
+│ /Users/leiro/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/p │
+│ ython3.12/asyncio/base_events.py:691 in run_until_complete                   │
+│                                                                              │
+│    688 │   │   if not future.done():                                         │
+│    689 │   │   │   raise RuntimeError('Event loop stopped before Future      │
+│        completed.')                                                          │
+│    690 │   │                                                                 │
+│ ❱  691 │   │   return future.result()                                        │
+│    692 │                                                                     │
+│    693 │   def stop(self):                                                   │
+│    694 │   │   """Stop running the event loop.                               │
+│                                                                              │
+│ /private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_ev │
+│ al_39a3hkoy/workspace/fake-harness:25 in _fake_run_once                      │
+│                                                                              │
+│   22 │   │   │   serializable[key] = str(value)                              │
+│   23 │   │   else:                                                           │
+│   24 │   │   │   serializable[key] = value                                   │
+│ ❱ 25 │   capture.write_text(json.dumps(serializable, indent=2,               │
+│      sort_keys=True), encoding="utf-8")                                      │
+│   26 │   return json.dumps(                                                  │
+│   27 │   │   {                                                               │
+│   28 │   │   │   "summary": "Verifier routing and promotion evidence should  │
+│      stay aligned.",                                                         │
+│                                                                              │
+│ /Users/leiro/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/p │
+│ ython3.12/json/__init__.py:238 in dumps                                      │
+│                                                                              │
+│   235 │   │   skipkeys=skipkeys, ensure_ascii=ensure_ascii,                  │
+│   236 │   │   check_circular=check_circular, allow_nan=allow_nan,            │
+│       indent=indent,                                                         │
+│   237 │   │   separators=separators, default=default, sort_keys=sort_keys,   │
+│ ❱ 238 │   │   **kw).encode(obj)                                              │
+│   239                                                                        │
+│   240                                                                        │
+│   241 _default_decoder = JSONDecoder(object_hook=None,                       │
+│       object_pairs_hook=None)                                                │
+│                                                                              │
+│ /Users/leiro/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/p │
+│ ython3.12/json/encoder.py:202 in encode                                      │
+│                                                                              │
+│   199 │   │   # equivalent to the PySequence_Fast that ''.join() would do.   │
+│   200 │   │   chunks = self.iterencode(o, _one_shot=True)                    │
+│   201 │   │   if not isinstance(chunks, (list, tuple)):                      │
+│ ❱ 202 │   │   │   chunks = list(chunks)                                      │
+│   203 │   │   return ''.join(chunks)                                         │
+│   204 │                                                                      │
+│   205 │   def iterencode(self, o, _one_shot=False):                          │
+│                                                                              │
+│ /Users/leiro/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/p │
+│ ython3.12/json/encoder.py:432 in _iterencode                                 │
+│                                                                              │
+│   429 │   │   elif isinstance(o, (list, tuple)):                             │
+│   430 │   │   │   yield from _iterencode_list(o, _current_indent_level)      │
+│   431 │   │   elif isinstance(o, dict):                                      │
+│ ❱ 432 │   │   │   yield from _iterencode_dict(o, _current_indent_level)      │
+│   433 │   │   else:                                                          │
+│   434 │   │   │   if markers is not None:                                    │
+│   435 │   │   │   │   markerid = id(o)                                       │
+│                                                                              │
+│ /Users/leiro/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/p │
+│ ython3.12/json/encoder.py:406 in _iterencode_dict                            │
+│                                                                              │
+│   403 │   │   │   │   │   chunks = _iterencode_dict(value,                   │
+│       _current_indent_level)                                                 │
+│   404 │   │   │   │   else:                                                  │
+│   405 │   │   │   │   │   chunks = _iterencode(value, _current_indent_level) │
+│ ❱ 406 │   │   │   │   yield from chunks                                      │
+│   407 │   │   if newline_indent is not None:                                 │
+│   408 │   │   │   _current_indent_level -= 1                                 │
+│   409 │   │   │   yield '\n' + _indent * _current_indent_level               │
+│                                                                              │
+│ /Users/leiro/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/p │
+│ ython3.12/json/encoder.py:439 in _iterencode                                 │
+│                                                                              │
+│   436 │   │   │   │   if markerid in markers:                                │
+│   437 │   │   │   │   │   raise ValueError("Circular reference detected")    │
+│   438 │   │   │   │   markers[markerid] = o                                  │
+│ ❱ 439 │   │   │   o = _default(o)                                            │
+│   440 │   │   │   yield from _iterencode(o, _current_indent_level)           │
+│   441 │   │   │   if markers is not None:                                    │
+│   442 │   │   │   │   del markers[markerid]                                  │
+│                                                                              │
+│ /Users/leiro/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/p │
+│ ython3.12/json/encoder.py:180 in default                                     │
+│                                                                              │
+│   177 │   │   │   │   return super().default(o)                              │
+│   178 │   │                                                                  │
+│   179 │   │   """                                                            │
+│ ❱ 180 │   │   raise TypeError(f'Object of type {o.__class__.__name__} '      │
+│   181 │   │   │   │   │   │   f'is not JSON serializable')                   │
+│   182 │                                                                      │
+│   183 │   def encode(self, o):                                               │
+╰──────────────────────────────────────────────────────────────────────────────╯
+TypeError: Object of type HarnessConfig is not JSON serializable

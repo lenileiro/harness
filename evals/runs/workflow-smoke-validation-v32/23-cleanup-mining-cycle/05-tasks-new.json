@@ -1,0 +1,19 @@
+{
+  "name": "tasks-new",
+  "argv": [
+    "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_pyoi0kcu/workspace/fake-harness",
+    "tasks",
+    "new",
+    "Temporary cleanup task",
+    "--db",
+    ".harness/harness.db",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_pyoi0kcu/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Created T-001  Temporary cleanup task\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.39436054113321006
+}

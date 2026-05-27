@@ -1,0 +1,42 @@
+adaptive strategy diagnosis-heavy bugfix -> diagnostic structure + critic; 
+implicit critic=llm
+
+→ list_dir(path='.')
+✓ list_dir: .git/
+.gitignore
+TASK.md
+src/
+tests/  (0.0s)
+
+→ glob(pattern='src/**/*.py')
+✓ glob: src/__init__.py
+src/format.py  (0.0s)
+
+→ read_file(path='src/format.py')
+✓ read_file: """Price and number formatting utilities."""
+
+from __future__ import annotations
+
+_DEFAULT_CURRENCY = "USD"
+_DEFAULT_PRECISION = 2
+
+
+def _currency_symbol(currency):
+    symbols = {"USD": "$", "EUR": …  … 1,082 bytes  (0.0s)
+
+
+✓ verify (shell)  ============================= test session starts 
+==============================
+collecting ... collected 5 items
+
+tests/test_format.py::test_render_amount_usd PASSED                      [ 20%]
+tests/test_format.py::test_render_amount_integer_no_decimals PASSED      [ 40%]
+tests/test_format.py::test_format_percentage_none PASSED                 [ 60%]
+tests/test_format.py::test_format_percentage_value PASSED                [ 80%]
+tests/test_format.py::test_format_large_number_thousands PASSED          [100%]
+
+============================== 5 passed in 0.01s ===============================
+
+defense ledger:
+  verifiers: shell=1✓/0✗
+  tools: list_dir x1, glob x1, read_file x1

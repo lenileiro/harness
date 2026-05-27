@@ -1,0 +1,26 @@
+{
+  "name": "ingest-web",
+  "argv": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "research",
+    "ingest-web",
+    "--title",
+    "Verifier routing note",
+    "--url",
+    "https://example.com/verifier-routing",
+    "--summary",
+    "Scoped routing reduces verifier noise.",
+    "--themes",
+    "autonomous-improvement",
+    "--related-sections",
+    "verification,runtime",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_c87841x7/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Recorded inspiration insp-verifier-routing-note-17a49672 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_c\n87841x7/workspace/.harness/research/inspiration/insp-verifier-routing-note-17a49\n672\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.4256726249586791
+}

@@ -1,0 +1,23 @@
+[
+  "/Users/leiro/workspace/harness/.venv/bin/harness",
+  "run",
+  "# Use the research CLI to seed a publication\n\nUse the built-in Harness research commands in this workspace to create a minimal\nresearch record for a plugin investigation.\n\nDo all of the following:\n\n1. Set the current vision title to `Autonomous Harness Research` and the\n   summary to `Build a compounding research loop for Harness.`\n2. Add a theme titled `Plugin reliability`.\n3. Create an unknown under that theme asking: `How should workspace plugins be validated?`\n4. Open a rabbit hole titled `Workspace plugin import flow`.\n5. Publish one research publication titled `Workspace plugin validation findings`.\n\nDo not hand-write `.harness/research/*.json` files directly. Use the CLI.\n\nRun the tests when done.",
+  "--cwd",
+  "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_o3d6gkxd/06-research-publication-flow",
+  "--yes",
+  "--in-memory",
+  "--provider",
+  "openrouter",
+  "--model",
+  "google/gemma-4-26b-a4b-it",
+  "--max-repair",
+  "2",
+  "--profile",
+  "adaptive",
+  "--verify",
+  "shell",
+  "--verify-command",
+  "pytest tests/ -v --tb=short --no-header",
+  "--critic",
+  "llm+search"
+]

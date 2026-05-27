@@ -1,0 +1,26 @@
+{
+  "name": "create-opportunity",
+  "argv": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "research",
+    "create-opportunity",
+    "--title",
+    "Compare workflow checks",
+    "--summary",
+    "Run simple experiment commands and record results.",
+    "--related-sections",
+    "research,experiments",
+    "--change-modes",
+    "build_on",
+    "--theme",
+    "autonomous-improvement",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval__kx99iig/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Created opportunity opp-compare-workflow-checks-f53221e9 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval__\nkx99iig/workspace/.harness/research/opportunities/opp-compare-workflow-checks-f5\n3221e9\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.33691204199567437
+}

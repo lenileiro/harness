@@ -1,0 +1,50 @@
+{
+  "fixture_name": "01-missing-plugin-docs",
+  "passed": false,
+  "findings_count": 3,
+  "matched_expectations": 0,
+  "matched_topics": 0,
+  "missing_expectations": [
+    "README.md:medium:plugin",
+    "missing_topic~plugin setup"
+  ],
+  "summary": "The documentation for the Harness repository is critically insufficient. The current README provides only a high-level definition of the project without any actionable instructions for installation, usage, benchmarking, or core functionality. Most importantly, there is zero documentation regarding plugin or extension architecture, making it impossible for users to extend the runtime or integrate external tools.",
+  "artifact_dir": "evals/runs/post-roadmap-docs-live-v3/01-missing-plugin-docs",
+  "raw_output": "{\n  \"summary\": \"The documentation for the Harness repository is critically \ninsufficient. The current README provides only a high-level definition of the \nproject without any actionable instructions for installation, usage, \nbenchmarking, or core functionality. Most importantly, there is zero \ndocumentation regarding plugin or extension architecture, making it impossible \nfor users to extend the runtime or integrate external tools.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"path\": \"README.md\",\n      \"issue\": \"Complete lack of onboarding/getting started instructions\",\n      \"rationale\": \"A user cannot install, run, or evaluate tasks using the \nframework without installation steps or basic usage examples.\",\n      \"suggested_update\": \"Add sections for 'Installation', 'Quick Start', and \n'Basic Usage' (running a task and running an eval).\"\n    },\n    {\n      \"severity\": \"high\",\n      \"path\": \"README.md\",\n      \"issue\": \"Missing plugin and extension guidance\",\n      \"rationale\": \"The audit specifically requested plugin/extension \ninformation. Currently, there is no information on how to develop, load, or \ndiscover plugins, which is a critical blocker for extensibility.\",\n      \"suggested_update\": \"Add a 'Plugin Development' or 'Extensibility' section\ndetailing the interface requirements, how to register a plugin, and how to list \nactive plugins.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"path\": \"README.md\",\n      \"issue\": \"No mention of benchmarking configuration\",\n      \"rationale\": \"The README claims the tool supports benchmarking, but \nprovides no context on how to define a benchmark or what parameters are \nrequired.\",\n      \"suggested_update\": \"Include a section on 'Benchmarking' with a minimal \nconfiguration example.\"\n    }\n  ],\n  \"missing_topics\": [\n    \"Installation guide\",\n    \"Plugin/Extension API specification\",\n    \"Plugin loading/registration mechanism\",\n    \"Plugin discovery/listing commands\",\n    \"Task execution examples\",\n    \"Evaluation framework usage\",\n    \"Benchmarking configuration\"\n  ]\n}",
+  "report": {
+    "summary": "The documentation for the Harness repository is critically insufficient. The current README provides only a high-level definition of the project without any actionable instructions for installation, usage, benchmarking, or core functionality. Most importantly, there is zero documentation regarding plugin or extension architecture, making it impossible for users to extend the runtime or integrate external tools.",
+    "findings": [
+      {
+        "severity": "high",
+        "path": "README.md",
+        "issue": "Complete lack of onboarding/getting started instructions",
+        "rationale": "A user cannot install, run, or evaluate tasks using the framework without installation steps or basic usage examples.",
+        "suggested_update": "Add sections for 'Installation', 'Quick Start', and 'Basic Usage' (running a task and running an eval)."
+      },
+      {
+        "severity": "high",
+        "path": "README.md",
+        "issue": "Missing plugin and extension guidance",
+        "rationale": "The audit specifically requested plugin/extension information. Currently, there is no information on how to develop, load, or discover plugins, which is a critical blocker for extensibility.",
+        "suggested_update": "Add a 'Plugin Development' or 'Extensibility' section detailing the interface requirements, how to register a plugin, and how to list active plugins."
+      },
+      {
+        "severity": "medium",
+        "path": "README.md",
+        "issue": "No mention of benchmarking configuration",
+        "rationale": "The README claims the tool supports benchmarking, but provides no context on how to define a benchmark or what parameters are required.",
+        "suggested_update": "Include a section on 'Benchmarking' with a minimal configuration example."
+      }
+    ],
+    "missing_topics": [
+      "Installation guide",
+      "Plugin/Extension API specification",
+      "Plugin loading/registration mechanism",
+      "Plugin discovery/listing commands",
+      "Task execution examples",
+      "Evaluation framework usage",
+      "Benchmarking configuration"
+    ]
+  },
+  "duration_seconds": 15.78362241690047
+}

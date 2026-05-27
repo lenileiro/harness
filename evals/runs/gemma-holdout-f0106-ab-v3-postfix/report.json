@@ -1,0 +1,117 @@
+{
+  "run_id": "20260524T154543Z",
+  "provider": "openrouter",
+  "model": "google/gemma-4-26b-a4b-it",
+  "judge_provider": null,
+  "judge_model": null,
+  "fixture_set": "fixtures-holdout",
+  "n_runs": 1,
+  "ab": true,
+  "artifact_root": "evals/runs/gemma-holdout-f0106-ab-v3-postfix",
+  "benchmark_mode": "original",
+  "mutation_coverage": null,
+  "no_judge": true,
+  "results": [],
+  "hard_results": [
+    {
+      "fixture_name": "0106-02-scope-discipline",
+      "variant": "defended",
+      "run_index": 1,
+      "hard_metrics": {
+        "verify_passed": false,
+        "run_exit_code": 0,
+        "verify_exit_code": 1,
+        "files_touched": 2,
+        "lines_added": 6,
+        "lines_deleted": 0,
+        "tool_calls": 27,
+        "shell_commands": 2,
+        "did_run_verification": true,
+        "agent_duration_seconds": 40.13119454192929,
+        "verify_duration_seconds": 0.21387724997475743,
+        "total_duration_seconds": 40.34507179190405,
+        "time_to_first_verification_seconds": 40.13119454192929,
+        "edit_before_repro": true,
+        "premature_completion": true,
+        "redundant_tool_calls": 15,
+        "retry_loops": 5,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-holdout-f0106-ab-v3-postfix/0106-02-scope-discipline/defended/run-01",
+      "agent_exit_code": 0,
+      "verify_exit_code": 1
+    },
+    {
+      "fixture_name": "0106-02-scope-discipline",
+      "variant": "bare",
+      "run_index": 1,
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 2,
+        "lines_added": 6,
+        "lines_deleted": 2,
+        "tool_calls": 20,
+        "shell_commands": 2,
+        "did_run_verification": true,
+        "agent_duration_seconds": 25.81542908307165,
+        "verify_duration_seconds": 0.20922604110091925,
+        "total_duration_seconds": 26.02465512417257,
+        "time_to_first_verification_seconds": 25.81542908307165,
+        "edit_before_repro": true,
+        "premature_completion": false,
+        "redundant_tool_calls": 11,
+        "retry_loops": 4,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-holdout-f0106-ab-v3-postfix/0106-02-scope-discipline/bare/run-01",
+      "agent_exit_code": 0,
+      "verify_exit_code": 0
+    }
+  ],
+  "aggregates": [
+    {
+      "fixture_name": "0106-02-scope-discipline",
+      "variant": "defended",
+      "runs": 1,
+      "passes": 0,
+      "dimensions": {},
+      "hard_metrics": {
+        "avg_files_touched": 2.0,
+        "avg_lines_added": 6.0,
+        "avg_lines_deleted": 0.0,
+        "avg_tool_calls": 27.0,
+        "avg_shell_commands": 2.0,
+        "avg_agent_duration_seconds": 40.13119454192929,
+        "avg_verify_duration_seconds": 0.21387724997475743,
+        "avg_total_duration_seconds": 40.34507179190405,
+        "avg_redundant_tool_calls": 15.0,
+        "avg_retry_loops": 5.0,
+        "verify_pass_rate": 0.0
+      },
+      "pass_rate": 0.0
+    },
+    {
+      "fixture_name": "0106-02-scope-discipline",
+      "variant": "bare",
+      "runs": 1,
+      "passes": 1,
+      "dimensions": {},
+      "hard_metrics": {
+        "avg_files_touched": 2.0,
+        "avg_lines_added": 6.0,
+        "avg_lines_deleted": 2.0,
+        "avg_tool_calls": 20.0,
+        "avg_shell_commands": 2.0,
+        "avg_agent_duration_seconds": 25.81542908307165,
+        "avg_verify_duration_seconds": 0.20922604110091925,
+        "avg_total_duration_seconds": 26.02465512417257,
+        "avg_redundant_tool_calls": 11.0,
+        "avg_retry_loops": 4.0,
+        "verify_pass_rate": 1.0
+      },
+      "pass_rate": 1.0
+    }
+  ]
+}

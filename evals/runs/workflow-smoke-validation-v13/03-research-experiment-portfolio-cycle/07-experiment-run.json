@@ -1,0 +1,19 @@
+{
+  "name": "experiment-run",
+  "argv": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "research",
+    "experiment",
+    "run",
+    "--plan",
+    "plan-hyp-simple-deterministic-checks--cf018ff6",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_szurbs9j/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Experiment exp-plan-hyp-simple-deterministic-ch-ffd8dd79 passed commands=2 \nduration=0.05s\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.47996104089543223
+}

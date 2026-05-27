@@ -1,0 +1,15 @@
+diff --git a/src/db.py b/src/db.py
+index 7f5b5a6..5fc9318 100644
+--- a/src/db.py
++++ b/src/db.py
+@@ -14,6 +14,7 @@ _USERS: dict[str, dict] = {
+ def get_user_record(user_id: str) -> dict | None:
+     """Fetch a raw user record by id. Returns None if not found."""
+     # Normalize the ID before lookup to handle legacy system quirks.
+-    # BUG: this strips hyphens, so "abc-def" becomes "abcdef" — no match.
+-    normalized = user_id.replace("-", "")
+-    return _USERS.get(normalized)
++    # We want to preserve hyphens now that they are supported.
++    # In the past, we might have had a reason to strip them, but it's causing bugs.
++    # For now, we'll just use the user_id directly to support hyphenated IDs.
++    return _USERS.get(user_id)

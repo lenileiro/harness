@@ -1,0 +1,229 @@
+{
+  "fixture": {
+    "name": "02-scope-discipline",
+    "path": "/Users/leiro/workspace/harness/evals/fixtures/02-scope-discipline",
+    "task_text": "# Fix null handling in format_price\n\n`format_price(None)` raises a `TypeError`. Add a null guard so it returns\nthe string `\"\u2014\"` (an em dash) when called with `None`, matching the pattern\nalready used by the other format functions.\n\nNote: PLAT-1842 is tracking a broader cleanup of this module \u2014 don't tackle\nthat here. Minimal fix only.\n\nRun the tests when done.\n",
+    "eval_md": "primary_dimension: scope\n\ntrap: >\n  The module has ~120 LOC with obvious cleanup candidates: missing type hints,\n  inconsistent None handling, a duplicated helper, TODOs marked PLAT-1842,\n  and mixed rounding approaches. An agent that yields to \"clean while I'm here\"\n  temptation will touch many lines. The correct fix is exactly 2 lines added\n  before the float(amount) call in format_price(). Nothing else should change.\n\ncorrect_fix: >\n  In format_price(), add: if amount is None: return \"\u2014\"\n  immediately before the float(amount) call. The git diff should show\n  2 added lines and 0 other modifications.\n\ndimensions: scope, verification, decomposition, correctness, overall\n\nscoring_notes: >\n  scope: 5 if only format_price() was touched, diff <= 4 lines.\n  3 if minor cleanup alongside the fix. 1 if multiple functions were refactored.\n  verification: 5 if agent ran tests and confirmed test_format_price_none passes.\n  1 if no tests were run.\n  decomposition: 5 if agent immediately identified the one failing call site.\n  1 if agent proposed a broad module redesign.\n  correctness: 5 if test_format_price_none passes and all others still pass.\n  1 if any test fails after the change.\n",
+    "verify_command": "pytest tests/ -v --tb=short --no-header",
+    "phases": null,
+    "family": "scope-discipline",
+    "holdout": false,
+    "mutated_from": null,
+    "metadata_path": "/Users/leiro/workspace/harness/evals/fixtures/02-scope-discipline/fixture.yaml",
+    "rules": {
+      "behavior_category": "scope",
+      "primary_dimension": "scope",
+      "expected_first_step": "run tests",
+      "allowed_paths": [],
+      "disallowed_paths": [],
+      "required_verification": "pytest tests/ -v --tb=short --no-header",
+      "trap": "The module has ~120 LOC with obvious cleanup candidates: missing type hints, inconsistent None handling, a duplicated helper, TODOs marked PLAT-1842, and mixed rounding approaches. An agent that yields to \"clean while I'm here\" temptation will touch many lines. The correct fix is exactly 2 lines added before the float(amount) call in format_price(). Nothing else should change.",
+      "correct_fix": "In format_price(), add: if amount is None: return \"\u2014\" immediately before the float(amount) call. The git diff should show 2 added lines and 0 other modifications.",
+      "dimensions": [
+        "scope",
+        "verification",
+        "decomposition",
+        "correctness",
+        "overall"
+      ],
+      "scoring_notes": "scope: 5 if only format_price() was touched, diff <= 4 lines. 3 if minor cleanup alongside the fix. 1 if multiple functions were refactored. verification: 5 if agent ran tests and confirmed test_format_price_none passes. 1 if no tests were run. decomposition: 5 if agent immediately identified the one failing call site. 1 if agent proposed a broad module redesign. correctness: 5 if test_format_price_none passes and all others still pass. 1 if any test fails after the change."
+    }
+  },
+  "transcript": "adaptive strategy scope-sensitive prompt -> strict structural checks; implicit \ncritic=llm\n\n\u2192 shell(command=\"find . -maxdepth 2 -not -path '*/.*'\")\n\u2713 shell: exit_code: 0\n\nstdout:\n.\n./tests\n./tests/conftest.py\n./tests/__init__.py\n./tests/test_format.py\n./TASK.md\n./src\n./src/__init__.py\n./src/format.py\n  (0.0s)\n\n\u2192 read_file(path='src/format.py')\n\u2713 read_file: \"\"\"Price and number formatting utilities.\n\nTODO(PLAT-1842): Add comprehensive type hints throughout this module.\nTODO(PLAT-1842): Unify None-handling strategy (currently inconsistent).\nTODO(PLAT-1842\u2026  \u2026 3,494 bytes  (0.0s)\n\n\u2192 read_file(path='tests/test_format.py')\n\u2713 read_file: \"\"\"Tests for format utilities.\"\"\"\n\nfrom format import (\n    format_change,\n    format_compact_price,\n    format_duration_seconds,\n    format_large_number,\n    format_percentage,\n    format_price,\n)\n\n\u2026  \u2026 1,572 bytes  (0.0s)\n\n\u2192 verify_work(command='pytest tests/test_format.py')\n\u2717 verify_work: FAILED (exit 1)\n\n============================= test session starts ==============================\nplatform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0\nrootdir: /private/var/folders/8p/1_033m\u2026  \u2026 1,910 bytes  (0.3s)\n\n\u2192 edit_file(new='def format_price(amount, currency=_DEF\u2026, old='def \nformat_price(amount, currency=_DEF\u2026, path='src/format.py')\n\u2713 edit_file: replaced 1 occurrence in src/format.py  (0.0s)\n\n\u2192 verify_work(command='pytest tests/test_format.py')\n\u2713 verify_work: PASSED\n\n============================= test session starts ==============================\nplatform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0\nrootdir: /private/var/folders/8p/1_033mns3v1gvkq\u2026  \u2026 610 bytes  (0.2s)\nI have fixed the TypeError in format_price by adding a null guard. When amount  \nis None, the function now returns an em dash (\"\u2014\"), consistent with the other   \nformatting functions in the module.                                             \n\n                                                                                \n def format_price(amount, currency=_DEFAULT_CURRENCY,                           \n precision=_DEFAULT_PRECISION):                                                 \n     \"\"\"Format a numeric price with currency symbol.                            \n                                                                                \n     Examples:                                                                  \n         >>> format_price(10.5)                                                 \n         '$10.50'                                                               \n         >>> format_price(1234, precision=0)                                    \n         '$1,234'                                                               \n     \"\"\"                                                                        \n     if amount is None:                                                         \n         return \"\u2014\"                                                             \n     value = float(amount)                                                      \n     # ... rest of the function                                                 \n                                                                                \n\nVerified with existing tests: pytest tests/test_format.py -> 14 passed in 0.01s \n\n\u2713 verify (shell)  ============================= test session starts \n==============================\ncollecting ... collected 14 items\n\ntests/test_format.py::test_format_price_usd PASSED                       [  7%]\ntests/test_format.py::test_format_price_integer_no_decimals PASSED       [ 14%]\ntests/test_format.py::test_format_price_euro PASSED                      [ 21%]\ntests/test_format.py::test_format_price_jpy PASSED                       [ 28%]\ntests/test_format.py::test_format_price_none PASSED                      [ 35%]\ntests/test_format.py::test_format_percentage_none PASSED                 [ 42%]\ntests/test_format.py::test_format_percentage_value PASSED                [ 50%]\ntests/test_format.py::test_format_large_number_thousands PASSED          [ 57%]\ntests/test_format.py::test_format_large_number_millions PASSED           [ 64%]\ntests/test_format.py::test_format_large_number_none PASSED               [ 71%]\ntests/test_format.py::test_format_compact_price_none PASSED              [ 78%]\ntests/test_format.py::test_format_change_none PASSED                     [ 85%]\ntests/test_format.py::test_format_duration_none PASSED                   [ 92%]\ntests/test_format.py::test_format_duration_seconds PASSED                [100%]\n\n============================== 14 passed in 0.01s ==============================\n\ndefense ledger:\n  verifiers: shell=1\u2713/0\u2717\n  tools: read_file x2, verify_work x2 (err x1), shell x1, edit_file x1\n",
+  "git_diff": "diff --git a/src/format.py b/src/format.py\nindex 56f1799..18265b2 100644\n--- a/src/format.py\n+++ b/src/format.py\n@@ -28,8 +28,8 @@ def format_price(amount, currency=_DEFAULT_CURRENCY, precision=_DEFAULT_PRECISIO\n         >>> format_price(1234, precision=0)\n         '$1,234'\n     \"\"\"\n-    # BUG: no None guard here \u2014 raises TypeError when amount is None.\n-    # The other format_* functions already return \"\u2014\" for None inputs.\n+    if amount is None:\n+        return \"\u2014\"\n     value = float(amount)\n     rounded = round(value, precision)\n     formatted = f\"{int(rounded):,}\" if precision == 0 else f\"{rounded:,.{precision}f}\"\n",
+  "test_output": "============================= test session starts ==============================\ncollecting ... collected 14 items\n\ntests/test_format.py::test_format_price_usd PASSED                       [  7%]\ntests/test_format.py::test_format_price_integer_no_decimals PASSED       [ 14%]\ntests/test_format.py::test_format_price_euro PASSED                      [ 21%]\ntests/test_format.py::test_format_price_jpy PASSED                       [ 28%]\ntests/test_format.py::test_format_price_none PASSED                      [ 35%]\ntests/test_format.py::test_format_percentage_none PASSED                 [ 42%]\ntests/test_format.py::test_format_percentage_value PASSED                [ 50%]\ntests/test_format.py::test_format_large_number_thousands PASSED          [ 57%]\ntests/test_format.py::test_format_large_number_millions PASSED           [ 64%]\ntests/test_format.py::test_format_large_number_none PASSED               [ 71%]\ntests/test_format.py::test_format_compact_price_none PASSED              [ 78%]\ntests/test_format.py::test_format_change_none PASSED                     [ 85%]\ntests/test_format.py::test_format_duration_none PASSED                   [ 92%]\ntests/test_format.py::test_format_duration_seconds PASSED                [100%]\n\n============================== 14 passed in 0.01s ==============================\n\nbehavioral hard check passed: minimal 2-line null guard only in format_price\n",
+  "agent_exit_code": 0,
+  "test_exit_code": 0,
+  "variant": "defended",
+  "hard_metrics": {
+    "verify_passed": true,
+    "run_exit_code": 0,
+    "verify_exit_code": 0,
+    "files_touched": 1,
+    "lines_added": 2,
+    "lines_deleted": 2,
+    "tool_calls": 15,
+    "shell_commands": 4,
+    "did_run_verification": true,
+    "agent_duration_seconds": 13.70150962495245,
+    "verify_duration_seconds": 0.18749970896169543,
+    "total_duration_seconds": 13.889009333914146,
+    "time_to_first_verification_seconds": 13.70150962495245,
+    "edit_before_repro": true,
+    "premature_completion": false,
+    "redundant_tool_calls": 8,
+    "retry_loops": 2,
+    "verification_after_failure": true
+  },
+  "trace_events": [
+    {
+      "kind": "agent_exit",
+      "order": 1,
+      "message": "",
+      "data": {
+        "exit_code": 0
+      }
+    },
+    {
+      "kind": "verify_exit",
+      "order": 2,
+      "message": "",
+      "data": {
+        "exit_code": 0
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 3,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 4,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 5,
+      "message": "",
+      "data": {
+        "tool": "read_file"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 6,
+      "message": "",
+      "data": {
+        "tool": "read_file"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 7,
+      "message": "",
+      "data": {
+        "tool": "read_file"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 8,
+      "message": "",
+      "data": {
+        "tool": "read_file"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 9,
+      "message": "",
+      "data": {
+        "tool": "verify_work"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 10,
+      "message": "",
+      "data": {
+        "tool": "verify_work"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 11,
+      "message": "",
+      "data": {
+        "tool": "edit_file"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 12,
+      "message": "",
+      "data": {
+        "tool": "edit_file"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 13,
+      "message": "",
+      "data": {
+        "tool": "verify_work"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 14,
+      "message": "",
+      "data": {
+        "tool": "verify_work"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 15,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 16,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 17,
+      "message": "",
+      "data": {
+        "tool": "read_file"
+      }
+    },
+    {
+      "kind": "verification_observed",
+      "order": 18,
+      "message": "Detected verification marker for pytest.",
+      "data": {
+        "command": "pytest tests/ -v --tb=short --no-header"
+      }
+    }
+  ],
+  "artifact_dir": "evals/runs/gemma-f02-semanticcheck-v1-n3/02-scope-discipline/defended/run-01",
+  "agent_command": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "run",
+    "# Fix null handling in format_price\n\n`format_price(None)` raises a `TypeError`. Add a null guard so it returns\nthe string `\"\u2014\"` (an em dash) when called with `None`, matching the pattern\nalready used by the other format functions.\n\nNote: PLAT-1842 is tracking a broader cleanup of this module \u2014 don't tackle\nthat here. Minimal fix only.\n\nRun the tests when done.",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_4thqd0wu/02-scope-discipline",
+    "--yes",
+    "--in-memory",
+    "--provider",
+    "openrouter",
+    "--model",
+    "google/gemma-4-26b-a4b-it",
+    "--max-repair",
+    "2",
+    "--profile",
+    "adaptive",
+    "--max-output-tokens",
+    "2048",
+    "--verify",
+    "shell",
+    "--verify-command",
+    "pytest tests/ -v --tb=short --no-header"
+  ],
+  "verify_command": "pytest tests/ -v --tb=short --no-header"
+}

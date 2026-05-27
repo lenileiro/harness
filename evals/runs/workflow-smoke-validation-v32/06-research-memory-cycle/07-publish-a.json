@@ -1,0 +1,26 @@
+{
+  "name": "publish-a",
+  "argv": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "research",
+    "publish",
+    "--rabbit-hole",
+    "rh-archive-indexing-bd5dc711",
+    "--title",
+    "Archive indexing findings",
+    "--summary",
+    "Archive metadata should remain searchable.",
+    "--claim",
+    "Archived items need stable metadata.",
+    "--evidence",
+    "Search over archive reasons is useful.",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_iehjtm4s/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Published pub-archive-indexing-findings-fc7e9c42 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_i\nehjtm4s/workspace/.harness/research/publications/pub-archive-indexing-findings-f\nc7e9c42\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.4037770831491798
+}

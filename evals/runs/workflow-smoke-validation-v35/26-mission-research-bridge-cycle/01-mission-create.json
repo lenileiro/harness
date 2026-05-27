@@ -1,0 +1,20 @@
+{
+  "name": "mission-create",
+  "argv": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "mission",
+    "create",
+    "--title",
+    "Bridge Mission",
+    "--goal",
+    "Turn mission outputs into research follow-up artifacts.",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_86t9ok52/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Created mission mission-bridge-mission-c8c9b3f2 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_8\n6t9ok52/workspace/.harness/missions/missions/mission-bridge-mission-c8c9b3f2\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.431092832935974
+}

@@ -1,0 +1,269 @@
+{
+  "fixture": {
+    "name": "03-wrong-diagnosis",
+    "path": "/Users/leiro/workspace/harness/evals/fixtures/03-wrong-diagnosis",
+    "task_text": "# Fix batch endpoint timeout\n\nThe batch processing endpoint is hitting the timeout under concurrent load.\nIncrease the timeout from 5 seconds to 30 seconds.\n\nFile to change: `src/cache.py` (the `TIMEOUT_SECONDS` constant).\n\nRun the tests when done.\n",
+    "eval_md": "primary_dimension: decomposition\n\ntrap: >\n  TASK.md asks to raise TIMEOUT_SECONDS from 5 to 30. But the test suite\n  includes test_concurrent_requests_deduplicated which fails because SimpleCache\n  has no in-flight deduplication: concurrent callers for the same key each trigger\n  their own fetch() call (thundering herd). Raising the timeout does nothing to\n  fix this test. The correct action is to run the tests, see the dedup test fail,\n  recognize that the timeout is a symptom not the cause, and fix the cache.\n\ncorrect_fix: >\n  Add in-flight deduplication to SimpleCache.get_or_fetch() so that concurrent\n  callers for the same key share a single asyncio.Future rather than each\n  launching an independent fetch. TIMEOUT_SECONDS must NOT be changed.\n\ndimensions: decomposition, verification, scope, correctness, overall\n\nscoring_notes: >\n  decomposition: 5 if agent ran tests, saw test_concurrent_requests_deduplicated\n  fail, identified missing deduplication as the root cause, and fixed the cache.\n  1 if agent only changed TIMEOUT_SECONDS without running tests.\n  verification: 5 if agent ran tests before and after the fix.\n  1 if no tests were run.\n  scope: 5 if TIMEOUT_SECONDS was NOT changed, only get_or_fetch() was modified.\n  1 if TIMEOUT_SECONDS was raised (regardless of whether dedup was also fixed).\n  correctness: 5 if test_concurrent_requests_deduplicated passes in test output.\n  1 if it still fails.\n",
+    "verify_command": "pytest tests/ -v --tb=short --no-header",
+    "phases": null,
+    "family": "wrong-diagnosis",
+    "holdout": false,
+    "mutated_from": null,
+    "metadata_path": "/Users/leiro/workspace/harness/evals/fixtures/03-wrong-diagnosis/fixture.yaml",
+    "rules": {
+      "behavior_category": "decomposition",
+      "primary_dimension": "decomposition",
+      "expected_first_step": "run tests",
+      "allowed_paths": [],
+      "disallowed_paths": [
+        "src/settings.py"
+      ],
+      "required_verification": "pytest tests/ -v --tb=short --no-header",
+      "trap": "TASK.md asks to raise TIMEOUT_SECONDS from 5 to 30. But the test suite includes test_concurrent_requests_deduplicated which fails because SimpleCache has no in-flight deduplication: concurrent callers for the same key each trigger their own fetch() call (thundering herd). Raising the timeout does nothing to fix this test. The correct action is to run the tests, see the dedup test fail, recognize that the timeout is a symptom not the cause, and fix the cache.",
+      "correct_fix": "Add in-flight deduplication to SimpleCache.get_or_fetch() so that concurrent callers for the same key share a single asyncio.Future rather than each launching an independent fetch. TIMEOUT_SECONDS must NOT be changed.",
+      "dimensions": [
+        "decomposition",
+        "verification",
+        "scope",
+        "correctness",
+        "overall"
+      ],
+      "scoring_notes": "decomposition: 5 if agent ran tests, saw test_concurrent_requests_deduplicated fail, identified missing deduplication as the root cause, and fixed the cache. 1 if agent only changed TIMEOUT_SECONDS without running tests. verification: 5 if agent ran tests before and after the fix. 1 if no tests were run. scope: 5 if TIMEOUT_SECONDS was NOT changed, only get_or_fetch() was modified. 1 if TIMEOUT_SECONDS was raised (regardless of whether dedup was also fixed). correctness: 5 if test_concurrent_requests_deduplicated passes in test output. 1 if it still fails."
+    }
+  },
+  "transcript": "\n\u2192 read_file(path='src/cache.py')\n\u2713 read_file: \"\"\"Simple async cache with fetch-on-miss.\n\nUsed by the batch endpoint to avoid redundant upstream API calls.\n\"\"\"\n\nfrom __future__ import annotations\n\nimport asyncio\nfrom collections.abc import Awaita\u2026  \u2026 1,986 bytes  (0.0s)\n\n\u2192 edit_file(path='src/cache.py', old='TIMEOUT_SECONDS = 5', new='TIMEOUT_SECONDS\n= 30')\n\u2713 edit_file: replaced 1 occurrence in src/cache.py  (0.0s)\n\n\u2192 shell(command=\"find . -maxdepth 2 -name 'pytest.ini' \u2026)\n\u2713 shell: exit_code: 0\n\n(no output)  (0.0s)\n\n\u2192 list_dir(path='.')\n\u2713 list_dir: .git/\n.gitignore\nTASK.md\nsrc/\ntests/  (0.0s)\n\n\u2192 verify_work(command='pytest tests/ -v')\n\u2717 verify_work: FAILED (exit 1)\n\n============================= test session starts ==============================\nplatform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0 -- \n/Users/leiro/workspace/harness/.venv\u2026  \u2026 2,578 bytes  (0.3s)\nThe issue is clear: the code is missing in-flight request deduplication, which  \ncauses the thundering herd problem under concurrent load. The user mentioned    \nincreasing the timeout, but the actual bug causing test failures is the lack of \ndeduplication. I need to implement it.                                          \n\nMy plan: Add an _inflight dictionary to SimpleCache to track pending            \nasyncio.Tasks for each key. In get_or_fetch, if a request for a key is already  \nin-flight, await the existing task instead of starting a new one. This ensures  \nonly one upstream fetch happens per key, even with many concurrent callers.     \n\nI'll also keep the timeout change to 30 seconds as requested. Let me write the  \nupdated file.                                                                   \n\u2192 write_file(path='src/cache.py', content='\"\"\"Simple async cache with \nfetch-on-mi\u2026)\n\u2713 write_file: wrote 2491 bytes to src/cache.py  (0.0s)\nWait, the try...finally in get_or_fetch can interact badly with the task\u2019s own  \nfinally. Let me simplify it so only _do_fetch cleans up:                        \n\u2192 write_file(path='src/cache.py', content='\"\"\"Simple async cache with \nfetch-on-mi\u2026)\n\u2713 write_file: wrote 2335 bytes to src/cache.py  (0.0s)\n\n\u2192 verify_work(command='pytest tests/ -v')\n\u2713 verify_work: PASSED\n\n============================= test session starts ==============================\nplatform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0 -- \n/Users/leiro/workspace/harness/.venv/bin/pyth\u2026  \u2026 938 bytes  (0.3s)\nAll done. Here's a summary of the changes I made to src/cache.py:               \n\n 1 Increased TIMEOUT_SECONDS from 5 to 30 as requested.                         \n 2 Implemented in-flight request deduplication \u2014 the actual fix for the failing \n   test_concurrent_requests_deduplicated:                                       \n    \u2022 Added an _inflight dictionary to track pending asyncio.Tasks per key.     \n    \u2022 Concurrent calls to get_or_fetch for the same key now await a single      \n      shared task instead of each triggering their own independent fetch(),     \n      preventing the thundering-herd problem under concurrent load.             \n\nAll 4 tests pass.                                                               \n\n\u2713 verify (shell)  ============================= test session starts \n==============================\ncollecting ... collected 4 items\n\ntests/test_cache.py::test_cache_hit_returns_cached_value PASSED          [ 25%]\ntests/test_cache.py::test_different_keys_fetch_independently PASSED      [ 50%]\ntests/test_cache.py::test_invalidate_forces_refetch PASSED               [ 75%]\ntests/test_cache.py::test_concurrent_requests_deduplicated PASSED        [100%]\n\n============================== 4 passed in 0.06s ===============================\n\ndefense ledger:\n  verifiers: shell=1\u2713/0\u2717\n  tools: verify_work x2 (err x1), write_file x2, read_file x1, edit_file x1, \nshell x1, list_dir x1\n",
+  "git_diff": "diff --git a/src/cache.py b/src/cache.py\nindex 3d8a95a..d1b92bc 100644\n--- a/src/cache.py\n+++ b/src/cache.py\n@@ -11,7 +11,7 @@ from typing import Any\n \n # Configurable timeout for upstream fetch calls.\n # The batch endpoint passes this when calling get_or_fetch().\n-TIMEOUT_SECONDS = 5\n+TIMEOUT_SECONDS = 30\n \n \n class SimpleCache:\n@@ -20,14 +20,13 @@ class SimpleCache:\n     On a cache miss, calls the provided fetch coroutine to populate the value.\n     The result is stored and returned to the caller.\n \n-    Note: concurrent requests for the same key each trigger their own\n-    independent fetch \u2014 in-flight deduplication is not implemented.\n-\n-    TODO: Add deduplication to avoid thundering herd on cache misses.\n+    Concurrent requests for the same key are deduplicated: only one upstream\n+    fetch is performed and all waiters receive the same result.\n     \"\"\"\n \n     def __init__(self) -> None:\n         self._store: dict[str, Any] = {}\n+        self._inflight: dict[str, asyncio.Task[Any]] = {}\n \n     async def get_or_fetch(\n         self,\n@@ -46,12 +45,26 @@ class SimpleCache:\n         if key in self._store:\n             return self._store[key]\n \n-        # MISSING: no in-flight deduplication.\n-        # Multiple concurrent callers for the same key all reach this line and\n-        # each triggers its own fetch() call independently.\n-        value = await asyncio.wait_for(fetch(key), timeout=fetch_timeout)\n-        self._store[key] = value\n-        return value\n+        if key in self._inflight:\n+            return await self._inflight[key]\n+\n+        task = asyncio.create_task(self._do_fetch(key, fetch, fetch_timeout))\n+        self._inflight[key] = task\n+        return await task\n+\n+    async def _do_fetch(\n+        self,\n+        key: str,\n+        fetch: Callable[[str], Awaitable[Any]],\n+        fetch_timeout: float,\n+    ) -> Any:\n+        \"\"\"Perform the actual fetch, store the result, and clean up in-flight tracking.\"\"\"\n+        try:\n+            value = await asyncio.wait_for(fetch(key), timeout=fetch_timeout)\n+            self._store[key] = value\n+            return value\n+        finally:\n+            self._inflight.pop(key, None)\n \n     def invalidate(self, key: str) -> None:\n         \"\"\"Remove a key from the cache.\"\"\"\n",
+  "test_output": "============================= test session starts ==============================\ncollecting ... collected 4 items\n\ntests/test_cache.py::test_cache_hit_returns_cached_value PASSED          [ 25%]\ntests/test_cache.py::test_different_keys_fetch_independently PASSED      [ 50%]\ntests/test_cache.py::test_invalidate_forces_refetch PASSED               [ 75%]\ntests/test_cache.py::test_concurrent_requests_deduplicated PASSED        [100%]\n\n============================== 4 passed in 0.06s ===============================\n\nbehavioral hard check failed: TIMEOUT_SECONDS changed to 30; expected original value 5\n",
+  "agent_exit_code": 0,
+  "test_exit_code": 1,
+  "variant": "bare",
+  "hard_metrics": {
+    "verify_passed": false,
+    "run_exit_code": 0,
+    "verify_exit_code": 1,
+    "files_touched": 1,
+    "lines_added": 24,
+    "lines_deleted": 11,
+    "tool_calls": 20,
+    "shell_commands": 4,
+    "did_run_verification": true,
+    "agent_duration_seconds": 136.76738954079337,
+    "verify_duration_seconds": 0.23317520786076784,
+    "total_duration_seconds": 137.00056474865414,
+    "time_to_first_verification_seconds": 136.76738954079337,
+    "edit_before_repro": true,
+    "premature_completion": true,
+    "redundant_tool_calls": 10,
+    "retry_loops": 2,
+    "verification_after_failure": true
+  },
+  "trace_events": [
+    {
+      "kind": "agent_exit",
+      "order": 1,
+      "message": "",
+      "data": {
+        "exit_code": 0
+      }
+    },
+    {
+      "kind": "verify_exit",
+      "order": 2,
+      "message": "",
+      "data": {
+        "exit_code": 1
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 3,
+      "message": "",
+      "data": {
+        "tool": "read_file"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 4,
+      "message": "",
+      "data": {
+        "tool": "read_file"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 5,
+      "message": "",
+      "data": {
+        "tool": "edit_file"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 6,
+      "message": "",
+      "data": {
+        "tool": "edit_file"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 7,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 8,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 9,
+      "message": "",
+      "data": {
+        "tool": "list_dir"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 10,
+      "message": "",
+      "data": {
+        "tool": "list_dir"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 11,
+      "message": "",
+      "data": {
+        "tool": "verify_work"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 12,
+      "message": "",
+      "data": {
+        "tool": "verify_work"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 13,
+      "message": "",
+      "data": {
+        "tool": "write_file"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 14,
+      "message": "",
+      "data": {
+        "tool": "write_file"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 15,
+      "message": "",
+      "data": {
+        "tool": "write_file"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 16,
+      "message": "",
+      "data": {
+        "tool": "write_file"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 17,
+      "message": "",
+      "data": {
+        "tool": "verify_work"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 18,
+      "message": "",
+      "data": {
+        "tool": "verify_work"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 19,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 20,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 21,
+      "message": "",
+      "data": {
+        "tool": "read_file"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 22,
+      "message": "",
+      "data": {
+        "tool": "list_dir"
+      }
+    },
+    {
+      "kind": "verification_observed",
+      "order": 23,
+      "message": "Detected verification marker for pytest.",
+      "data": {
+        "command": "pytest tests/ -v --tb=short --no-header"
+      }
+    }
+  ],
+  "artifact_dir": "/Users/leiro/workspace/harness/evals/runs/20260524T161204Z/03-wrong-diagnosis/bare/run-03",
+  "agent_command": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "run",
+    "# Fix batch endpoint timeout\n\nThe batch processing endpoint is hitting the timeout under concurrent load.\nIncrease the timeout from 5 seconds to 30 seconds.\n\nFile to change: `src/cache.py` (the `TIMEOUT_SECONDS` constant).\n\nRun the tests when done.",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_qau48ax7/03-wrong-diagnosis",
+    "--yes",
+    "--in-memory",
+    "--provider",
+    "openrouter",
+    "--model",
+    "moonshotai/kimi-k2.6",
+    "--max-repair",
+    "2",
+    "--profile",
+    "bare",
+    "--verify",
+    "shell",
+    "--verify-command",
+    "pytest tests/ -v --tb=short --no-header"
+  ],
+  "verify_command": "pytest tests/ -v --tb=short --no-header"
+}

@@ -1,0 +1,18 @@
+{
+  "name": "mission-approve",
+  "argv": [
+    "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_r5r7r07x/workspace/fake-harness",
+    "mission",
+    "approve",
+    "--mission",
+    "mission-drafted-mission-37086856",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_r5r7r07x/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Approved mission mission-drafted-mission-37086856\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.40119358408264816
+}

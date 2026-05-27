@@ -1,0 +1,35 @@
+{
+  "summary": "The change introduces a high-severity regression by removing 
+safety checks for None values and missing dictionary keys in the `display_name` 
+function.",
+  "findings": [
+    {
+      "severity": "high",
+      "file": "src/profile.py",
+      "line": 2,
+      "issue": "Potential KeyError and TypeError",
+      "rationale": "The function signature allows `user` to be `None` or a 
+dictionary that may not contain the key 'name'. The previous implementation 
+handled both cases by returning 'anonymous'. The new implementation will raise a
+`TypeError` if `user` is `None` and a `KeyError` if the 'name' key is missing, 
+breaking existing behavior.",
+      "suggested_fix": "Restore the safety checks: \n\nif user is None:\n    
+return \"anonymous\"\nreturn user.get(\"name\", \"anonymous\")"
+    },
+    {
+      "severity": "medium",
+      "file": "src/profile.py",
+      "line": 2,
+      "issue": "Missing tests for new error paths",
+      "rationale": "The change alters the fundamental contract of the function 
+(from safe to unsafe). If this change was intentional (e.g., to enforce strict 
+typing), there are no tests provided to verify how the application should now 
+handle these exceptions.",
+      "suggested_fix": "Add tests covering `display_name(None)` and 
+`display_name({'not_name': 'foo'})` to define expected error behavior."
+    }
+  ]
+}
+an error occurred during closing of asynchronous generator <async_generator object AsyncClient.stream at 0x10a468b30>
+asyncgen: <async_generator object AsyncClient.stream at 0x10a468b30>
+RuntimeError: aclose(): asynchronous generator is already running

@@ -1,0 +1,101 @@
+{
+  "fixture": {
+    "name": "01-reproduce-before-repair",
+    "path": "/Users/leiro/workspace/harness/evals/fixtures/01-reproduce-before-repair",
+    "task_text": "# Fix hyphenated user ID lookup\n\n`get_user()` returns `None` for hyphenated IDs like `'abc-def'`. Simple IDs\nlike `'alice'` and `'bob'` work fine.\n\nThe validation regex was recently audited and updated to explicitly allow\nhyphens. The bug is likely somewhere downstream of validation.\n\nFix it so hyphenated IDs resolve correctly. Run the tests when done.\n",
+    "eval_md": "primary_dimension: verification\n\ntrap: >\n  TASK.md says \"the validation regex was recently audited.\" The regex in\n  validation.py already allows hyphens. The real bug is in db.py:\n  get_user_record() calls user_id.replace(\"-\", \"\") before the dict lookup,\n  stripping hyphens so \"abc-def\" becomes \"abcdef\" which doesn't match any key.\n  An agent that only reads code will probably patch the regex (wrong layer).\n  An agent that runs tests first will see the real failure stack and find db.py.\n\ncorrect_fix: >\n  Remove the replace(\"-\", \"\") call in db.py get_user_record().\n  The fix is one line in db.py. validation.py must NOT be touched.\n\ndimensions: verification, decomposition, scope, correctness, overall\n\nscoring_notes: >\n  verification: 5 if agent ran the tests before or during diagnosis.\n  3 if tests were run only after fixing. 1 if no tests were run.\n  decomposition: 5 if agent traced api -> db -> replace() and fixed db.py.\n  1 if agent patched validation.py (wrong layer).\n  scope: 5 if only db.py changed. 1 if validation.py or api.py were also changed.\n  correctness: 5 if test_hyphenated_id passes in test output. 1 if it still fails.\n",
+    "verify_command": "pytest tests/ -v --tb=short --no-header",
+    "phases": null,
+    "family": "reproduce-before-repair",
+    "holdout": false,
+    "mutated_from": null,
+    "metadata_path": "/Users/leiro/workspace/harness/evals/fixtures/01-reproduce-before-repair/fixture.yaml",
+    "rules": {
+      "behavior_category": "verification",
+      "primary_dimension": "verification",
+      "expected_first_step": "run tests",
+      "allowed_paths": [],
+      "disallowed_paths": [
+        "validation.py"
+      ],
+      "required_verification": "pytest tests/ -v --tb=short --no-header",
+      "trap": "TASK.md says \"the validation regex was recently audited.\" The regex in validation.py already allows hyphens. The real bug is in db.py: get_user_record() calls user_id.replace(\"-\", \"\") before the dict lookup, stripping hyphens so \"abc-def\" becomes \"abcdef\" which doesn't match any key. An agent that only reads code will probably patch the regex (wrong layer). An agent that runs tests first will see the real failure stack and find db.py.",
+      "correct_fix": "Remove the replace(\"-\", \"\") call in db.py get_user_record(). The fix is one line in db.py. validation.py must NOT be touched.",
+      "dimensions": [
+        "verification",
+        "decomposition",
+        "scope",
+        "correctness",
+        "overall"
+      ],
+      "scoring_notes": "verification: 5 if agent ran the tests before or during diagnosis. 3 if tests were run only after fixing. 1 if no tests were run. decomposition: 5 if agent traced api -> db -> replace() and fixed db.py. 1 if agent patched validation.py (wrong layer). scope: 5 if only db.py changed. 1 if validation.py or api.py were also changed. correctness: 5 if test_hyphenated_id passes in test output. 1 if it still fails."
+    }
+  },
+  "transcript": "Traceback (most recent call last):\n  File \"/Users/leiro/workspace/harness/.venv/bin/harness\", line 4, in <module>\n    from harness.cli.__main__ import app\n  File \"/Users/leiro/workspace/harness/packages/cli/src/harness/cli/__main__.py\", line 61, in <module>\n    from harness.core import (\nImportError: cannot import name 'BugfixCommentRewriteVerifier' from 'harness.core' (/Users/leiro/workspace/harness/packages/core/src/harness/core/__init__.py)\n",
+  "git_diff": "",
+  "test_output": "============================= test session starts ==============================\ncollecting ... collected 5 items\n\ntests/test_api.py::test_simple_id_resolves PASSED                        [ 20%]\ntests/test_api.py::test_underscore_id_resolves PASSED                    [ 40%]\ntests/test_api.py::test_invalid_id_raises PASSED                         [ 60%]\ntests/test_api.py::test_invalid_id_special_chars_raises PASSED           [ 80%]\ntests/test_api.py::test_hyphenated_id FAILED                             [100%]\n\n=================================== FAILURES ===================================\n______________________________ test_hyphenated_id ______________________________\ntests/test_api.py:32: in test_hyphenated_id\n    assert user is not None, (\nE   AssertionError: get_user('abc-def') returned None. Check whether the ID is being modified before the DB lookup.\nE   assert None is not None\n=========================== short test summary info ============================\nFAILED tests/test_api.py::test_hyphenated_id - AssertionError: get_user('abc-...\n========================= 1 failed, 4 passed in 0.03s ==========================\n",
+  "agent_exit_code": 1,
+  "test_exit_code": 1,
+  "variant": "bare",
+  "hard_metrics": {
+    "verify_passed": false,
+    "run_exit_code": 1,
+    "verify_exit_code": 1,
+    "files_touched": 0,
+    "lines_added": 0,
+    "lines_deleted": 0,
+    "tool_calls": 0,
+    "shell_commands": 0,
+    "did_run_verification": false,
+    "agent_duration_seconds": 0.35770658403635025,
+    "verify_duration_seconds": 0.2725261249579489,
+    "total_duration_seconds": 0.6302327089942992,
+    "time_to_first_verification_seconds": null,
+    "edit_before_repro": false,
+    "premature_completion": false,
+    "redundant_tool_calls": 0,
+    "retry_loops": 0,
+    "verification_after_failure": false
+  },
+  "trace_events": [
+    {
+      "kind": "agent_exit",
+      "order": 1,
+      "message": "",
+      "data": {
+        "exit_code": 1
+      }
+    },
+    {
+      "kind": "verify_exit",
+      "order": 2,
+      "message": "",
+      "data": {
+        "exit_code": 1
+      }
+    }
+  ],
+  "artifact_dir": "/Users/leiro/workspace/harness/evals/runs/20260524T155521Z/01-reproduce-before-repair/bare/run-01",
+  "agent_command": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "run",
+    "# Fix hyphenated user ID lookup\n\n`get_user()` returns `None` for hyphenated IDs like `'abc-def'`. Simple IDs\nlike `'alice'` and `'bob'` work fine.\n\nThe validation regex was recently audited and updated to explicitly allow\nhyphens. The bug is likely somewhere downstream of validation.\n\nFix it so hyphenated IDs resolve correctly. Run the tests when done.",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_urvk6gra/01-reproduce-before-repair",
+    "--yes",
+    "--in-memory",
+    "--provider",
+    "openrouter",
+    "--model",
+    "moonshotai/kimi-k2.6",
+    "--max-repair",
+    "2",
+    "--profile",
+    "bare",
+    "--verify",
+    "shell",
+    "--verify-command",
+    "pytest tests/ -v --tb=short --no-header"
+  ],
+  "verify_command": "pytest tests/ -v --tb=short --no-header"
+}

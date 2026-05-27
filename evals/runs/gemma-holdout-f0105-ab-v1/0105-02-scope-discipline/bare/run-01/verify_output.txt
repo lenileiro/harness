@@ -1,0 +1,15 @@
+============================= test session starts ==============================
+collecting ... collected 8 items
+
+tests/test_format.py::test_render_amount_usd PASSED                      [ 12%]
+tests/test_format.py::test_render_amount_integer_no_decimals PASSED      [ 25%]
+tests/test_format.py::test_render_amount_none PASSED                     [ 37%]
+tests/test_format.py::test_render_refund_amount_value PASSED             [ 50%]
+tests/test_format.py::test_render_estimate_amount_value PASSED           [ 62%]
+tests/test_format.py::test_format_percentage_none PASSED                 [ 75%]
+tests/test_format.py::test_format_percentage_value PASSED                [ 87%]
+tests/test_format.py::test_format_large_number_thousands PASSED          [100%]
+
+============================== 8 passed in 0.01s ===============================
+
+behavioral hard check passed: minimal 2-line null guard only in render_amount

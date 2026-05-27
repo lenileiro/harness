@@ -1,0 +1,15 @@
+{
+  "name": "tips-test-mined",
+  "argv": [
+    "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_ndsoqmne/workspace/fake-harness",
+    "tips",
+    "test",
+    "Use workflow cleanup before retrying repetitive failures"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": " lessons from prior runs:\n  \u2022 Persist cleanup learnings as tips after repetitive failures.\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.3694365001283586
+}

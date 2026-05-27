@@ -1,0 +1,45 @@
+diff --git a/src/README.md b/src/README.md
+index aa9813a..f35605b 100644
+--- a/src/README.md
++++ b/src/README.md
+@@ -7,6 +7,7 @@ A simple stateless calculator.
+ - `add(a, b)` — sum of two numbers
+ - `divide(a, b)` — `a / b`, raises `ZeroDivisionError` when `b == 0`
+ - `multiply(a, b)` — product of two numbers
++- `power(base, exponent)` — `base` raised to the `exponent`
+ - `sqrt(x)` — square root of a non-negative number
+ - `subtract(a, b)` — `a - b`
+ 
+diff --git a/src/calculator.py b/src/calculator.py
+index 9ebe3c5..8665191 100644
+--- a/src/calculator.py
++++ b/src/calculator.py
+@@ -28,6 +28,10 @@ class Calculator:
+             raise ZeroDivisionError("cannot divide by zero")
+         return a / b
+ 
++    def power(self, base: float, exponent: float) -> float:
++        """Return `base` raised to the `exponent`."""
++        return base ** exponent
++
+     def sqrt(self, x: float) -> float:
+         """Return the square root of `x`. Raises ValueError if x is negative."""
+         if x < 0:
+diff --git a/tests/test_calculator.py b/tests/test_calculator.py
+index a69ca14..d585b37 100644
+--- a/tests/test_calculator.py
++++ b/tests/test_calculator.py
+@@ -28,6 +28,13 @@ def test_multiply(calc):
+     assert calc.multiply(-2, 5) == -10
+ 
+ 
++# -- power ---------------------------------------------------------------
++def test_power(calc):
++    assert calc.power(2, 3) == 8
++    assert calc.power(5, 0) == 1
++    assert calc.power(2, -1) == 0.5
++
++
+ def test_divide(calc):
+     assert calc.divide(10, 2) == 5.0
+     assert calc.divide(7, 2) == 3.5

@@ -1,0 +1,60 @@
+{
+  "run_id": "20260525T010814Z-workflow",
+  "artifact_root": "evals/runs/workflow-session-v1",
+  "results": [
+    {
+      "fixture_name": "13-session-cycle",
+      "passed": false,
+      "steps_total": 4,
+      "steps_passed": 1,
+      "step_results": [
+        {
+          "name": "run-session",
+          "argv": [
+            "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_uv0ga1nk/workspace/fake-harness",
+            "run",
+            "say hello",
+            "--session",
+            "sess_workflow_eval",
+            "--provider",
+            "ollama",
+            "--model",
+            "test-model",
+            "--yes",
+            "--verify",
+            "none",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_uv0ga1nk/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "adaptive strategy default adaptive path -> minimal structure\nworkflow session ok                                                             \n\n\u2713 verify (verify_before_done)  No modifying tool calls detected \u2014 verification \nnot required.\n\ndefense ledger:\n  verifiers: verify_before_done=1\u2713/0\u2717\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 1.0153807080350816
+        },
+        {
+          "name": "sessions-list",
+          "argv": [
+            "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_uv0ga1nk/workspace/fake-harness",
+            "sessions",
+            "list",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_uv0ga1nk/workspace"
+          ],
+          "passed": false,
+          "returncode": 2,
+          "stdout": "",
+          "stderr": "Usage: fake-harness sessions list [OPTIONS]\nTry 'fake-harness sessions list --help' for help.\n\u256d\u2500 Error \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256e\n\u2502 No such option '--cwd'. Did you mean '--db'?                                 \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\n",
+          "failures": [
+            "returncode=2",
+            "stdout~sess_workflow_eval"
+          ],
+          "duration_seconds": 0.4484668329823762
+        }
+      ],
+      "artifact_dir": "evals/runs/workflow-session-v1/13-session-cycle",
+      "duration_seconds": 1.4661342918407172
+    }
+  ]
+}

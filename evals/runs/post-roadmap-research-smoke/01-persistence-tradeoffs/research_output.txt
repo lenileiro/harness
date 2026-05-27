@@ -1,0 +1,117 @@
+╭───────────────────── Traceback (most recent call last) ──────────────────────╮
+│ /Users/leiro/workspace/harness/packages/cli/src/harness/cli/__main__.py:861  │
+│ in research                                                                  │
+│                                                                              │
+│    858 │   │   typer.Option("--config", help=f"Override config path          │
+│        (default: {default_config_path()})."),                                │
+│    859 │   ] = None,                                                         │
+│    860 ) -> None:                                                            │
+│ ❱  861 │   _research_command(                                                │
+│    862 │   │   topic=topic,                                                  │
+│    863 │   │   model=model,                                                  │
+│    864 │   │   provider=provider,                                            │
+│                                                                              │
+│ /Users/leiro/workspace/harness/packages/cli/src/harness/cli/research_command │
+│ s.py:79 in research_command                                                  │
+│                                                                              │
+│    76 │   effective_model = model or cfg.default_model or "llama3.2"         │
+│    77 │                                                                      │
+│    78 │   prompt = build_research_prompt(topic=topic)                        │
+│ ❱  79 │   final_text = run_async(                                            │
+│    80 │   │   run_once(                                                      │
+│    81 │   │   │   prompt=prompt,                                             │
+│    82 │   │   │   model=effective_model,                                     │
+│                                                                              │
+│ /Users/leiro/workspace/harness/packages/cli/src/harness/cli/common.py:31 in  │
+│ _run_async                                                                   │
+│                                                                              │
+│    28 │   loop = asyncio.new_event_loop()                                    │
+│    29 │   try:                                                               │
+│    30 │   │   asyncio.set_event_loop(loop)                                   │
+│ ❱  31 │   │   return loop.run_until_complete(awaitable)                      │
+│    32 │   finally:                                                           │
+│    33 │   │   try:                                                           │
+│    34 │   │   │   loop.run_until_complete(loop.shutdown_asyncgens())         │
+│                                                                              │
+│ /Users/leiro/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/p │
+│ ython3.12/asyncio/base_events.py:691 in run_until_complete                   │
+│                                                                              │
+│    688 │   │   if not future.done():                                         │
+│    689 │   │   │   raise RuntimeError('Event loop stopped before Future      │
+│        completed.')                                                          │
+│    690 │   │                                                                 │
+│ ❱  691 │   │   return future.result()                                        │
+│    692 │                                                                     │
+│    693 │   def stop(self):                                                   │
+│    694 │   │   """Stop running the event loop.                               │
+│                                                                              │
+│ /Users/leiro/workspace/harness/packages/cli/src/harness/cli/__main__.py:931  │
+│ in _run_once                                                                 │
+│                                                                              │
+│    928                                                                       │
+│    929                                                                       │
+│    930 async def _run_once(**kwargs: Any) -> str | None:                     │
+│ ❱  931 │   return await _run_once_impl(                                      │
+│    932 │   │   **kwargs,                                                     │
+│    933 │   │   build_storage=_build_storage,                                 │
+│    934 │   │   resolve_task_attachment=_resolve_task_attachment,             │
+│                                                                              │
+│ /Users/leiro/workspace/harness/packages/cli/src/harness/cli/run_commands.py: │
+│ 273 in run_once                                                              │
+│                                                                              │
+│   270 │   │   │   │   include=allowed_tools,                                 │
+│   271 │   │   │   )                                                          │
+│   272 │   │                                                                  │
+│ ❱ 273 │   │   agent = build_agent(                                           │
+│   274 │   │   │   chain=chain,                                               │
+│   275 │   │   │   base_url=base_url,                                         │
+│   276 │   │   │   model=model,                                               │
+│                                                                              │
+│ /Users/leiro/workspace/harness/packages/cli/src/harness/cli/__main__.py:453  │
+│ in _build_agent                                                              │
+│                                                                              │
+│    450 │   resume: Any | None = None,                                        │
+│    451 │   build_tools: Any = _build_tools,                                  │
+│    452 ) -> Agent:                                                           │
+│ ❱  453 │   return _build_agent_impl(                                         │
+│    454 │   │   chain=chain,                                                  │
+│    455 │   │   base_url=base_url,                                            │
+│    456 │   │   model=model,                                                  │
+│                                                                              │
+│ /Users/leiro/workspace/harness/packages/cli/src/harness/cli/runtime_agent.py │
+│ :289 in build_agent                                                          │
+│                                                                              │
+│   286 │   adapters: dict[str, Adapter] = {}                                  │
+│   287 │   for index, provider in enumerate(chain):                           │
+│   288 │   │   provider_base_url = base_url if index == 0 else None           │
+│ ❱ 289 │   │   adapters[provider] = build_adapter(provider,                   │
+│       base_url=provider_base_url, config=config)                             │
+│   290 │                                                                      │
+│   291 │   project_ctx = load_project_context(cwd)                            │
+│   292 │   if project_ctx and system_prompt:                                  │
+│                                                                              │
+│ /Users/leiro/workspace/harness/packages/cli/src/harness/cli/__main__.py:408  │
+│ in _build_adapter                                                            │
+│                                                                              │
+│    405 │   │   │   else OllamaAdapter(timeout=timeout)                       │
+│    406 │   │   )                                                             │
+│    407 │   if provider == "openrouter":                                      │
+│ ❱  408 │   │   return OpenRouterAdapter(                                     │
+│    409 │   │   │   base_url=effective_base_url,                              │
+│    410 │   │   │   http_referer=settings.get("http_referer"),                │
+│    411 │   │   │   x_title=settings.get("x_title"),                          │
+│                                                                              │
+│ /Users/leiro/workspace/harness/packages/adapter-openrouter/src/harness/adapt │
+│ ers/openrouter/__init__.py:71 in __init__                                    │
+│                                                                              │
+│    68 │   ) -> None:                                                         │
+│    69 │   │   key = api_key or os.environ.get("OPENROUTER_API_KEY")          │
+│    70 │   │   if not key:                                                    │
+│ ❱  71 │   │   │   raise ConfigurationError(                                  │
+│    72 │   │   │   │   "OpenRouter API key missing: pass api_key= or set      │
+│       OPENROUTER_API_KEY"                                                    │
+│    73 │   │   │   )                                                          │
+│    74 │   │   self.api_key = key                                             │
+╰──────────────────────────────────────────────────────────────────────────────╯
+ConfigurationError: OpenRouter API key missing: pass api_key= or set 
+OPENROUTER_API_KEY

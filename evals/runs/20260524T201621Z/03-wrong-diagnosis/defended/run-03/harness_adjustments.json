@@ -1,0 +1,26 @@
+[
+  {
+    "id": "adj_1e254200f4",
+    "kind": "prompt_surface_revert",
+    "text": "Treat prompt-suggested symptom edits as provisional. If you change a named constant to test a theory, revert it once the real root cause is identified.",
+    "triggers": [
+      "timeout_seconds",
+      "batch",
+      "endpoint",
+      "timeout",
+      "processing",
+      "hitting",
+      "under",
+      "concurrent"
+    ],
+    "weight": 2.5,
+    "source_fixture_name": "03-wrong-diagnosis",
+    "source_variant": "defended",
+    "source_artifact_dir": "/Users/leiro/workspace/harness/evals/runs/20260524T201621Z/03-wrong-diagnosis/defended/run-03",
+    "rationale": "Wrong-diagnosis fixtures often leave a prompt-surface constant changed after the real bug is fixed.",
+    "evidence": {
+      "family": "wrong-diagnosis",
+      "verify_passed": false
+    }
+  }
+]

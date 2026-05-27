@@ -1,0 +1,19 @@
+{
+  "name": "sessions-fork-static",
+  "argv": [
+    "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_xwdoqhvh/workspace/fake-harness",
+    "sessions",
+    "fork",
+    "sess_parent_eval",
+    "--session",
+    "sess_branch_eval",
+    "--db",
+    "sessions.db"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Forked sess_parent_eval \u2192 sess_branch_eval\nResume with: harness sessions resume sess_branch_eval \"<prompt>\"\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.39162320806644857
+}

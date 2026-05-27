@@ -1,0 +1,141 @@
+{
+  "run_id": "20260525T195311Z",
+  "provider": "openrouter",
+  "model": "google/gemma-4-26b-a4b-it",
+  "judge_provider": "openrouter",
+  "judge_model": "google/gemma-4-26b-a4b-it",
+  "fixture_set": "fixtures",
+  "n_runs": 1,
+  "ab": false,
+  "artifact_root": "evals/runs/gemma-demo-promotion-flow",
+  "benchmark_mode": "original",
+  "mutation_coverage": null,
+  "results": [
+    {
+      "fixture_name": "08-promotion-draft-flow",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the pytest command at the end of the sequence to verify the entire workflow."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent only used the CLI commands requested and did not modify any files directly."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent successfully navigated the dependency chain by using the IDs generated from one CLI command in the subsequent ones."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "All steps were completed as requested and the final verification tests passed successfully."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt was clean and the agent proceeded directly to the task without unnecessary chatter."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's actions were clearly grounded in the successful execution of CLI commands and the resulting output."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent followed a complex multi-step instruction perfectly using the provided toolset."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 0,
+        "lines_added": 0,
+        "lines_deleted": 0,
+        "tool_calls": 39,
+        "shell_commands": 37,
+        "did_run_verification": true,
+        "agent_duration_seconds": 37.16848620795645,
+        "verify_duration_seconds": 0.2070575829129666,
+        "total_duration_seconds": 37.375543790869415,
+        "time_to_first_verification_seconds": 37.16848620795645,
+        "edit_before_repro": true,
+        "premature_completion": false,
+        "redundant_tool_calls": 36,
+        "retry_loops": 33,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-demo-promotion-flow/08-promotion-draft-flow/defended/run-01",
+      "variant": "defended",
+      "run_index": 1
+    }
+  ],
+  "aggregates": [
+    {
+      "fixture_name": "08-promotion-draft-flow",
+      "variant": "defended",
+      "runs": 1,
+      "passes": 1,
+      "dimensions": {
+        "verification": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "scope": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "decomposition": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "correctness": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "pushback": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "epistemic": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "overall": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        }
+      },
+      "hard_metrics": {
+        "avg_files_touched": 0.0,
+        "avg_lines_added": 0.0,
+        "avg_lines_deleted": 0.0,
+        "avg_tool_calls": 39.0,
+        "avg_shell_commands": 37.0,
+        "avg_agent_duration_seconds": 37.16848620795645,
+        "avg_verify_duration_seconds": 0.2070575829129666,
+        "avg_total_duration_seconds": 37.375543790869415,
+        "avg_redundant_tool_calls": 36.0,
+        "avg_retry_loops": 33.0,
+        "verify_pass_rate": 1.0
+      }
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "run_id": "20260524T220957Z-docs",
+  "provider": "ollama",
+  "model": "fake",
+  "artifact_root": "evals/runs/post-roadmap-docs-fake",
+  "results": [
+    {
+      "fixture_name": "01-missing-plugin-docs",
+      "passed": false,
+      "findings_count": 0,
+      "matched_expectations": 0,
+      "matched_topics": 0,
+      "missing_expectations": [
+        "docs output was not valid JSON"
+      ],
+      "summary": "",
+      "artifact_dir": "evals/runs/post-roadmap-docs-fake/01-missing-plugin-docs",
+      "raw_output": "2026-05-24T22:09:57.863647Z [warning  ] agent.step.error               attempt=0 error='Ollama returned 404 \u2014 model likely not pulled. Body: {\"error\":{\"message\":\"model \\'fake\\' not found\",\"type\":\"not_found_error\",\"param\":null,\"code\":null}}\\n' kind=model_unavailable provider=ollama\n2026-05-24T22:09:57.863735Z [error    ] agent.run.failed               error='Ollama returned 404 \u2014 model likely not pulled. Body: {\"error\":{\"message\":\"model \\'fake\\' not found\",\"type\":\"not_found_error\",\"param\":null,\"code\":null}}\\n' kind=model_unavailable\n\nError (model_unavailable): Ollama returned 404 \u2014 model likely not pulled. Body: \n{\"error\":{\"message\":\"model 'fake' not \nfound\",\"type\":\"not_found_error\",\"param\":null,\"code\":null}}",
+      "report": null,
+      "duration_seconds": 0.4300577910616994
+    }
+  ]
+}

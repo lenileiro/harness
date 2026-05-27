@@ -1,0 +1,8 @@
+adaptive strategy default adaptive path -> minimal structure
+done                                                                            
+
+✓ verify (claim_grounding)  no completed tool events — nothing to ground claims 
+against  (confidence 0.40)
+
+defense ledger:
+  verifiers: claim_grounding=1✓/0✗

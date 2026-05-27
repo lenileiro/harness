@@ -1,0 +1,19 @@
+{
+  "name": "tasks-new-secondary",
+  "argv": [
+    "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_9r_dtm9c/workspace/fake-harness",
+    "tasks",
+    "new",
+    "Collect supporting notes",
+    "--db",
+    ".harness/harness.db",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_9r_dtm9c/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Created T-002  Collect supporting notes\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.4109327089972794
+}

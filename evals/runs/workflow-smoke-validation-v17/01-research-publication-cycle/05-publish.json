@@ -1,0 +1,26 @@
+{
+  "name": "publish",
+  "argv": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "research",
+    "publish",
+    "--rabbit-hole",
+    "rh-verifier-routing-deep-dive-5f9ef21b",
+    "--title",
+    "Verifier routing findings",
+    "--summary",
+    "Scoped routing helps.",
+    "--claim",
+    "Scoped routing reduces verifier noise.",
+    "--evidence",
+    "Targeted evals showed fewer false positives.",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_53vp4fxb/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Published pub-verifier-routing-findings-7f73735e at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_5\n3vp4fxb/workspace/.harness/research/publications/pub-verifier-routing-findings-7\nf73735e\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.40222020796500146
+}

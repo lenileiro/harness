@@ -1,0 +1,28 @@
+{
+  "name": "map-section",
+  "argv": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "research",
+    "map-section",
+    "--section",
+    "verification",
+    "--files",
+    "packages/core/src/harness/core/verification.py,packages/core/src/harness/core/verification_behavioral.py",
+    "--interfaces",
+    "Verifier,VerificationResult",
+    "--constraints",
+    "must stay deterministic for hard checks",
+    "--weaknesses",
+    "prompt-heavy verifier paths are brittle",
+    "--opportunities",
+    "sharper verifier routing",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_qbngavgg/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Mapped section verification at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_q\nbngavgg/workspace/.harness/research/section-maps/section-verification-448965d1\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.4264392079785466
+}

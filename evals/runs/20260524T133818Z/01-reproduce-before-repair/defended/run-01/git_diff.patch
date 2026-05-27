@@ -1,0 +1,30 @@
+diff --git a/src/api.py b/src/api.py
+index 31e72ee..2e33b37 100644
+--- a/src/api.py
++++ b/src/api.py
+@@ -2,8 +2,8 @@
+ 
+ from __future__ import annotations
+ 
+-from db import get_user_record
+-from validation import validate_user_id
++from src.db import get_user_record
++from src.validation import validate_user_id
+ 
+ 
+ def get_user(user_id: str) -> dict | None:
+diff --git a/src/db.py b/src/db.py
+index 7f5b5a6..25be5b2 100644
+--- a/src/db.py
++++ b/src/db.py
+@@ -13,7 +13,6 @@ _USERS: dict[str, dict] = {
+ 
+ def get_user_record(user_id: str) -> dict | None:
+     """Fetch a raw user record by id. Returns None if not found."""
+-    # Normalize the ID before lookup to handle legacy system quirks.
+-    # BUG: this strips hyphens, so "abc-def" becomes "abcdef" — no match.
+-    normalized = user_id.replace("-", "")
+-    return _USERS.get(normalized)
++    # Look up the user ID directly without normalization.
++    # Hyphens are now allowed in user IDs and should be preserved for lookup.
++    return _USERS.get(user_id)

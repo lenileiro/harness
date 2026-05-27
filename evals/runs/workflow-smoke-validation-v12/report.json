@@ -1,0 +1,1281 @@
+{
+  "run_id": "20260525T004907Z-workflow",
+  "artifact_root": "evals/runs/workflow-smoke-validation-v12",
+  "results": [
+    {
+      "fixture_name": "01-research-publication-cycle",
+      "passed": true,
+      "steps_total": 6,
+      "steps_passed": 6,
+      "step_results": [
+        {
+          "name": "vision-update",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "vision",
+            "update",
+            "--title",
+            "Autonomous research harness",
+            "--summary",
+            "Turn Harness into a compounding research and promotion system.",
+            "--theme",
+            "autonomous-improvement",
+            "--success-metric",
+            "high-signal autonomous PRs",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_pb_knikp/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "Updated vision at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_p\nb_knikp/workspace/.harness/research/vision/current\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.4146362498868257
+        },
+        {
+          "name": "add-theme",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "add-theme",
+            "--title",
+            "Verifier reliability",
+            "--description",
+            "Study routing and contract opportunities.",
+            "--priority",
+            "high",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_pb_knikp/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "Added theme theme-verifier-reliability-f627ffac at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_p\nb_knikp/workspace/.harness/research/themes/theme-verifier-reliability-f627ffac\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.4137483339291066
+        },
+        {
+          "name": "create-unknown",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "create-unknown",
+            "--theme-id",
+            "theme-verifier-reliability-f627ffac",
+            "--question",
+            "Which verifier routing refinements reduce false positives?",
+            "--why-it-matters",
+            "False positives create noise in defended runs.",
+            "--confidence",
+            "0.5",
+            "--related-sections",
+            "verification,runtime",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_pb_knikp/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "Created unknown unknown-which-verifier-routing-refinemen-ad800a5c at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_p\nb_knikp/workspace/.harness/research/unknowns/unknown-which-verifier-routing-refi\nnemen-ad800a5c\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.4200337079819292
+        },
+        {
+          "name": "open-rabbithole",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "open",
+            "--title",
+            "Verifier routing deep dive",
+            "--question",
+            "Can routing reduce verifier noise?",
+            "--scope",
+            "Inspect routing, prompt overlap, and eval impact.",
+            "--theme",
+            "verification",
+            "--related-sections",
+            "verification,runtime",
+            "--mode",
+            "improve",
+            "--subsystem",
+            "verification",
+            "--rationale",
+            "Routing is too broad.",
+            "--expected-outcome",
+            "Less verifier noise.",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_pb_knikp/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "Opened rabbit hole rh-verifier-routing-deep-dive-23151cf9 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_p\nb_knikp/workspace/.harness/research/rabbitholes/rh-verifier-routing-deep-dive-23\n151cf9\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.4181052080821246
+        },
+        {
+          "name": "publish",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "publish",
+            "--rabbit-hole",
+            "rh-verifier-routing-deep-dive-23151cf9",
+            "--title",
+            "Verifier routing findings",
+            "--summary",
+            "Scoped routing helps.",
+            "--claim",
+            "Scoped routing reduces verifier noise.",
+            "--evidence",
+            "Targeted evals showed fewer false positives.",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_pb_knikp/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "Published pub-verifier-routing-findings-ee42c797 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_p\nb_knikp/workspace/.harness/research/publications/pub-verifier-routing-findings-e\ne42c797\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.41122120898216963
+        },
+        {
+          "name": "search",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "search",
+            "routing",
+            "--kind",
+            "publication",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_pb_knikp/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2513\n\u2503             \u2503                                        \u2503       \u2503 Summa \u2503       \u2503\n\u2503 Kind        \u2503 ID                                     \u2503 Title \u2503 ry    \u2503 Path  \u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2529\n\u2502 publication \u2502 pub-verifier-routing-findings-ee42c797 \u2502 Veri\u2026 \u2502 Scope \u2502 /priv \u2502\n\u2502             \u2502                                        \u2502 rout\u2026 \u2502 d     \u2502 ate/v \u2502\n\u2502             \u2502                                        \u2502 find\u2026 \u2502 routi \u2502 ar/fo \u2502\n\u2502             \u2502                                        \u2502       \u2502 ng    \u2502 lders \u2502\n\u2502             \u2502                                        \u2502       \u2502 helps \u2502 /8p/1 \u2502\n\u2502             \u2502                                        \u2502       \u2502 .     \u2502 _033m \u2502\n\u2502             \u2502                                        \u2502       \u2502       \u2502 ns3v1 \u2502\n\u2502             \u2502                                        \u2502       \u2502       \u2502 gvkq9 \u2502\n\u2502             \u2502                                        \u2502       \u2502       \u2502 5_wfx \u2502\n\u2502             \u2502                                        \u2502       \u2502       \u2502 4xr00 \u2502\n\u2502             \u2502                                        \u2502       \u2502       \u2502 00gn/ \u2502\n\u2502             \u2502                                        \u2502       \u2502       \u2502 T/har \u2502\n\u2502             \u2502                                        \u2502       \u2502       \u2502 ness_ \u2502\n\u2502             \u2502                                        \u2502       \u2502       \u2502 workf \u2502\n\u2502             \u2502                                        \u2502       \u2502       \u2502 low_e \u2502\n\u2502             \u2502                                        \u2502       \u2502       \u2502 val_p \u2502\n\u2502             \u2502                                        \u2502       \u2502       \u2502 b_kni \u2502\n\u2502             \u2502                                        \u2502       \u2502       \u2502 kp/wo \u2502\n\u2502             \u2502                                        \u2502       \u2502       \u2502 rkspa \u2502\n\u2502             \u2502                                        \u2502       \u2502       \u2502 ce/.h \u2502\n\u2502             \u2502                                        \u2502       \u2502       \u2502 arnes \u2502\n\u2502             \u2502                                        \u2502       \u2502       \u2502 s/res \u2502\n\u2502             \u2502                                        \u2502       \u2502       \u2502 earch \u2502\n\u2502             \u2502                                        \u2502       \u2502       \u2502 /publ \u2502\n\u2502             \u2502                                        \u2502       \u2502       \u2502 icati \u2502\n\u2502             \u2502                                        \u2502       \u2502       \u2502 ons/p \u2502\n\u2502             \u2502                                        \u2502       \u2502       \u2502 ub-ve \u2502\n\u2502             \u2502                                        \u2502       \u2502       \u2502 rifie \u2502\n\u2502             \u2502                                        \u2502       \u2502       \u2502 r-rou \u2502\n\u2502             \u2502                                        \u2502       \u2502       \u2502 ting- \u2502\n\u2502             \u2502                                        \u2502       \u2502       \u2502 findi \u2502\n\u2502             \u2502                                        \u2502       \u2502       \u2502 ngs-e \u2502\n\u2502             \u2502                                        \u2502       \u2502       \u2502 e42c7 \u2502\n\u2502             \u2502                                        \u2502       \u2502       \u2502 97    \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.4203057500999421
+        }
+      ],
+      "artifact_dir": "evals/runs/workflow-smoke-validation-v12/01-research-publication-cycle",
+      "duration_seconds": 2.510802665958181
+    },
+    {
+      "fixture_name": "02-research-promotion-cycle",
+      "passed": true,
+      "steps_total": 10,
+      "steps_passed": 10,
+      "step_results": [
+        {
+          "name": "create-opportunity",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "create-opportunity",
+            "--title",
+            "Tighten research promotion",
+            "--summary",
+            "Turn research findings into smaller bounded promotion candidates.",
+            "--related-sections",
+            "research,promotion",
+            "--change-modes",
+            "improve,extend",
+            "--theme",
+            "autonomous-improvement",
+            "--priority",
+            "high",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_v8dtmmwy/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "Created opportunity opp-tighten-research-promotion-bdcb0356 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_v\n8dtmmwy/workspace/.harness/research/opportunities/opp-tighten-research-promotion\n-bdcb0356\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.4222356250975281
+        },
+        {
+          "name": "hypothesize",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "hypothesize",
+            "--opportunity",
+            "opp-tighten-research-promotion-bdcb0356",
+            "--claim",
+            "A promotion draft should always include explicit evidence sections.",
+            "--expected-win",
+            "Higher signal PRs.",
+            "--risk-level",
+            "low",
+            "--change-mode",
+            "improve",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_v8dtmmwy/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "Created hypothesis hyp-a-promotion-draft-should-always--d792ace0 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_v\n8dtmmwy/workspace/.harness/research/hypotheses/hyp-a-promotion-draft-should-alwa\nys--d792ace0\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.4095875830389559
+        },
+        {
+          "name": "plan-experiment",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "plan-experiment",
+            "--hypothesis",
+            "hyp-a-promotion-draft-should-always--d792ace0",
+            "--plan",
+            "Create a bounded promotion candidate and inspect the generated PR payload.",
+            "--target-files",
+            "packages/core/src/harness/core/pr_generation.py",
+            "--checks",
+            "pytest,pyright",
+            "--eval-slices",
+            "workflow-smoke",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_v8dtmmwy/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "Planned experiment plan-hyp-a-promotion-draft-should-alw-50e03ce8 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_v\n8dtmmwy/workspace/.harness/research/experiment-plans/plan-hyp-a-promotion-draft-\nshould-alw-50e03ce8\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.4093201248906553
+        },
+        {
+          "name": "refine",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "refine",
+            "--title",
+            "Promotion draft evidence section",
+            "--summary",
+            "Keep PR payloads bounded and explicit.",
+            "--source-hypothesis",
+            "hyp-a-promotion-draft-should-always--d792ace0",
+            "--target-files",
+            "packages/core/src/harness/core/pr_generation.py",
+            "--expected-metric",
+            "PR body includes evidence checklist.",
+            "--validation-plan",
+            "Run workflow smoke plus focused tests.",
+            "--risk-level",
+            "low",
+            "--mode",
+            "improve",
+            "--subsystem",
+            "promotion",
+            "--rationale",
+            "PRs need clearer proof.",
+            "--expected-outcome",
+            "Promotion artifacts are more reviewable.",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_v8dtmmwy/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "Created promotion candidate promo-promotion-draft-evidence-section-287b72c4 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_v\n8dtmmwy/workspace/.harness/research/promotions/promo-promotion-draft-evidence-se\nction-287b72c4\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.40807666699402034
+        },
+        {
+          "name": "queue",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "queue",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_v8dtmmwy/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2513\n\u2503 Kind              \u2503 ID                                            \u2503 Priori\u2026 \u2503\u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2529\n\u2502 promotion_candid\u2026 \u2502 promo-promotion-draft-evidence-section-287b7\u2026 \u2502 100     \u2502\u2502\n\u2502 opportunity       \u2502 opp-tighten-research-promotion-bdcb0356       \u2502 60      \u2502\u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2518\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.4064855419564992
+        },
+        {
+          "name": "candidate-show",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "candidate",
+            "show",
+            "promo-promotion-draft-evidence-section-287b72c4",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_v8dtmmwy/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "Promotion draft evidence section\nKeep PR payloads bounded and explicit.\n\nTarget Files\n- packages/core/src/harness/core/pr_generation.py\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.4073228749912232
+        },
+        {
+          "name": "promote",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "promote",
+            "--candidate",
+            "promo-promotion-draft-evidence-section-287b72c4",
+            "--no-create-branch",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_v8dtmmwy/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "Prepared promotion draft for promo-promotion-draft-evidence-section-287b72c4\nbranch=research/promo-promotion-draft-evidence-section-287b72c4\ncommit_message=research: promote Promotion draft evidence section\ndraft_json=/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_work\nflow_eval_v8dtmmwy/workspace/.harness/research/promotions/promo-promotion-draft-\nevidence-section-287b72c4/promotion_draft.json\npr_body=/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflo\nw_eval_v8dtmmwy/workspace/.harness/research/promotions/promo-promotion-draft-evi\ndence-section-287b72c4/PR_BODY.md\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.4154363330453634
+        },
+        {
+          "name": "pr-payload",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "pr",
+            "--candidate",
+            "promo-promotion-draft-evidence-section-287b72c4",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_v8dtmmwy/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "Prepared PR payload for promo-promotion-draft-evidence-section-287b72c4\ntitle=improve: Promotion draft evidence section\nbranch=research/promo-promotion-draft-evidence-section-287b72c4\nbody=/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_e\nval_v8dtmmwy/workspace/.harness/research/promotions/promo-promotion-draft-eviden\nce-section-287b72c4/PR_BODY.md\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.41248620906844735
+        },
+        {
+          "name": "archive",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "archive",
+            "--kind",
+            "hypothesis",
+            "--id",
+            "hyp-a-promotion-draft-should-always--d792ace0",
+            "--reason",
+            "covered by promotion candidate",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_v8dtmmwy/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "Archived hypothesis:hyp-a-promotion-draft-should-always--d792ace0 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_v\n8dtmmwy/workspace/.harness/research/archive/archive-hypothesis-hyp-a-promotion-d\nraft-eb43e34e\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.4144090418703854
+        },
+        {
+          "name": "resurrect",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "resurrect",
+            "archive-hypothesis-hyp-a-promotion-draft-eb43e34e",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_v8dtmmwy/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "Resurrected archive-hypothesis-hyp-a-promotion-draft-eb43e34e to \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_v\n8dtmmwy/workspace/.harness/research/hypotheses/hyp-a-promotion-draft-should-alwa\nys--d792ace0\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.41107762488536537
+        }
+      ],
+      "artifact_dir": "evals/runs/workflow-smoke-validation-v12/02-research-promotion-cycle",
+      "duration_seconds": 4.13724433304742
+    },
+    {
+      "fixture_name": "03-research-experiment-portfolio-cycle",
+      "passed": true,
+      "steps_total": 12,
+      "steps_passed": 12,
+      "step_results": [
+        {
+          "name": "ingest-web",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "ingest-web",
+            "--title",
+            "Verifier routing note",
+            "--url",
+            "https://example.com/verifier-routing",
+            "--summary",
+            "Scoped routing reduces verifier noise.",
+            "--themes",
+            "autonomous-improvement",
+            "--related-sections",
+            "verification,runtime",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_on4mcjxz/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "Recorded inspiration insp-verifier-routing-note-c8949573 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_o\nn4mcjxz/workspace/.harness/research/inspiration/insp-verifier-routing-note-c8949\n573\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.4113521249964833
+        },
+        {
+          "name": "scout",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "scout",
+            "--source-kind",
+            "web",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_on4mcjxz/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2513\n\u2503 ID                                  \u2503 Kind \u2503 Title          \u2503 Summary        \u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2529\n\u2502 insp-verifier-routing-note-c8949573 \u2502 web  \u2502 Verifier       \u2502 Scoped routing \u2502\n\u2502                                     \u2502      \u2502 routing note   \u2502 reduces        \u2502\n\u2502                                     \u2502      \u2502                \u2502 verifier       \u2502\n\u2502                                     \u2502      \u2502                \u2502 noise.         \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.40139004215598106
+        },
+        {
+          "name": "roles",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "roles"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2513\n\u2503 Role                 \u2503 Description                                           \u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2529\n\u2502 section-investigator \u2502 Map one subsystem deeply and surface local leverage   \u2502\n\u2502                      \u2502 points.                                               \u2502\n\u2502 scout                \u2502 Gather inspiration from repo artifacts, peers,        \u2502\n\u2502                      \u2502 papers, trends, and the web.                          \u2502\n\u2502 synthesizer          \u2502 Link multiple sections and observations into          \u2502\n\u2502                      \u2502 cross-cutting opportunities.                          \u2502\n\u2502 hypothesis-agent     \u2502 Propose multiple competing improvement angles for one \u2502\n\u2502                      \u2502 opportunity.                                          \u2502\n\u2502 experiment-agent     \u2502 Run one bounded experiment and capture concrete       \u2502\n\u2502                      \u2502 evidence.                                             \u2502\n\u2502 publisher            \u2502 Turn deep investigations into structured              \u2502\n\u2502                      \u2502 publications.                                         \u2502\n\u2502 challenger           \u2502 Retest or disprove prior claims and stale             \u2502\n\u2502                      \u2502 assumptions.                                          \u2502\n\u2502 refiner              \u2502 Simplify promising experiments into promotion         \u2502\n\u2502                      \u2502 candidates.                                           \u2502\n\u2502 promotion-agent      \u2502 Prepare bounded branches, commits, and PR payloads    \u2502\n\u2502                      \u2502 with evidence.                                        \u2502\n\u2502 archivist            \u2502 Archive weak or superseded work so it is not retried  \u2502\n\u2502                      \u2502 blindly.                                              \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.40847333311103284
+        },
+        {
+          "name": "create-opportunity",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "create-opportunity",
+            "--title",
+            "Compare workflow checks",
+            "--summary",
+            "Run simple experiment commands and record results.",
+            "--related-sections",
+            "research,experiments",
+            "--change-modes",
+            "build_on",
+            "--theme",
+            "autonomous-improvement",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_on4mcjxz/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "Created opportunity opp-compare-workflow-checks-01f3d729 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_o\nn4mcjxz/workspace/.harness/research/opportunities/opp-compare-workflow-checks-01\nf3d729\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.4000026669818908
+        },
+        {
+          "name": "hypothesize",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "hypothesize",
+            "--opportunity",
+            "opp-compare-workflow-checks-01f3d729",
+            "--claim",
+            "Simple deterministic checks are enough to validate experiment storage.",
+            "--expected-win",
+            "Broader workflow eval coverage.",
+            "--risk-level",
+            "low",
+            "--change-mode",
+            "build_on",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_on4mcjxz/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "Created hypothesis hyp-simple-deterministic-checks-are--975dd329 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_o\nn4mcjxz/workspace/.harness/research/hypotheses/hyp-simple-deterministic-checks-a\nre--975dd329\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.4153175000101328
+        },
+        {
+          "name": "plan-experiment",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "plan-experiment",
+            "--hypothesis",
+            "hyp-simple-deterministic-checks-are--975dd329",
+            "--plan",
+            "Run one deterministic check command and one deterministic eval command.",
+            "--checks",
+            "python -c \"print('workflow-check')\"",
+            "--eval-slices",
+            "python -c \"print('workflow-eval')\"",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_on4mcjxz/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "Planned experiment plan-hyp-simple-deterministic-checks--3dfcb3a3 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_o\nn4mcjxz/workspace/.harness/research/experiment-plans/plan-hyp-simple-determinist\nic-checks--3dfcb3a3\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.41332741687074304
+        },
+        {
+          "name": "experiment-run",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "experiment",
+            "run",
+            "--plan",
+            "plan-hyp-simple-deterministic-checks--3dfcb3a3",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_on4mcjxz/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "Experiment exp-plan-hyp-simple-deterministic-ch-9bc331fa passed commands=2 \nduration=0.05s\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.4788013328798115
+        },
+        {
+          "name": "experiment-show",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "experiment",
+            "show",
+            "exp-plan-hyp-simple-deterministic-ch-9bc331fa",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_on4mcjxz/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "exp-plan-hyp-simple-deterministic-ch-9bc331fa \nplan=plan-hyp-simple-deterministic-checks--3dfcb3a3 status=passed\n\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2513\n\u2503 Kind  \u2503 Exit \u2503 Seconds \u2503 Command                             \u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2529\n\u2502 check \u2502 0    \u2502 0.02    \u2502 python -c \"print('workflow-check')\" \u2502\n\u2502 eval  \u2502 0    \u2502 0.02    \u2502 python -c \"print('workflow-eval')\"  \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.4181677910964936
+        },
+        {
+          "name": "experiment-run-second",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "experiment",
+            "run",
+            "--plan",
+            "plan-hyp-simple-deterministic-checks--3dfcb3a3",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_on4mcjxz/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "Experiment exp-plan-hyp-simple-deterministic-ch-ae48d6e1 passed commands=2 \nduration=0.05s\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.48606008291244507
+        },
+        {
+          "name": "experiment-compare",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "experiment",
+            "compare",
+            "exp-plan-hyp-simple-deterministic-ch-9bc331fa",
+            "exp-plan-hyp-simple-deterministic-ch-ae48d6e1",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_on4mcjxz/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2513\n\u2503 Metric           \u2503 Left   \u2503 Right  \u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2529\n\u2502 status           \u2502 passed \u2502 passed \u2502\n\u2502 duration_seconds \u2502 0.05   \u2502 0.05   \u2502\n\u2502 commands         \u2502 2      \u2502 2      \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.40585254202596843
+        },
+        {
+          "name": "portfolio",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "portfolio",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_on4mcjxz/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2513\n\u2503 Metric               \u2503 Count \u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2529\n\u2502 themes               \u2502 0     \u2502\n\u2502 unknowns             \u2502 0     \u2502\n\u2502 rabbit_holes         \u2502 0     \u2502\n\u2502 publications         \u2502 0     \u2502\n\u2502 opportunities        \u2502 1     \u2502\n\u2502 hypotheses           \u2502 1     \u2502\n\u2502 experiment_plans     \u2502 1     \u2502\n\u2502 experiments          \u2502 2     \u2502\n\u2502 promotion_candidates \u2502 0     \u2502\n\u2502 archived_items       \u2502 0     \u2502\n\u2502 inspiration_notes    \u2502 1     \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.42393670906312764
+        },
+        {
+          "name": "rebalance",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "rebalance",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_on4mcjxz/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2513\n\u2503 Metric               \u2503 Count \u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2529\n\u2502 themes               \u2502 0     \u2502\n\u2502 open_unknowns        \u2502 0     \u2502\n\u2502 opportunities        \u2502 1     \u2502\n\u2502 promotion_candidates \u2502 0     \u2502\n\u2502 archived_items       \u2502 0     \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.4206485419999808
+        }
+      ],
+      "artifact_dir": "evals/runs/workflow-smoke-validation-v12/03-research-experiment-portfolio-cycle",
+      "duration_seconds": 5.108434916008264
+    },
+    {
+      "fixture_name": "04-plugin-experience-cycle",
+      "passed": true,
+      "steps_total": 6,
+      "steps_passed": 6,
+      "step_results": [
+        {
+          "name": "plugins-list",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "plugins",
+            "list",
+            "--kind",
+            "tool",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_jtk5n2zc/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2513\n\u2503 Plugin  \u2503 Kind \u2503 Source    \u2503 Provider       \u2503 Path          \u2503 Description    \u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2529\n\u2502 builtin \u2502 tool \u2502 bundled   \u2502 harness.cli.bu \u2502 \u2014             \u2502 Standard       \u2502\n\u2502         \u2502      \u2502           \u2502 iltin_tools:Bu \u2502               \u2502 Harness CLI    \u2502\n\u2502         \u2502      \u2502           \u2502 iltinToolProvi \u2502               \u2502 toolset.       \u2502\n\u2502         \u2502      \u2502           \u2502 der            \u2502               \u2502                \u2502\n\u2502 demo    \u2502 tool \u2502 workspace \u2502 workspace_plug \u2502 /private/var\u2026 \u2502 Local demo     \u2502\n\u2502         \u2502      \u2502           \u2502 in:DemoProvide \u2502               \u2502 plugin         \u2502\n\u2502         \u2502      \u2502           \u2502 r              \u2502               \u2502                \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.4086714170407504
+        },
+        {
+          "name": "plugins-validate",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "plugins",
+            "validate",
+            "--kind",
+            "tool",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_jtk5n2zc/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2513\n\u2503 Plugin  \u2503 Kind \u2503 Source    \u2503 Status \u2503 Detail \u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2529\n\u2502 builtin \u2502 tool \u2502 bundled   \u2502 ok     \u2502 ok     \u2502\n\u2502 demo    \u2502 tool \u2502 workspace \u2502 ok     \u2502 ok     \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.41295833396725357
+        },
+        {
+          "name": "procedures-add",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "experience",
+            "procedures",
+            "add",
+            "--name",
+            "Scope discipline",
+            "--body",
+            "Keep the patch in the named formatter only.",
+            "--triggers",
+            "format_price,minimal fix",
+            "--scope",
+            "repo",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_jtk5n2zc/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "Added procedure proc_eab040a588 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_j\ntk5n2zc/workspace/.harness/procedures/scope-discipline\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.4080992918461561
+        },
+        {
+          "name": "procedures-add-duplicate",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "experience",
+            "procedures",
+            "add",
+            "--name",
+            "Scope discipline duplicate",
+            "--body",
+            "Keep the patch in the named formatter only.",
+            "--triggers",
+            "format_price,minimal fix",
+            "--scope",
+            "repo",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_jtk5n2zc/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "Added procedure proc_d4726bb514 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_j\ntk5n2zc/workspace/.harness/procedures/scope-discipline-duplicate\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.46137591707520187
+        },
+        {
+          "name": "procedures-list",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "experience",
+            "procedures",
+            "list",
+            "--scope",
+            "repo",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_jtk5n2zc/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2513\n\u2503 ID              \u2503 Name        \u2503 Domain  \u2503 Confidence \u2503 Triggers     \u2503 Source \u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2529\n\u2502 proc_d4726bb514 \u2502 Scope       \u2502 general \u2502        1.0 \u2502 format_pric\u2026 \u2502 human  \u2502\n\u2502                 \u2502 discipline  \u2502         \u2502            \u2502 minimal fix  \u2502        \u2502\n\u2502                 \u2502 duplicate   \u2502         \u2502            \u2502              \u2502        \u2502\n\u2502 proc_eab040a588 \u2502 Scope       \u2502 general \u2502        1.0 \u2502 format_pric\u2026 \u2502 human  \u2502\n\u2502                 \u2502 discipline  \u2502         \u2502            \u2502 minimal fix  \u2502        \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.44830358284525573
+        },
+        {
+          "name": "experience-curate",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "experience",
+            "curate",
+            "--scope",
+            "repo",
+            "--dry-run",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_jtk5n2zc/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "scanned=2 archived=1 dry_run=yes\n\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2513\n\u2503 Kind      \u2503 Procedure        \u2503 Reason                \u2503 Archive path          \u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2529\n\u2502 duplicate \u2502 Scope discipline \u2502 Exact duplicate of    \u2502 /private/var/folders/ \u2502\n\u2502           \u2502                  \u2502 higher-confidence     \u2502 8p/1_033mns3v1gvkq95_ \u2502\n\u2502           \u2502                  \u2502 procedure             \u2502 wfx4xr0000gn/T/harnes \u2502\n\u2502           \u2502                  \u2502 proc_d4726bb514       \u2502 s_workflow_eval_jtk5n \u2502\n\u2502           \u2502                  \u2502                       \u2502 2zc/workspace/.harnes \u2502\n\u2502           \u2502                  \u2502                       \u2502 s/procedures/.archive \u2502\n\u2502           \u2502                  \u2502                       \u2502 /scope-discipline-177 \u2502\n\u2502           \u2502                  \u2502                       \u2502 9670161               \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.41675816709175706
+        }
+      ],
+      "artifact_dir": "evals/runs/workflow-smoke-validation-v12/04-plugin-experience-cycle",
+      "duration_seconds": 2.5636825838591903
+    },
+    {
+      "fixture_name": "05-provider-plugin-cycle",
+      "passed": true,
+      "steps_total": 8,
+      "steps_passed": 8,
+      "step_results": [
+        {
+          "name": "experience-list",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "plugins",
+            "list",
+            "--kind",
+            "experience",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_tciorb4v/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2513\n\u2503 Plugin     \u2503 Kind       \u2503 Source    \u2503 Provider    \u2503 Path        \u2503 Descripti\u2026 \u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2529\n\u2502 repo-hints \u2502 experience \u2502 workspace \u2502 provider_pl \u2502 /private/v\u2026 \u2502 Local      \u2502\n\u2502            \u2502            \u2502           \u2502 ugins:RepoH \u2502             \u2502 experience \u2502\n\u2502            \u2502            \u2502           \u2502 intsProvide \u2502             \u2502 provider   \u2502\n\u2502            \u2502            \u2502           \u2502 r           \u2502             \u2502            \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.4227490830235183
+        },
+        {
+          "name": "experience-validate",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "plugins",
+            "validate",
+            "--kind",
+            "experience",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_tciorb4v/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2513\n\u2503 Plugin     \u2503 Kind       \u2503 Source    \u2503 Status \u2503 Detail \u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2529\n\u2502 repo-hints \u2502 experience \u2502 workspace \u2502 ok     \u2502 ok     \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.4190869589801878
+        },
+        {
+          "name": "domain-list",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "plugins",
+            "list",
+            "--kind",
+            "domain-profile",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_tciorb4v/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2513\n\u2503                  \u2503                \u2503           \u2503 Provide \u2503         \u2503          \u2503\n\u2503 Plugin           \u2503 Kind           \u2503 Source    \u2503 r       \u2503 Path    \u2503 Descrip\u2026 \u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2529\n\u2502 docs-review-pack \u2502 domain_profile \u2502 workspace \u2502 provide \u2502 /priva\u2026 \u2502 Local    \u2502\n\u2502                  \u2502                \u2502           \u2502 r_plugi \u2502         \u2502 domain-\u2026 \u2502\n\u2502                  \u2502                \u2502           \u2502 ns:Docs \u2502         \u2502 provider \u2502\n\u2502                  \u2502                \u2502           \u2502 ReviewP \u2502         \u2502          \u2502\n\u2502                  \u2502                \u2502           \u2502 rofileP \u2502         \u2502          \u2502\n\u2502                  \u2502                \u2502           \u2502 rovider \u2502         \u2502          \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.40757595794275403
+        },
+        {
+          "name": "domain-validate",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "plugins",
+            "validate",
+            "--kind",
+            "domain-profile",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_tciorb4v/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2513\n\u2503 Plugin           \u2503 Kind           \u2503 Source    \u2503 Status \u2503 Detail \u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2529\n\u2502 docs-review-pack \u2502 domain_profile \u2502 workspace \u2502 ok     \u2502 ok     \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.4108845409937203
+        },
+        {
+          "name": "verifier-list",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "plugins",
+            "list",
+            "--kind",
+            "verifier",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_tciorb4v/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2513\n\u2503 Plugin             \u2503 Kind     \u2503 Source    \u2503 Provider  \u2503 Path      \u2503 Descrip\u2026 \u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2529\n\u2502 strict-verify-pack \u2502 verifier \u2502 workspace \u2502 provider_ \u2502 /private\u2026 \u2502 Local    \u2502\n\u2502                    \u2502          \u2502           \u2502 plugins:S \u2502           \u2502 verifier \u2502\n\u2502                    \u2502          \u2502           \u2502 trictVeri \u2502           \u2502 provider \u2502\n\u2502                    \u2502          \u2502           \u2502 fierProvi \u2502           \u2502          \u2502\n\u2502                    \u2502          \u2502           \u2502 der       \u2502           \u2502          \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.42467950005084276
+        },
+        {
+          "name": "verifier-validate",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "plugins",
+            "validate",
+            "--kind",
+            "verifier",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_tciorb4v/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2513\n\u2503 Plugin             \u2503 Kind     \u2503 Source    \u2503 Status \u2503 Detail \u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2529\n\u2502 strict-verify-pack \u2502 verifier \u2502 workspace \u2502 ok     \u2502 ok     \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.40219779103063047
+        },
+        {
+          "name": "critic-list",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "plugins",
+            "list",
+            "--kind",
+            "critic",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_tciorb4v/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2513\n\u2503 Plugin       \u2503 Kind   \u2503 Source    \u2503 Provider    \u2503 Path        \u2503 Description  \u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2529\n\u2502 skeptic-pack \u2502 critic \u2502 workspace \u2502 provider_pl \u2502 /private/v\u2026 \u2502 Local critic \u2502\n\u2502              \u2502        \u2502           \u2502 ugins:Skept \u2502             \u2502 provider     \u2502\n\u2502              \u2502        \u2502           \u2502 icCriticPro \u2502             \u2502              \u2502\n\u2502              \u2502        \u2502           \u2502 vider       \u2502             \u2502              \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.40576483285985887
+        },
+        {
+          "name": "critic-validate",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "plugins",
+            "validate",
+            "--kind",
+            "critic",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_tciorb4v/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2513\n\u2503 Plugin       \u2503 Kind   \u2503 Source    \u2503 Status \u2503 Detail \u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2529\n\u2502 skeptic-pack \u2502 critic \u2502 workspace \u2502 ok     \u2502 ok     \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.4388702919241041
+        }
+      ],
+      "artifact_dir": "evals/runs/workflow-smoke-validation-v12/05-provider-plugin-cycle",
+      "duration_seconds": 3.341515874955803
+    },
+    {
+      "fixture_name": "06-research-memory-cycle",
+      "passed": true,
+      "steps_total": 15,
+      "steps_passed": 15,
+      "step_results": [
+        {
+          "name": "vision-update",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "vision",
+            "update",
+            "--title",
+            "Research memory harness",
+            "--summary",
+            "Keep durable records for themes, unknowns, and linked publications.",
+            "--theme",
+            "research-memory",
+            "--success-metric",
+            "reusable published findings",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_gw0nnccf/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "Updated vision at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_g\nw0nnccf/workspace/.harness/research/vision/current\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.4541817498393357
+        },
+        {
+          "name": "add-theme",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "add-theme",
+            "--title",
+            "Memory graph",
+            "--description",
+            "Model citations and archive decisions.",
+            "--priority",
+            "high",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_gw0nnccf/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "Added theme theme-memory-graph-0d222628 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_g\nw0nnccf/workspace/.harness/research/themes/theme-memory-graph-0d222628\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.40682679205201566
+        },
+        {
+          "name": "list-themes",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "list-themes",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_gw0nnccf/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2513\n\u2503 ID                          \u2503 Title        \u2503 Priority \u2503 Status \u2503 Vision  \u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2529\n\u2502 theme-memory-graph-0d222628 \u2502 Memory graph \u2502 high     \u2502 active \u2502 current \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.41232795803807676
+        },
+        {
+          "name": "create-unknown",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "create-unknown",
+            "--theme-id",
+            "theme-memory-graph-0d222628",
+            "--question",
+            "How should archived findings stay discoverable?",
+            "--why-it-matters",
+            "Research should compound instead of being lost.",
+            "--confidence",
+            "0.4",
+            "--related-sections",
+            "research,archive",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_gw0nnccf/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "Created unknown unknown-how-should-archived-findings-sta-74058718 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_g\nw0nnccf/workspace/.harness/research/unknowns/unknown-how-should-archived-finding\ns-sta-74058718\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.4216939159668982
+        },
+        {
+          "name": "list-unknowns",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "list-unknowns",
+            "--theme-id",
+            "theme-memory-graph-0d222628",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_gw0nnccf/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2533\u2513\n\u2503 ID                                          \u2503 Theme                \u2503  \u2503 Co\u2026 \u2503\u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2547\u2529\n\u2502 unknown-how-should-archived-findings-sta-7\u2026 \u2502 theme-memory-graph-\u2026 \u2502  \u2502 0.\u2026 \u2502\u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2534\u2518\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.40735683287493885
+        },
+        {
+          "name": "open-rabbithole-a",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "open",
+            "--title",
+            "Archive indexing",
+            "--question",
+            "How should archived findings stay searchable?",
+            "--scope",
+            "Inspect search and archive metadata.",
+            "--theme",
+            "research-memory",
+            "--related-sections",
+            "archive,search",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_gw0nnccf/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "Opened rabbit hole rh-archive-indexing-8d112f02 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_g\nw0nnccf/workspace/.harness/research/rabbitholes/rh-archive-indexing-8d112f02\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.4089075420051813
+        },
+        {
+          "name": "publish-a",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "publish",
+            "--rabbit-hole",
+            "rh-archive-indexing-8d112f02",
+            "--title",
+            "Archive indexing findings",
+            "--summary",
+            "Archive metadata should remain searchable.",
+            "--claim",
+            "Archived items need stable metadata.",
+            "--evidence",
+            "Search over archive reasons is useful.",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_gw0nnccf/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "Published pub-archive-indexing-findings-ed944864 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_g\nw0nnccf/workspace/.harness/research/publications/pub-archive-indexing-findings-e\nd944864\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.407634292030707
+        },
+        {
+          "name": "open-rabbithole-b",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "open",
+            "--title",
+            "Citation graph",
+            "--question",
+            "How should later work build on archival findings?",
+            "--scope",
+            "Inspect citations and reuse paths.",
+            "--theme",
+            "research-memory",
+            "--related-sections",
+            "citations,publications",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_gw0nnccf/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "Opened rabbit hole rh-citation-graph-65ad778b at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_g\nw0nnccf/workspace/.harness/research/rabbitholes/rh-citation-graph-65ad778b\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.41246254090219736
+        },
+        {
+          "name": "publish-b",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "publish",
+            "--rabbit-hole",
+            "rh-citation-graph-65ad778b",
+            "--title",
+            "Citation graph findings",
+            "--summary",
+            "Later findings should cite earlier archival work.",
+            "--claim",
+            "Citations preserve research lineage.",
+            "--evidence",
+            "Linking publications keeps context reusable.",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_gw0nnccf/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "Published pub-citation-graph-findings-c8923fde at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_g\nw0nnccf/workspace/.harness/research/publications/pub-citation-graph-findings-c89\n23fde\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.42313075019046664
+        },
+        {
+          "name": "cite",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "cite",
+            "--source-publication",
+            "pub-citation-graph-findings-c8923fde",
+            "--target-publication",
+            "pub-archive-indexing-findings-ed944864",
+            "--relationship",
+            "builds_on",
+            "--note",
+            "Newer citation work builds on archive indexing.",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_gw0nnccf/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "Recorded citation cite-pub-citation-graph-findings-c892-c63f3cab at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_g\nw0nnccf/workspace/.harness/research/citations/cite-pub-citation-graph-findings-c\n892-c63f3cab\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.4195577909704298
+        },
+        {
+          "name": "search-citation",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "search",
+            "builds_on",
+            "--kind",
+            "citation",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_gw0nnccf/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2513\n\u2503          \u2503                                                \u2503     \u2503 Sum \u2503      \u2503\n\u2503          \u2503                                                \u2503     \u2503 mar \u2503      \u2503\n\u2503 Kind     \u2503 ID                                             \u2503 Ti\u2026 \u2503 y   \u2503 Path \u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2529\n\u2502 citation \u2502 cite-pub-citation-graph-findings-c892-c63f3cab \u2502 pu\u2026 \u2502 bui \u2502 /pri \u2502\n\u2502          \u2502                                                \u2502 ->  \u2502 lds \u2502 vate \u2502\n\u2502          \u2502                                                \u2502 pu\u2026 \u2502 _on \u2502 /var \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 /fol \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 ders \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 /8p/ \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 1_03 \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 3mns \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 3v1g \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 vkq9 \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 5_wf \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 x4xr \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 0000 \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 gn/T \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 /har \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 ness \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 _wor \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 kflo \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 w_ev \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 al_g \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 w0nn \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 ccf/ \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 work \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 spac \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 e/.h \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 arne \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 ss/r \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 esea \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 rch/ \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 cita \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 tion \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 s/ci \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 te-p \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 ub-c \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 itat \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 ion- \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 grap \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 h-fi \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 ndin \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 gs-c \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 892- \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 c63f \u2502\n\u2502          \u2502                                                \u2502     \u2502     \u2502 3cab \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.4129291661083698
+        },
+        {
+          "name": "show-publication",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "show-publication",
+            "pub-citation-graph-findings-c8923fde",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_gw0nnccf/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "Citation graph findings\nLater findings should cite earlier archival work.\nclaim: Citations preserve research lineage.\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.4122829579282552
+        },
+        {
+          "name": "reject-unknown",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "reject",
+            "--kind",
+            "unknown",
+            "--id",
+            "unknown-how-should-archived-findings-sta-74058718",
+            "--reason",
+            "covered by publication pair",
+            "--note",
+            "promoted into durable findings",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_gw0nnccf/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "Rejected and archived unknown:unknown-how-should-archived-findings-sta-74058718 \nat \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_g\nw0nnccf/workspace/.harness/research/archive/archive-unknown-unknown-how-should-a\nrchi-be18d78e\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.40987920784391463
+        },
+        {
+          "name": "list-archive",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "list-archive",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_gw0nnccf/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2513\n\u2503 Archive ID                            \u2503\u2503 Original ID                        \u2503\u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2529\n\u2502 archive-unknown-unknown-how-should-a\u2026 \u2502\u2502 unknown-how-should-archived-findi\u2026 \u2502\u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2518\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.4227622919715941
+        },
+        {
+          "name": "resurrect",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "research",
+            "resurrect",
+            "archive-unknown-unknown-how-should-archi-be18d78e",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_gw0nnccf/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "Resurrected archive-unknown-unknown-how-should-archi-be18d78e to \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_g\nw0nnccf/workspace/.harness/research/unknowns/unknown-how-should-archived-finding\ns-sta-74058718\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.40874554216861725
+        }
+      ],
+      "artifact_dir": "evals/runs/workflow-smoke-validation-v12/06-research-memory-cycle",
+      "duration_seconds": 6.27290324983187
+    }
+  ]
+}

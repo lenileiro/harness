@@ -1,0 +1,12 @@
+
+● Step 1/2: Write a greeting
+Hello from step 1                                                               
+
+● Step 2/2: Summarize it
+Summary done                                                                    
+
+✓ verify (verify_before_done)  No modifying tool calls detected — verification 
+not required.
+
+defense ledger:
+  verifiers: verify_before_done=1✓/0✗

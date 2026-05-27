@@ -1,0 +1,17 @@
+{
+  "name": "approvals-deny",
+  "argv": [
+    "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_sq5apvvo/workspace/fake-harness",
+    "approvals",
+    "deny",
+    "{latest_approval_id}",
+    "--db",
+    ".harness/harness.db"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Denied appr_0bc189072dd7  (read_file)\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.3579038339667022
+}

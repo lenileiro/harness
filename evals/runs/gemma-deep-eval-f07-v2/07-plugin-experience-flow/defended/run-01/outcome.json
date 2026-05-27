@@ -1,0 +1,357 @@
+{
+  "fixture": {
+    "name": "07-plugin-experience-flow",
+    "path": "/Users/leiro/workspace/harness/evals/fixtures/07-plugin-experience-flow",
+    "task_text": "# Create and validate a workspace experience plugin\n\nUse the workspace plugin mechanism in this fixture directory to add one\nexperience provider plugin, then validate it through the real Harness CLI.\n\nDo not edit files under the repo root. Work only inside this copied fixture\nworkspace.\n\nCreate these two files:\n\n1. `.harness/plugins/workspace-experience.toml`\n2. `workspace_plugin.py`\n\nRequirements:\n\n- The manifest must declare:\n  - `name = \"workspace-experience\"`\n  - `kind = \"experience\"`\n  - `provider = \"workspace_plugin:WorkspaceExperienceProvider\"`\n- `workspace_plugin.py` must define `WorkspaceExperienceProvider`\n- Use this import:\n  - `from harness.core.tips_models import Tip`\n- `WorkspaceExperienceProvider.query()` should return exactly one tip when the\n  task text mentions `plugin`\n- That tip text must be:\n  `Use plugin validation before runtime experiments.`\n- For unrelated task text, return no tips\n\nUse this exact provider shape:\n\n```python\nfrom harness.core.tips_models import Tip\n\n\nclass WorkspaceExperienceProvider:\n    def query(self, task_text: str, *, top_k: int = 3):\n        if \"plugin\" not in task_text.lower():\n            return []\n        return [\n            Tip(\n                text=\"Use plugin validation before runtime experiments.\",\n                triggers=(\"plugin\",),\n                weight=2.0,\n            )\n        ]\n```\n\nAfter creating the files, run:\n\n- `harness plugins validate --kind experience`\n\nThen run the tests.\n\nDo not search the repo for other provider implementations. The exact pattern\nabove is sufficient.\n",
+    "eval_md": "primary_dimension: correctness\n\ntrap: >\n  This fixture is about real workspace plugin loading, not just writing a TOML\n  file. A weak agent will stop after creating a manifest or only run\n  `plugins list`. The correct path is to create a loadable Python provider,\n  validate it through the CLI, and leave behind a provider that can actually be\n  imported and queried by the test suite.\n\ncorrect_fix: >\n  Add `.harness/plugins/workspace-experience.toml` with the required manifest\n  values and implement `workspace_plugin.py` using `from\n  harness.core.tips_models import Tip` and the exact query behavior described\n  in TASK.md. Run `harness plugins validate --kind experience` and then the\n  tests.\n\ndimensions: correctness, decomposition, verification, scope, overall\n\nscoring_notes: >\n  correctness: 5 if the provider is loadable and returns the expected tip for a\n  plugin query. 1 if the manifest is invalid or the provider cannot be loaded.\n  decomposition: 5 if the agent understands the manifest + provider +\n  validation sequence and completes it without wandering. 1 if it gets stuck in\n  help loops or only edits one side of the plugin.\n  verification: 5 if the agent runs the CLI validation and the tests. 1 if it\n  skips them.\n  scope: 5 if only the two workspace plugin files are added. 1 if unrelated\n  workspace files are created.\n",
+    "verify_command": "pytest tests/ -v --tb=short --no-header",
+    "phases": null,
+    "family": "plugin-experience-flow",
+    "holdout": false,
+    "mutated_from": null,
+    "metadata_path": "/Users/leiro/workspace/harness/evals/fixtures/07-plugin-experience-flow/fixture.yaml",
+    "rules": {
+      "behavior_category": "decomposition",
+      "primary_dimension": "correctness",
+      "expected_first_step": "inspect workspace",
+      "allowed_paths": [],
+      "disallowed_paths": [],
+      "required_verification": "pytest tests/ -v --tb=short --no-header",
+      "trap": "This fixture is about real workspace plugin loading, not just writing a TOML file. A weak agent will stop after creating a manifest or only run `plugins list`. The correct path is to create a loadable Python provider, validate it through the CLI, and leave behind a provider that can actually be imported and queried by the test suite.",
+      "correct_fix": "Add `.harness/plugins/workspace-experience.toml` with the required manifest values and implement `workspace_plugin.py` using `from harness.core.tips_models import Tip` and the exact query behavior described in TASK.md. Run `harness plugins validate --kind experience` and then the tests.",
+      "dimensions": [
+        "correctness",
+        "decomposition",
+        "verification",
+        "scope",
+        "overall"
+      ],
+      "scoring_notes": "correctness: 5 if the provider is loadable and returns the expected tip for a plugin query. 1 if the manifest is invalid or the provider cannot be loaded. decomposition: 5 if the agent understands the manifest + provider + validation sequence and completes it without wandering. 1 if it gets stuck in help loops or only edits one side of the plugin. verification: 5 if the agent runs the CLI validation and the tests. 1 if it skips them. scope: 5 if only the two workspace plugin files are added. 1 if unrelated workspace files are created."
+    }
+  },
+  "transcript": "adaptive strategy feature task -> keep structure light\n\n\u2192 list_dir(path='.')\n\u2713 list_dir: .git/\n.gitignore\nTASK.md\ntests/  (0.0s)\n\n\u2192 list_dir(path='fixture_workspace')\n\u2717 list_dir: path does not exist: fixture_workspace  (0.0s)\n\n\u2192 shell(command=\"find . -maxdepth 2 -not -path '*/.*'\")\n\u2713 shell: exit_code: 0\n\nstdout:\n.\n./tests\n./tests/__init__.py\n./tests/test_plugin_flow.py\n./TASK.md\n  (0.0s)\n\n\u2192 read_file(path='TASK.md')\n\u2713 read_file: # Create and validate a workspace experience plugin\n\nUse the workspace plugin mechanism in this fixture directory to add one\nexperience provider plugin, then validate it through the real Harness CLI.\u2026  \u2026 \n1,567 bytes  (0.0s)\n\n\u2192 shell(command='ls -R')\n\u2713 shell: exit_code: 0\n\nstdout:\nTASK.md\ntests\n\n./tests:\n__init__.py\ntest_plugin_flow.py\n  (0.0s)\n\n\u2192 shell(command='ls -a')\n\u2713 shell: exit_code: 0\n\nstdout:\n.\n..\n.git\n.gitignore\nTASK.md\ntests\n  (0.0s)\n\n\u2192 shell(command='mkdir -p .harness/plugins')\n\u2713 shell: exit_code: 0\n\n(no output)  (0.0s)\n\n\u2192 write_file(content='name = \"workspace-experience\"\\nkind = \u2026, \npath='.harness/plugins/workspace-experience.\u2026)\n\u2713 write_file: wrote 108 bytes to .harness/plugins/workspace-experience.toml  \n(0.0s)\n\n\u2192 write_file(content='from harness.core.tips_models import T\u2026, \npath='workspace_plugin.py')\n\u2713 write_file: wrote 400 bytes to workspace_plugin.py  (0.0s)\n\n\u2192 shell(command='harness plugins validate --kind experi\u2026)\n\u2713 shell: exit_code: 0\n\nstdout:\n\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2513\n\u2503 Plugin               \u2503 Kind       \u2503 Source    \u2503 Status \u2503 Detail \u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2026  \u2026 362 bytes  (0.4s)\n\n\u2192 shell(command='pytest tests/test_plugin_flow.py')\n\u2713 shell: exit_code: 0\n\nstdout:\n============================= test session starts ==============================\nplatform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0\nrootdir: /private/var/folders/8p/1\u2026  \u2026 629 bytes  (1.5s)\nI have successfully created the workspace experience plugin and validated it.   \n\n 1 Created .harness/plugins/workspace-experience.toml with the required         \n   manifest.                                                                    \n 2 Created workspace_plugin.py with the specified WorkspaceExperienceProvider   \n   implementation.                                                              \n 3 Validated the plugin using harness plugins validate --kind experience, which \n   returned ok.                                                                 \n 4 Ran the tests using pytest tests/test_plugin_flow.py, which passed.          \n\n                                                                                \n $ harness plugins validate --kind experience                                   \n \u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2513            \n \u2503 Plugin               \u2503 Kind       \u2503 Source    \u2503 Status \u2503 Detail \u2503            \n \u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2529                    \n \u2502 workspace-experience \u2502 experience \u2502 workspace \u2502 ok     \u2502 ok     \u2502            \n \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518            \n                                                                                \n $ pytest tests/test_plugin_flow.py                                             \n ============================== 1 passed in 1.20s                               \n ===============================                                                \n                                                                                \n\n\u2717 verify (chained)  You made file changes but never ran verify_work. You must \ntest your changes before finishing. Call verify_work with the appropriate \ncommand (e.g. 'pytest tests/', 'npm test', 'cargo test'). Read the output \u2014 if \ntests fail, fix the specific failures and call verify_work again. Iterate until \nall tests pass.\n\n\u2192 verify_work(command='pytest tests/test_plugin_flow.py')\n\u2713 verify_work: PASSED\n\n============================= test session starts ==============================\nplatform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0\nrootdir: /private/var/folders/8p/1_033mns3v1gvkq\u2026  \u2026 614 bytes  (1.4s)\nThe task is complete. I have created the plugin files, validated them with the  \nHarness CLI, and verified the implementation with the test suite.               \n\n 1 Created .harness/plugins/workspace-experience.toml with the required         \n   configuration.                                                               \n 2 Created workspace_plugin.py with the WorkspaceExperienceProvider class as    \n   specified.                                                                   \n 3 Validated the plugin using harness plugins validate --kind experience.       \n 4 Verified the implementation by running pytest tests/test_plugin_flow.py,     \n   which passed.                                                                \n\n\u2713 verify (shell)  ============================= test session starts \n==============================\ncollecting ... collected 1 item\n\ntests/test_plugin_flow.py::test_workspace_experience_plugin_loads_and_queries \nPASSED [100%]\n\n============================== 1 passed in 1.16s ===============================\n\ndefense ledger:\n  verifiers: chained=0\u2713/1\u2717, shell=1\u2713/0\u2717\n  repair attempts: 1\n  tools: shell x6, list_dir x2 (err x1), write_file x2, read_file x1, \nverify_work x1\n  lifeharness: L2 tips x3\n",
+  "git_diff": "",
+  "test_output": "============================= test session starts ==============================\ncollecting ... collected 1 item\n\ntests/test_plugin_flow.py::test_workspace_experience_plugin_loads_and_queries PASSED [100%]\n\n============================== 1 passed in 1.15s ===============================\n",
+  "agent_exit_code": 0,
+  "test_exit_code": 0,
+  "variant": "defended",
+  "hard_metrics": {
+    "verify_passed": true,
+    "run_exit_code": 0,
+    "verify_exit_code": 0,
+    "files_touched": 0,
+    "lines_added": 0,
+    "lines_deleted": 0,
+    "tool_calls": 31,
+    "shell_commands": 14,
+    "did_run_verification": true,
+    "agent_duration_seconds": 24.133313625119627,
+    "verify_duration_seconds": 1.3572347918525338,
+    "total_duration_seconds": 25.49054841697216,
+    "time_to_first_verification_seconds": 24.133313625119627,
+    "edit_before_repro": true,
+    "premature_completion": false,
+    "redundant_tool_calls": 21,
+    "retry_loops": 13,
+    "verification_after_failure": true
+  },
+  "trace_events": [
+    {
+      "kind": "agent_exit",
+      "order": 1,
+      "message": "",
+      "data": {
+        "exit_code": 0
+      }
+    },
+    {
+      "kind": "verify_exit",
+      "order": 2,
+      "message": "",
+      "data": {
+        "exit_code": 0
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 3,
+      "message": "",
+      "data": {
+        "tool": "list_dir"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 4,
+      "message": "",
+      "data": {
+        "tool": "list_dir"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 5,
+      "message": "",
+      "data": {
+        "tool": "list_dir"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 6,
+      "message": "",
+      "data": {
+        "tool": "list_dir"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 7,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 8,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 9,
+      "message": "",
+      "data": {
+        "tool": "read_file"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 10,
+      "message": "",
+      "data": {
+        "tool": "read_file"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 11,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 12,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 13,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 14,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 15,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 16,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 17,
+      "message": "",
+      "data": {
+        "tool": "write_file"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 18,
+      "message": "",
+      "data": {
+        "tool": "write_file"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 19,
+      "message": "",
+      "data": {
+        "tool": "write_file"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 20,
+      "message": "",
+      "data": {
+        "tool": "write_file"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 21,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 22,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 23,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 24,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 25,
+      "message": "",
+      "data": {
+        "tool": "verify_work"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 26,
+      "message": "",
+      "data": {
+        "tool": "verify_work"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 27,
+      "message": "",
+      "data": {
+        "tool": "verify_work"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 28,
+      "message": "",
+      "data": {
+        "tool": "verify_work"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 29,
+      "message": "",
+      "data": {
+        "tool": "verify_work"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 30,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 31,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 32,
+      "message": "",
+      "data": {
+        "tool": "read_file"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 33,
+      "message": "",
+      "data": {
+        "tool": "verify_work"
+      }
+    },
+    {
+      "kind": "verification_observed",
+      "order": 34,
+      "message": "Detected verification marker for pytest.",
+      "data": {
+        "command": "pytest tests/ -v --tb=short --no-header"
+      }
+    }
+  ],
+  "artifact_dir": "evals/runs/gemma-deep-eval-f07-v2/07-plugin-experience-flow/defended/run-01",
+  "agent_command": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "run",
+    "# Create and validate a workspace experience plugin\n\nUse the workspace plugin mechanism in this fixture directory to add one\nexperience provider plugin, then validate it through the real Harness CLI.\n\nDo not edit files under the repo root. Work only inside this copied fixture\nworkspace.\n\nCreate these two files:\n\n1. `.harness/plugins/workspace-experience.toml`\n2. `workspace_plugin.py`\n\nRequirements:\n\n- The manifest must declare:\n  - `name = \"workspace-experience\"`\n  - `kind = \"experience\"`\n  - `provider = \"workspace_plugin:WorkspaceExperienceProvider\"`\n- `workspace_plugin.py` must define `WorkspaceExperienceProvider`\n- Use this import:\n  - `from harness.core.tips_models import Tip`\n- `WorkspaceExperienceProvider.query()` should return exactly one tip when the\n  task text mentions `plugin`\n- That tip text must be:\n  `Use plugin validation before runtime experiments.`\n- For unrelated task text, return no tips\n\nUse this exact provider shape:\n\n```python\nfrom harness.core.tips_models import Tip\n\n\nclass WorkspaceExperienceProvider:\n    def query(self, task_text: str, *, top_k: int = 3):\n        if \"plugin\" not in task_text.lower():\n            return []\n        return [\n            Tip(\n                text=\"Use plugin validation before runtime experiments.\",\n                triggers=(\"plugin\",),\n                weight=2.0,\n            )\n        ]\n```\n\nAfter creating the files, run:\n\n- `harness plugins validate --kind experience`\n\nThen run the tests.\n\nDo not search the repo for other provider implementations. The exact pattern\nabove is sufficient.",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_w_pbaafy/07-plugin-experience-flow",
+    "--yes",
+    "--in-memory",
+    "--provider",
+    "openrouter",
+    "--model",
+    "google/gemma-4-26b-a4b-it",
+    "--max-repair",
+    "2",
+    "--profile",
+    "adaptive",
+    "--verify",
+    "shell",
+    "--verify-command",
+    "pytest tests/ -v --tb=short --no-header",
+    "--critic",
+    "llm+search"
+  ],
+  "verify_command": "pytest tests/ -v --tb=short --no-header"
+}

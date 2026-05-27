@@ -1,0 +1,14 @@
+{
+  "name": "harness-whatsapp-bridge",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "dependencies": {
+    "@hapi/boom": "^10.0.1",
+    "@whiskeysockets/baileys": "^6.7.18",
+    "express": "^4.21.2",
+    "link-preview-js": "^3.1.0",
+    "pino": "^9.9.0",
+    "qrcode-terminal": "^0.12.0"
+  }
+}

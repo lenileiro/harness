@@ -1,0 +1,2 @@
+2026-05-24T22:32:16.475733Z [warning  ] agent.step.error               attempt=0 error='exceeded max_steps=40 without final answer' kind=internal provider=openrouter
+2026-05-24T22:32:16.475955Z [error    ] agent.run.failed               error='exceeded max_steps=40 without final answer' kind=internal

@@ -1,0 +1,101 @@
+{
+  "fixture_name": "17-tune-cycle",
+  "passed": true,
+  "steps_total": 5,
+  "steps_passed": 5,
+  "step_results": [
+    {
+      "name": "tune-list",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_rg4fgn65/workspace/fake-harness",
+        "tune",
+        "list",
+        "--cwd",
+        "."
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2513\n\u2503 Key                  \u2503 Current version \u2503 Rationale \u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2529\n\u2502 minimal_fix_verifier \u2502               2 \u2502 tuned     \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.9783965409733355
+    },
+    {
+      "name": "tune-show-current",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_rg4fgn65/workspace/fake-harness",
+        "tune",
+        "show",
+        "minimal_fix_verifier",
+        "--cwd",
+        "."
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "minimal_fix_verifier v2\ntuned\n\nrevised prompt\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.41749541694298387
+    },
+    {
+      "name": "tune-rollback",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_rg4fgn65/workspace/fake-harness",
+        "tune",
+        "rollback",
+        "minimal_fix_verifier",
+        "--cwd",
+        "."
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "Rolled back v2. Current is now v1.\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.41828183294273913
+    },
+    {
+      "name": "tune-show-rolled-back",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_rg4fgn65/workspace/fake-harness",
+        "tune",
+        "show",
+        "minimal_fix_verifier",
+        "--cwd",
+        "."
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "minimal_fix_verifier v1\ninitial\n\nseed prompt\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.40619895816780627
+    },
+    {
+      "name": "tune-propose-dry-run",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_rg4fgn65/workspace/fake-harness",
+        "tune",
+        "propose",
+        "minimal_fix_verifier",
+        "--current",
+        "current.txt",
+        "--pairs",
+        "pairs.json",
+        "--provider",
+        "ollama",
+        "--model",
+        "test-model",
+        "--dry-run"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "Proposed delta for 'minimal_fix_verifier'\n\nRationale: tighten scope discipline\n\nPrefer the minimum diff that fixes the issue.\n\n--dry-run: not saving.\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.4116271249949932
+    }
+  ],
+  "artifact_dir": "evals/runs/workflow-smoke-validation-v25/17-tune-cycle",
+  "duration_seconds": 2.6379311671480536
+}

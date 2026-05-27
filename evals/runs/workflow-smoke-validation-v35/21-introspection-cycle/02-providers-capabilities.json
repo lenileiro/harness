@@ -1,0 +1,15 @@
+{
+  "name": "providers-capabilities",
+  "argv": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "providers",
+    "capabilities",
+    "ollama"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n\u2502 streaming          \u2502 True  \u2502\n\u2502 tool_use           \u2502 True  \u2502\n\u2502 structured_output  \u2502 False \u2502\n\u2502 max_context_tokens \u2502 \u2014     \u2502\n\u2502 models             \u2502 \u2014     \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.4038852918893099
+}

@@ -1,0 +1,14 @@
+{
+  "name": "eval-validate",
+  "argv": [
+    "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_491oetfo/workspace/fake-harness",
+    "eval",
+    "validate"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "    Eval asset validation    \n\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2513\n\u2503 Fixture set       \u2503 Count \u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2529\n\u2502 fixtures          \u2502     1 \u2502\n\u2502 fixtures-mutated  \u2502     1 \u2502\n\u2502 fixtures-holdout  \u2502     1 \u2502\n\u2502 review-fixtures   \u2502     1 \u2502\n\u2502 research-fixtures \u2502     1 \u2502\n\u2502 docs-fixtures     \u2502     1 \u2502\n\u2502 workflow-fixtures \u2502     1 \u2502\n\u2502 gold labels       \u2502     6 \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.3440459589473903
+}

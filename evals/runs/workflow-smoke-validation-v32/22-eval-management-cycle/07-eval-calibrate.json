@@ -1,0 +1,17 @@
+{
+  "name": "eval-calibrate",
+  "argv": [
+    "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_k4jnnz0q/workspace/fake-harness",
+    "eval",
+    "calibrate",
+    "report.json",
+    "--gold-dir",
+    "evals/gold"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "         Judge calibration         \n\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2513\n\u2503 Dimension    \u2503 N \u2503 Exact \u2503  MAE \u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2529\n\u2502 verification \u2502 1 \u2502  1.00 \u2502 0.00 \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.3930009580217302
+}

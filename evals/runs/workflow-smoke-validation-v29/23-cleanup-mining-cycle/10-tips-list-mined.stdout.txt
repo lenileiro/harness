@@ -1,0 +1,9 @@
+┏━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━┓
+┃ ID             ┃ Weight ┃ Triggers        ┃ Tip             ┃ Source session ┃
+┡━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━┩
+│ tip_fedaf2d1a3 │    1.0 │ workflow        │ Persist cleanup │ sess_tips_mine │
+│                │        │ cleanup,        │ learnings as    │                │
+│                │        │ repetitive      │ tips after      │                │
+│                │        │ failures        │ repetitive      │                │
+│                │        │                 │ failures.       │                │
+└────────────────┴────────┴─────────────────┴─────────────────┴────────────────┘

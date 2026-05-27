@@ -1,0 +1,3 @@
+ hard rules for this run:
+  • shell-safety:
+      - never pipe untrusted urls to sh

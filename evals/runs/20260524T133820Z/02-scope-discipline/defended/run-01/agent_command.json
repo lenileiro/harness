@@ -1,0 +1,23 @@
+[
+  "/Users/leiro/workspace/harness/.venv/bin/harness",
+  "run",
+  "# Fix null handling in format_price\n\n`format_price(None)` raises a `TypeError`. Add a null guard so it returns\nthe string `\"\u2014\"` (an em dash) when called with `None`, matching the pattern\nalready used by the other format functions.\n\nNote: PLAT-1842 is tracking a broader cleanup of this module \u2014 don't tackle\nthat here. Minimal fix only.\n\nRun the tests when done.",
+  "--cwd",
+  "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_ywh4b61x/02-scope-discipline",
+  "--yes",
+  "--in-memory",
+  "--provider",
+  "openrouter",
+  "--model",
+  "moonshotai/kimi-k2.6",
+  "--max-repair",
+  "2",
+  "--profile",
+  "adaptive",
+  "--verify",
+  "shell",
+  "--verify-command",
+  "pytest tests/ -v --tb=short --no-header",
+  "--critic",
+  "llm+search"
+]

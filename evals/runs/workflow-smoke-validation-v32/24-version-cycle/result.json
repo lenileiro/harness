@@ -1,0 +1,23 @@
+{
+  "fixture_name": "24-version-cycle",
+  "passed": true,
+  "steps_total": 1,
+  "steps_passed": 1,
+  "step_results": [
+    {
+      "name": "version",
+      "argv": [
+        "/Users/leiro/workspace/harness/.venv/bin/harness",
+        "version"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "0.0.0\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.4022562080062926
+    }
+  ],
+  "artifact_dir": "evals/runs/workflow-smoke-validation-v32/24-version-cycle",
+  "duration_seconds": 0.4036771669052541
+}

@@ -1,0 +1,133 @@
+{
+  "workspace": "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/mission_live_plan_mf8rvdnk",
+  "mission_id": "mission-live-mission-plan-smoke-4957ef45",
+  "create": {
+    "rc": 0,
+    "stdout": "Created mission mission-live-mission-plan-smoke-4957ef45 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/mission_live_plan_mf8rv\ndnk/.harness/missions/missions/mission-live-mission-plan-smoke-4957ef45\n",
+    "stderr": ""
+  },
+  "plan": {
+    "rc": 0,
+    "stdout": "{\n  \"draft\": {\n    \"contract_summary\": \"A system to transform high-level text goals into structured, actionable JSON mission plans containing milestones, assertions, and features with strict dependency mapping.\",\n    \"milestones\": [\n      {\n        \"label\": \"m1\",\n        \"title\": \"Core Plan Engine\",\n        \"summary\": \"Implementation of the logic to parse goals and generate the structured JSON mission plan schema.\"\n      },\n      {\n        \"label\": \"m2\",\n        \"title\": \"Persistence Layer\",\n        \"summary\": \"Mechanism to save and retrieve generated mission plans from disk or database.\"\n      }\n    ],\n    \"assertions\": [\n      {\n        \"label\": \"a1\",\n        \"title\": \"Schema Compliance\",\n        \"description\": \"The output must strictly adhere to the provided JSON schema, including all required keys.\",\n        \"kind\": \"contract\",\n        \"verification_method\": \"JSON schema validation against the target output.\"\n      },\n      {\n        \"label\": \"a2\",\n        \"title\": \"Logical Integrity\",\n        \"description\": \"Every feature must be linked to at least one assertion, and every feature must belong to a milestone.\",\n        \"kind\": \"behavior\",\n        \"verification_method\": \"Graph traversal of the generated JSON to ensure no orphaned features or assertions.\"\n      },\n      {\n        \"label\": \"a3\",\n        \"title\": \"Goal Coverage\",\n        \"description\": \"The generated plan must include at least one milestone, one assertion, and one feature.\",\n        \"kind\": \"behavior\",\n        \"verification_method\": \"Check length of arrays in the generated JSON object.\"\n      }\n    ],\n    \"features\": [\n      {\n        \"label\": \"f1\",\n        \"milestone_label\": \"m1\",\n        \"title\": \"Plan Generator Implementation\",\n        \"summary\": \"Implement the primary logic that maps input strings to the JSON structure.\",\n        \"assigned_role\": \"worker\",\n        \"target_files\": [\n          \"src/planner/engine.py\"\n        ],\n        \"depends_on_labels\": [],\n        \"assertion_labels\": [\n          \"a1\",\n          \"a3\"\n        ],\n        \"research_refs\": []\n      },\n      {\n        \"label\": \"f2\",\n        \"milestone_label\": \"m1\",\n        \"title\": \"Dependency Validator\",\n        \"summary\": \"Implement a validator that ensures features point to valid milestones and assertions.\",\n        \"assigned_role\": \"worker\",\n        \"target_files\": [\n          \"src/planner/validator.py\"\n        ],\n        \"depends_on_labels\": [\n          \"f1\"\n        ],\n        \"assertion_labels\": [\n          \"a2\"\n        ],\n        \"research_refs\": []\n      },\n      {\n        \"label\": \"f3\",\n        \"milestone_label\": \"m2\",\n        \"title\": \"File System Persistence\",\n        \"summary\": \"Implement functionality to write the mission plan to a .json file.\",\n        \"assigned_role\": \"worker\",\n        \"target_files\": [\n          \"src/planner/storage.py\"\n        ],\n        \"depends_on_labels\": [\n          \"f1\"\n        ],\n        \"assertion_labels\": [\n          \"a1\"\n        ],\n        \"research_refs\": []\n      }\n    ]\n  },\n  \"applied\": {\n    \"mission_id\": \"mission-live-mission-plan-smoke-4957ef45\",\n    \"milestones\": 2,\n    \"features\": 3,\n    \"assertions\": 3,\n    \"current_milestone_id\": \"milestone-core-plan-engine-798241e7\"\n  }\n}\n",
+    "stderr": "an error occurred during closing of asynchronous generator <async_generator object AsyncClient.stream at 0x10a3c5300>\nasyncgen: <async_generator object AsyncClient.stream at 0x10a3c5300>\nRuntimeError: aclose(): asynchronous generator is already running\n"
+  },
+  "contract": {
+    "rc": 0,
+    "stdout": "contract-live-mission-plan-smoke-8fd26483\nmission_id=mission-live-mission-plan-smoke-4957ef45\n\nSummary\nA system to transform high-level text goals into structured, actionable JSON \nmission plans containing milestones, assertions, and features with strict \ndependency mapping.\n\nAssertions\n- assertion-schema-compliance-8b732f99: Schema Compliance  -> JSON schema \nvalidation against the target output.\n- assertion-logical-integrity-8bb4817a: Logical Integrity  -> Graph traversal of\nthe generated JSON to ensure no orphaned features or assertions.\n- assertion-goal-coverage-0af8ce3c: Goal Coverage  -> Check length of arrays in \nthe generated JSON object.\n",
+    "stderr": ""
+  },
+  "milestones": {
+    "rc": 0,
+    "stdout": "\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2513\n\u2503 ID                                   \u2503 Title             \u2503 Status  \u2503 Order \u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2529\n\u2502 milestone-core-plan-engine-798241e7  \u2502 Core Plan Engine  \u2502 pending \u2502 1     \u2502\n\u2502 milestone-persistence-layer-a10f5068 \u2502 Persistence Layer \u2502 pending \u2502 2     \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n",
+    "stderr": ""
+  },
+  "features": {
+    "rc": 0,
+    "stdout": "\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2533\u2501\u2533\u2513\n\u2503 ID                                     \u2503\u2503 Milestone                     \u2503 \u2503 \u2503\u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2547\u2501\u2547\u2529\n\u2502 feature-dependency-validator-d1a50ba8  \u2502\u2502 milestone-core-plan-engine-7\u2026 \u2502 \u2502 \u2502\u2502\n\u2502 feature-file-system-persistence-edd67\u2026 \u2502\u2502 milestone-persistence-layer-\u2026 \u2502 \u2502 \u2502\u2502\n\u2502 feature-plan-generator-implementation\u2026 \u2502\u2502 milestone-core-plan-engine-7\u2026 \u2502 \u2502 \u2502\u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2534\u2500\u2534\u2518\n",
+    "stderr": ""
+  },
+  "show": {
+    "rc": 0,
+    "stdout": "Live Mission Plan Smoke\nid=mission-live-mission-plan-smoke-4957ef45\nstatus=planned\ncreated_by=human\ncurrent_milestone_id=milestone-core-plan-engine-798241e7\n\nGoal\nGenerate a mission plan from a high-level goal and persist milestones, features,\nand assertions.\n",
+    "stderr": ""
+  },
+  "plan_payload": {
+    "draft": {
+      "contract_summary": "A system to transform high-level text goals into structured, actionable JSON mission plans containing milestones, assertions, and features with strict dependency mapping.",
+      "milestones": [
+        {
+          "label": "m1",
+          "title": "Core Plan Engine",
+          "summary": "Implementation of the logic to parse goals and generate the structured JSON mission plan schema."
+        },
+        {
+          "label": "m2",
+          "title": "Persistence Layer",
+          "summary": "Mechanism to save and retrieve generated mission plans from disk or database."
+        }
+      ],
+      "assertions": [
+        {
+          "label": "a1",
+          "title": "Schema Compliance",
+          "description": "The output must strictly adhere to the provided JSON schema, including all required keys.",
+          "kind": "contract",
+          "verification_method": "JSON schema validation against the target output."
+        },
+        {
+          "label": "a2",
+          "title": "Logical Integrity",
+          "description": "Every feature must be linked to at least one assertion, and every feature must belong to a milestone.",
+          "kind": "behavior",
+          "verification_method": "Graph traversal of the generated JSON to ensure no orphaned features or assertions."
+        },
+        {
+          "label": "a3",
+          "title": "Goal Coverage",
+          "description": "The generated plan must include at least one milestone, one assertion, and one feature.",
+          "kind": "behavior",
+          "verification_method": "Check length of arrays in the generated JSON object."
+        }
+      ],
+      "features": [
+        {
+          "label": "f1",
+          "milestone_label": "m1",
+          "title": "Plan Generator Implementation",
+          "summary": "Implement the primary logic that maps input strings to the JSON structure.",
+          "assigned_role": "worker",
+          "target_files": [
+            "src/planner/engine.py"
+          ],
+          "depends_on_labels": [],
+          "assertion_labels": [
+            "a1",
+            "a3"
+          ],
+          "research_refs": []
+        },
+        {
+          "label": "f2",
+          "milestone_label": "m1",
+          "title": "Dependency Validator",
+          "summary": "Implement a validator that ensures features point to valid milestones and assertions.",
+          "assigned_role": "worker",
+          "target_files": [
+            "src/planner/validator.py"
+          ],
+          "depends_on_labels": [
+            "f1"
+          ],
+          "assertion_labels": [
+            "a2"
+          ],
+          "research_refs": []
+        },
+        {
+          "label": "f3",
+          "milestone_label": "m2",
+          "title": "File System Persistence",
+          "summary": "Implement functionality to write the mission plan to a .json file.",
+          "assigned_role": "worker",
+          "target_files": [
+            "src/planner/storage.py"
+          ],
+          "depends_on_labels": [
+            "f1"
+          ],
+          "assertion_labels": [
+            "a1"
+          ],
+          "research_refs": []
+        }
+      ]
+    },
+    "applied": {
+      "mission_id": "mission-live-mission-plan-smoke-4957ef45",
+      "milestones": 2,
+      "features": 3,
+      "assertions": 3,
+      "current_milestone_id": "milestone-core-plan-engine-798241e7"
+    }
+  }
+}

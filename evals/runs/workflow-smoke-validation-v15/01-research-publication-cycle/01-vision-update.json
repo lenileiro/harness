@@ -1,0 +1,24 @@
+{
+  "name": "vision-update",
+  "argv": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "vision",
+    "update",
+    "--title",
+    "Autonomous research harness",
+    "--summary",
+    "Turn Harness into a compounding research and promotion system.",
+    "--theme",
+    "autonomous-improvement",
+    "--success-metric",
+    "high-signal autonomous PRs",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_4tkgm7ch/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Updated vision at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_4\ntkgm7ch/workspace/.harness/research/vision/current\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.4219667077995837
+}

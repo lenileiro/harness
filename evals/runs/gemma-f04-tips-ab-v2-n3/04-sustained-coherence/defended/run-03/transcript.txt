@@ -1,0 +1,8 @@
+adaptive strategy scope-sensitive prompt -> strict structural checks
+2026-05-24T16:21:14.066983Z [warning  ] agent.step.error               attempt=0 error='Ollama returned 404 — model likely not pulled. Body: {"error":{"message":"model \'openrouter/google/gemma-4-26b-a4b-it\' not found","type":"not_found_error","param":null,"code":null}}\n' kind=model_unavailable provider=ollama
+2026-05-24T16:21:14.067098Z [error    ] agent.run.failed               error='Ollama returned 404 — model likely not pulled. Body: {"error":{"message":"model \'openrouter/google/gemma-4-26b-a4b-it\' not found","type":"not_found_error","param":null,"code":null}}\n' kind=model_unavailable
+
+Error (model_unavailable): Ollama returned 404 — model likely not pulled. Body: 
+{"error":{"message":"model 'openrouter/google/gemma-4-26b-a4b-it' not 
+found","type":"not_found_error","param":null,"code":null}}
+

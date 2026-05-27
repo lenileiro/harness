@@ -1,0 +1,17 @@
+{
+  "name": "resume-set-current",
+  "argv": [
+    "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_hpm273rn/workspace/fake-harness",
+    "resume",
+    "set-current",
+    "beta",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_hpm273rn/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Current feature is now 'beta'\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.4074704160448164
+}

@@ -1,0 +1,64 @@
+diff --git a/src/cache.py b/src/cache.py
+index 3d8a95a..d1b92bc 100644
+--- a/src/cache.py
++++ b/src/cache.py
+@@ -11,7 +11,7 @@ from typing import Any
+ 
+ # Configurable timeout for upstream fetch calls.
+ # The batch endpoint passes this when calling get_or_fetch().
+-TIMEOUT_SECONDS = 5
++TIMEOUT_SECONDS = 30
+ 
+ 
+ class SimpleCache:
+@@ -20,14 +20,13 @@ class SimpleCache:
+     On a cache miss, calls the provided fetch coroutine to populate the value.
+     The result is stored and returned to the caller.
+ 
+-    Note: concurrent requests for the same key each trigger their own
+-    independent fetch — in-flight deduplication is not implemented.
+-
+-    TODO: Add deduplication to avoid thundering herd on cache misses.
++    Concurrent requests for the same key are deduplicated: only one upstream
++    fetch is performed and all waiters receive the same result.
+     """
+ 
+     def __init__(self) -> None:
+         self._store: dict[str, Any] = {}
++        self._inflight: dict[str, asyncio.Task[Any]] = {}
+ 
+     async def get_or_fetch(
+         self,
+@@ -46,12 +45,26 @@ class SimpleCache:
+         if key in self._store:
+             return self._store[key]
+ 
+-        # MISSING: no in-flight deduplication.
+-        # Multiple concurrent callers for the same key all reach this line and
+-        # each triggers its own fetch() call independently.
+-        value = await asyncio.wait_for(fetch(key), timeout=fetch_timeout)
+-        self._store[key] = value
+-        return value
++        if key in self._inflight:
++            return await self._inflight[key]
++
++        task = asyncio.create_task(self._do_fetch(key, fetch, fetch_timeout))
++        self._inflight[key] = task
++        return await task
++
++    async def _do_fetch(
++        self,
++        key: str,
++        fetch: Callable[[str], Awaitable[Any]],
++        fetch_timeout: float,
++    ) -> Any:
++        """Perform the actual fetch, store the result, and clean up in-flight tracking."""
++        try:
++            value = await asyncio.wait_for(fetch(key), timeout=fetch_timeout)
++            self._store[key] = value
++            return value
++        finally:
++            self._inflight.pop(key, None)
+ 
+     def invalidate(self, key: str) -> None:
+         """Remove a key from the cache."""

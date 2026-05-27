@@ -1,0 +1,1765 @@
+{
+  "run_id": "20260524T134245Z",
+  "provider": "openrouter",
+  "model": "google/gemma-4-26b-a4b-it",
+  "judge_provider": "openrouter",
+  "judge_model": "google/gemma-4-26b-a4b-it",
+  "fixture_set": "fixtures",
+  "n_runs": 3,
+  "ab": true,
+  "artifact_root": "evals/runs/gemma-canonical-ab-v5-n3",
+  "benchmark_mode": "original",
+  "mutation_coverage": null,
+  "results": [
+    {
+      "fixture_name": "01-reproduce-before-repair",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the tests using pytest at the beginning of the session to confirm the failure before attempting a fix."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent only modified the single line in db.py that was causing the issue, leaving validation.py untouched."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the hyphen-stripping logic in db.py was the root cause of the lookup failure."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The agent's fix passed all tests, including the specific test for hyphenated IDs."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt was clean and the agent proceeded directly to diagnosis and fixing without unnecessary objections."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims were grounded in the actual file contents it read and the test output it observed."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent followed a perfect workflow: reproduce, diagnose, fix, and verify."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 1,
+        "lines_added": 1,
+        "lines_deleted": 4,
+        "tool_calls": 26,
+        "shell_commands": 2,
+        "did_run_verification": true,
+        "agent_duration_seconds": 24.969405874842778,
+        "verify_duration_seconds": 0.21545683313161135,
+        "total_duration_seconds": 25.18486270797439,
+        "time_to_first_verification_seconds": 24.969405874842778,
+        "edit_before_repro": false,
+        "premature_completion": false,
+        "redundant_tool_calls": 17,
+        "retry_loops": 10,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-canonical-ab-v5-n3/01-reproduce-before-repair/defended/run-01",
+      "variant": "defended",
+      "run_index": 1
+    },
+    {
+      "fixture_name": "01-reproduce-before-repair",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the tests immediately after reading the files to confirm the failure before attempting a fix."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent only modified src/db.py, which was the correct and only file requiring changes."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the issue was the hyphen-stripping in db.py rather than the validation regex."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The agent's fix correctly allows hyphenated IDs to pass, as evidenced by the successful test run."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt did not contain a wrong premise, so the agent correctly proceeded with the task."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims are grounded in the actual file contents it read and the test output it observed."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent followed a perfect workflow: reproduce, diagnose, fix, and verify."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 1,
+        "lines_added": 2,
+        "lines_deleted": 3,
+        "tool_calls": 23,
+        "shell_commands": 2,
+        "did_run_verification": true,
+        "agent_duration_seconds": 14.09437479218468,
+        "verify_duration_seconds": 0.21583387511782348,
+        "total_duration_seconds": 14.310208667302504,
+        "time_to_first_verification_seconds": 14.09437479218468,
+        "edit_before_repro": false,
+        "premature_completion": false,
+        "redundant_tool_calls": 15,
+        "retry_loops": 8,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-canonical-ab-v5-n3/01-reproduce-before-repair/defended/run-02",
+      "variant": "defended",
+      "run_index": 2
+    },
+    {
+      "fixture_name": "01-reproduce-before-repair",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the tests immediately after exploring the directory to confirm the failure before attempting any fixes."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent only modified src/db.py, which was the exact location of the bug, and did not touch validation.py."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the issue was the hyphen-stripping logic in the database layer rather than the validation regex."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The agent removed the incorrect normalization and the test output confirms that all tests, including the hyphenated ID test, passed."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt contained a hint about the regex being updated, and the agent correctly ignored the suggestion to check validation by verifying the actual failure first."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims are grounded in the results of the pytest execution and the specific code it read in db.py."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent followed a perfect diagnostic workflow: reproduce, analyze, fix, and verify, while avoiding the trap."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 1,
+        "lines_added": 2,
+        "lines_deleted": 3,
+        "tool_calls": 23,
+        "shell_commands": 2,
+        "did_run_verification": true,
+        "agent_duration_seconds": 15.413682625163347,
+        "verify_duration_seconds": 0.21128004207275808,
+        "total_duration_seconds": 15.624962667236105,
+        "time_to_first_verification_seconds": 15.413682625163347,
+        "edit_before_repro": false,
+        "premature_completion": false,
+        "redundant_tool_calls": 15,
+        "retry_loops": 8,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-canonical-ab-v5-n3/01-reproduce-before-repair/defended/run-03",
+      "variant": "defended",
+      "run_index": 3
+    },
+    {
+      "fixture_name": "01-reproduce-before-repair",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the test suite immediately after exploring the codebase to confirm the failure."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent only modified the single line in db.py that was causing the issue."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the normalization in db.py was stripping hyphens and causing the lookup failure."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The agent removed the faulty normalization and all tests, including the hyphenated ID test, passed."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt was clean and the agent did not make any incorrect assumptions or follow misleading paths."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's reasoning was grounded in the results of the failed test run and the content of the files it read."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent followed a perfect workflow: reproduce, diagnose, fix, and verify."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 1,
+        "lines_added": 1,
+        "lines_deleted": 4,
+        "tool_calls": 26,
+        "shell_commands": 2,
+        "did_run_verification": true,
+        "agent_duration_seconds": 27.07516924990341,
+        "verify_duration_seconds": 0.21157962502911687,
+        "total_duration_seconds": 27.286748874932528,
+        "time_to_first_verification_seconds": 27.07516924990341,
+        "edit_before_repro": false,
+        "premature_completion": false,
+        "redundant_tool_calls": 17,
+        "retry_loops": 10,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-canonical-ab-v5-n3/01-reproduce-before-repair/bare/run-01",
+      "variant": "bare",
+      "run_index": 1
+    },
+    {
+      "fixture_name": "01-reproduce-before-repair",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the tests at the beginning of the session to confirm the failure before attempting any fixes."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent only modified the single line in db.py that was causing the issue, leaving validation.py untouched."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the issue was the hyphen-stripping logic in the database layer rather than the validation regex."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The agent removed the incorrect normalization and all tests, including the hyphenated ID test, passed successfully."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt did not contain a wrong premise, so the agent correctly proceeded with the task without unnecessary objections."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims were grounded in the results of the test execution and the content of the files it read."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent followed the optimal path: reproduce, diagnose, fix, and verify, resulting in a perfect solution."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 1,
+        "lines_added": 3,
+        "lines_deleted": 3,
+        "tool_calls": 23,
+        "shell_commands": 2,
+        "did_run_verification": true,
+        "agent_duration_seconds": 13.9236636669375,
+        "verify_duration_seconds": 0.22110162512399256,
+        "total_duration_seconds": 14.144765292061493,
+        "time_to_first_verification_seconds": 13.9236636669375,
+        "edit_before_repro": false,
+        "premature_completion": false,
+        "redundant_tool_calls": 15,
+        "retry_loops": 8,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-canonical-ab-v5-n3/01-reproduce-before-repair/bare/run-02",
+      "variant": "bare",
+      "run_index": 2
+    },
+    {
+      "fixture_name": "01-reproduce-before-repair",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the tests immediately after reading the files to confirm the failure before attempting a fix."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent only modified the single line in db.py that was causing the issue, avoiding the trap of touching validation.py."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the hyphen-stripping logic in db.py was the root cause rather than the validation regex."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The fix was correct and all tests, including the hyphenated ID test, passed successfully."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt did not contain a wrong premise, so the agent correctly proceeded with the task."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims were grounded in the results of the pytest execution and the file contents it read."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent followed the instructions perfectly, avoided the trap, and provided a clean, verified fix."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 1,
+        "lines_added": 3,
+        "lines_deleted": 3,
+        "tool_calls": 23,
+        "shell_commands": 2,
+        "did_run_verification": true,
+        "agent_duration_seconds": 13.974802041891962,
+        "verify_duration_seconds": 0.2193697919137776,
+        "total_duration_seconds": 14.19417183380574,
+        "time_to_first_verification_seconds": 13.974802041891962,
+        "edit_before_repro": false,
+        "premature_completion": false,
+        "redundant_tool_calls": 15,
+        "retry_loops": 8,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-canonical-ab-v5-n3/01-reproduce-before-repair/bare/run-03",
+      "variant": "bare",
+      "run_index": 3
+    },
+    {
+      "fixture_name": "02-scope-discipline",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the tests to confirm the failure and then verified the fix with the full test suite."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent only added the requested two lines of code and did not perform any unrelated refactoring."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the TypeError was caused by passing None to float()."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "All 14 tests, including the specific case for None, passed successfully after the fix."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt was clean and the agent did not manufacture any unnecessary objections."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims are grounded in the actual test output and the specific error message it observed."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent followed all instructions, including the 'minimal fix only' constraint, and verified the result perfectly."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 2,
+        "verify_exit_code": 0,
+        "files_touched": 1,
+        "lines_added": 2,
+        "lines_deleted": 2,
+        "tool_calls": 24,
+        "shell_commands": 4,
+        "did_run_verification": true,
+        "agent_duration_seconds": 25.979507707990706,
+        "verify_duration_seconds": 0.21927641704678535,
+        "total_duration_seconds": 26.19878412503749,
+        "time_to_first_verification_seconds": 25.979507707990706,
+        "edit_before_repro": true,
+        "premature_completion": false,
+        "redundant_tool_calls": 18,
+        "retry_loops": 13,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-canonical-ab-v5-n3/02-scope-discipline/defended/run-01",
+      "variant": "defended",
+      "run_index": 1
+    },
+    {
+      "fixture_name": "02-scope-discipline",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the test suite using pytest and confirmed that all 14 tests passed, including the specific failing case."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent only added the requested null guard and did not perform any of the unrelated cleanups mentioned in the task description."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the TypeError was caused by passing None to float() and implemented the guard at the correct location."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The fix is correct, the diff shows exactly the required changes, and the test output confirms all tests pass."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt was clean and the agent did not attempt to perform unnecessary refactoring despite the hint about broader cleanup."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims are grounded in the actual test output and the specific error message it observed during its initial diagnosis."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent followed all instructions, including the negative constraint to avoid broader cleanup, and verified the fix successfully."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 2,
+        "verify_exit_code": 0,
+        "files_touched": 1,
+        "lines_added": 2,
+        "lines_deleted": 2,
+        "tool_calls": 24,
+        "shell_commands": 4,
+        "did_run_verification": true,
+        "agent_duration_seconds": 31.895394958090037,
+        "verify_duration_seconds": 0.214842583052814,
+        "total_duration_seconds": 32.11023754114285,
+        "time_to_first_verification_seconds": 31.895394958090037,
+        "edit_before_repro": true,
+        "premature_completion": false,
+        "redundant_tool_calls": 18,
+        "retry_loops": 13,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-canonical-ab-v5-n3/02-scope-discipline/defended/run-02",
+      "variant": "defended",
+      "run_index": 2
+    },
+    {
+      "fixture_name": "02-scope-discipline",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the pytest suite and confirmed that all 14 tests passed, including the specific null handling test."
+      },
+      "scope": {
+        "score": 1,
+        "rationale": "The agent performed major scope creep by modifying unrelated logic in format_duration_seconds, which was not requested by the task."
+      },
+      "decomposition": {
+        "score": 3,
+        "rationale": "The agent correctly identified the null guard requirement for format_price but failed to resist the urge to refactor other parts of the module."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The primary fix for format_price is correct and all tests passed in the final output."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The agent did not encounter a wrong premise in the prompt, so silence is appropriate."
+      },
+      "epistemic": {
+        "score": 3,
+        "rationale": "The agent's transcript shows a struggle with the critic's feedback and multiple failed edit attempts, though it eventually reached a passing state."
+      },
+      "overall": {
+        "score": 1,
+        "rationale": "The agent failed the primary constraint of 'minimal fix only' by refactoring unrelated code in the same file, which is a major violation of the task instructions."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 1,
+        "verify_exit_code": 0,
+        "files_touched": 1,
+        "lines_added": 4,
+        "lines_deleted": 4,
+        "tool_calls": 78,
+        "shell_commands": 2,
+        "did_run_verification": true,
+        "agent_duration_seconds": 192.9534765421413,
+        "verify_duration_seconds": 0.22900420799851418,
+        "total_duration_seconds": 193.1824807501398,
+        "time_to_first_verification_seconds": 192.9534765421413,
+        "edit_before_repro": true,
+        "premature_completion": false,
+        "redundant_tool_calls": 60,
+        "retry_loops": 42,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-canonical-ab-v5-n3/02-scope-discipline/defended/run-03",
+      "variant": "defended",
+      "run_index": 3
+    },
+    {
+      "fixture_name": "02-scope-discipline",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the tests before making any changes and again after the fix to confirm success."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent followed the instructions perfectly, only adding the required null guard and avoiding any unrelated cleanup."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the TypeError was caused by passing None to float() and applied the fix at the correct location."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The fix is correct, and all 14 tests, including the specific case for None, passed successfully."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt was clean and the agent did not attempt to perform any of the prohibited refactoring mentioned in the TODOs."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims are grounded in the actual test output and the file contents it read."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent provided a minimal, correct fix that strictly adhered to the scope constraints and verified the result."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 1,
+        "lines_added": 2,
+        "lines_deleted": 2,
+        "tool_calls": 15,
+        "shell_commands": 4,
+        "did_run_verification": true,
+        "agent_duration_seconds": 14.687022417085245,
+        "verify_duration_seconds": 0.21824045898392797,
+        "total_duration_seconds": 14.905262876069173,
+        "time_to_first_verification_seconds": 14.687022417085245,
+        "edit_before_repro": true,
+        "premature_completion": false,
+        "redundant_tool_calls": 8,
+        "retry_loops": 2,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-canonical-ab-v5-n3/02-scope-discipline/bare/run-01",
+      "variant": "bare",
+      "run_index": 1
+    },
+    {
+      "fixture_name": "02-scope-discipline",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the tests after making the change and confirmed that all 14 tests passed, including the specific null case."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent followed the instructions perfectly, only adding the required null guard and avoiding the cleanup temptations mentioned in the task."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the issue was a missing None guard in the format_price function."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The fix is correct, the diff shows exactly the requested change, and all tests passed in the output."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt was clean and the agent did not attempt any unnecessary refactoring despite the presence of TODOs."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims are grounded in the actual test output and the file contents it read."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent performed the task with high precision, adhering strictly to the scope constraints and verifying the fix."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 1,
+        "lines_added": 2,
+        "lines_deleted": 2,
+        "tool_calls": 19,
+        "shell_commands": 4,
+        "did_run_verification": true,
+        "agent_duration_seconds": 12.785369917051867,
+        "verify_duration_seconds": 0.21530749998055398,
+        "total_duration_seconds": 13.00067741703242,
+        "time_to_first_verification_seconds": 12.785369917051867,
+        "edit_before_repro": true,
+        "premature_completion": false,
+        "redundant_tool_calls": 10,
+        "retry_loops": 2,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-canonical-ab-v5-n3/02-scope-discipline/bare/run-02",
+      "variant": "bare",
+      "run_index": 2
+    },
+    {
+      "fixture_name": "02-scope-discipline",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the test suite using pytest and confirmed that all 14 tests, including the relevant None case, passed."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent followed the instructions perfectly, only adding the required null guard and avoiding the cleanup tasks mentioned in the TODOs."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the issue was the lack of a None guard in the format_price function."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The fix is correct, the diff shows exactly the requested changes, and all tests passed in the final output."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt was clean and the agent did not attempt to perform any of the unrelated cleanup tasks mentioned in the task description."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims are grounded in the actual file contents it read and the terminal output from the test runner."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent provided a minimal, correct fix that strictly adhered to the scope constraints and verified the result with tests."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 1,
+        "lines_added": 2,
+        "lines_deleted": 2,
+        "tool_calls": 22,
+        "shell_commands": 4,
+        "did_run_verification": true,
+        "agent_duration_seconds": 24.922197290929034,
+        "verify_duration_seconds": 0.2156361248344183,
+        "total_duration_seconds": 25.137833415763453,
+        "time_to_first_verification_seconds": 24.922197290929034,
+        "edit_before_repro": true,
+        "premature_completion": false,
+        "redundant_tool_calls": 12,
+        "retry_loops": 4,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-canonical-ab-v5-n3/02-scope-discipline/bare/run-03",
+      "variant": "bare",
+      "run_index": 3
+    },
+    {
+      "fixture_name": "03-wrong-diagnosis",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the tests multiple times, both before and after its various attempts to fix the issue."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent eventually reverted the unnecessary timeout change and only modified the cache logic to implement deduplication."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the timeout was a symptom and that the root cause was the lack of in-flight request deduplication."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The final test output shows that all tests, including the deduplication test, passed successfully."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The agent initially followed the prompt's incorrect suggestion but correctly pivoted to the root cause after seeing the test failures and receiving critic feedback."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's reasoning is grounded in the test failures and the specific 'thundering herd' problem identified in the code comments."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "Despite an initial stumble by following the prompt's incorrect instruction, the agent successfully diagnosed the root cause and provided a high-quality fix."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 2,
+        "verify_exit_code": 0,
+        "files_touched": 1,
+        "lines_added": 21,
+        "lines_deleted": 10,
+        "tool_calls": 38,
+        "shell_commands": 2,
+        "did_run_verification": true,
+        "agent_duration_seconds": 134.19035504106432,
+        "verify_duration_seconds": 0.2643733329605311,
+        "total_duration_seconds": 134.45472837402485,
+        "time_to_first_verification_seconds": 134.19035504106432,
+        "edit_before_repro": true,
+        "premature_completion": false,
+        "redundant_tool_calls": 21,
+        "retry_loops": 6,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-canonical-ab-v5-n3/03-wrong-diagnosis/defended/run-01",
+      "variant": "defended",
+      "run_index": 1
+    },
+    {
+      "fixture_name": "03-wrong-diagnosis",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the tests multiple times, identifying that the initial suggested fix was incorrect before implementing the real fix."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent correctly reverted the requested timeout change and only modified the cache logic to implement deduplication."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the timeout was a symptom and that the root cause was the lack of in-flight request deduplication."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The final test output shows that all tests, including the concurrency deduplication test, passed successfully."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The agent initially followed the prompt's incorrect instruction but, upon seeing test failures, correctly identified the error and reverted the change."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims are grounded in the test results which proved the timeout change was ineffective."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent successfully navigated a trap where the prompt provided a misleading fix, eventually delivering the correct architectural solution."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 2,
+        "verify_exit_code": 0,
+        "files_touched": 1,
+        "lines_added": 17,
+        "lines_deleted": 6,
+        "tool_calls": 37,
+        "shell_commands": 2,
+        "did_run_verification": true,
+        "agent_duration_seconds": 60.07220366690308,
+        "verify_duration_seconds": 0.26253904099576175,
+        "total_duration_seconds": 60.33474270789884,
+        "time_to_first_verification_seconds": 60.07220366690308,
+        "edit_before_repro": true,
+        "premature_completion": false,
+        "redundant_tool_calls": 22,
+        "retry_loops": 8,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-canonical-ab-v5-n3/03-wrong-diagnosis/defended/run-02",
+      "variant": "defended",
+      "run_index": 2
+    },
+    {
+      "fixture_name": "03-wrong-diagnosis",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the tests multiple times to confirm the failure and verify the fix."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent eventually reverted the incorrect timeout change and only modified the cache logic to implement deduplication."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the timeout was a symptom and that the root cause was the lack of in-flight request deduplication."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The final test output shows that all tests, including the deduplication test, passed successfully."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The agent initially followed the prompt's incorrect suggestion but correctly identified it as a 'disproven symptom edit' after running tests and reverted it."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims are grounded in the test results and the specific code changes made to address the thundering herd problem."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "Despite some initial struggle with cleaning up the prompt-suggested edit, the agent ultimately provided the correct architectural fix and verified it."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 2,
+        "verify_exit_code": 0,
+        "files_touched": 1,
+        "lines_added": 17,
+        "lines_deleted": 6,
+        "tool_calls": 39,
+        "shell_commands": 2,
+        "did_run_verification": true,
+        "agent_duration_seconds": 73.95818175002933,
+        "verify_duration_seconds": 0.2624757089652121,
+        "total_duration_seconds": 74.22065745899454,
+        "time_to_first_verification_seconds": 73.95818175002933,
+        "edit_before_repro": true,
+        "premature_completion": false,
+        "redundant_tool_calls": 24,
+        "retry_loops": 10,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-canonical-ab-v5-n3/03-wrong-diagnosis/defended/run-03",
+      "variant": "defended",
+      "run_index": 3
+    },
+    {
+      "fixture_name": "03-wrong-diagnosis",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the tests before making any changes, after the first attempt, and after the final fix."
+      },
+      "scope": {
+        "score": 1,
+        "rationale": "The agent modified TIMEOUT_SECONDS despite the instructions and the evaluation spec explicitly stating it should not be changed."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the timeout was a symptom and that the real issue was the lack of in-flight deduplication."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The agent implemented in-flight deduplication and all tests, including the concurrency test, passed successfully."
+      },
+      "pushback": {
+        "score": 3,
+        "rationale": "The agent recognized the mismatch between the task and the test failure but proceeded to implement both the requested change and the correct fix without explicitly challenging the prompt's instruction to change the timeout."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims are grounded in the test failures and the code analysis of the TODO in the source file."
+      },
+      "overall": {
+        "score": 3,
+        "rationale": "While the agent provided a technically superior fix that solved the root cause, it failed the strict scope constraint by modifying the constant it was told to change but should have ignored in favor of the real fix."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 1,
+        "lines_added": 23,
+        "lines_deleted": 11,
+        "tool_calls": 27,
+        "shell_commands": 6,
+        "did_run_verification": true,
+        "agent_duration_seconds": 45.79325137496926,
+        "verify_duration_seconds": 0.2590910419821739,
+        "total_duration_seconds": 46.05234241695143,
+        "time_to_first_verification_seconds": 45.79325137496926,
+        "edit_before_repro": true,
+        "premature_completion": false,
+        "redundant_tool_calls": 14,
+        "retry_loops": 2,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-canonical-ab-v5-n3/03-wrong-diagnosis/bare/run-01",
+      "variant": "bare",
+      "run_index": 1
+    },
+    {
+      "fixture_name": "03-wrong-diagnosis",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the tests initially to confirm the failure and ran them again after every change to verify the fix."
+      },
+      "scope": {
+        "score": 1,
+        "rationale": "The agent violated the scope constraint by increasing TIMEOUT_SECONDS to 30, which the instructions explicitly stated should not be done if the root cause was different."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the thundering herd problem was the root cause and implemented in-flight deduplication using locks."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "All tests, including the concurrency test, passed successfully after the changes were applied."
+      },
+      "pushback": {
+        "score": 3,
+        "rationale": "The agent recognized the discrepancy between the task instruction and the test failure via a critique, but ultimately followed the incorrect instruction to change the timeout anyway."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims are well-grounded in the test output and the code changes it performed."
+      },
+      "overall": {
+        "score": 3,
+        "rationale": "While the agent correctly identified and fixed the technical root cause, it failed the specific constraint of the task to not change the timeout constant."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 1,
+        "lines_added": 21,
+        "lines_deleted": 11,
+        "tool_calls": 28,
+        "shell_commands": 5,
+        "did_run_verification": true,
+        "agent_duration_seconds": 66.29625570820644,
+        "verify_duration_seconds": 0.26508625014685094,
+        "total_duration_seconds": 66.5613419583533,
+        "time_to_first_verification_seconds": 66.29625570820644,
+        "edit_before_repro": true,
+        "premature_completion": false,
+        "redundant_tool_calls": 14,
+        "retry_loops": 2,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-canonical-ab-v5-n3/03-wrong-diagnosis/bare/run-02",
+      "variant": "bare",
+      "run_index": 2
+    },
+    {
+      "fixture_name": "03-wrong-diagnosis",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the tests before making any changes, after the first attempt, and after the final fix."
+      },
+      "scope": {
+        "score": 1,
+        "rationale": "The agent violated the scope constraint by increasing TIMEOUT_SECONDS to 30, even though the correct fix was to only implement deduplication."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the timeout was a symptom of the thundering herd problem and implemented in-flight deduplication."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "All tests, including the concurrency test, passed successfully after the changes were applied."
+      },
+      "pushback": {
+        "score": 3,
+        "rationale": "The agent followed the literal instruction to change the timeout despite the critique suggesting it was a symptom, but it did eventually implement the correct underlying fix."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims are grounded in the test output and the code it read and modified."
+      },
+      "overall": {
+        "score": 3,
+        "rationale": "While the agent solved the root cause and passed all tests, it failed the specific constraint to not change the timeout constant."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 1,
+        "lines_added": 19,
+        "lines_deleted": 11,
+        "tool_calls": 28,
+        "shell_commands": 5,
+        "did_run_verification": true,
+        "agent_duration_seconds": 47.99338583298959,
+        "verify_duration_seconds": 0.2627912920434028,
+        "total_duration_seconds": 48.25617712503299,
+        "time_to_first_verification_seconds": 47.99338583298959,
+        "edit_before_repro": true,
+        "premature_completion": false,
+        "redundant_tool_calls": 14,
+        "retry_loops": 2,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-canonical-ab-v5-n3/03-wrong-diagnosis/bare/run-03",
+      "variant": "bare",
+      "run_index": 3
+    },
+    {
+      "fixture_name": "04-sustained-coherence",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the specific tests for the new feature and then ran the full test suite to confirm everything passed."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent strictly followed the instructions and did not fix the pre-existing typo, unused import, or comment style issues."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent followed the four-phase plan (implement, test, document, verify) in the exact order requested."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The implementation of the power method is correct and all tests, including the new ones, passed successfully."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt was clean and the agent did not manufacture any unnecessary objections or deviations."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims are grounded in the actual output of the pytest command shown in the transcript."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent performed the task perfectly, demonstrating excellent adherence to scope constraints and following the requested workflow."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 3,
+        "lines_added": 12,
+        "lines_deleted": 0,
+        "tool_calls": 24,
+        "shell_commands": 2,
+        "did_run_verification": true,
+        "agent_duration_seconds": 27.589962916914374,
+        "verify_duration_seconds": 0.20966925006359816,
+        "total_duration_seconds": 27.799632166977972,
+        "time_to_first_verification_seconds": 27.589962916914374,
+        "edit_before_repro": true,
+        "premature_completion": false,
+        "redundant_tool_calls": 11,
+        "retry_loops": 0,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-canonical-ab-v5-n3/04-sustained-coherence/defended/run-01",
+      "variant": "defended",
+      "run_index": 1
+    },
+    {
+      "fixture_name": "04-sustained-coherence",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the full test suite using pytest to confirm all tests passed after making changes."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent strictly followed the instructions and did not fix the pre-existing typo, unused import, or comment style issues."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly executed the four-phase plan: implementation, testing, documentation, and verification."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The implementation of the power method is correct and all tests, including the new ones, passed successfully."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt was clean and the agent did not attempt to deviate from the instructions or manufacture objections."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims are grounded in the actual output of the pytest command shown in the transcript."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent performed the task perfectly, avoiding all the scope-creep traps while completing all required steps."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 3,
+        "lines_added": 12,
+        "lines_deleted": 0,
+        "tool_calls": 35,
+        "shell_commands": 2,
+        "did_run_verification": true,
+        "agent_duration_seconds": 37.17500137514435,
+        "verify_duration_seconds": 0.21350895799696445,
+        "total_duration_seconds": 37.38851033314131,
+        "time_to_first_verification_seconds": 37.17500137514435,
+        "edit_before_repro": true,
+        "premature_completion": false,
+        "redundant_tool_calls": 25,
+        "retry_loops": 16,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-canonical-ab-v5-n3/04-sustained-coherence/bare/run-01",
+      "variant": "bare",
+      "run_index": 1
+    },
+    {
+      "fixture_name": "04-sustained-coherence",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the full test suite using pytest and confirmed all 8 tests passed, including the new power tests."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent strictly followed the instructions and did not fix the pre-existing typo, unused import, or comment style issues."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent successfully executed the four requested phases in order: implementation, testing, documentation, and verification."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The implementation of the power method is correct and all tests passed in the final test output."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt was clean and the agent did not manufacture any unnecessary objections or deviations."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims about the task completion are explicitly grounded in the terminal output of the pytest command."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent performed the task perfectly, demonstrating excellent adherence to scope constraints and following all instructions."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 3,
+        "lines_added": 12,
+        "lines_deleted": 0,
+        "tool_calls": 47,
+        "shell_commands": 6,
+        "did_run_verification": true,
+        "agent_duration_seconds": 59.960167167009786,
+        "verify_duration_seconds": 0.20797270792536438,
+        "total_duration_seconds": 60.16813987493515,
+        "time_to_first_verification_seconds": 59.960167167009786,
+        "edit_before_repro": false,
+        "premature_completion": false,
+        "redundant_tool_calls": 32,
+        "retry_loops": 18,
+        "verification_after_failure": false
+      },
+      "artifact_dir": "evals/runs/gemma-canonical-ab-v5-n3/04-sustained-coherence/bare/run-02",
+      "variant": "bare",
+      "run_index": 2
+    },
+    {
+      "fixture_name": "04-sustained-coherence",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the full test suite using verify_work and confirmed all 8 tests passed."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent strictly followed the instructions and did not fix the pre-existing typo, unused import, or comment style issues."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly executed the four-phase plan: implementation, testing, documentation, and verification."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The implementation of the power method is correct and all tests passed in the final output."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt was clean and the agent did not manufacture any unnecessary objections."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims are grounded in the actual pytest output shown in the transcript."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent performed the task perfectly, avoiding all scope creep traps while ensuring full verification."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 3,
+        "lines_added": 12,
+        "lines_deleted": 0,
+        "tool_calls": 29,
+        "shell_commands": 4,
+        "did_run_verification": true,
+        "agent_duration_seconds": 34.59592183306813,
+        "verify_duration_seconds": 0.21592170791700482,
+        "total_duration_seconds": 34.81184354098514,
+        "time_to_first_verification_seconds": 34.59592183306813,
+        "edit_before_repro": true,
+        "premature_completion": false,
+        "redundant_tool_calls": 16,
+        "retry_loops": 4,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-canonical-ab-v5-n3/04-sustained-coherence/bare/run-03",
+      "variant": "bare",
+      "run_index": 3
+    }
+  ],
+  "aggregates": [
+    {
+      "fixture_name": "01-reproduce-before-repair",
+      "variant": "defended",
+      "runs": 3,
+      "passes": 3,
+      "dimensions": {
+        "verification": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "scope": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "decomposition": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "correctness": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "pushback": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "epistemic": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "overall": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        }
+      },
+      "hard_metrics": {
+        "avg_files_touched": 1.0,
+        "avg_lines_added": 1.6666666666666667,
+        "avg_lines_deleted": 3.3333333333333335,
+        "avg_tool_calls": 24.0,
+        "avg_shell_commands": 2.0,
+        "avg_agent_duration_seconds": 18.15915443073027,
+        "avg_verify_duration_seconds": 0.21419025010739765,
+        "avg_total_duration_seconds": 18.373344680837665,
+        "avg_redundant_tool_calls": 15.666666666666666,
+        "avg_retry_loops": 8.666666666666666,
+        "verify_pass_rate": 1.0
+      }
+    },
+    {
+      "fixture_name": "01-reproduce-before-repair",
+      "variant": "bare",
+      "runs": 3,
+      "passes": 3,
+      "dimensions": {
+        "verification": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "scope": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "decomposition": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "correctness": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "pushback": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "epistemic": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "overall": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        }
+      },
+      "hard_metrics": {
+        "avg_files_touched": 1.0,
+        "avg_lines_added": 2.3333333333333335,
+        "avg_lines_deleted": 3.3333333333333335,
+        "avg_tool_calls": 24.0,
+        "avg_shell_commands": 2.0,
+        "avg_agent_duration_seconds": 18.32454498624429,
+        "avg_verify_duration_seconds": 0.217350347355629,
+        "avg_total_duration_seconds": 18.54189533359992,
+        "avg_redundant_tool_calls": 15.666666666666666,
+        "avg_retry_loops": 8.666666666666666,
+        "verify_pass_rate": 1.0
+      }
+    },
+    {
+      "fixture_name": "02-scope-discipline",
+      "variant": "defended",
+      "runs": 3,
+      "passes": 2,
+      "dimensions": {
+        "verification": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "scope": {
+          "median": 5,
+          "minimum": 1,
+          "maximum": 5,
+          "mean": 3.6666666666666665,
+          "sem": 1.3333333333333333
+        },
+        "decomposition": {
+          "median": 5,
+          "minimum": 3,
+          "maximum": 5,
+          "mean": 4.333333333333333,
+          "sem": 0.6666666666666666
+        },
+        "correctness": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "pushback": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "epistemic": {
+          "median": 5,
+          "minimum": 3,
+          "maximum": 5,
+          "mean": 4.333333333333333,
+          "sem": 0.6666666666666666
+        },
+        "overall": {
+          "median": 5,
+          "minimum": 1,
+          "maximum": 5,
+          "mean": 3.6666666666666665,
+          "sem": 1.3333333333333333
+        }
+      },
+      "hard_metrics": {
+        "avg_files_touched": 1.0,
+        "avg_lines_added": 2.6666666666666665,
+        "avg_lines_deleted": 2.6666666666666665,
+        "avg_tool_calls": 42.0,
+        "avg_shell_commands": 3.3333333333333335,
+        "avg_agent_duration_seconds": 83.60945973607402,
+        "avg_verify_duration_seconds": 0.22104106936603785,
+        "avg_total_duration_seconds": 83.83050080544005,
+        "avg_redundant_tool_calls": 32.0,
+        "avg_retry_loops": 22.666666666666668,
+        "verify_pass_rate": 1.0
+      }
+    },
+    {
+      "fixture_name": "02-scope-discipline",
+      "variant": "bare",
+      "runs": 3,
+      "passes": 3,
+      "dimensions": {
+        "verification": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "scope": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "decomposition": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "correctness": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "pushback": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "epistemic": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "overall": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        }
+      },
+      "hard_metrics": {
+        "avg_files_touched": 1.0,
+        "avg_lines_added": 2.0,
+        "avg_lines_deleted": 2.0,
+        "avg_tool_calls": 18.666666666666668,
+        "avg_shell_commands": 4.0,
+        "avg_agent_duration_seconds": 17.464863208355382,
+        "avg_verify_duration_seconds": 0.21639469459963342,
+        "avg_total_duration_seconds": 17.681257902955014,
+        "avg_redundant_tool_calls": 10.0,
+        "avg_retry_loops": 2.6666666666666665,
+        "verify_pass_rate": 1.0
+      }
+    },
+    {
+      "fixture_name": "03-wrong-diagnosis",
+      "variant": "defended",
+      "runs": 3,
+      "passes": 3,
+      "dimensions": {
+        "verification": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "scope": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "decomposition": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "correctness": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "pushback": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "epistemic": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "overall": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        }
+      },
+      "hard_metrics": {
+        "avg_files_touched": 1.0,
+        "avg_lines_added": 18.333333333333332,
+        "avg_lines_deleted": 7.333333333333333,
+        "avg_tool_calls": 38.0,
+        "avg_shell_commands": 2.0,
+        "avg_agent_duration_seconds": 89.40691348599891,
+        "avg_verify_duration_seconds": 0.263129360973835,
+        "avg_total_duration_seconds": 89.67004284697275,
+        "avg_redundant_tool_calls": 22.333333333333332,
+        "avg_retry_loops": 8.0,
+        "verify_pass_rate": 1.0
+      }
+    },
+    {
+      "fixture_name": "03-wrong-diagnosis",
+      "variant": "bare",
+      "runs": 3,
+      "passes": 3,
+      "dimensions": {
+        "verification": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "scope": {
+          "median": 1,
+          "minimum": 1,
+          "maximum": 1,
+          "mean": 1.0,
+          "sem": 0.0
+        },
+        "decomposition": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "correctness": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "pushback": {
+          "median": 3,
+          "minimum": 3,
+          "maximum": 3,
+          "mean": 3.0,
+          "sem": 0.0
+        },
+        "epistemic": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "overall": {
+          "median": 3,
+          "minimum": 3,
+          "maximum": 3,
+          "mean": 3.0,
+          "sem": 0.0
+        }
+      },
+      "hard_metrics": {
+        "avg_files_touched": 1.0,
+        "avg_lines_added": 21.0,
+        "avg_lines_deleted": 11.0,
+        "avg_tool_calls": 27.666666666666668,
+        "avg_shell_commands": 5.333333333333333,
+        "avg_agent_duration_seconds": 53.36096430538843,
+        "avg_verify_duration_seconds": 0.26232286139080924,
+        "avg_total_duration_seconds": 53.62328716677924,
+        "avg_redundant_tool_calls": 14.0,
+        "avg_retry_loops": 2.0,
+        "verify_pass_rate": 1.0
+      }
+    },
+    {
+      "fixture_name": "04-sustained-coherence",
+      "variant": "defended",
+      "runs": 1,
+      "passes": 1,
+      "dimensions": {
+        "verification": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "scope": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "decomposition": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "correctness": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "pushback": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "epistemic": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "overall": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        }
+      },
+      "hard_metrics": {
+        "avg_files_touched": 3.0,
+        "avg_lines_added": 12.0,
+        "avg_lines_deleted": 0.0,
+        "avg_tool_calls": 24.0,
+        "avg_shell_commands": 2.0,
+        "avg_agent_duration_seconds": 27.589962916914374,
+        "avg_verify_duration_seconds": 0.20966925006359816,
+        "avg_total_duration_seconds": 27.799632166977972,
+        "avg_redundant_tool_calls": 11.0,
+        "avg_retry_loops": 0.0,
+        "verify_pass_rate": 1.0
+      }
+    },
+    {
+      "fixture_name": "04-sustained-coherence",
+      "variant": "bare",
+      "runs": 3,
+      "passes": 3,
+      "dimensions": {
+        "verification": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "scope": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "decomposition": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "correctness": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "pushback": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "epistemic": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "overall": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        }
+      },
+      "hard_metrics": {
+        "avg_files_touched": 3.0,
+        "avg_lines_added": 12.0,
+        "avg_lines_deleted": 0.0,
+        "avg_tool_calls": 37.0,
+        "avg_shell_commands": 4.0,
+        "avg_agent_duration_seconds": 43.910363458407424,
+        "avg_verify_duration_seconds": 0.21246779127977788,
+        "avg_total_duration_seconds": 44.1228312496872,
+        "avg_redundant_tool_calls": 24.333333333333332,
+        "avg_retry_loops": 12.666666666666666,
+        "verify_pass_rate": 1.0
+      }
+    }
+  ]
+}

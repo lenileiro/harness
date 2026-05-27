@@ -1,0 +1,36 @@
+{
+  "run_id": "20260525T072715Z-workflow",
+  "artifact_root": "evals/runs/workflow-eval-management-v1",
+  "results": [
+    {
+      "fixture_name": "22-eval-management-cycle",
+      "passed": false,
+      "steps_total": 8,
+      "steps_passed": 0,
+      "step_results": [
+        {
+          "name": "eval-list",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "eval",
+            "list",
+            "--fixture-set",
+            "fixtures"
+          ],
+          "passed": false,
+          "returncode": 1,
+          "stdout": "",
+          "stderr": "\u256d\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 Traceback (most recent call last) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256e\n\u2502 /Users/leiro/workspace/harness/packages/cli/src/harness/cli/evals.py:73 in   \u2502\n\u2502 eval_list                                                                    \u2502\n\u2502                                                                              \u2502\n\u2502     70 \u2502   \u2502   console.print(\"[red]No evals/fixtures/ directory found \u2014 run  \u2502\n\u2502        from the harness repo.[/red]\")                                        \u2502\n\u2502     71 \u2502   \u2502   raise typer.Exit(1)                                           \u2502\n\u2502     72 \u2502                                                                     \u2502\n\u2502 \u2771   73 \u2502   runner = _load_eval_module(\"runner\", evals_root)                  \u2502\n\u2502     74 \u2502   fixtures = runner.discover_fixtures(                              \u2502\n\u2502     75 \u2502   \u2502   evals_root,                                                   \u2502\n\u2502     76 \u2502   \u2502   fixtures_subdir=fixture_set,                                  \u2502\n\u2502                                                                              \u2502\n\u2502 /Users/leiro/workspace/harness/packages/cli/src/harness/cli/evals.py:37 in   \u2502\n\u2502 _load_eval_module                                                            \u2502\n\u2502                                                                              \u2502\n\u2502     34 \u2502   if repo_root not in _sys.path:                                    \u2502\n\u2502     35 \u2502   \u2502   _sys.path.insert(0, repo_root)                                \u2502\n\u2502     36 \u2502   _sys.modules[module_name] = mod                                   \u2502\n\u2502 \u2771   37 \u2502   spec.loader.exec_module(mod)  # type: ignore[union-attr]          \u2502\n\u2502     38 \u2502   return mod                                                        \u2502\n\u2502     39                                                                       \u2502\n\u2502     40                                                                       \u2502\n\u2502 in exec_module:995                                                           \u2502\n\u2502 in get_code:1132                                                             \u2502\n\u2502 in get_data:1190                                                             \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\nFileNotFoundError: [Errno 2] No such file or directory: \n'/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_\nwa9zym91/workspace/evals/runner.py'\n",
+          "failures": [
+            "returncode=1",
+            "stdout~01-demo",
+            "stdout~verification"
+          ],
+          "duration_seconds": 0.40134991612285376
+        }
+      ],
+      "artifact_dir": "evals/runs/workflow-eval-management-v1/22-eval-management-cycle",
+      "duration_seconds": 0.4027760410681367
+    }
+  ]
+}

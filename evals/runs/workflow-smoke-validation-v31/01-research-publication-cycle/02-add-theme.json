@@ -1,0 +1,22 @@
+{
+  "name": "add-theme",
+  "argv": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "research",
+    "add-theme",
+    "--title",
+    "Verifier reliability",
+    "--description",
+    "Study routing and contract opportunities.",
+    "--priority",
+    "high",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_5h5lxczl/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Added theme theme-verifier-reliability-7dcbeb8e at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_5\nh5lxczl/workspace/.harness/research/themes/theme-verifier-reliability-7dcbeb8e\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.36528229201212525
+}

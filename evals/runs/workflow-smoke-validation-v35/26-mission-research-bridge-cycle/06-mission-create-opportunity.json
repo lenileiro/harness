@@ -1,0 +1,24 @@
+{
+  "name": "mission-create-opportunity",
+  "argv": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "mission",
+    "create-opportunity",
+    "--mission",
+    "mission-bridge-mission-c8c9b3f2",
+    "--finding",
+    "finding-bridge-slice-works-8a15a3b4",
+    "--title",
+    "Mission validator follow-up",
+    "--summary",
+    "Convert mission validation findings into durable research follow-up.",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_86t9ok52/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Created linked opportunity opp-mission-validator-follow-up-8f65a419 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_8\n6t9ok52/workspace/.harness/research/opportunities/opp-mission-validator-follow-u\np-8f65a419\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.41026012506335974
+}

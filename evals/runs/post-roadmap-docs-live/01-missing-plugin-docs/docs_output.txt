@@ -1,0 +1,155 @@
+→ list_dir(path='.')
+✓ list_dir: README.md  (0.0s)
+
+→ read_file(path='README.md')
+✓ read_file: # Harness
+
+Harness is an agent runtime and eval framework.
+
+It supports commands for running tasks and benchmarking them.
+  (0.0s)
+
+→ glob(pattern='**/*.md')
+✓ glob: README.md  (0.0s)
+
+→ list_dir(path='.')
+✓ list_dir: README.md  (0.0s)
+
+→ glob(pattern='docs/*')
+✓ glob: (no matches)  (0.0s)
+
+→ list_dir(path='.')
+✓ list_dir: README.md  (0.0s)
+
+→ glob(pattern='*')
+✓ glob: README.md  (0.0s)
+
+→ list_dir(path='.')
+✓ list_dir: README.md  (0.0s)
+
+→ glob(pattern='*')
+✓ glob: README.md  (0.0s)
+
+→ list_dir(path='.')
+✓ list_dir: README.md  (0.0s)
+
+→ glob(pattern='*')
+✓ glob: README.md  (0.0s)
+
+→ list_dir(path='.')
+✓ list_dir: README.md  (0.0s)
+
+→ list_dir(path='.')
+✓ list_dir: README.md  (0.0s)
+
+→ glob(pattern='*')
+✓ glob: README.md  (0.0s)
+
+→ list_dir(path='.')
+✓ list_dir: README.md  (0.0s)
+
+→ glob(pattern='*')
+✓ glob: README.md  (0.0s)
+                                                                                
+ {                                                                              
+   "summary": "The repository documentation is critically underspecified. The   
+ current README provides only a high-level definition of the project without    
+ any actionable guidance for installation, usage, configuration, or extension.  
+ There is no documentation regarding plugins or extensions, making it           
+ impossible for users to understand how to extend the runtime or discover       
+ existing capabilities.",                                                       
+   "findings": [                                                                
+     {                                                                          
+       "severity": "high",                                                      
+       "path": "README.md",                                                     
+       "issue": "Complete absence of installation and quickstart guides.",      
+       "rationale": "New users cannot get the agent runtime running without     
+ installation instructions, environment requirements, or basic command          
+ examples.",                                                                    
+       "suggested_update": "Add sections for 'Installation', 'Quickstart', and  
+ 'Basic Usage' including CLI command examples."                                 
+     },                                                                         
+     {                                                                          
+       "severity": "high",                                                      
+       "path": "README.md",                                                     
+       "issue": "Missing plugin/extension architecture documentation.",         
+       "rationale": "The audit requirement specifically highlighted plugin      
+ guidance. There is currently no information on how to develop, load, list, or  
+ configure plugins, which prevents ecosystem growth and safe extension.",       
+       "suggested_update": "Create a `docs/extensions.md` file or a section in  
+ README explaining the plugin interface, discovery mechanism, and how to        
+ register new tools/plugins."                                                   
+     },                                                                         
+     {                                                                          
+       "severity": "medium",                                                    
+       "path": "README.md",                                                     
+       "issue": "Lack of API or CLI reference.",                                
+       "rationale": "While the README mentions 'commands for running tasks', it 
+ does not list them, their arguments, or their expected outputs, making the     
+ framework a 'black box'.",                                                     
+       "suggested_update": "Provide a table or list of core commands and their  
+ purpose."                                                                      
+     }                                                                          
+   ],                                                                           
+   "missing_topics": [                                                          
+     "Installation/Setup guide",                                                
+     "Plugin/Extension development guide",                                      
+     "Plugin discovery and loading instructions",                               
+     "CLI command reference",                                                   
+     "Evaluation framework usage/benchmarking guide",                           
+     "Configuration management"                                                 
+   ]                                                                            
+ }                                                                              
+                                                                                
+
+defense ledger:
+  tools: list_dir x8, glob x7, read_file x1
+{
+  "summary": "The repository documentation is critically underspecified. The 
+current README provides only a high-level definition of the project without any 
+actionable guidance for installation, usage, configuration, or extension. There 
+is no documentation regarding plugins or extensions, making it impossible for 
+users to understand how to extend the runtime or discover existing 
+capabilities.",
+  "findings": [
+    {
+      "severity": "high",
+      "path": "README.md",
+      "issue": "Complete absence of installation and quickstart guides.",
+      "rationale": "New users cannot get the agent runtime running without 
+installation instructions, environment requirements, or basic command 
+examples.",
+      "suggested_update": "Add sections for 'Installation', 'Quickstart', and 
+'Basic Usage' including CLI command examples."
+    },
+    {
+      "severity": "high",
+      "path": "README.md",
+      "issue": "Missing plugin/extension architecture documentation.",
+      "rationale": "The audit requirement specifically highlighted plugin 
+guidance. There is currently no information on how to develop, load, list, or 
+configure plugins, which prevents ecosystem growth and safe extension.",
+      "suggested_update": "Create a `docs/extensions.md` file or a section in 
+README explaining the plugin interface, discovery mechanism, and how to register
+new tools/plugins."
+    },
+    {
+      "severity": "medium",
+      "path": "README.md",
+      "issue": "Lack of API or CLI reference.",
+      "rationale": "While the README mentions 'commands for running tasks', it 
+does not list them, their arguments, or their expected outputs, making the 
+framework a 'black box'.",
+      "suggested_update": "Provide a table or list of core commands and their 
+purpose."
+    }
+  ],
+  "missing_topics": [
+    "Installation/Setup guide",
+    "Plugin/Extension development guide",
+    "Plugin discovery and loading instructions",
+    "CLI command reference",
+    "Evaluation framework usage/benchmarking guide",
+    "Configuration management"
+  ]
+}

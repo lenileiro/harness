@@ -1,0 +1,24 @@
+{
+  "name": "plan-experiment",
+  "argv": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "research",
+    "plan-experiment",
+    "--hypothesis",
+    "hyp-simple-deterministic-checks-are--4b17411a",
+    "--plan",
+    "Run one deterministic check command and one deterministic eval command.",
+    "--checks",
+    "python -c \"print('workflow-check')\"",
+    "--eval-slices",
+    "python -c \"print('workflow-eval')\"",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_490mb2l3/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Planned experiment plan-hyp-simple-deterministic-checks--a99fcd81 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_4\n90mb2l3/workspace/.harness/research/experiment-plans/plan-hyp-simple-determinist\nic-checks--a99fcd81\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.4073016671463847
+}

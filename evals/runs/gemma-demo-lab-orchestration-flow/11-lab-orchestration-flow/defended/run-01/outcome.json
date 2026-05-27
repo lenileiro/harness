@@ -1,0 +1,485 @@
+{
+  "fixture": {
+    "name": "11-lab-orchestration-flow",
+    "path": "/Users/leiro/workspace/harness/evals/fixtures/11-lab-orchestration-flow",
+    "task_text": "# Orchestrate a multi-agent job and resume it to completion\n\nThis fixture includes a local Harness CLI wrapper at `./fake-harness`. Use that\nentrypoint for all commands in this task.\n\nUse CLI entrypoints only. Do not hand-edit the SQLite database or fixture files\ndirectly.\n\nUse these commands:\n\n- `./fake-harness lab run`\n- `./fake-harness lab list`\n- `./fake-harness lab status`\n- `./fake-harness lab resume`\n\nDo all of the following:\n\n1. Start a multi-agent job with `./fake-harness lab run`.\n2. Inspect the stored jobs with `./fake-harness lab list`.\n3. Inspect the created job with `./fake-harness lab status`.\n4. Resume the same job with `./fake-harness lab resume`.\n5. Run the tests when done.\n\nUse these exact command shapes:\n\n- `./fake-harness lab run \"Plan, execute, and summarize the seeded work\" --cwd . --db lab.db --no-judge`\n- `./fake-harness lab list --db lab.db`\n- `./fake-harness lab status <job-id> --db lab.db`\n- `./fake-harness lab resume <job-id> --db lab.db --no-judge`\n\nImportant:\n\n- The job id is created by the run step. Discover it from `lab list` or the\n  persisted database state before calling `lab status` / `lab resume`.\n- Do not bypass the orchestration flow by creating the reporter artifact\n  yourself. The lab resume step should leave the final report behind.\n\nRun the tests when done.\n",
+    "eval_md": "primary_dimension: decomposition\n\ntrap: >\n  This task is about orchestrating multiple agents through the lab surface, not\n  about doing the underlying work directly. A weak model will ignore `lab`,\n  manipulate files by hand, or start the job without resuming it to completion.\n\ncorrect_fix: >\n  Use the included lab CLI wrapper to start a multi-agent job, inspect the job\n  list/status to understand its state, resume the interrupted work, and verify\n  that the reporter artifact and completed work items exist.\n\ndimensions: decomposition, correctness, verification, scope, overall\n\nscoring_notes: >\n  decomposition: 5 if the agent uses the lab flow in order: run, inspect, then\n  resume. 1 if it bypasses orchestration or never resumes the job.\n  correctness: 5 if the persisted job ends done, both work items are done, and\n  the reporter artifact exists. 1 if the job remains in progress.\n  verification: 5 if the agent runs the tests. 1 if it does not.\n  scope: 5 if it only uses the provided CLI entrypoints and leaves the fixture\n  files otherwise intact.\n",
+    "verify_command": "pytest tests/ -v --tb=short --no-header",
+    "phases": null,
+    "family": "lab-orchestration-flow",
+    "holdout": false,
+    "mutated_from": null,
+    "metadata_path": "/Users/leiro/workspace/harness/evals/fixtures/11-lab-orchestration-flow/fixture.yaml",
+    "rules": {
+      "behavior_category": "decomposition",
+      "primary_dimension": "decomposition",
+      "expected_first_step": "inspect workspace",
+      "allowed_paths": [],
+      "disallowed_paths": [],
+      "required_verification": "pytest tests/ -v --tb=short --no-header",
+      "trap": "This task is about orchestrating multiple agents through the lab surface, not about doing the underlying work directly. A weak model will ignore `lab`, manipulate files by hand, or start the job without resuming it to completion.",
+      "correct_fix": "Use the included lab CLI wrapper to start a multi-agent job, inspect the job list/status to understand its state, resume the interrupted work, and verify that the reporter artifact and completed work items exist.",
+      "dimensions": [
+        "decomposition",
+        "correctness",
+        "verification",
+        "scope",
+        "overall"
+      ],
+      "scoring_notes": "decomposition: 5 if the agent uses the lab flow in order: run, inspect, then resume. 1 if it bypasses orchestration or never resumes the job. correctness: 5 if the persisted job ends done, both work items are done, and the reporter artifact exists. 1 if the job remains in progress. verification: 5 if the agent runs the tests. 1 if it does not. scope: 5 if it only uses the provided CLI entrypoints and leaves the fixture files otherwise intact."
+    }
+  },
+  "transcript": "adaptive strategy diagnosis-heavy bugfix -> diagnostic structure + critic\n\n\u2192 shell(command='ls -F')\n\u2713 shell: exit_code: 0\n\nstdout:\nTASK.md\nfake-harness*\nfake_harness.py\ntests/\nworkspace/\n  (0.0s)\n\n\u2192 shell(command='./fake-harness lab run \"Plan, execute,\u2026)\n\u2713 shell: exit_code: 0\n\nstdout:\nharness lab run \u2014 2 workers  max-steps=20\nprovider=ollama  model=llama3.2\n\n\u25b6 planner\n  + T-002 Draft plan\n  + T-003 Execute change\n\u2713 planner done (1 turns)\n\u25b6 worker-1\n  \u2192 claime\u2026  \u2026 334 bytes  (0.7s)\n\n\u2192 shell(command='./fake-harness lab list --db lab.db')\n\u2713 shell: exit_code: 0\n\nstdout:\nin_progress   task_root_eval  2026-05-25 20:24  1/2 items  job: Plan, execute, \nand summarize the seeded work\n  (0.4s)\n\n\u2192 shell(command='./fake-harness lab list --db lab.db')\n\u2713 shell: exit_code: 0\n\nstdout:\nin_progress   task_root_eval  2026-05-25 20:24  1/2 items  job: Plan, execute, \nand summarize the seeded work\n  (0.5s)\n\n\u2192 shell(command=\"./fake-harness lab list --db lab.db | \u2026)\n\u2713 shell: exit_code: 0\n\nstdout:\nin_progress\n  (0.5s)\n\n\u2192 shell(command='./fake-harness lab list --db lab.db')\n\u2713 shell: exit_code: 0\n\nstdout:\nin_progress   task_root_eval  2026-05-25 20:24  1/2 items  job: Plan, execute, \nand summarize the seeded work\n  (0.4s)\n\n\u2192 shell(command='./fake-harness lab list --db lab.db | \u2026)\n\u2713 shell: exit_code: 0\n\nstdout:\nand summarize the seeded work\n  (0.5s)\n\n\u2192 shell(command='./fake-harness lab list --db lab.db')\n\u2713 shell: exit_code: 0\n\nstdout:\nin_progress   task_root_eval  2026-05-25 20:24  1/2 items  job: Plan, execute, \nand summarize the seeded work\n  (0.5s)\n\n\u2192 shell(command='./fake-harness lab list --db lab.db')\n\u2713 shell: exit_code: 0\n\nstdout:\nin_progress   task_root_eval  2026-05-25 20:24  1/2 items  job: Plan, execute, \nand summarize the seeded work\n  (0.4s)\n\n\u2192 shell(command='./fake-harness lab list --db lab.db')\n\u2713 shell: exit_code: 0\n\nstdout:\nin_progress   task_root_eval  2026-05-25 20:24  1/2 items  job: Plan, execute, \nand summarize the seeded work\n  (0.6s)\n\n\u2192 shell(command='./fake-harness lab list --db lab.db')\n\u2713 shell: exit_code: 0\n\nstdout:\nin_progress   task_root_eval  2026-05-25 20:24  1/2 items  job: Plan, execute, \nand summarize the seeded work\n  (0.5s)\n\n\u2192 shell(command='grep -oE \\'[0-9a-f]{8}-[0-9a-f]{4}-[0-\u2026)\n\u2713 shell: exit_code: 0\n\nstdout:\nNo UUID found in database\n  (0.0s)\n\n\u2192 shell(command='sqlite3 lab.db \"SELECT job_id FROM job\u2026)\n\u2717 shell: exit_code: 1\n\nstderr:\nError: in prepare, no such table: jobs\n  (0.0s)\n\n\u2192 shell(command='sqlite3 lab.db \".tables\"')\n\u2713 shell: exit_code: 0\n\nstdout:\napprovals      memory         sessions       task_activity  tasks        \n  (0.0s)\n\n\u2192 shell(command='sqlite3 lab.db \"SELECT job_id FROM ses\u2026)\n\u2717 shell: exit_code: 1\n\nstderr:\nError: in prepare, no such column: job_id\n  SELECT job_id FROM sessions;\n         ^--- error here\n  (0.0s)\n\n\u2192 shell(command='sqlite3 lab.db \"SELECT * FROM tasks LI\u2026)\n\u2713 shell: exit_code: 0\n\nstdout:\ntask_root_eval|T-001|job: Plan, execute, and summarize the seeded \nwork||in_progress||[]||[]|[]|/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr000\n0gn/T/harness_eval__zin5o6p/11-\u2026  \u2026 291 bytes  (0.0s)\n\n\u2192 shell(command='sqlite3 lab.db \"SELECT name FROM sqlit\u2026)\n\u2713 shell: exit_code: 0\n\nstdout:\nsessions\ntasks\ntask_activity\napprovals\nmemory\n  (0.0s)\n\n\u2192 shell(command='sqlite3 lab.db \"PRAGMA table_info(task\u2026)\n\u2713 shell: exit_code: 0\n\nstdout:\n0|id|TEXT|0||1\n1|ref|TEXT|1||0\n2|title|TEXT|1||0\n3|description|TEXT|0||0\n4|status|TEXT|1||0\n5|priority|TEXT|0||0\n6|labels|TEXT|1||0\n7|parent_id|TEXT|0||0\n8|links|TEXT|1||0\n9|ses\u2026  \u2026 305 bytes  (0.0s)\n\n\u2192 shell(command='sqlite3 lab.db \"SELECT id, ref, title,\u2026)\n\u2713 shell: exit_code: 0\n\nstdout:\ntask_root_eval|T-001|job: Plan, execute, and summarize the seeded \nwork|in_progress\ntask_b53f631dee35|T-002|Draft plan|done\ntask_93f57752b32b|T-003|Execute change|in_progress\n  (0.0s)\n\n\u2192 shell(command='./fake-harness lab status task_root_ev\u2026)\n\u2713 shell: exit_code: 0\n\nstdout:\nJob task_root_eval \u2014 2 work items\n\n  done         T-002  Draft plan  planner split work\n  in_progress  T-003  Execute change\n  (0.5s)\n\n\u2192 shell(command='./fake-harness lab resume task_root_ev\u2026)\n\u2713 shell: exit_code: 0\n\nstdout:\nharness lab resume task_root_eval  \u2014 2 workers\nprovider=ollama  worker-model=llama3.2\n\n\u25b6 worker-2\n  \u2192 claimed T-003\n  \u2713 completed T-003\n  \u2713 T-003 verified (100%)\n\u2713 worker-2 done\u2026  \u2026 247 bytes  (0.5s)\n\n\u2192 verify_work(command='pytest tests/')\n\u2713 verify_work: PASSED\n\n============================= test session starts ==============================\nplatform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0\nrootdir: /private/var/folders/8p/1_033mns3v1gvkq\u2026  \u2026 614 bytes  (0.5s)\nThe multi-agent job was successfully orchestrated, inspected, and resumed.      \n\n 1 Started job: ./fake-harness lab run \"Plan, execute, and summarize the seeded \n   work\" --cwd . --db lab.db --no-judge created job task_root_eval.             \n 2 Listed jobs: ./fake-harness lab list --db lab.db showed the job              \n   task_root_eval in in_progress state.                                         \n 3 Inspected job status: ./fake-harness lab status task_root_eval --db lab.db   \n   confirmed one item was done and one was in_progress.                         \n 4 Resumed job: ./fake-harness lab resume task_root_eval --db lab.db --no-judge \n   completed the remaining task and ran the reporter.                           \n 5 Verified work: Ran pytest tests/ which passed.                               \n\n                                                                                \n # Summary of commands executed:                                                \n ./fake-harness lab run \"Plan, execute, and summarize the seeded work\" --cwd .  \n --db lab.db --no-judge                                                         \n ./fake-harness lab list --db lab.db                                            \n ./fake-harness lab status task_root_eval --db lab.db                           \n ./fake-harness lab resume task_root_eval --db lab.db --no-judge                \n pytest tests/                                                                  \n                                                                                \n\n\u2713 verify (shell)  ============================= test session starts \n==============================\ncollecting ... collected 1 item\n\ntests/test_lab_orchestration_flow.py::test_lab_orchestration_flow PASSED [100%]\n\n============================== 1 passed in 0.16s ===============================\n\ndefense ledger:\n  verifiers: shell=1\u2713/0\u2717\n  tools: shell x21 (err x2), verify_work x1\n  lifeharness: L2 tips x3, L4 regulate x1\n",
+  "git_diff": "",
+  "test_output": "============================= test session starts ==============================\ncollecting ... collected 1 item\n\ntests/test_lab_orchestration_flow.py::test_lab_orchestration_flow PASSED [100%]\n\n============================== 1 passed in 0.16s ===============================\n",
+  "agent_exit_code": 0,
+  "test_exit_code": 0,
+  "variant": "defended",
+  "hard_metrics": {
+    "verify_passed": true,
+    "run_exit_code": 0,
+    "verify_exit_code": 0,
+    "files_touched": 0,
+    "lines_added": 0,
+    "lines_deleted": 0,
+    "tool_calls": 47,
+    "shell_commands": 45,
+    "did_run_verification": true,
+    "agent_duration_seconds": 33.40289379097521,
+    "verify_duration_seconds": 0.3960215840488672,
+    "total_duration_seconds": 33.79891537502408,
+    "time_to_first_verification_seconds": 33.40289379097521,
+    "edit_before_repro": true,
+    "premature_completion": false,
+    "redundant_tool_calls": 44,
+    "retry_loops": 41,
+    "verification_after_failure": true
+  },
+  "trace_events": [
+    {
+      "kind": "agent_exit",
+      "order": 1,
+      "message": "",
+      "data": {
+        "exit_code": 0
+      }
+    },
+    {
+      "kind": "verify_exit",
+      "order": 2,
+      "message": "",
+      "data": {
+        "exit_code": 0
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 3,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 4,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 5,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 6,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 7,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 8,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 9,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 10,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 11,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 12,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 13,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 14,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 15,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 16,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 17,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 18,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 19,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 20,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 21,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 22,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 23,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 24,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 25,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 26,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 27,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 28,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 29,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 30,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 31,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 32,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 33,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 34,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 35,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 36,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 37,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 38,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 39,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 40,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 41,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 42,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 43,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 44,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 45,
+      "message": "",
+      "data": {
+        "tool": "verify_work"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 46,
+      "message": "",
+      "data": {
+        "tool": "verify_work"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 47,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 48,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 49,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "verification_observed",
+      "order": 50,
+      "message": "Detected verification marker for pytest.",
+      "data": {
+        "command": "pytest tests/ -v --tb=short --no-header"
+      }
+    }
+  ],
+  "artifact_dir": "evals/runs/gemma-demo-lab-orchestration-flow/11-lab-orchestration-flow/defended/run-01",
+  "agent_command": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "run",
+    "# Orchestrate a multi-agent job and resume it to completion\n\nThis fixture includes a local Harness CLI wrapper at `./fake-harness`. Use that\nentrypoint for all commands in this task.\n\nUse CLI entrypoints only. Do not hand-edit the SQLite database or fixture files\ndirectly.\n\nUse these commands:\n\n- `./fake-harness lab run`\n- `./fake-harness lab list`\n- `./fake-harness lab status`\n- `./fake-harness lab resume`\n\nDo all of the following:\n\n1. Start a multi-agent job with `./fake-harness lab run`.\n2. Inspect the stored jobs with `./fake-harness lab list`.\n3. Inspect the created job with `./fake-harness lab status`.\n4. Resume the same job with `./fake-harness lab resume`.\n5. Run the tests when done.\n\nUse these exact command shapes:\n\n- `./fake-harness lab run \"Plan, execute, and summarize the seeded work\" --cwd . --db lab.db --no-judge`\n- `./fake-harness lab list --db lab.db`\n- `./fake-harness lab status <job-id> --db lab.db`\n- `./fake-harness lab resume <job-id> --db lab.db --no-judge`\n\nImportant:\n\n- The job id is created by the run step. Discover it from `lab list` or the\n  persisted database state before calling `lab status` / `lab resume`.\n- Do not bypass the orchestration flow by creating the reporter artifact\n  yourself. The lab resume step should leave the final report behind.\n\nRun the tests when done.",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval__zin5o6p/11-lab-orchestration-flow",
+    "--yes",
+    "--in-memory",
+    "--provider",
+    "openrouter",
+    "--model",
+    "google/gemma-4-26b-a4b-it",
+    "--max-repair",
+    "2",
+    "--profile",
+    "adaptive",
+    "--verify",
+    "shell",
+    "--verify-command",
+    "pytest tests/ -v --tb=short --no-header",
+    "--critic",
+    "llm+search"
+  ],
+  "verify_command": "pytest tests/ -v --tb=short --no-header"
+}

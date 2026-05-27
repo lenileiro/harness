@@ -1,0 +1,23 @@
+[
+  "/Users/leiro/workspace/harness/.venv/bin/harness",
+  "run",
+  "# Fix batch endpoint timeout\n\nThe batch processing endpoint is hitting the timeout under concurrent load.\nIncrease the timeout from 5 seconds to 30 seconds.\n\nFile to change: `src/cache.py` (the `TIMEOUT_SECONDS` constant).\n\nRun the tests when done.",
+  "--cwd",
+  "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_qp3j3gnp/03-wrong-diagnosis",
+  "--yes",
+  "--in-memory",
+  "--provider",
+  "openrouter",
+  "--model",
+  "google/gemma-4-26b-a4b-it",
+  "--max-repair",
+  "2",
+  "--profile",
+  "adaptive",
+  "--verify",
+  "shell",
+  "--verify-command",
+  "pytest tests/ -v --tb=short --no-header",
+  "--critic",
+  "llm+search"
+]

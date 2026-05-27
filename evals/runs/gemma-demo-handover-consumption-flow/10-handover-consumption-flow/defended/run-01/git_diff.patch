@@ -1,0 +1,30 @@
+diff --git a/.harness/resume.json b/.harness/resume.json
+index 7f49a0d..221b97b 100644
+--- a/.harness/resume.json
++++ b/.harness/resume.json
+@@ -1,5 +1,5 @@
+ {
+-  "current": "handover-consumption",
++  "current": "handover-verification",
+   "features": [
+     {
+       "name": "handover-checklist",
+@@ -20,6 +20,18 @@
+       ],
+       "notes": [],
+       "session_id": null
++    },
++    {
++      "name": "handover-verification",
++      "description": "Verify the handover contract before the next continuation step.",
++      "status": "pending",
++      "phases": [
++        "inspect",
++        "verify",
++        "continue"
++      ],
++      "notes": [],
++      "session_id": null
+     }
+   ],
+   "notes": []

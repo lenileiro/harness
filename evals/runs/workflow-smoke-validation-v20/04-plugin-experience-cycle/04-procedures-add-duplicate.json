@@ -1,0 +1,25 @@
+{
+  "name": "procedures-add-duplicate",
+  "argv": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "experience",
+    "procedures",
+    "add",
+    "--name",
+    "Scope discipline duplicate",
+    "--body",
+    "Keep the patch in the named formatter only.",
+    "--triggers",
+    "format_price,minimal fix",
+    "--scope",
+    "repo",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval__tsxp5l_/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Added procedure proc_26ef2a9984 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval__\ntsxp5l_/workspace/.harness/procedures/scope-discipline-duplicate\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.400979416212067
+}

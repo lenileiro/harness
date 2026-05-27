@@ -1,0 +1,33 @@
+{
+  "fixture_name": "12-chat-cycle",
+  "passed": true,
+  "steps_total": 1,
+  "steps_passed": 1,
+  "step_results": [
+    {
+      "name": "chat-repl",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval__9r6rm9x/workspace/fake-harness",
+        "chat",
+        "--session",
+        "sess_chat_eval",
+        "--provider",
+        "ollama",
+        "--model",
+        "test-model",
+        "--in-memory",
+        "--yes",
+        "--cwd",
+        "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval__9r6rm9x/workspace"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "\u256d\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 harness chat \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256e\n\u2502 Session: sess_chat_eval                                                      \u2502\n\u2502 Provider: ollama                                                             \u2502\n\u2502 Model: test-model                                                            \u2502\n\u2502 Tools: edit_file, fetch_url, glob, list_dir, read_file, request_critique,    \u2502\n\u2502 shell, spawn_agents, verify_work, web_search, write_file                     \u2502\n\u2502 CWD:                                                                         \u2502\n\u2502 /private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_ev \u2502\n\u2502 al__9r6rm9x/workspace                                                        \u2502\n\u2502                                                                              \u2502\n\u2502 Type /help for commands. /quit to exit.                                      \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\n\n> hello from fake chat                                                            \n\n\u2713 verify (claim_grounding)  no completed tool events \u2014 nothing to ground claims \nagainst  (confidence 0.40)\n\n> Session sess_chat_eval, status: done, 2 messages\n\n> bye\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.9405522500164807
+    }
+  ],
+  "artifact_dir": "evals/runs/workflow-smoke-validation-v24/12-chat-cycle",
+  "duration_seconds": 0.9416310410015285
+}

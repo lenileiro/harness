@@ -1,0 +1,16 @@
+{
+  "name": "phase-status",
+  "argv": [
+    "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_c7v5kp0e/workspace/fake-harness",
+    "phase",
+    "status",
+    "--db",
+    "phase.db"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "session: sess_d158c7519949\ndeclared (in order): implement\ncompleted: implement\nall declared phases completed\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.40855458308942616
+}

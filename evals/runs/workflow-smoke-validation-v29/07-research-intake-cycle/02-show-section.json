@@ -1,0 +1,17 @@
+{
+  "name": "show-section",
+  "argv": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "research",
+    "show-section",
+    "verification",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_wvi1pzjs/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "verification (section-verification-ff745944)\n\nFiles\n- packages/core/src/harness/core/verification.py\n- packages/core/src/harness/core/verification_behavioral.py\n\nInterfaces\n- Verifier\n- VerificationResult\n\nConstraints\n- must stay deterministic for hard checks\n\nWeaknesses\n- prompt-heavy verifier paths are brittle\n\nOpportunities\n- sharper verifier routing\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.3350635420065373
+}

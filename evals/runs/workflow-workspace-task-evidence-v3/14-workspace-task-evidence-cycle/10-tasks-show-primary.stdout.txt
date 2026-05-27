@@ -1,0 +1,39 @@
+╭──────────────────────────────────── task ────────────────────────────────────╮
+│ T-001  in_progress  Investigate workspace evidence                           │
+│ created 2s ago, updated 0s ago                                               │
+│ cwd:                                                                         │
+│ /private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_ev │
+│ al_9r_dtm9c/workspace                                                        │
+│ priority: high                                                               │
+│ labels: workflow, demo                                                       │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─────── links ────────╮
+│ depends_on   → T-002 │
+╰──────────────────────╯
+╭── sessions (1) ──╮
+│ sess_task_memory │
+╰──────────────────╯
+╭─────────────────────────────── activity (10) ────────────────────────────────╮
+│ 2026-05-25T01:14:14+00:00  task.created  ref=T-001 title=Investigate         │
+│ workspace evidence                                                           │
+│ 2026-05-25T01:14:15+00:00  task.status_changed  ref=T-001 from=backlog       │
+│ to=in_progress                                                               │
+│ 2026-05-25T01:14:15+00:00  task.linked  ref=T-001 target_ref=T-002           │
+│ relation=depends_on                                                          │
+│ 2026-05-25T01:14:16+00:00  agent_run.started  provider=ollama                │
+│ model=test-model prompt=read the note and summarize it                       │
+│ 2026-05-25T01:14:16+00:00  step.started  step=0 description=read the note    │
+│ and summarize it                                                             │
+│ 2026-05-25T01:14:16+00:00  tool_call.dispatched  tool_call_id=c1             │
+│ name=read_file arguments={'path': 'note.txt'}                                │
+│ 2026-05-25T01:14:16+00:00  tool_call.completed  tool_call_id=c1              │
+│ name=read_file is_error=False content_preview=workspace evidence payload     │
+│  content_size=27 arguments={'path': 'note.txt'} duration_ms=0                │
+│ metadata={'path': 'note.txt', 'bytes': 27, 'encoding': 'utf-8'}              │
+│ 2026-05-25T01:14:16+00:00  step.completed  step=0                            │
+│ 2026-05-25T01:14:16+00:00  verification.completed                            │
+│ verifier_name=verify_before_done can_finish=True reason=No modifying tool    │
+│ calls detected — verification not requi… confidence=None                     │
+│ evidence_event_ids=[]                                                        │
+│ 2026-05-25T01:14:16+00:00  agent_run.completed                               │
+╰──────────────────────────────────────────────────────────────────────────────╯

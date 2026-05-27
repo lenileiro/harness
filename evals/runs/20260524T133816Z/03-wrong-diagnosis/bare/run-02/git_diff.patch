@@ -1,0 +1,55 @@
+diff --git a/src/cache.py b/src/cache.py
+index 3d8a95a..2dfb707 100644
+--- a/src/cache.py
++++ b/src/cache.py
+@@ -11,7 +11,7 @@ from typing import Any
+ 
+ # Configurable timeout for upstream fetch calls.
+ # The batch endpoint passes this when calling get_or_fetch().
+-TIMEOUT_SECONDS = 5
++TIMEOUT_SECONDS = 30
+ 
+ 
+ class SimpleCache:
+@@ -28,6 +28,7 @@ class SimpleCache:
+ 
+     def __init__(self) -> None:
+         self._store: dict[str, Any] = {}
++        self._locks: dict[str, asyncio.Lock] = {}
+ 
+     async def get_or_fetch(
+         self,
+@@ -46,20 +47,27 @@ class SimpleCache:
+         if key in self._store:
+             return self._store[key]
+ 
+-        # MISSING: no in-flight deduplication.
+-        # Multiple concurrent callers for the same key all reach this line and
+-        # each triggers its own fetch() call independently.
+-        value = await asyncio.wait_for(fetch(key), timeout=fetch_timeout)
+-        self._store[key] = value
+-        return value
++        if key not in self._locks:
++            self._locks[key] = asyncio.Lock()
++
++        async with self._locks[key]:
++            # Double-check after acquiring the lock
++            if key in self._store:
++                return self._store[key]
++
++            value = await asyncio.wait_for(fetch(key), timeout=fetch_timeout)
++            self._store[key] = value
++            return value
+ 
+     def invalidate(self, key: str) -> None:
+         """Remove a key from the cache."""
+         self._store.pop(key, None)
++        self._locks.pop(key, None)
+ 
+     def clear(self) -> None:
+         """Remove all cached entries."""
+         self._store.clear()
++        self._locks.clear()
+ 
+     def __len__(self) -> int:
+         return len(self._store)

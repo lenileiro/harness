@@ -1,0 +1,17 @@
+{
+  "name": "resurrect",
+  "argv": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "research",
+    "resurrect",
+    "archive-hypothesis-hyp-a-promotion-draft-43e25fec",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_o_jypmtc/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Resurrected archive-hypothesis-hyp-a-promotion-draft-43e25fec to \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_o\n_jypmtc/workspace/.harness/research/hypotheses/hyp-a-promotion-draft-should-alwa\nys--b51a2e2e\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.42527887504547834
+}

@@ -1,0 +1,22 @@
+{
+  "run_id": "20260525T081959Z-review",
+  "provider": "ollama",
+  "model": "gemma4:26b",
+  "artifact_root": "evals/runs/gemma-feature-test-review",
+  "results": [
+    {
+      "fixture_name": "01-missing-none-guard",
+      "passed": false,
+      "findings_count": 0,
+      "matched_expectations": 0,
+      "missing_expectations": [
+        "review output was not valid JSON"
+      ],
+      "summary": "",
+      "artifact_dir": "evals/runs/gemma-feature-test-review/01-missing-none-guard",
+      "raw_output": "2026-05-25T08:22:01.906148Z [warning  ] agent.step.error               attempt=0 error='Ollama request timed out: ' kind=timeout provider=ollama\n2026-05-25T08:22:02.053788Z [error    ] agent.run.failed               error='Ollama request timed out: ' kind=timeout\n\n",
+      "report": null,
+      "duration_seconds": 129.1733222499024
+    }
+  ]
+}

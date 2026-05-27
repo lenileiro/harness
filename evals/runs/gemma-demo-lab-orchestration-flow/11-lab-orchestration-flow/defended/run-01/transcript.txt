@@ -1,0 +1,234 @@
+adaptive strategy diagnosis-heavy bugfix -> diagnostic structure + critic
+
+→ shell(command='ls -F')
+✓ shell: exit_code: 0
+
+stdout:
+TASK.md
+fake-harness*
+fake_harness.py
+tests/
+workspace/
+  (0.0s)
+
+→ shell(command='./fake-harness lab run "Plan, execute,…)
+✓ shell: exit_code: 0
+
+stdout:
+harness lab run — 2 workers  max-steps=20
+provider=ollama  model=llama3.2
+
+▶ planner
+  + T-002 Draft plan
+  + T-003 Execute change
+✓ planner done (1 turns)
+▶ worker-1
+  → claime…  … 334 bytes  (0.7s)
+
+→ shell(command='./fake-harness lab list --db lab.db')
+✓ shell: exit_code: 0
+
+stdout:
+in_progress   task_root_eval  2026-05-25 20:24  1/2 items  job: Plan, execute, 
+and summarize the seeded work
+  (0.4s)
+
+→ shell(command='./fake-harness lab list --db lab.db')
+✓ shell: exit_code: 0
+
+stdout:
+in_progress   task_root_eval  2026-05-25 20:24  1/2 items  job: Plan, execute, 
+and summarize the seeded work
+  (0.5s)
+
+→ shell(command="./fake-harness lab list --db lab.db | …)
+✓ shell: exit_code: 0
+
+stdout:
+in_progress
+  (0.5s)
+
+→ shell(command='./fake-harness lab list --db lab.db')
+✓ shell: exit_code: 0
+
+stdout:
+in_progress   task_root_eval  2026-05-25 20:24  1/2 items  job: Plan, execute, 
+and summarize the seeded work
+  (0.4s)
+
+→ shell(command='./fake-harness lab list --db lab.db | …)
+✓ shell: exit_code: 0
+
+stdout:
+and summarize the seeded work
+  (0.5s)
+
+→ shell(command='./fake-harness lab list --db lab.db')
+✓ shell: exit_code: 0
+
+stdout:
+in_progress   task_root_eval  2026-05-25 20:24  1/2 items  job: Plan, execute, 
+and summarize the seeded work
+  (0.5s)
+
+→ shell(command='./fake-harness lab list --db lab.db')
+✓ shell: exit_code: 0
+
+stdout:
+in_progress   task_root_eval  2026-05-25 20:24  1/2 items  job: Plan, execute, 
+and summarize the seeded work
+  (0.4s)
+
+→ shell(command='./fake-harness lab list --db lab.db')
+✓ shell: exit_code: 0
+
+stdout:
+in_progress   task_root_eval  2026-05-25 20:24  1/2 items  job: Plan, execute, 
+and summarize the seeded work
+  (0.6s)
+
+→ shell(command='./fake-harness lab list --db lab.db')
+✓ shell: exit_code: 0
+
+stdout:
+in_progress   task_root_eval  2026-05-25 20:24  1/2 items  job: Plan, execute, 
+and summarize the seeded work
+  (0.5s)
+
+→ shell(command='grep -oE \'[0-9a-f]{8}-[0-9a-f]{4}-[0-…)
+✓ shell: exit_code: 0
+
+stdout:
+No UUID found in database
+  (0.0s)
+
+→ shell(command='sqlite3 lab.db "SELECT job_id FROM job…)
+✗ shell: exit_code: 1
+
+stderr:
+Error: in prepare, no such table: jobs
+  (0.0s)
+
+→ shell(command='sqlite3 lab.db ".tables"')
+✓ shell: exit_code: 0
+
+stdout:
+approvals      memory         sessions       task_activity  tasks        
+  (0.0s)
+
+→ shell(command='sqlite3 lab.db "SELECT job_id FROM ses…)
+✗ shell: exit_code: 1
+
+stderr:
+Error: in prepare, no such column: job_id
+  SELECT job_id FROM sessions;
+         ^--- error here
+  (0.0s)
+
+→ shell(command='sqlite3 lab.db "SELECT * FROM tasks LI…)
+✓ shell: exit_code: 0
+
+stdout:
+task_root_eval|T-001|job: Plan, execute, and summarize the seeded 
+work||in_progress||[]||[]|[]|/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr000
+0gn/T/harness_eval__zin5o6p/11-…  … 291 bytes  (0.0s)
+
+→ shell(command='sqlite3 lab.db "SELECT name FROM sqlit…)
+✓ shell: exit_code: 0
+
+stdout:
+sessions
+tasks
+task_activity
+approvals
+memory
+  (0.0s)
+
+→ shell(command='sqlite3 lab.db "PRAGMA table_info(task…)
+✓ shell: exit_code: 0
+
+stdout:
+0|id|TEXT|0||1
+1|ref|TEXT|1||0
+2|title|TEXT|1||0
+3|description|TEXT|0||0
+4|status|TEXT|1||0
+5|priority|TEXT|0||0
+6|labels|TEXT|1||0
+7|parent_id|TEXT|0||0
+8|links|TEXT|1||0
+9|ses…  … 305 bytes  (0.0s)
+
+→ shell(command='sqlite3 lab.db "SELECT id, ref, title,…)
+✓ shell: exit_code: 0
+
+stdout:
+task_root_eval|T-001|job: Plan, execute, and summarize the seeded 
+work|in_progress
+task_b53f631dee35|T-002|Draft plan|done
+task_93f57752b32b|T-003|Execute change|in_progress
+  (0.0s)
+
+→ shell(command='./fake-harness lab status task_root_ev…)
+✓ shell: exit_code: 0
+
+stdout:
+Job task_root_eval — 2 work items
+
+  done         T-002  Draft plan  planner split work
+  in_progress  T-003  Execute change
+  (0.5s)
+
+→ shell(command='./fake-harness lab resume task_root_ev…)
+✓ shell: exit_code: 0
+
+stdout:
+harness lab resume task_root_eval  — 2 workers
+provider=ollama  worker-model=llama3.2
+
+▶ worker-2
+  → claimed T-003
+  ✓ completed T-003
+  ✓ T-003 verified (100%)
+✓ worker-2 done…  … 247 bytes  (0.5s)
+
+→ verify_work(command='pytest tests/')
+✓ verify_work: PASSED
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0
+rootdir: /private/var/folders/8p/1_033mns3v1gvkq…  … 614 bytes  (0.5s)
+The multi-agent job was successfully orchestrated, inspected, and resumed.      
+
+ 1 Started job: ./fake-harness lab run "Plan, execute, and summarize the seeded 
+   work" --cwd . --db lab.db --no-judge created job task_root_eval.             
+ 2 Listed jobs: ./fake-harness lab list --db lab.db showed the job              
+   task_root_eval in in_progress state.                                         
+ 3 Inspected job status: ./fake-harness lab status task_root_eval --db lab.db   
+   confirmed one item was done and one was in_progress.                         
+ 4 Resumed job: ./fake-harness lab resume task_root_eval --db lab.db --no-judge 
+   completed the remaining task and ran the reporter.                           
+ 5 Verified work: Ran pytest tests/ which passed.                               
+
+                                                                                
+ # Summary of commands executed:                                                
+ ./fake-harness lab run "Plan, execute, and summarize the seeded work" --cwd .  
+ --db lab.db --no-judge                                                         
+ ./fake-harness lab list --db lab.db                                            
+ ./fake-harness lab status task_root_eval --db lab.db                           
+ ./fake-harness lab resume task_root_eval --db lab.db --no-judge                
+ pytest tests/                                                                  
+                                                                                
+
+✓ verify (shell)  ============================= test session starts 
+==============================
+collecting ... collected 1 item
+
+tests/test_lab_orchestration_flow.py::test_lab_orchestration_flow PASSED [100%]
+
+============================== 1 passed in 0.16s ===============================
+
+defense ledger:
+  verifiers: shell=1✓/0✗
+  tools: shell x21 (err x2), verify_work x1
+  lifeharness: L2 tips x3, L4 regulate x1

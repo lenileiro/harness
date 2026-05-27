@@ -1,0 +1,9 @@
+adaptive strategy default adaptive path -> minimal structure
+plugin runtime ok                                                               
+
+✓ verify (verify_before_done)  No modifying tool calls detected — verification 
+not required.
+
+defense ledger:
+  verifiers: verify_before_done=1✓/0✗
+  lifeharness: L2 tips x1

@@ -1,0 +1,10 @@
+adaptive strategy scope-sensitive prompt -> strict structural checks
+2026-05-24T14:56:11.259076Z [warning  ] agent.step.error               attempt=0 error='OpenRouter 402 (out of credits). Body: {"error":{"message":"This request requires more credits, or fewer max_tokens. You requested up to 8192 tokens, but can only afford 3723. To increase, visit https://openrouter.ai/settings/credits and add more credits","code":402,"metadata":{"provider_name":null}},"user_id":"user_385huHaWh47hA0WSioz7xgn5BgT"}' kind=configuration provider=openrouter
+2026-05-24T14:56:11.259171Z [error    ] agent.run.failed               error='OpenRouter 402 (out of credits). Body: {"error":{"message":"This request requires more credits, or fewer max_tokens. You requested up to 8192 tokens, but can only afford 3723. To increase, visit https://openrouter.ai/settings/credits and add more credits","code":402,"metadata":{"provider_name":null}},"user_id":"user_385huHaWh47hA0WSioz7xgn5BgT"}' kind=configuration
+
+Error (configuration): OpenRouter 402 (out of credits). Body: 
+{"error":{"message":"This request requires more credits, or fewer max_tokens. 
+You requested up to 8192 tokens, but can only afford 3723. To increase, visit 
+https://openrouter.ai/settings/credits and add more 
+credits","code":402,"metadata":{"provider_name":null}},"user_id":"user_385huHaWh
+47hA0WSioz7xgn5BgT"}

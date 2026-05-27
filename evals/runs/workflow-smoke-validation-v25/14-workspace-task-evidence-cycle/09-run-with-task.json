@@ -1,0 +1,29 @@
+{
+  "name": "run-with-task",
+  "argv": [
+    "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_noki07z9/workspace/fake-harness",
+    "run",
+    "read the note and summarize it",
+    "--provider",
+    "ollama",
+    "--model",
+    "test-model",
+    "--db",
+    ".harness/harness.db",
+    "--task",
+    "T-001",
+    "--session",
+    "sess_task_memory",
+    "--yes",
+    "--verify",
+    "none",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_noki07z9/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "adaptive strategy default adaptive path -> minimal structure\n\n\u2192 read_file(path='note.txt')\n\u2713 read_file: workspace evidence payload\n  (0.0s)\nworkspace task evidence ok                                                      \n\n\u2713 verify (verify_before_done)  No modifying tool calls detected \u2014 verification \nnot required.\n\ndefense ledger:\n  verifiers: verify_before_done=1\u2713/0\u2717\n  tools: read_file x1\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.4293354591354728
+}

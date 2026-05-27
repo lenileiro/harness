@@ -1,0 +1,5 @@
+Usage: harness providers list [OPTIONS]
+Try 'harness providers list --help' for help.
+╭─ Error ──────────────────────────────────────────────────────────────────────╮
+│ No such option '--cwd'.                                                      │
+╰──────────────────────────────────────────────────────────────────────────────╯

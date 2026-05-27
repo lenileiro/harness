@@ -1,0 +1,28 @@
+{
+  "name": "map-section",
+  "argv": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "research",
+    "map-section",
+    "--section",
+    "promotion",
+    "--files",
+    "packages/core/src/harness/core/pr_generation.py,packages/core/src/harness/core/promotion_candidates.py",
+    "--interfaces",
+    "PromotionCandidate,PromotionDraft",
+    "--constraints",
+    "promotion artifacts must stay deterministic",
+    "--weaknesses",
+    "reporting is scattered",
+    "--opportunities",
+    "clearer candidate prioritization",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_rxi0etgr/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Mapped section promotion at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_r\nxi0etgr/workspace/.harness/research/section-maps/section-promotion-c53937f3\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.4061146250460297
+}

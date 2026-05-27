@@ -1,0 +1,50 @@
+[
+  {
+    "id": "adj_a15a940236",
+    "kind": "tests_first",
+    "text": "Run the narrowest failing test or verify command before editing; do not patch from the prompt alone.",
+    "triggers": [
+      "build",
+      "promotion",
+      "candidate",
+      "draft",
+      "research",
+      "built",
+      "harness",
+      "commands"
+    ],
+    "weight": 1.6,
+    "source_fixture_name": "08-promotion-draft-flow",
+    "source_variant": "defended",
+    "source_artifact_dir": "evals/runs/gemma-demo-promotion-flow/08-promotion-draft-flow/defended/run-01",
+    "rationale": "Artifact trace showed edits happened before the first verification step.",
+    "evidence": {
+      "edit_before_repro": true,
+      "time_to_first_verification_seconds": 37.16848620795645
+    }
+  },
+  {
+    "id": "adj_20fb23a5b9",
+    "kind": "verify_loop",
+    "text": "After a failed verification, rerun the targeted check after each repair and do not declare completion until it passes.",
+    "triggers": [
+      "build",
+      "promotion",
+      "candidate",
+      "draft",
+      "research",
+      "built",
+      "harness",
+      "commands"
+    ],
+    "weight": 1.8,
+    "source_fixture_name": "08-promotion-draft-flow",
+    "source_variant": "defended",
+    "source_artifact_dir": "evals/runs/gemma-demo-promotion-flow/08-promotion-draft-flow/defended/run-01",
+    "rationale": "The trace required at least one verification retry loop.",
+    "evidence": {
+      "verification_after_failure": true,
+      "retry_loops": 33
+    }
+  }
+]

@@ -1,0 +1,79 @@
+
+→ glob(pattern='**/*.py')
+✓ glob: src/__init__.py
+src/format.py
+tests/__init__.py
+tests/conftest.py
+tests/test_format.py  (0.0s)
+
+→ read_file(path='src/format.py')
+
+→ read_file(path='tests/test_format.py')
+✓ read_file: """Price and number formatting utilities.
+
+TODO(PLAT-1842): Add comprehensive type hints throughout this module.
+TODO(PLAT-1842): Unify None-handling strategy (currently inconsistent).
+TODO(PLAT-1842…  … 3,494 bytes  (0.0s)
+✓ read_file: """Tests for format utilities."""
+
+from format import (
+    format_change,
+    format_compact_price,
+    format_duration_seconds,
+    format_large_number,
+    format_percentage,
+    format_price,
+)
+
+…  … 1,572 bytes  (0.0s)
+
+→ edit_file(path='src/format.py', old='    # BUG: no None guard here — raises…, 
+new='    if amount is None:\n        return…)
+✓ edit_file: replaced 1 occurrence in src/format.py  (0.0s)
+
+→ verify_work(command='pytest tests/ -v')
+✓ verify_work: PASSED
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0 -- 
+/Users/leiro/workspace/harness/.venv/bin/pyth…  … 1,740 bytes  (0.2s)
+Done. I added a null guard to format_price in src/format.py:                    
+
+                                                                                
+ def format_price(amount, currency=_DEFAULT_CURRENCY,                           
+ precision=_DEFAULT_PRECISION):                                                 
+     if amount is None:                                                         
+         return "—"                                                             
+     value = float(amount)                                                      
+     ...                                                                        
+                                                                                
+
+This matches the pattern used by format_percentage, format_large_number,        
+format_compact_price, format_duration_seconds, format_change, and format_ratio. 
+All 14 tests pass.                                                              
+
+
+✓ verify (shell)  ============================= test session starts 
+==============================
+collecting ... collected 14 items
+
+tests/test_format.py::test_format_price_usd PASSED                       [  7%]
+tests/test_format.py::test_format_price_integer_no_decimals PASSED       [ 14%]
+tests/test_format.py::test_format_price_euro PASSED                      [ 21%]
+tests/test_format.py::test_format_price_jpy PASSED                       [ 28%]
+tests/test_format.py::test_format_price_none PASSED                      [ 35%]
+tests/test_format.py::test_format_percentage_none PASSED                 [ 42%]
+tests/test_format.py::test_format_percentage_value PASSED                [ 50%]
+tests/test_format.py::test_format_large_number_thousands PASSED          [ 57%]
+tests/test_format.py::test_format_large_number_millions PASSED           [ 64%]
+tests/test_format.py::test_format_large_number_none PASSED               [ 71%]
+tests/test_format.py::test_format_compact_price_none PASSED              [ 78%]
+tests/test_format.py::test_format_change_none PASSED                     [ 85%]
+tests/test_format.py::test_format_duration_none PASSED                   [ 92%]
+tests/test_format.py::test_format_duration_seconds PASSED                [100%]
+
+============================== 14 passed in 0.01s ==============================
+
+defense ledger:
+  verifiers: shell=1✓/0✗
+  tools: read_file x2, glob x1, edit_file x1, verify_work x1

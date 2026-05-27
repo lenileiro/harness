@@ -1,0 +1,28 @@
+diff --git a/src/format.py b/src/format.py
+index f2a284d..b89f304 100644
+--- a/src/format.py
++++ b/src/format.py
+@@ -15,6 +15,8 @@ def render_amount(amount, currency=_DEFAULT_CURRENCY, precision=_DEFAULT_PRECISI
+     """Format a numeric price with currency symbol."""
+     # BUG: no None guard here — raises TypeError when amount is None.
+     # The other format_* functions already return "—" for None inputs.
++    if amount is None:
++        return "—"
+     value = float(amount)
+     formatted = f"{int(value):,}" if precision == 0 else f"{value:,.{precision}f}"
+     symbol = _currency_symbol(currency)
+diff --git a/tests/test_format.py b/tests/test_format.py
+index 40b85ad..19f0f2f 100644
+--- a/tests/test_format.py
++++ b/tests/test_format.py
+@@ -8,6 +8,10 @@ def test_render_amount_usd():
+     assert render_amount(10.5) == "$10.50"
+ 
+ 
++def test_render_amount_none():
++    assert render_amount(None) == "—"
++
++
+ def test_render_amount_integer_no_decimals():
+     assert render_amount(1234, precision=0) == "$1,234"
+ 

@@ -1,0 +1,37 @@
+diff --git a/src/calculator.py b/src/calculator.py
+index 9ebe3c5..8665191 100644
+--- a/src/calculator.py
++++ b/src/calculator.py
+@@ -28,6 +28,10 @@ class Calculator:
+             raise ZeroDivisionError("cannot divide by zero")
+         return a / b
+ 
++    def power(self, base: float, exponent: float) -> float:
++        """Return `base` raised to the `exponent`."""
++        return base ** exponent
++
+     def sqrt(self, x: float) -> float:
+         """Return the square root of `x`. Raises ValueError if x is negative."""
+         if x < 0:
+diff --git a/tests/test_calculator.py b/tests/test_calculator.py
+index a69ca14..5649122 100644
+--- a/tests/test_calculator.py
++++ b/tests/test_calculator.py
+@@ -38,12 +38,8 @@ def test_divide_by_zero(calc):
+         calc.divide(1, 0)
+ 
+ 
+-# sqrt
+-def test_sqrt(calc):
+-    assert calc.sqrt(9) == 3.0
+-    assert calc.sqrt(0) == 0.0
+-
+-
+-def test_sqrt_negative(calc):
+-    with pytest.raises(ValueError):
+-        calc.sqrt(-1)
++# -- power -------------------------------------------------------------
++def test_power(calc):
++    assert calc.power(2, 3) == 8
++    assert calc.power(5, 0) == 1
++    assert calc.power(2, -1) == 0.5

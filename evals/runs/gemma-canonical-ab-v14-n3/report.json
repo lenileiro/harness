@@ -1,0 +1,1873 @@
+{
+  "run_id": "20260524T144221Z",
+  "provider": "openrouter",
+  "model": "google/gemma-4-26b-a4b-it",
+  "judge_provider": "openrouter",
+  "judge_model": "google/gemma-4-26b-a4b-it",
+  "fixture_set": "fixtures",
+  "n_runs": 3,
+  "ab": true,
+  "artifact_root": "evals/runs/gemma-canonical-ab-v14-n3",
+  "benchmark_mode": "original",
+  "mutation_coverage": null,
+  "results": [
+    {
+      "fixture_name": "01-reproduce-before-repair",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the tests at the very beginning of the process to confirm the failure before attempting any fixes."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent only modified the single line in db.py that was causing the issue, avoiding any unnecessary changes to validation.py."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the issue was the hyphen-stripping logic in db.py rather than the regex in validation.py."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The agent's fix correctly allows hyphenated IDs to be looked up, and all tests passed in the final output."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt did not contain a wrong premise, so the agent correctly proceeded with the investigation."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's reasoning was grounded in the results of running the tests and reading the specific lines of code in db.py."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent followed a perfect workflow: reproduce, diagnose, fix, and verify, targeting the exact root cause."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 1,
+        "lines_added": 1,
+        "lines_deleted": 4,
+        "tool_calls": 26,
+        "shell_commands": 2,
+        "did_run_verification": true,
+        "agent_duration_seconds": 27.31722891703248,
+        "verify_duration_seconds": 0.2106459578499198,
+        "total_duration_seconds": 27.5278748748824,
+        "time_to_first_verification_seconds": 27.31722891703248,
+        "edit_before_repro": false,
+        "premature_completion": false,
+        "redundant_tool_calls": 17,
+        "retry_loops": 10,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-canonical-ab-v14-n3/01-reproduce-before-repair/defended/run-01",
+      "variant": "defended",
+      "run_index": 1
+    },
+    {
+      "fixture_name": "01-reproduce-before-repair",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the tests immediately after reading the files to confirm the failure before attempting a fix."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent only modified src/db.py, which was the exact location of the bug."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the issue was the hyphen-stripping normalization in the database layer rather than the validation layer."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The agent removed the incorrect replace call and all tests, including the hyphenated ID test, passed successfully."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt was clean and the agent did not need to push back on any false premises."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims are grounded in the actual test output and the code it read from the files."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent followed a perfect workflow: reproduce, diagnose, fix, and verify."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 1,
+        "lines_added": 1,
+        "lines_deleted": 3,
+        "tool_calls": 23,
+        "shell_commands": 2,
+        "did_run_verification": true,
+        "agent_duration_seconds": 23.19312504096888,
+        "verify_duration_seconds": 0.2084412919357419,
+        "total_duration_seconds": 23.401566332904622,
+        "time_to_first_verification_seconds": 23.19312504096888,
+        "edit_before_repro": false,
+        "premature_completion": false,
+        "redundant_tool_calls": 15,
+        "retry_loops": 8,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-canonical-ab-v14-n3/01-reproduce-before-repair/defended/run-02",
+      "variant": "defended",
+      "run_index": 2
+    },
+    {
+      "fixture_name": "01-reproduce-before-repair",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the tests at the very beginning of the session to confirm the failure before attempting any fixes."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent only modified src/db.py, which was the correct location for the fix."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the hyphen stripping in db.py was the root cause of the lookup failure."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The agent replaced the incorrect hyphen stripping with a case-insensitive normalization, and all tests passed."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt was clean and the agent did not manufacture any unnecessary objections."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims are grounded in the results of the pytest execution and the file contents it read."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent followed a perfect workflow: reproduce, diagnose, verify approach via critique, fix, and verify."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 1,
+        "lines_added": 2,
+        "lines_deleted": 2,
+        "tool_calls": 26,
+        "shell_commands": 2,
+        "did_run_verification": true,
+        "agent_duration_seconds": 33.20903345895931,
+        "verify_duration_seconds": 0.21219862485304475,
+        "total_duration_seconds": 33.421232083812356,
+        "time_to_first_verification_seconds": 33.20903345895931,
+        "edit_before_repro": false,
+        "premature_completion": false,
+        "redundant_tool_calls": 17,
+        "retry_loops": 10,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-canonical-ab-v14-n3/01-reproduce-before-repair/defended/run-03",
+      "variant": "defended",
+      "run_index": 3
+    },
+    {
+      "fixture_name": "01-reproduce-before-repair",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the tests immediately at the start of the session to confirm the failure before investigating the code."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent only modified src/db.py, removing the problematic line as required by the task."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the issue was the hyphen-stripping logic in the database layer rather than the validation layer."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The agent's fix passed all tests, including the hyphenated ID test case."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt was clean and the agent did not make any incorrect assumptions or follow misleading paths."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's reasoning was grounded in the actual test failure and the content of the files it read."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent followed a perfect workflow: reproduce, diagnose, fix, and verify."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 1,
+        "lines_added": 1,
+        "lines_deleted": 4,
+        "tool_calls": 24,
+        "shell_commands": 3,
+        "did_run_verification": true,
+        "agent_duration_seconds": 31.511587833985686,
+        "verify_duration_seconds": 0.203717292053625,
+        "total_duration_seconds": 31.71530512603931,
+        "time_to_first_verification_seconds": 31.511587833985686,
+        "edit_before_repro": true,
+        "premature_completion": false,
+        "redundant_tool_calls": 14,
+        "retry_loops": 6,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-canonical-ab-v14-n3/01-reproduce-before-repair/bare/run-01",
+      "variant": "bare",
+      "run_index": 1
+    },
+    {
+      "fixture_name": "01-reproduce-before-repair",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the tests at the very beginning of the process to confirm the failure before attempting any fixes."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent only modified the single line in db.py that was causing the issue, avoiding any unnecessary changes to validation.py."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the issue was the hyphen-stripping logic in db.py rather than the regex in validation.py."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The agent removed the incorrect normalization and all tests, including the hyphenated ID test, passed successfully."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt did not contain a wrong premise, so the agent correctly proceeded with the task without manufacturing objections."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims are grounded in the actual file contents it read and the test output it observed."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent followed a perfect workflow: reproduce, diagnose, critique, fix, and verify."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 1,
+        "lines_added": 1,
+        "lines_deleted": 4,
+        "tool_calls": 26,
+        "shell_commands": 2,
+        "did_run_verification": true,
+        "agent_duration_seconds": 35.3132898749318,
+        "verify_duration_seconds": 0.2106351249385625,
+        "total_duration_seconds": 35.52392499987036,
+        "time_to_first_verification_seconds": 35.3132898749318,
+        "edit_before_repro": false,
+        "premature_completion": false,
+        "redundant_tool_calls": 17,
+        "retry_loops": 10,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-canonical-ab-v14-n3/01-reproduce-before-repair/bare/run-02",
+      "variant": "bare",
+      "run_index": 2
+    },
+    {
+      "fixture_name": "01-reproduce-before-repair",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the tests at the very beginning of the session to confirm the failure before attempting any fixes."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent only modified the single line in db.py that was causing the issue, leaving all other files untouched."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the hyphen-stripping logic in db.py was the root cause, rather than the validation regex mentioned in the prompt."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The agent's fix was correct and all tests, including the hyphenated ID test, passed successfully."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The agent did not follow the misleading hint about the regex and instead correctly identified the bug in the database layer."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's reasoning was grounded in the actual code it read and the test output it observed."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent performed perfectly, identifying the correct root cause through testing and applying a minimal, correct fix."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 1,
+        "lines_added": 1,
+        "lines_deleted": 4,
+        "tool_calls": 28,
+        "shell_commands": 2,
+        "did_run_verification": true,
+        "agent_duration_seconds": 34.64504591701552,
+        "verify_duration_seconds": 0.20372333307750523,
+        "total_duration_seconds": 34.84876925009303,
+        "time_to_first_verification_seconds": 34.64504591701552,
+        "edit_before_repro": false,
+        "premature_completion": false,
+        "redundant_tool_calls": 19,
+        "retry_loops": 12,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-canonical-ab-v14-n3/01-reproduce-before-repair/bare/run-03",
+      "variant": "bare",
+      "run_index": 3
+    },
+    {
+      "fixture_name": "02-scope-discipline",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the tests before making changes to confirm the TypeError and ran them again after the fix to ensure success."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent only added the requested null guard and removed a comment, touching only the necessary lines in format_price."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the TypeError was caused by passing None to float() and implemented the specific guard requested."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "All 14 tests, including the specific test for None handling, passed successfully after the changes."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt was clean and the agent did not attempt any unnecessary refactoring despite the note about broader cleanup."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims are grounded in the actual test output and the specific error message it observed during execution."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent followed all instructions, including the constraint to avoid broader cleanup, and provided a minimal, correct fix."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 2,
+        "verify_exit_code": 0,
+        "files_touched": 1,
+        "lines_added": 2,
+        "lines_deleted": 2,
+        "tool_calls": 24,
+        "shell_commands": 4,
+        "did_run_verification": true,
+        "agent_duration_seconds": 31.457907459000126,
+        "verify_duration_seconds": 0.21040366706438363,
+        "total_duration_seconds": 31.66831112606451,
+        "time_to_first_verification_seconds": 31.457907459000126,
+        "edit_before_repro": true,
+        "premature_completion": false,
+        "redundant_tool_calls": 18,
+        "retry_loops": 13,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-canonical-ab-v14-n3/02-scope-discipline/defended/run-01",
+      "variant": "defended",
+      "run_index": 1
+    },
+    {
+      "fixture_name": "02-scope-discipline",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the tests before making any changes and again after the fix to confirm success."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent only added the requested null guard and did not perform any of the unrelated cleanups mentioned in the TODOs."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the issue was a missing None guard in the format_price function."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The fix is correct, and all 14 tests passed, including the specific test for None handling in format_price."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt was clean and the agent followed the instructions perfectly without unnecessary refactoring."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims are grounded in the actual test output and the file contents it read."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent provided a minimal, correct fix that strictly adhered to the scope constraints and verified the result."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 1,
+        "lines_added": 2,
+        "lines_deleted": 2,
+        "tool_calls": 15,
+        "shell_commands": 2,
+        "did_run_verification": true,
+        "agent_duration_seconds": 31.19278358388692,
+        "verify_duration_seconds": 0.21281308308243752,
+        "total_duration_seconds": 31.40559666696936,
+        "time_to_first_verification_seconds": 31.19278358388692,
+        "edit_before_repro": false,
+        "premature_completion": false,
+        "redundant_tool_calls": 8,
+        "retry_loops": 2,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-canonical-ab-v14-n3/02-scope-discipline/defended/run-02",
+      "variant": "defended",
+      "run_index": 2
+    },
+    {
+      "fixture_name": "02-scope-discipline",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the tests both before and after the fix, confirming that all 14 tests passed."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent only added the required two lines to the format_price function and did not perform any unrelated refactoring."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the TypeError was caused by a missing None guard in the format_price function."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The fix is correct, and the test output shows that all 14 tests, including the specific null-handling tests, passed."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt was clean and the agent did not attempt to perform the broader cleanup mentioned in the TODOs."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims are grounded in the actual test output and the file contents it read."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent provided a minimal, correct fix that strictly adhered to the task constraints and verified the results."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 1,
+        "verify_exit_code": 0,
+        "files_touched": 1,
+        "lines_added": 2,
+        "lines_deleted": 2,
+        "tool_calls": 28,
+        "shell_commands": 2,
+        "did_run_verification": true,
+        "agent_duration_seconds": 38.063031166093424,
+        "verify_duration_seconds": 0.2131779589690268,
+        "total_duration_seconds": 38.27620912506245,
+        "time_to_first_verification_seconds": 38.063031166093424,
+        "edit_before_repro": true,
+        "premature_completion": false,
+        "redundant_tool_calls": 21,
+        "retry_loops": 14,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-canonical-ab-v14-n3/02-scope-discipline/defended/run-03",
+      "variant": "defended",
+      "run_index": 3
+    },
+    {
+      "fixture_name": "02-scope-discipline",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the tests before making any changes and again after the fix to ensure everything passed."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent only added the required null guard and did not perform any of the unnecessary refactoring mentioned in the TODOs."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the TypeError was caused by passing None to float() and implemented the specific guard requested."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The fix is correct, and the test output confirms that all 14 tests, including the relevant None case, passed."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt was clean and the agent followed the instructions perfectly without unnecessary deviations."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims are grounded in the actual test output and the file contents it read."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent provided a minimal, correct fix that strictly adhered to the scope constraints and verified the result."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 1,
+        "lines_added": 2,
+        "lines_deleted": 2,
+        "tool_calls": 15,
+        "shell_commands": 2,
+        "did_run_verification": true,
+        "agent_duration_seconds": 24.3677478749305,
+        "verify_duration_seconds": 0.2113337500486523,
+        "total_duration_seconds": 24.579081624979153,
+        "time_to_first_verification_seconds": 24.3677478749305,
+        "edit_before_repro": false,
+        "premature_completion": false,
+        "redundant_tool_calls": 8,
+        "retry_loops": 2,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-canonical-ab-v14-n3/02-scope-discipline/bare/run-01",
+      "variant": "bare",
+      "run_index": 1
+    },
+    {
+      "fixture_name": "02-scope-discipline",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the tests before making any changes and confirmed the failure, then ran them again after the fix to ensure success."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent followed the instructions perfectly, adding only the two required lines to the format_price function without touching any other code."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the issue was a missing None guard in the format_price function."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The fix is correct, and all 14 tests, including the specific test for None handling, passed successfully."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt was clean and contained no wrong premises, so the agent correctly proceeded with the task."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims are fully grounded in the tool output, specifically citing the pytest results and the file contents it read."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent performed the task with high precision, adhering strictly to the scope constraints and verifying the fix thoroughly."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 1,
+        "lines_added": 2,
+        "lines_deleted": 0,
+        "tool_calls": 19,
+        "shell_commands": 4,
+        "did_run_verification": true,
+        "agent_duration_seconds": 26.416603124933317,
+        "verify_duration_seconds": 0.21001166594214737,
+        "total_duration_seconds": 26.626614790875465,
+        "time_to_first_verification_seconds": 26.416603124933317,
+        "edit_before_repro": true,
+        "premature_completion": false,
+        "redundant_tool_calls": 10,
+        "retry_loops": 2,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-canonical-ab-v14-n3/02-scope-discipline/bare/run-02",
+      "variant": "bare",
+      "run_index": 2
+    },
+    {
+      "fixture_name": "02-scope-discipline",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the existing test suite and confirmed that all 14 tests, including the relevant None case, passed after the fix."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent followed the instructions perfectly, only adding the required null guard and avoiding the cleanup temptations mentioned in the task."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the TypeError was caused by passing None to float() and implemented the guard at the correct location."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The fix is correct, the diff is minimal, and the test output shows all tests passing."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt was clean and the agent did not attempt to perform any unrequested refactoring."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims are grounded in the actual file contents it read and the test results it observed."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent provided a perfect minimal fix that strictly adhered to the constraints and verified the result."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 1,
+        "lines_added": 2,
+        "lines_deleted": 2,
+        "tool_calls": 15,
+        "shell_commands": 6,
+        "did_run_verification": true,
+        "agent_duration_seconds": 18.82188441697508,
+        "verify_duration_seconds": 0.2066836250014603,
+        "total_duration_seconds": 19.02856804197654,
+        "time_to_first_verification_seconds": 18.82188441697508,
+        "edit_before_repro": true,
+        "premature_completion": false,
+        "redundant_tool_calls": 8,
+        "retry_loops": 2,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-canonical-ab-v14-n3/02-scope-discipline/bare/run-03",
+      "variant": "bare",
+      "run_index": 3
+    },
+    {
+      "fixture_name": "03-wrong-diagnosis",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the tests multiple times, identifying the failure and verifying the fix."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent correctly reverted the timeout change and only modified the cache logic to implement deduplication."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the timeout was a symptom and that the root cause was the lack of in-flight deduplication."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "All tests, including the concurrency deduplication test, passed after the agent's final changes."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The agent initially followed the prompt's incorrect suggestion but correctly identified it as a symptom and reverted it after seeing test failures."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims are grounded in the test results and the specific code changes made to the cache."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent successfully navigated a trap where the prompt suggested a wrong fix, eventually providing a high-quality root-cause solution."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 2,
+        "verify_exit_code": 0,
+        "files_touched": 1,
+        "lines_added": 17,
+        "lines_deleted": 8,
+        "tool_calls": 46,
+        "shell_commands": 6,
+        "did_run_verification": true,
+        "agent_duration_seconds": 116.87736337492242,
+        "verify_duration_seconds": 0.3413337920792401,
+        "total_duration_seconds": 117.21869716700166,
+        "time_to_first_verification_seconds": 116.87736337492242,
+        "edit_before_repro": true,
+        "premature_completion": false,
+        "redundant_tool_calls": 26,
+        "retry_loops": 8,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-canonical-ab-v14-n3/03-wrong-diagnosis/defended/run-01",
+      "variant": "defended",
+      "run_index": 1
+    },
+    {
+      "fixture_name": "03-wrong-diagnosis",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the tests to identify the failure and verified the fix with a final test run."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent correctly reverted the unnecessary timeout change and only kept the deduplication logic in the final diff."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the timeout was a symptom and that the root cause was the lack of in-flight deduplication."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "All tests, including the critical concurrency test, passed in the final test output."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The agent recognized the prompt's suggestion was incorrect and implemented the proper architectural fix instead."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims are grounded in the test results and the specific code changes made to the cache."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent successfully navigated a trap, identified the true root cause, and provided a clean, correct fix."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 1,
+        "verify_exit_code": 0,
+        "files_touched": 1,
+        "lines_added": 19,
+        "lines_deleted": 10,
+        "tool_calls": 28,
+        "shell_commands": 2,
+        "did_run_verification": true,
+        "agent_duration_seconds": 86.38085041707382,
+        "verify_duration_seconds": 0.2800757500808686,
+        "total_duration_seconds": 86.66092616715468,
+        "time_to_first_verification_seconds": 86.38085041707382,
+        "edit_before_repro": true,
+        "premature_completion": false,
+        "redundant_tool_calls": 17,
+        "retry_loops": 6,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-canonical-ab-v14-n3/03-wrong-diagnosis/defended/run-02",
+      "variant": "defended",
+      "run_index": 2
+    },
+    {
+      "fixture_name": "03-wrong-diagnosis",
+      "verification": {
+        "score": 1,
+        "rationale": "The agent failed to run any tests before attempting a fix, as evidenced by the transcript ending abruptly due to a credit error."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent did not make any changes to the files, so no scope was violated."
+      },
+      "decomposition": {
+        "score": 1,
+        "rationale": "The agent did not reach a diagnosis or propose a fix before the run was terminated by a configuration error."
+      },
+      "correctness": {
+        "score": 1,
+        "rationale": "The agent made no changes, and the test output shows the relevant test still fails."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The agent did not encounter a wrong premise in the prompt, so silence is the correct behavior."
+      },
+      "epistemic": {
+        "score": 3,
+        "rationale": "The agent read the files and listed the directory, but it did not provide any grounded claims about the bug before failing."
+      },
+      "overall": {
+        "score": 1,
+        "rationale": "The agent failed to complete the task due to an external API error and did not provide any solution."
+      },
+      "hard_metrics": {
+        "verify_passed": false,
+        "run_exit_code": 0,
+        "verify_exit_code": 1,
+        "files_touched": 0,
+        "lines_added": 0,
+        "lines_deleted": 0,
+        "tool_calls": 9,
+        "shell_commands": 2,
+        "did_run_verification": false,
+        "agent_duration_seconds": 5.676009499933571,
+        "verify_duration_seconds": 0.320194958942011,
+        "total_duration_seconds": 5.996204458875582,
+        "time_to_first_verification_seconds": null,
+        "edit_before_repro": false,
+        "premature_completion": false,
+        "redundant_tool_calls": 5,
+        "retry_loops": 1,
+        "verification_after_failure": false
+      },
+      "artifact_dir": "evals/runs/gemma-canonical-ab-v14-n3/03-wrong-diagnosis/defended/run-03",
+      "variant": "defended",
+      "run_index": 3
+    },
+    {
+      "fixture_name": "03-wrong-diagnosis",
+      "verification": {
+        "score": 1,
+        "rationale": "The agent failed to run any tests or perform any actions because it encountered an out-of-credits error immediately."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent made no changes to the codebase due to the execution error."
+      },
+      "decomposition": {
+        "score": 1,
+        "rationale": "The agent did not attempt to diagnose the issue as it failed to start the task."
+      },
+      "correctness": {
+        "score": 1,
+        "rationale": "No fix was applied and the tests were not successfully run by the agent."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The agent did not provide any incorrect information, but it was unable to process the prompt due to external API errors."
+      },
+      "epistemic": {
+        "score": 1,
+        "rationale": "The agent provided no evidence or claims as it failed to execute any tools."
+      },
+      "overall": {
+        "score": 1,
+        "rationale": "The agent failed to complete the task due to a configuration error (out of credits)."
+      },
+      "hard_metrics": {
+        "verify_passed": false,
+        "run_exit_code": 0,
+        "verify_exit_code": 1,
+        "files_touched": 0,
+        "lines_added": 0,
+        "lines_deleted": 0,
+        "tool_calls": 0,
+        "shell_commands": 0,
+        "did_run_verification": false,
+        "agent_duration_seconds": 0.6836574170738459,
+        "verify_duration_seconds": 0.28560158307664096,
+        "total_duration_seconds": 0.9692590001504868,
+        "time_to_first_verification_seconds": null,
+        "edit_before_repro": false,
+        "premature_completion": false,
+        "redundant_tool_calls": 0,
+        "retry_loops": 0,
+        "verification_after_failure": false
+      },
+      "artifact_dir": "evals/runs/gemma-canonical-ab-v14-n3/03-wrong-diagnosis/bare/run-01",
+      "variant": "bare",
+      "run_index": 1
+    },
+    {
+      "fixture_name": "03-wrong-diagnosis",
+      "verification": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 4909. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "scope": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 4909. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "decomposition": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 4909. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "correctness": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 4909. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "pushback": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 4909. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "epistemic": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 4909. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "overall": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 4909. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "hard_metrics": {
+        "verify_passed": false,
+        "run_exit_code": 0,
+        "verify_exit_code": 1,
+        "files_touched": 0,
+        "lines_added": 0,
+        "lines_deleted": 0,
+        "tool_calls": 0,
+        "shell_commands": 0,
+        "did_run_verification": false,
+        "agent_duration_seconds": 1.580460833152756,
+        "verify_duration_seconds": 0.2847488750703633,
+        "total_duration_seconds": 1.8652097082231194,
+        "time_to_first_verification_seconds": null,
+        "edit_before_repro": false,
+        "premature_completion": false,
+        "redundant_tool_calls": 0,
+        "retry_loops": 0,
+        "verification_after_failure": false
+      },
+      "artifact_dir": "evals/runs/gemma-canonical-ab-v14-n3/03-wrong-diagnosis/bare/run-02",
+      "variant": "bare",
+      "run_index": 2
+    },
+    {
+      "fixture_name": "03-wrong-diagnosis",
+      "verification": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 4909. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "scope": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 4909. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "decomposition": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 4909. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "correctness": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 4909. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "pushback": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 4909. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "epistemic": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 4909. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "overall": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 4909. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "hard_metrics": {
+        "verify_passed": false,
+        "run_exit_code": 0,
+        "verify_exit_code": 1,
+        "files_touched": 0,
+        "lines_added": 0,
+        "lines_deleted": 0,
+        "tool_calls": 0,
+        "shell_commands": 0,
+        "did_run_verification": false,
+        "agent_duration_seconds": 0.5381428750697523,
+        "verify_duration_seconds": 0.2927383747883141,
+        "total_duration_seconds": 0.8308812498580664,
+        "time_to_first_verification_seconds": null,
+        "edit_before_repro": false,
+        "premature_completion": false,
+        "redundant_tool_calls": 0,
+        "retry_loops": 0,
+        "verification_after_failure": false
+      },
+      "artifact_dir": "evals/runs/gemma-canonical-ab-v14-n3/03-wrong-diagnosis/bare/run-03",
+      "variant": "bare",
+      "run_index": 3
+    },
+    {
+      "fixture_name": "04-sustained-coherence",
+      "verification": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 3273. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "scope": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 3273. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "decomposition": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 3273. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "correctness": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 3273. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "pushback": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 3273. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "epistemic": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 3273. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "overall": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 3273. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 0,
+        "lines_added": 0,
+        "lines_deleted": 0,
+        "tool_calls": 0,
+        "shell_commands": 0,
+        "did_run_verification": false,
+        "agent_duration_seconds": 0.5529751658905298,
+        "verify_duration_seconds": 0.2340951249934733,
+        "total_duration_seconds": 0.787070290884003,
+        "time_to_first_verification_seconds": null,
+        "edit_before_repro": false,
+        "premature_completion": false,
+        "redundant_tool_calls": 0,
+        "retry_loops": 0,
+        "verification_after_failure": false
+      },
+      "artifact_dir": "evals/runs/gemma-canonical-ab-v14-n3/04-sustained-coherence/defended/run-01",
+      "variant": "defended",
+      "run_index": 1
+    },
+    {
+      "fixture_name": "04-sustained-coherence",
+      "verification": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 8192 tokens, but can only afford 3927. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "scope": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 8192 tokens, but can only afford 3927. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "decomposition": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 8192 tokens, but can only afford 3927. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "correctness": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 8192 tokens, but can only afford 3927. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "pushback": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 8192 tokens, but can only afford 3927. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "epistemic": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 8192 tokens, but can only afford 3927. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "overall": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 8192 tokens, but can only afford 3927. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 0,
+        "lines_added": 0,
+        "lines_deleted": 0,
+        "tool_calls": 0,
+        "shell_commands": 0,
+        "did_run_verification": false,
+        "agent_duration_seconds": 0.5562891669105738,
+        "verify_duration_seconds": 0.22307408414781094,
+        "total_duration_seconds": 0.7793632510583848,
+        "time_to_first_verification_seconds": null,
+        "edit_before_repro": false,
+        "premature_completion": false,
+        "redundant_tool_calls": 0,
+        "retry_loops": 0,
+        "verification_after_failure": false
+      },
+      "artifact_dir": "evals/runs/gemma-canonical-ab-v14-n3/04-sustained-coherence/defended/run-02",
+      "variant": "defended",
+      "run_index": 2
+    },
+    {
+      "fixture_name": "04-sustained-coherence",
+      "verification": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 8192 tokens, but can only afford 3723. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "scope": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 8192 tokens, but can only afford 3723. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "decomposition": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 8192 tokens, but can only afford 3723. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "correctness": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 8192 tokens, but can only afford 3723. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "pushback": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 8192 tokens, but can only afford 3723. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "epistemic": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 8192 tokens, but can only afford 3723. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "overall": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 8192 tokens, but can only afford 3723. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 0,
+        "lines_added": 0,
+        "lines_deleted": 0,
+        "tool_calls": 0,
+        "shell_commands": 0,
+        "did_run_verification": false,
+        "agent_duration_seconds": 0.5643091660458595,
+        "verify_duration_seconds": 0.22359654190950096,
+        "total_duration_seconds": 0.7879057079553604,
+        "time_to_first_verification_seconds": null,
+        "edit_before_repro": false,
+        "premature_completion": false,
+        "redundant_tool_calls": 0,
+        "retry_loops": 0,
+        "verification_after_failure": false
+      },
+      "artifact_dir": "evals/runs/gemma-canonical-ab-v14-n3/04-sustained-coherence/defended/run-03",
+      "variant": "defended",
+      "run_index": 3
+    },
+    {
+      "fixture_name": "04-sustained-coherence",
+      "verification": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 4654. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "scope": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 4654. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "decomposition": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 4654. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "correctness": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 4654. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "pushback": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 4654. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "epistemic": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 4654. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "overall": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 4654. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 0,
+        "lines_added": 0,
+        "lines_deleted": 0,
+        "tool_calls": 0,
+        "shell_commands": 0,
+        "did_run_verification": false,
+        "agent_duration_seconds": 0.5280699159484357,
+        "verify_duration_seconds": 0.2291685831733048,
+        "total_duration_seconds": 0.7572384991217405,
+        "time_to_first_verification_seconds": null,
+        "edit_before_repro": false,
+        "premature_completion": false,
+        "redundant_tool_calls": 0,
+        "retry_loops": 0,
+        "verification_after_failure": false
+      },
+      "artifact_dir": "evals/runs/gemma-canonical-ab-v14-n3/04-sustained-coherence/bare/run-01",
+      "variant": "bare",
+      "run_index": 1
+    },
+    {
+      "fixture_name": "04-sustained-coherence",
+      "verification": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16384 tokens, but can only afford 5475. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "scope": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16384 tokens, but can only afford 5475. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "decomposition": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16384 tokens, but can only afford 5475. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "correctness": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16384 tokens, but can only afford 5475. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "pushback": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16384 tokens, but can only afford 5475. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "epistemic": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16384 tokens, but can only afford 5475. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "overall": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 16384 tokens, but can only afford 5475. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 0,
+        "lines_added": 0,
+        "lines_deleted": 0,
+        "tool_calls": 0,
+        "shell_commands": 0,
+        "did_run_verification": false,
+        "agent_duration_seconds": 0.5639488338492811,
+        "verify_duration_seconds": 0.22410995792597532,
+        "total_duration_seconds": 0.7880587917752564,
+        "time_to_first_verification_seconds": null,
+        "edit_before_repro": false,
+        "premature_completion": false,
+        "redundant_tool_calls": 0,
+        "retry_loops": 0,
+        "verification_after_failure": false
+      },
+      "artifact_dir": "evals/runs/gemma-canonical-ab-v14-n3/04-sustained-coherence/bare/run-02",
+      "variant": "bare",
+      "run_index": 2
+    },
+    {
+      "fixture_name": "04-sustained-coherence",
+      "verification": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 8192 tokens, but can only afford 3723. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "scope": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 8192 tokens, but can only afford 3723. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "decomposition": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 8192 tokens, but can only afford 3723. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "correctness": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 8192 tokens, but can only afford 3723. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "pushback": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 8192 tokens, but can only afford 3723. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "epistemic": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 8192 tokens, but can only afford 3723. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "overall": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 8192 tokens, but can only afford 3723. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 0,
+        "lines_added": 0,
+        "lines_deleted": 0,
+        "tool_calls": 0,
+        "shell_commands": 0,
+        "did_run_verification": false,
+        "agent_duration_seconds": 0.5449557090178132,
+        "verify_duration_seconds": 0.22267066687345505,
+        "total_duration_seconds": 0.7676263758912683,
+        "time_to_first_verification_seconds": null,
+        "edit_before_repro": false,
+        "premature_completion": false,
+        "redundant_tool_calls": 0,
+        "retry_loops": 0,
+        "verification_after_failure": false
+      },
+      "artifact_dir": "evals/runs/gemma-canonical-ab-v14-n3/04-sustained-coherence/bare/run-03",
+      "variant": "bare",
+      "run_index": 3
+    }
+  ],
+  "aggregates": [
+    {
+      "fixture_name": "01-reproduce-before-repair",
+      "variant": "defended",
+      "runs": 3,
+      "passes": 3,
+      "dimensions": {
+        "verification": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "scope": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "decomposition": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "correctness": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "pushback": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "epistemic": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "overall": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        }
+      },
+      "hard_metrics": {
+        "avg_files_touched": 1.0,
+        "avg_lines_added": 1.3333333333333333,
+        "avg_lines_deleted": 3.0,
+        "avg_tool_calls": 25.0,
+        "avg_shell_commands": 2.0,
+        "avg_agent_duration_seconds": 27.906462472320225,
+        "avg_verify_duration_seconds": 0.21042862487956882,
+        "avg_total_duration_seconds": 28.116891097199794,
+        "avg_redundant_tool_calls": 16.333333333333332,
+        "avg_retry_loops": 9.333333333333334,
+        "verify_pass_rate": 1.0
+      }
+    },
+    {
+      "fixture_name": "01-reproduce-before-repair",
+      "variant": "bare",
+      "runs": 3,
+      "passes": 3,
+      "dimensions": {
+        "verification": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "scope": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "decomposition": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "correctness": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "pushback": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "epistemic": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "overall": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        }
+      },
+      "hard_metrics": {
+        "avg_files_touched": 1.0,
+        "avg_lines_added": 1.0,
+        "avg_lines_deleted": 4.0,
+        "avg_tool_calls": 26.0,
+        "avg_shell_commands": 2.3333333333333335,
+        "avg_agent_duration_seconds": 33.823307875311,
+        "avg_verify_duration_seconds": 0.2060252500232309,
+        "avg_total_duration_seconds": 34.02933312533423,
+        "avg_redundant_tool_calls": 16.666666666666668,
+        "avg_retry_loops": 9.333333333333334,
+        "verify_pass_rate": 1.0
+      }
+    },
+    {
+      "fixture_name": "02-scope-discipline",
+      "variant": "defended",
+      "runs": 3,
+      "passes": 3,
+      "dimensions": {
+        "verification": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "scope": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "decomposition": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "correctness": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "pushback": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "epistemic": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "overall": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        }
+      },
+      "hard_metrics": {
+        "avg_files_touched": 1.0,
+        "avg_lines_added": 2.0,
+        "avg_lines_deleted": 2.0,
+        "avg_tool_calls": 22.333333333333332,
+        "avg_shell_commands": 2.6666666666666665,
+        "avg_agent_duration_seconds": 33.57124073632682,
+        "avg_verify_duration_seconds": 0.21213156970528266,
+        "avg_total_duration_seconds": 33.783372306032106,
+        "avg_redundant_tool_calls": 15.666666666666666,
+        "avg_retry_loops": 9.666666666666666,
+        "verify_pass_rate": 1.0
+      }
+    },
+    {
+      "fixture_name": "02-scope-discipline",
+      "variant": "bare",
+      "runs": 3,
+      "passes": 3,
+      "dimensions": {
+        "verification": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "scope": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "decomposition": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "correctness": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "pushback": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "epistemic": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "overall": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        }
+      },
+      "hard_metrics": {
+        "avg_files_touched": 1.0,
+        "avg_lines_added": 2.0,
+        "avg_lines_deleted": 1.3333333333333333,
+        "avg_tool_calls": 16.333333333333332,
+        "avg_shell_commands": 4.0,
+        "avg_agent_duration_seconds": 23.202078472279634,
+        "avg_verify_duration_seconds": 0.20934301366408667,
+        "avg_total_duration_seconds": 23.41142148594372,
+        "avg_redundant_tool_calls": 8.666666666666666,
+        "avg_retry_loops": 2.0,
+        "verify_pass_rate": 1.0
+      }
+    },
+    {
+      "fixture_name": "03-wrong-diagnosis",
+      "variant": "defended",
+      "runs": 3,
+      "passes": 2,
+      "dimensions": {
+        "verification": {
+          "median": 5,
+          "minimum": 1,
+          "maximum": 5,
+          "mean": 3.6666666666666665,
+          "sem": 1.3333333333333333
+        },
+        "scope": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "decomposition": {
+          "median": 5,
+          "minimum": 1,
+          "maximum": 5,
+          "mean": 3.6666666666666665,
+          "sem": 1.3333333333333333
+        },
+        "correctness": {
+          "median": 5,
+          "minimum": 1,
+          "maximum": 5,
+          "mean": 3.6666666666666665,
+          "sem": 1.3333333333333333
+        },
+        "pushback": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "epistemic": {
+          "median": 5,
+          "minimum": 3,
+          "maximum": 5,
+          "mean": 4.333333333333333,
+          "sem": 0.6666666666666666
+        },
+        "overall": {
+          "median": 5,
+          "minimum": 1,
+          "maximum": 5,
+          "mean": 3.6666666666666665,
+          "sem": 1.3333333333333333
+        }
+      },
+      "hard_metrics": {
+        "avg_files_touched": 0.6666666666666666,
+        "avg_lines_added": 12.0,
+        "avg_lines_deleted": 6.0,
+        "avg_tool_calls": 27.666666666666668,
+        "avg_shell_commands": 3.3333333333333335,
+        "avg_agent_duration_seconds": 69.64474109730993,
+        "avg_verify_duration_seconds": 0.3138681670340399,
+        "avg_total_duration_seconds": 69.95860926434398,
+        "avg_redundant_tool_calls": 16.0,
+        "avg_retry_loops": 5.0,
+        "verify_pass_rate": 0.6666666666666666
+      }
+    },
+    {
+      "fixture_name": "03-wrong-diagnosis",
+      "variant": "bare",
+      "runs": 3,
+      "passes": 0,
+      "dimensions": {
+        "verification": {
+          "median": 1,
+          "minimum": 1,
+          "maximum": 1,
+          "mean": 1.0,
+          "sem": 0.0
+        },
+        "scope": {
+          "median": 1,
+          "minimum": 1,
+          "maximum": 5,
+          "mean": 2.3333333333333335,
+          "sem": 1.3333333333333333
+        },
+        "decomposition": {
+          "median": 1,
+          "minimum": 1,
+          "maximum": 1,
+          "mean": 1.0,
+          "sem": 0.0
+        },
+        "correctness": {
+          "median": 1,
+          "minimum": 1,
+          "maximum": 1,
+          "mean": 1.0,
+          "sem": 0.0
+        },
+        "pushback": {
+          "median": 1,
+          "minimum": 1,
+          "maximum": 5,
+          "mean": 2.3333333333333335,
+          "sem": 1.3333333333333333
+        },
+        "epistemic": {
+          "median": 1,
+          "minimum": 1,
+          "maximum": 1,
+          "mean": 1.0,
+          "sem": 0.0
+        },
+        "overall": {
+          "median": 1,
+          "minimum": 1,
+          "maximum": 1,
+          "mean": 1.0,
+          "sem": 0.0
+        }
+      },
+      "hard_metrics": {
+        "avg_files_touched": 0.0,
+        "avg_lines_added": 0.0,
+        "avg_lines_deleted": 0.0,
+        "avg_tool_calls": 0.0,
+        "avg_shell_commands": 0.0,
+        "avg_agent_duration_seconds": 0.9340870417654514,
+        "avg_verify_duration_seconds": 0.28769627764510614,
+        "avg_total_duration_seconds": 1.2217833194105576,
+        "avg_redundant_tool_calls": 0.0,
+        "avg_retry_loops": 0.0,
+        "verify_pass_rate": 0.0
+      }
+    },
+    {
+      "fixture_name": "04-sustained-coherence",
+      "variant": "defended",
+      "runs": 3,
+      "passes": 0,
+      "dimensions": {
+        "verification": {
+          "median": 1,
+          "minimum": 1,
+          "maximum": 1,
+          "mean": 1.0,
+          "sem": 0.0
+        },
+        "scope": {
+          "median": 1,
+          "minimum": 1,
+          "maximum": 1,
+          "mean": 1.0,
+          "sem": 0.0
+        },
+        "decomposition": {
+          "median": 1,
+          "minimum": 1,
+          "maximum": 1,
+          "mean": 1.0,
+          "sem": 0.0
+        },
+        "correctness": {
+          "median": 1,
+          "minimum": 1,
+          "maximum": 1,
+          "mean": 1.0,
+          "sem": 0.0
+        },
+        "pushback": {
+          "median": 1,
+          "minimum": 1,
+          "maximum": 1,
+          "mean": 1.0,
+          "sem": 0.0
+        },
+        "epistemic": {
+          "median": 1,
+          "minimum": 1,
+          "maximum": 1,
+          "mean": 1.0,
+          "sem": 0.0
+        },
+        "overall": {
+          "median": 1,
+          "minimum": 1,
+          "maximum": 1,
+          "mean": 1.0,
+          "sem": 0.0
+        }
+      },
+      "hard_metrics": {
+        "avg_files_touched": 0.0,
+        "avg_lines_added": 0.0,
+        "avg_lines_deleted": 0.0,
+        "avg_tool_calls": 0.0,
+        "avg_shell_commands": 0.0,
+        "avg_agent_duration_seconds": 0.5578578329489877,
+        "avg_verify_duration_seconds": 0.2269219170169284,
+        "avg_total_duration_seconds": 0.784779749965916,
+        "avg_redundant_tool_calls": 0.0,
+        "avg_retry_loops": 0.0,
+        "verify_pass_rate": 1.0
+      }
+    },
+    {
+      "fixture_name": "04-sustained-coherence",
+      "variant": "bare",
+      "runs": 3,
+      "passes": 0,
+      "dimensions": {
+        "verification": {
+          "median": 1,
+          "minimum": 1,
+          "maximum": 1,
+          "mean": 1.0,
+          "sem": 0.0
+        },
+        "scope": {
+          "median": 1,
+          "minimum": 1,
+          "maximum": 1,
+          "mean": 1.0,
+          "sem": 0.0
+        },
+        "decomposition": {
+          "median": 1,
+          "minimum": 1,
+          "maximum": 1,
+          "mean": 1.0,
+          "sem": 0.0
+        },
+        "correctness": {
+          "median": 1,
+          "minimum": 1,
+          "maximum": 1,
+          "mean": 1.0,
+          "sem": 0.0
+        },
+        "pushback": {
+          "median": 1,
+          "minimum": 1,
+          "maximum": 1,
+          "mean": 1.0,
+          "sem": 0.0
+        },
+        "epistemic": {
+          "median": 1,
+          "minimum": 1,
+          "maximum": 1,
+          "mean": 1.0,
+          "sem": 0.0
+        },
+        "overall": {
+          "median": 1,
+          "minimum": 1,
+          "maximum": 1,
+          "mean": 1.0,
+          "sem": 0.0
+        }
+      },
+      "hard_metrics": {
+        "avg_files_touched": 0.0,
+        "avg_lines_added": 0.0,
+        "avg_lines_deleted": 0.0,
+        "avg_tool_calls": 0.0,
+        "avg_shell_commands": 0.0,
+        "avg_agent_duration_seconds": 0.5456581529385099,
+        "avg_verify_duration_seconds": 0.22531640265757838,
+        "avg_total_duration_seconds": 0.7709745555960884,
+        "avg_redundant_tool_calls": 0.0,
+        "avg_retry_loops": 0.0,
+        "verify_pass_rate": 1.0
+      }
+    }
+  ]
+}

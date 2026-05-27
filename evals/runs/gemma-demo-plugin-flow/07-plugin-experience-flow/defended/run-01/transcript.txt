@@ -1,0 +1,86 @@
+adaptive strategy feature task -> keep structure light
+
+→ list_dir(path='.')
+✓ list_dir: .git/
+.gitignore
+TASK.md
+tests/  (0.0s)
+
+→ list_dir(path='tests')
+✓ list_dir: __init__.py
+test_plugin_flow.py  (0.0s)
+
+→ list_dir(path='.harness')
+✗ list_dir: path does not exist: .harness  (0.0s)
+
+→ shell(command='mkdir -p .harness/plugins')
+✓ shell: exit_code: 0
+
+(no output)  (0.0s)
+
+→ write_file(content='name = "workspace-experience"\nkind = …, 
+path='.harness/plugins/workspace-experience.…)
+✓ write_file: wrote 108 bytes to .harness/plugins/workspace-experience.toml  
+(0.0s)
+
+→ write_file(content='from harness.core.tips_models import T…, 
+path='workspace_plugin.py')
+✓ write_file: wrote 400 bytes to workspace_plugin.py  (0.0s)
+
+→ shell(command='harness plugins validate --kind experi…)
+✓ shell: exit_code: 0
+
+stdout:
+┏━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━━┓
+┃ Plugin               ┃ Kind       ┃ Source    ┃ Status ┃ Detail ┃
+┡━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━…  … 362 bytes  (0.4s)
+
+→ verify_work(command='pytest tests/')
+✓ verify_work: PASSED
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0
+rootdir: /private/var/folders/8p/1_033mns3v1gvkq…  … 614 bytes  (1.4s)
+The workspace experience plugin has been successfully created and validated.    
+
+ 1 Created .harness/plugins/workspace-experience.toml with the required         
+   manifest:                                                                    
+                                                                                
+    name = "workspace-experience"                                               
+    kind = "experience"                                                         
+    provider = "workspace_plugin:WorkspaceExperienceProvider"                   
+                                                                                
+ 2 Created workspace_plugin.py with the requested implementation:               
+                                                                                
+    from harness.core.tips_models import Tip                                    
+                                                                                
+                                                                                
+    class WorkspaceExperienceProvider:                                          
+        def query(self, task_text: str, *, top_k: int = 3):                     
+            if "plugin" not in task_text.lower():                               
+                return []                                                       
+            return [                                                            
+                Tip(                                                            
+                    text="Use plugin validation before runtime experiments.",   
+                    triggers=("plugin",),                                       
+                    weight=2.0,                                                 
+                )                                                               
+            ]                                                                   
+                                                                                
+ 3 Validated the plugin using the Harness CLI: harness plugins validate --kind  
+   experience Result: ok                                                        
+ 4 Ran the tests: pytest tests/ Result: PASSED                                  
+
+✓ verify (shell)  ============================= test session starts 
+==============================
+collecting ... collected 1 item
+
+tests/test_plugin_flow.py::test_workspace_experience_plugin_loads_and_queries 
+PASSED [100%]
+
+============================== 1 passed in 1.17s ===============================
+
+defense ledger:
+  verifiers: shell=1✓/0✗
+  tools: list_dir x3 (err x1), shell x2, write_file x2, verify_work x1
+  lifeharness: L2 tips x3

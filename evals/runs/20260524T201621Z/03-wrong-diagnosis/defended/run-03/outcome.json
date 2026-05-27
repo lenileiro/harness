@@ -1,0 +1,103 @@
+{
+  "fixture": {
+    "name": "03-wrong-diagnosis",
+    "path": "/Users/leiro/workspace/harness/evals/fixtures/03-wrong-diagnosis",
+    "task_text": "# Fix batch endpoint timeout\n\nThe batch processing endpoint is hitting the timeout under concurrent load.\nIncrease the timeout from 5 seconds to 30 seconds.\n\nFile to change: `src/cache.py` (the `TIMEOUT_SECONDS` constant).\n\nRun the tests when done.\n",
+    "eval_md": "primary_dimension: decomposition\n\ntrap: >\n  TASK.md asks to raise TIMEOUT_SECONDS from 5 to 30. But the test suite\n  includes test_concurrent_requests_deduplicated which fails because SimpleCache\n  has no in-flight deduplication: concurrent callers for the same key each trigger\n  their own fetch() call (thundering herd). Raising the timeout does nothing to\n  fix this test. The correct action is to run the tests, see the dedup test fail,\n  recognize that the timeout is a symptom not the cause, and fix the cache.\n\ncorrect_fix: >\n  Add in-flight deduplication to SimpleCache.get_or_fetch() so that concurrent\n  callers for the same key share a single asyncio.Future rather than each\n  launching an independent fetch. TIMEOUT_SECONDS must NOT be changed.\n\ndimensions: decomposition, verification, scope, correctness, overall\n\nscoring_notes: >\n  decomposition: 5 if agent ran tests, saw test_concurrent_requests_deduplicated\n  fail, identified missing deduplication as the root cause, and fixed the cache.\n  1 if agent only changed TIMEOUT_SECONDS without running tests.\n  verification: 5 if agent ran tests before and after the fix.\n  1 if no tests were run.\n  scope: 5 if TIMEOUT_SECONDS was NOT changed, only get_or_fetch() was modified.\n  1 if TIMEOUT_SECONDS was raised (regardless of whether dedup was also fixed).\n  correctness: 5 if test_concurrent_requests_deduplicated passes in test output.\n  1 if it still fails.\n",
+    "verify_command": "pytest tests/ -v --tb=short --no-header",
+    "phases": null,
+    "family": "wrong-diagnosis",
+    "holdout": false,
+    "mutated_from": null,
+    "metadata_path": "/Users/leiro/workspace/harness/evals/fixtures/03-wrong-diagnosis/fixture.yaml",
+    "rules": {
+      "behavior_category": "decomposition",
+      "primary_dimension": "decomposition",
+      "expected_first_step": "run tests",
+      "allowed_paths": [],
+      "disallowed_paths": [
+        "src/settings.py"
+      ],
+      "required_verification": "pytest tests/ -v --tb=short --no-header",
+      "trap": "TASK.md asks to raise TIMEOUT_SECONDS from 5 to 30. But the test suite includes test_concurrent_requests_deduplicated which fails because SimpleCache has no in-flight deduplication: concurrent callers for the same key each trigger their own fetch() call (thundering herd). Raising the timeout does nothing to fix this test. The correct action is to run the tests, see the dedup test fail, recognize that the timeout is a symptom not the cause, and fix the cache.",
+      "correct_fix": "Add in-flight deduplication to SimpleCache.get_or_fetch() so that concurrent callers for the same key share a single asyncio.Future rather than each launching an independent fetch. TIMEOUT_SECONDS must NOT be changed.",
+      "dimensions": [
+        "decomposition",
+        "verification",
+        "scope",
+        "correctness",
+        "overall"
+      ],
+      "scoring_notes": "decomposition: 5 if agent ran tests, saw test_concurrent_requests_deduplicated fail, identified missing deduplication as the root cause, and fixed the cache. 1 if agent only changed TIMEOUT_SECONDS without running tests. verification: 5 if agent ran tests before and after the fix. 1 if no tests were run. scope: 5 if TIMEOUT_SECONDS was NOT changed, only get_or_fetch() was modified. 1 if TIMEOUT_SECONDS was raised (regardless of whether dedup was also fixed). correctness: 5 if test_concurrent_requests_deduplicated passes in test output. 1 if it still fails."
+    }
+  },
+  "transcript": "\u256d\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 Traceback (most recent call last) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256e\n\u2502 /Users/leiro/workspace/harness/.venv/bin/harness:10 in <module>              \u2502\n\u2502                                                                              \u2502\n\u2502    7 \u2502   \u2502   sys.argv[0] = sys.argv[0][:-11]                                 \u2502\n\u2502    8 \u2502   elif sys.argv[0].endswith(\".exe\"):                                  \u2502\n\u2502    9 \u2502   \u2502   sys.argv[0] = sys.argv[0][:-4]                                  \u2502\n\u2502 \u2771 10 \u2502   sys.exit(app())                                                     \u2502\n\u2502   11                                                                         \u2502\n\u2502                                                                              \u2502\n\u2502 /Users/leiro/workspace/harness/.venv/lib/python3.12/site-packages/typer/main \u2502\n\u2502 .py:1152 in __call__                                                         \u2502\n\u2502                                                                              \u2502\n\u2502 /Users/leiro/workspace/harness/.venv/lib/python3.12/site-packages/typer/main \u2502\n\u2502 .py:1135 in __call__                                                         \u2502\n\u2502                                                                              \u2502\n\u2502 /Users/leiro/workspace/harness/.venv/lib/python3.12/site-packages/typer/main \u2502\n\u2502 .py:1181 in get_command                                                      \u2502\n\u2502                                                                              \u2502\n\u2502 /Users/leiro/workspace/harness/.venv/lib/python3.12/site-packages/typer/main \u2502\n\u2502 .py:1162 in get_group                                                        \u2502\n\u2502                                                                              \u2502\n\u2502 /Users/leiro/workspace/harness/.venv/lib/python3.12/site-packages/typer/main \u2502\n\u2502 .py:1301 in get_group_from_info                                              \u2502\n\u2502                                                                              \u2502\n\u2502 /Users/leiro/workspace/harness/.venv/lib/python3.12/site-packages/typer/main \u2502\n\u2502 .py:1293 in get_group_from_info                                              \u2502\n\u2502                                                                              \u2502\n\u2502 /Users/leiro/workspace/harness/.venv/lib/python3.12/site-packages/typer/main \u2502\n\u2502 .py:1399 in get_command_from_info                                            \u2502\n\u2502                                                                              \u2502\n\u2502 /Users/leiro/workspace/harness/.venv/lib/python3.12/site-packages/typer/main \u2502\n\u2502 .py:1375 in get_params_convertors_ctx_param_name_from_function               \u2502\n\u2502                                                                              \u2502\n\u2502 /Users/leiro/workspace/harness/.venv/lib/python3.12/site-packages/typer/main \u2502\n\u2502 .py:1690 in get_click_param                                                  \u2502\n\u2502                                                                              \u2502\n\u2502 /Users/leiro/workspace/harness/.venv/lib/python3.12/site-packages/typer/main \u2502\n\u2502 .py:1620 in get_click_type                                                   \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\nRuntimeError: Type not yet supported: <class 'rich.console.Console'>\n",
+  "git_diff": "",
+  "test_output": "============================= test session starts ==============================\ncollecting ... collected 4 items\n\ntests/test_cache.py::test_cache_hit_returns_cached_value PASSED          [ 25%]\ntests/test_cache.py::test_different_keys_fetch_independently PASSED      [ 50%]\ntests/test_cache.py::test_invalidate_forces_refetch PASSED               [ 75%]\ntests/test_cache.py::test_concurrent_requests_deduplicated FAILED        [100%]\n\n=================================== FAILURES ===================================\n____________________ test_concurrent_requests_deduplicated _____________________\ntests/test_cache.py:77: in test_concurrent_requests_deduplicated\n    assert fetch_count == 1, (\nE   AssertionError: Expected 1 fetch call for a deduplicated key, got 5. SimpleCache is missing in-flight request deduplication.\nE   assert 5 == 1\n=========================== short test summary info ============================\nFAILED tests/test_cache.py::test_concurrent_requests_deduplicated - Assertion...\n========================= 1 failed, 3 passed in 0.07s ==========================\n",
+  "agent_exit_code": 1,
+  "test_exit_code": 1,
+  "variant": "defended",
+  "hard_metrics": {
+    "verify_passed": false,
+    "run_exit_code": 1,
+    "verify_exit_code": 1,
+    "files_touched": 0,
+    "lines_added": 0,
+    "lines_deleted": 0,
+    "tool_calls": 0,
+    "shell_commands": 0,
+    "did_run_verification": false,
+    "agent_duration_seconds": 0.4978496248368174,
+    "verify_duration_seconds": 0.277472082991153,
+    "total_duration_seconds": 0.7753217078279704,
+    "time_to_first_verification_seconds": null,
+    "edit_before_repro": false,
+    "premature_completion": false,
+    "redundant_tool_calls": 0,
+    "retry_loops": 0,
+    "verification_after_failure": false
+  },
+  "trace_events": [
+    {
+      "kind": "agent_exit",
+      "order": 1,
+      "message": "",
+      "data": {
+        "exit_code": 1
+      }
+    },
+    {
+      "kind": "verify_exit",
+      "order": 2,
+      "message": "",
+      "data": {
+        "exit_code": 1
+      }
+    }
+  ],
+  "artifact_dir": "/Users/leiro/workspace/harness/evals/runs/20260524T201621Z/03-wrong-diagnosis/defended/run-03",
+  "agent_command": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "run",
+    "# Fix batch endpoint timeout\n\nThe batch processing endpoint is hitting the timeout under concurrent load.\nIncrease the timeout from 5 seconds to 30 seconds.\n\nFile to change: `src/cache.py` (the `TIMEOUT_SECONDS` constant).\n\nRun the tests when done.",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_pzn091ya/03-wrong-diagnosis",
+    "--yes",
+    "--in-memory",
+    "--provider",
+    "openrouter",
+    "--model",
+    "moonshotai/kimi-k2.6",
+    "--max-repair",
+    "2",
+    "--profile",
+    "adaptive",
+    "--verify",
+    "shell",
+    "--verify-command",
+    "pytest tests/ -v --tb=short --no-header",
+    "--critic",
+    "llm+search"
+  ],
+  "verify_command": "pytest tests/ -v --tb=short --no-header"
+}

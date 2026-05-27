@@ -1,0 +1,30 @@
+{
+  "name": "create-opportunity",
+  "argv": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "research",
+    "create-opportunity",
+    "--title",
+    "Refine verifier reflection routing",
+    "--summary",
+    "Combine repo observations with reflective research to narrow verifier prompts.",
+    "--related-sections",
+    "verification,runtime,research",
+    "--origin-observations",
+    "obs-verifier-prompt-drift-a2416169",
+    "--change-modes",
+    "improve,build_on",
+    "--theme",
+    "verifier-reliability",
+    "--priority",
+    "high",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_9521gn_q/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Created opportunity opp-refine-verifier-reflection-routi-fe00e176 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_9\n521gn_q/workspace/.harness/research/opportunities/opp-refine-verifier-reflection\n-routi-fe00e176\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.4010914168320596
+}

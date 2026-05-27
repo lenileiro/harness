@@ -1,0 +1,50 @@
+[
+  {
+    "id": "adj_f024dd38d6",
+    "kind": "tests_first",
+    "text": "Run the narrowest failing test or verify command before editing; do not patch from the prompt alone.",
+    "triggers": [
+      "create",
+      "structured",
+      "handover",
+      "next",
+      "agent",
+      "built",
+      "harness",
+      "workspace"
+    ],
+    "weight": 1.6,
+    "source_fixture_name": "09-handover-vision-flow",
+    "source_variant": "defended",
+    "source_artifact_dir": "evals/runs/gemma-demo-handover-flow-v2/09-handover-vision-flow/defended/run-01",
+    "rationale": "Artifact trace showed edits happened before the first verification step.",
+    "evidence": {
+      "edit_before_repro": true,
+      "time_to_first_verification_seconds": 21.604309916030616
+    }
+  },
+  {
+    "id": "adj_06fcd0337b",
+    "kind": "verify_loop",
+    "text": "After a failed verification, rerun the targeted check after each repair and do not declare completion until it passes.",
+    "triggers": [
+      "create",
+      "structured",
+      "handover",
+      "next",
+      "agent",
+      "built",
+      "harness",
+      "workspace"
+    ],
+    "weight": 1.8,
+    "source_fixture_name": "09-handover-vision-flow",
+    "source_variant": "defended",
+    "source_artifact_dir": "evals/runs/gemma-demo-handover-flow-v2/09-handover-vision-flow/defended/run-01",
+    "rationale": "The trace required at least one verification retry loop.",
+    "evidence": {
+      "verification_after_failure": true,
+      "retry_loops": 23
+    }
+  }
+]

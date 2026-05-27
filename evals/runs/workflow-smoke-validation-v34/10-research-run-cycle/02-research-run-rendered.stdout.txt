@@ -1,0 +1,18 @@
+Verifier routing and promotion evidence should stay aligned.
+
+Findings
+- Scoped verifier routing lowers noise.
+- Promotion artifacts need explicit evidence sections.
+
+Open Questions
+- How strict should promotion evidence be?
+
+Sources
+┏━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Title                ┃ URL                       ┃ Excerpt                   ┃
+┡━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ verification routing │ packages/core/src/harnes… │ Scoped routing reduces    │
+│                      │                           │ verifier noise.           │
+│ promotion drafting   │ packages/core/src/harnes… │ Evidence sections clarify │
+│                      │                           │ promotion candidates.     │
+└──────────────────────┴───────────────────────────┴───────────────────────────┘

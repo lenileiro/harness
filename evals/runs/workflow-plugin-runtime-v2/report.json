@@ -1,0 +1,44 @@
+{
+  "run_id": "20260525T010412Z-workflow",
+  "artifact_root": "evals/runs/workflow-plugin-runtime-v2",
+  "results": [
+    {
+      "fixture_name": "11-plugin-runtime-cycle",
+      "passed": false,
+      "steps_total": 1,
+      "steps_passed": 0,
+      "step_results": [
+        {
+          "name": "run-plugin-domain",
+          "argv": [
+            "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_nj5gmod3/workspace/fake-harness",
+            "run",
+            "review the docs patch",
+            "--domain",
+            "plugin-review",
+            "--provider",
+            "ollama",
+            "--model",
+            "test-model",
+            "--in-memory",
+            "--yes",
+            "--verify",
+            "none",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_nj5gmod3/workspace"
+          ],
+          "passed": false,
+          "returncode": 0,
+          "stdout": "adaptive strategy default adaptive path -> minimal structure\nplugin runtime ok                                                               \n\n\u2713 verify (verify_before_done)  No modifying tool calls detected \u2014 verification \nnot required.\n\ndefense ledger:\n  verifiers: verify_before_done=1\u2713/0\u2717\n  lifeharness: L2 tips x1\n",
+          "stderr": "",
+          "failures": [
+            "file_contains~.harness/runtime-plugin-capture.json~\"tool_count\": 1"
+          ],
+          "duration_seconds": 1.154525708872825
+        }
+      ],
+      "artifact_dir": "evals/runs/workflow-plugin-runtime-v2/11-plugin-runtime-cycle",
+      "duration_seconds": 1.1558670410886407
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+Proposed delta for 'minimal_fix_verifier'
+
+Rationale: tighten scope discipline
+
+Prefer the minimum diff that fixes the issue.
+
+--dry-run: not saving.

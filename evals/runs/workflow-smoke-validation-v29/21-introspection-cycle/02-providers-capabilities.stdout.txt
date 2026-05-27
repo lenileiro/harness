@@ -1,0 +1,7 @@
+┌────────────────────┬───────┐
+│ streaming          │ True  │
+│ tool_use           │ True  │
+│ structured_output  │ False │
+│ max_context_tokens │ —     │
+│ models             │ —     │
+└────────────────────┴───────┘

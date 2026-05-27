@@ -1,0 +1,14 @@
+╭───────────────────── Traceback (most recent call last) ──────────────────────╮
+│ /Users/leiro/workspace/harness/packages/cli/src/harness/cli/__main__.py:744  │
+│ in run                                                                       │
+│                                                                              │
+│    741 │   │   bool, typer.Option("--verbose", "-v", help="Enable DEBUG      │
+│        logging to stderr.")                                                  │
+│    742 │   ] = False,                                                        │
+│    743 ) -> None:                                                            │
+│ ❱  744 │   _run_command(                                                     │
+│    745 │   │   prompt=prompt,                                                │
+│    746 │   │   model=model,                                                  │
+│    747 │   │   provider=provider,                                            │
+╰──────────────────────────────────────────────────────────────────────────────╯
+TypeError: run_command() missing 1 required keyword-only argument: 'domain'

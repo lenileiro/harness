@@ -1,0 +1,26 @@
+{
+  "name": "create-unknown",
+  "argv": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "research",
+    "create-unknown",
+    "--theme-id",
+    "theme-memory-graph-d27895f2",
+    "--question",
+    "How should archived findings stay discoverable?",
+    "--why-it-matters",
+    "Research should compound instead of being lost.",
+    "--confidence",
+    "0.4",
+    "--related-sections",
+    "research,archive",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_7t3nql21/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Created unknown unknown-how-should-archived-findings-sta-40afbf1d at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_7\nt3nql21/workspace/.harness/research/unknowns/unknown-how-should-archived-finding\ns-sta-40afbf1d\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.4315283331088722
+}

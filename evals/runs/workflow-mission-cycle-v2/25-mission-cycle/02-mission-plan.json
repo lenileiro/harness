@@ -1,0 +1,26 @@
+{
+  "name": "mission-plan",
+  "argv": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "mission",
+    "plan",
+    "--mission",
+    "mission-workflow-mission-da230554",
+    "--contract-summary",
+    "Mission workflow assertions are declared before execution.",
+    "--milestone",
+    "m1|Milestone 1|Ship the workflow mission slice.",
+    "--assertion",
+    "a1|Workflow slice works|The mission slice should validate cleanly.|contract|Inspect mission validation output.",
+    "--feature",
+    "f1|m1|Implement workflow slice|Create the first workflow mission feature.|worker|app/workflow.py||a1",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_sflrcawo/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Planned mission mission-workflow-mission-da230554\nmilestones=1\nfeatures=1\nassertions=1\ncurrent_milestone_id=milestone-milestone-1-2a784a89\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.4071922090370208
+}

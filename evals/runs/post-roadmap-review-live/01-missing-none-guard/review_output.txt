@@ -1,0 +1,71 @@
+                                                                                
+ {                                                                              
+   "summary": "The change introduces a high-severity regression in              
+ `display_name` by removing safety checks for both `None` inputs and missing    
+ 'name' keys in the user dictionary.",                                          
+   "findings": [                                                                
+     {                                                                          
+       "severity": "high",                                                      
+       "file": "src/profile.py",                                                
+       "line": 2,                                                               
+       "issue": "Potential KeyError and TypeError",                             
+       "rationale": "The original implementation safely handled `user is None`  
+ (returning 'anonymous') and missing 'name' keys (via `.get()`). The new        
+ implementation will raise a `TypeError` if `user` is `None` and a `KeyError`   
+ if the `user` dictionary exists but lacks the `"name"` key. This breaks the    
+ existing contract of the function.",                                           
+       "suggested_fix": "Revert to the previous implementation or use: return   
+ (user or {}).get(\"name\", \"anonymous\")"                                     
+     },                                                                         
+     {                                                                          
+       "severity": "medium",                                                    
+       "file": "src/profile.py",                                                
+       "line": 2,                                                               
+       "issue": "Missing tests for edge cases",                                 
+       "rationale": "The diff does not include any accompanying tests. Given    
+ that this change fundamentally alters the error-handling behavior of the       
+ function, new tests (or updated existing ones) should be provided to verify    
+ how the system handles `None` or incomplete user objects.",                    
+       "suggested_fix": "Add unit tests covering `user=None`, `user={}`, and    
+ `user={'name': '...'}`."                                                       
+     }                                                                          
+   ]                                                                            
+ }                                                                              
+                                                                                
+```json
+{
+  "summary": "The change introduces a high-severity regression in `display_name`
+by removing safety checks for both `None` inputs and missing 'name' keys in the 
+user dictionary.",
+  "findings": [
+    {
+      "severity": "high",
+      "file": "src/profile.py",
+      "line": 2,
+      "issue": "Potential KeyError and TypeError",
+      "rationale": "The original implementation safely handled `user is None` 
+(returning 'anonymous') and missing 'name' keys (via `.get()`). The new 
+implementation will raise a `TypeError` if `user` is `None` and a `KeyError` if 
+the `user` dictionary exists but lacks the `"name"` key. This breaks the 
+existing contract of the function.",
+      "suggested_fix": "Revert to the previous implementation or use: return 
+(user or {}).get(\"name\", \"anonymous\")"
+    },
+    {
+      "severity": "medium",
+      "file": "src/profile.py",
+      "line": 2,
+      "issue": "Missing tests for edge cases",
+      "rationale": "The diff does not include any accompanying tests. Given that
+this change fundamentally alters the error-handling behavior of the function, 
+new tests (or updated existing ones) should be provided to verify how the system
+handles `None` or incomplete user objects.",
+      "suggested_fix": "Add unit tests covering `user=None`, `user={}`, and 
+`user={'name': '...'}`."
+    }
+  ]
+}
+```
+an error occurred during closing of asynchronous generator <async_generator object AsyncClient.stream at 0x108228810>
+asyncgen: <async_generator object AsyncClient.stream at 0x108228810>
+RuntimeError: aclose(): asynchronous generator is already running

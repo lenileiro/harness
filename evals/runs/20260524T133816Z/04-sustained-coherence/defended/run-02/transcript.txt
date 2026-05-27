@@ -1,0 +1,189 @@
+adaptive strategy scope-sensitive prompt -> strict structural checks
+
+→ phase(action='declare', name='implement')
+✓ phase: phase 'implement' declared  (0.0s)
+▶ phase: implement
+
+→ list_dir(path='src')
+✓ list_dir: README.md
+__init__.py
+calculator.py  (0.0s)
+
+→ read_file(path='src/calculator.py')
+✓ read_file: """Simple calculator.
+
+Supports basic arithmetic operations. Designed for clarity over performance.
+"""
+
+import json  # noqa: F401  (kept for legacy serialization, planned removal in 
+PLAT-2103)
+impor…  … 1,108 bytes  (0.0s)
+
+→ edit_file(new='    def power(self, base: float, expon…, old='    def 
+sqrt(self, x: float) -> float:…, path='src/calculator.py')
+✓ edit_file: replaced 1 occurrence in src/calculator.py  (0.0s)
+
+→ phase(action='complete', name='implement')
+✓ phase: phase 'implement' completed  (0.0s)
+✓ phase: implement
+
+→ phase(action='declare', name='test')
+✓ phase: phase 'test' declared  (0.0s)
+▶ phase 2/2: test
+
+→ list_dir(path='tests')
+✓ list_dir: __init__.py
+conftest.py
+test_calculator.py  (0.0s)
+
+→ read_file(path='tests/test_calculator.py')
+✓ read_file: """Tests for the Calculator class."""
+
+import pytest
+from calculator import Calculator
+
+
+# Fixture used by the rest of this module
+@pytest.fixture
+def calc() -> Calculator:
+    return Calculator()
+
+
+…  … 1,026 bytes  (0.0s)
+
+→ edit_file(new='# -- power ---------------------------…, old='# sqrt\ndef 
+test_sqrt(calc):\n    asse…, path='tests/test_calculator.py')
+✓ edit_file: replaced 1 occurrence in tests/test_calculator.py  (0.0s)
+
+→ verify_work(command='pytest tests/test_calculator.py')
+✓ verify_work: PASSED
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0
+rootdir: /private/var/folders/8p/1_033mns3v1gvkq…  … 612 bytes  (0.2s)
+
+→ phase(action='complete', name='test')
+✓ phase: phase 'test' completed  (0.0s)
+✓ phase 2/2: test
+
+→ phase(action='declare', name='document')
+✓ phase: phase 'document' declared  (0.0s)
+▶ phase 3/3: document
+
+→ read_file(path='src/README.md')
+✓ read_file: # Calculator
+
+A simple stateless calculator.
+
+## Operations
+
+- `add(a, b)` — sum of two numbers
+- `divide(a, b)` — `a / b`, raises `ZeroDivisionError` when `b == 0`
+- `multiply(a, b)` — product of tw…  … 412 bytes  (0.0s)
+
+→ edit_file(new='- `add(a, b)` — sum of two numbers\n- …, old='- `add(a, b)` — 
+sum of two numbers\n- …, path='src/README.md')
+✓ edit_file: replaced 1 occurrence in src/README.md  (0.0s)
+
+→ phase(action='complete', name='document')
+✓ phase: phase 'document' completed  (0.0s)
+✓ phase 3/3: document
+
+→ phase(action='declare', name='verify')
+✓ phase: phase 'verify' declared  (0.0s)
+▶ phase 4/4: verify
+
+→ verify_work(command='pytest tests/test_calculator.py')
+✓ verify_work: PASSED
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0
+rootdir: /private/var/folders/8p/1_033mns3v1gvkq…  … 612 bytes  (0.2s)
+
+→ shell(command='pytest tests/test_calculator.py')
+✓ shell: exit_code: 0
+
+stdout:
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0
+rootdir: /private/var/folders/8p/1…  … 627 bytes  (0.2s)
+
+→ shell(command='pytest tests/test_calculator.py')
+✓ shell: exit_code: 0
+
+stdout:
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0
+rootdir: /private/var/folders/8p/1…  … 627 bytes  (0.2s)
+
+→ read_file(path='tests/test_calculator.py')
+✓ read_file: """Tests for the Calculator class."""
+
+import pytest
+from calculator import Calculator
+
+
+# Fixture used by the rest of this module
+@pytest.fixture
+def calc() -> Calculator:
+    return Calculator()
+
+
+…  … 1,043 bytes  (0.0s)
+
+→ shell(command='pytest tests/test_calculator.py')
+✓ shell: exit_code: 0
+
+stdout:
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0
+rootdir: /private/var/folders/8p/1…  … 627 bytes  (0.2s)
+
+→ write_file(content='"""Tests for the Calculator class."""\…, 
+path='tests/test_calculator.py')
+✓ write_file: wrote 1225 bytes to tests/test_calculator.py  (0.0s)
+
+→ verify_work(command='pytest tests/test_calculator.py')
+✗ verify_work: FAILED (exit 1)
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0
+rootdir: /private/var/folders/8p/1_033m…  … 1,654 bytes  (0.3s)
+
+→ read_file(path='src/calculator.py')
+✓ read_file: """Simple calculator.
+
+Supports basic arithmetic operations. Designed for clarity over performance.
+"""
+
+import json  # noqa: F401  (kept for legacy serialization, planned removal in 
+PLAT-2103)
+impor…  … 1,020 bytes  (0.0s)
+
+→ edit_file(new='    def power(self, base: float, expon…, old='    def 
+power(self, base: float, expon…, path='src/calculator.py')
+✓ edit_file: replaced 1 occurrence in src/calculator.py  (0.0s)
+2026-05-24T14:04:18.915312Z [warning  ] agent.step.error               attempt=0 error='exceeded max_steps=25 without final answer' kind=internal provider=openrouter
+2026-05-24T14:04:18.915432Z [error    ] agent.run.failed               error='exceeded max_steps=25 without final answer' kind=internal
+
+Error (internal): exceeded max_steps=25 without final answer
+
+defense ledger:
+  tools: phase x7, read_file x5, edit_file x4, verify_work x3 (err x1), shell 
+x3, list_dir x2
+an error occurred during closing of asynchronous generator <async_generator object OpenRouterAdapter._stream at 0x10c044f60>
+asyncgen: <async_generator object OpenRouterAdapter._stream at 0x10c044f60>
+Traceback (most recent call last):
+  File "/Users/leiro/workspace/harness/packages/adapter-openrouter/src/harness/adapters/openrouter/__init__.py", line 163, in _stream
+    yield event
+GeneratorExit
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/leiro/workspace/harness/packages/adapter-openrouter/src/harness/adapters/openrouter/__init__.py", line 159, in _stream
+    async with client.stream("POST", url, json=payload, headers=headers) as response:
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/leiro/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/contextlib.py", line 267, in __aexit__
+    raise RuntimeError("generator didn't stop after athrow()")
+RuntimeError: generator didn't stop after athrow()

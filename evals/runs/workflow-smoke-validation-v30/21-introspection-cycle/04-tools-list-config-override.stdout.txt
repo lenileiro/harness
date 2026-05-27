@@ -1,0 +1,20 @@
+┏━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Tool       ┃ Approval ┃ Description                                          ┃
+┡━━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ read_file  │ auto     │ Read the UTF-8 text contents of a file. The `path`   │
+│            │          │ argument is resolved relativ…                        │
+│ write_file │ prompt   │ Create or overwrite a UTF-8 text file. The `path` is │
+│            │          │ resolved relative to cwd a…                          │
+│ edit_file  │ prompt   │ Replace one occurrence of `old` with `new` inside a  │
+│            │          │ UTF-8 text file. Fails if `…                         │
+│ list_dir   │ auto     │ List directory entries. Returns one entry per line.  │
+│            │          │ Directories are suffixed wi…                         │
+│ glob       │ auto     │ List files under cwd that match a glob pattern (e.g. │
+│            │          │ '**/*.py'). Returns paths …                          │
+│ shell      │ deny     │ Execute a shell command in the session's working     │
+│            │          │ directory. Returns the exit co…                      │
+│ web_search │ auto     │ Search the internet using Tavily. Returns titles,    │
+│            │          │ snippets, and URLs for the mo…                       │
+│ fetch_url  │ prompt   │ GET an http(s) URL and return the response body as   │
+│            │          │ text. Refuses non-http(s) sc…                        │
+└────────────┴──────────┴──────────────────────────────────────────────────────┘

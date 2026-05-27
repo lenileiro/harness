@@ -1,0 +1,20 @@
+{
+  "name": "mission-create",
+  "argv": [
+    "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_r5r7r07x/workspace/fake-harness",
+    "mission",
+    "create",
+    "--title",
+    "Drafted Mission",
+    "--goal",
+    "Generate a mission plan from a high-level goal.",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_r5r7r07x/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Created mission mission-drafted-mission-37086856 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_r\n5r7r07x/workspace/.harness/missions/missions/mission-drafted-mission-37086856\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.5825351669918746
+}

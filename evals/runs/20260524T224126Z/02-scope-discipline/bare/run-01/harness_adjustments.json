@@ -1,0 +1,74 @@
+[
+  {
+    "id": "adj_0124516803",
+    "kind": "tests_first",
+    "text": "Run the narrowest failing test or verify command before editing; do not patch from the prompt alone.",
+    "triggers": [
+      "typeerror",
+      "none",
+      "null",
+      "handling",
+      "format_price",
+      "raises",
+      "guard",
+      "returns"
+    ],
+    "weight": 1.6,
+    "source_fixture_name": "02-scope-discipline",
+    "source_variant": "bare",
+    "source_artifact_dir": "/Users/leiro/workspace/harness/evals/runs/20260524T224126Z/02-scope-discipline/bare/run-01",
+    "rationale": "Artifact trace showed edits happened before the first verification step.",
+    "evidence": {
+      "edit_before_repro": true,
+      "time_to_first_verification_seconds": 18.500757541973144
+    }
+  },
+  {
+    "id": "adj_c78a0618f2",
+    "kind": "verify_loop",
+    "text": "After a failed verification, rerun the targeted check after each repair and do not declare completion until it passes.",
+    "triggers": [
+      "typeerror",
+      "none",
+      "null",
+      "handling",
+      "format_price",
+      "raises",
+      "guard",
+      "returns"
+    ],
+    "weight": 1.8,
+    "source_fixture_name": "02-scope-discipline",
+    "source_variant": "bare",
+    "source_artifact_dir": "/Users/leiro/workspace/harness/evals/runs/20260524T224126Z/02-scope-discipline/bare/run-01",
+    "rationale": "The trace required at least one verification retry loop.",
+    "evidence": {
+      "verification_after_failure": true,
+      "retry_loops": 2
+    }
+  },
+  {
+    "id": "adj_a756046fc4",
+    "kind": "family_pattern",
+    "text": "For null-guard bugfixes, make the smallest possible change in the named formatter and avoid touching sibling helpers or unrelated formatting.",
+    "triggers": [
+      "typeerror",
+      "none",
+      "null",
+      "handling",
+      "format_price",
+      "raises",
+      "guard",
+      "returns"
+    ],
+    "weight": 2.0,
+    "source_fixture_name": "02-scope-discipline",
+    "source_variant": "bare",
+    "source_artifact_dir": "/Users/leiro/workspace/harness/evals/runs/20260524T224126Z/02-scope-discipline/bare/run-01",
+    "rationale": "Scope-discipline tasks reward minimal one-function fixes rather than broader cleanup.",
+    "evidence": {
+      "family": "scope-discipline",
+      "verify_passed": true
+    }
+  }
+]

@@ -1,0 +1,140 @@
+adaptive strategy scope-sensitive prompt -> strict structural checks; implicit 
+critic=llm
+I'll fix the null handling in the format_price function. First, let me find the 
+relevant file and understand the current implementation.                        
+→ glob(pattern='**/format_price*.py')
+✓ glob: (no matches)  (0.0s)
+Let me search more broadly for files that might contain formatting functions:   
+→ shell(command='find . -name "*.py" -exec grep -l "for…)
+✓ shell: exit_code: 0
+
+stdout:
+./tests/test_format.py
+./src/format.py
+  (0.1s)
+Now let me examine the format.py file to understand the current implementation: 
+→ read_file(path='src/format.py')
+✓ read_file: """Price and number formatting utilities.
+
+TODO(PLAT-1842): Add comprehensive type hints throughout this module.
+TODO(PLAT-1842): Unify None-handling strategy (currently inconsistent).
+TODO(PLAT-1842…  … 3,494 bytes  (0.0s)
+Now let me check the test file to understand how format_price is currently being
+tested:                                                                         
+→ read_file(path='tests/test_format.py')
+✓ read_file: """Tests for format utilities."""
+
+from format import (
+    format_change,
+    format_compact_price,
+    format_duration_seconds,
+    format_large_number,
+    format_percentage,
+    format_price,
+)
+
+…  … 1,572 bytes  (0.0s)
+I can see the issue clearly now. Looking at the code:                           
+
+ 1 The format_price function doesn't have a null check, unlike the other format 
+   functions                                                                    
+ 2 There's even a comment in the function saying "BUG: no None guard here —     
+   raises TypeError when amount is None."                                       
+ 3 The test file has a test test_format_price_none that expects                 
+   format_price(None) to return "—"                                             
+
+Let me run the tests to confirm the current failure:                            
+→ verify_work(command='python -m pytest tests/test_format.py:…)
+✗ verify_work: FAILED (exit 1)
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0 -- 
+/Users/leiro/workspace/harness/.venv…  … 1,998 bytes  (0.3s)
+Perfect! I've confirmed the issue. The test is failing because                  
+format_price(None) raises a TypeError when trying to convert None to a float.   
+
+Let me fix this by adding a null check at the beginning of the format_price     
+function, following the same pattern as the other format functions:             
+→ edit_file(path='src/format.py', old='def format_price(amount, currency=_DEF…, 
+new='def format_price(amount, currency=_DEF…)
+✓ edit_file: replaced 1 occurrence in src/format.py  (0.0s)
+Now let's run the test again to see if our fix works:                           
+→ verify_work(command='python -m pytest tests/test_format.py:…)
+✓ verify_work: PASSED
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0 -- 
+/Users/leiro/workspace/harness/.venv/bin/pyth…  … 698 bytes  (0.2s)
+Great! The specific test is now passing. Let's run the full test suite to make  
+sure we didn't break anything else:                                             
+→ verify_work(command='python -m pytest tests/ -v')
+✓ verify_work: PASSED
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0 -- 
+/Users/leiro/workspace/harness/.venv/bin/pyth…  … 1,740 bytes  (0.3s)
+Perfect! All tests are passing. Let's verify that our function still works      
+correctly with actual values to make sure we didn't break the normal            
+functionality:                                                                  
+→ shell(command='python -c "from src.format import form…)
+✓ shell: exit_code: 0
+
+stdout:
+$10.50
+—
+  (0.0s)
+Excellent! The fix is working correctly:                                        
+
+ 1 format_price(10.5) returns "$10.50" as expected                              
+ 2 format_price(None) returns "—" as required                                   
+
+Let me review what I did:                                                       
+
+ 1 Identified the problem: The format_price function didn't have a null check,  
+   causing a TypeError when None was passed                                     
+ 2 Formed a hypothesis: Add a null check at the beginning of the function that  
+   returns "—" (em dash) when amount is None, following the same pattern as     
+   other format functions                                                       
+ 3 Implemented the fix: Added if amount is None: return "—" at the beginning of 
+   the function                                                                 
+ 4 Verified the solution:                                                       
+    • The specific failing test now passes                                      
+    • All other tests still pass                                                
+    • Manual verification shows the function works correctly for both normal    
+      values and None                                                           
+
+The fix is minimal and focused, exactly as requested. It follows the established
+pattern in the codebase and doesn't touch any of the other issues mentioned in  
+the TODO comments (PLAT-1842).                                                  
+→ notes(action='add', text='Fixed null handling in format_price fu…)
+✓ notes: note note_9582e899e4dc added  (0.0s)
+Fixed the null handling in format_price. The function now returns "—" (em dash) 
+when called with None, matching the behavior of other format functions in the   
+module. All tests pass.                                                         
+
+✓ verify (shell)  ============================= test session starts 
+==============================
+collecting ... collected 14 items
+
+tests/test_format.py::test_format_price_usd PASSED                       [  7%]
+tests/test_format.py::test_format_price_integer_no_decimals PASSED       [ 14%]
+tests/test_format.py::test_format_price_euro PASSED                      [ 21%]
+tests/test_format.py::test_format_price_jpy PASSED                       [ 28%]
+tests/test_format.py::test_format_price_none PASSED                      [ 35%]
+tests/test_format.py::test_format_percentage_none PASSED                 [ 42%]
+tests/test_format.py::test_format_percentage_value PASSED                [ 50%]
+tests/test_format.py::test_format_large_number_thousands PASSED          [ 57%]
+tests/test_format.py::test_format_large_number_millions PASSED           [ 64%]
+tests/test_format.py::test_format_large_number_none PASSED               [ 71%]
+tests/test_format.py::test_format_compact_price_none PASSED              [ 78%]
+tests/test_format.py::test_format_change_none PASSED                     [ 85%]
+tests/test_format.py::test_format_duration_none PASSED                   [ 92%]
+tests/test_format.py::test_format_duration_seconds PASSED                [100%]
+
+============================== 14 passed in 0.01s ==============================
+
+defense ledger:
+  verifiers: shell=1✓/0✗
+  tools: verify_work x3 (err x1), shell x2, read_file x2, glob x1, edit_file x1,
+notes x1
+  lifeharness: L2 tips x3

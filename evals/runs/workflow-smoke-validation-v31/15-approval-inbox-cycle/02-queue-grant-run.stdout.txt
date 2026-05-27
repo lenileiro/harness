@@ -1,0 +1,12 @@
+adaptive strategy default adaptive path -> minimal structure
+
+→ read_file(path='note.txt')
+✗ read_file: queued for approval — review with `harness approvals list`  (0.0s)
+queued; will resume later                                                       
+
+✓ verify (verify_before_done)  No modifying tool calls detected — verification 
+not required.
+
+defense ledger:
+  verifiers: verify_before_done=1✓/0✗
+  tools: read_file x1 (err x1)

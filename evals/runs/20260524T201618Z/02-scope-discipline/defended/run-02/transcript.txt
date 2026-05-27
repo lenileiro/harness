@@ -1,0 +1,127 @@
+adaptive strategy scope-sensitive prompt -> strict structural checks; implicit 
+critic=llm
+I'll fix the null handling in the format_price function. Let me first locate the
+relevant file and understand the current implementation.                        
+→ glob(pattern='**/*.py')
+✓ glob: src/__init__.py
+src/format.py
+tests/__init__.py
+tests/conftest.py
+tests/test_format.py  (0.0s)
+Let me examine the format.py file to understand the current implementation of   
+format_price:                                                                   
+→ read_file(path='src/format.py')
+✓ read_file: """Price and number formatting utilities.
+
+TODO(PLAT-1842): Add comprehensive type hints throughout this module.
+TODO(PLAT-1842): Unify None-handling strategy (currently inconsistent).
+TODO(PLAT-1842…  … 3,494 bytes  (0.0s)
+Now let me check the test file to understand how format_price is being tested   
+and what the expected behavior should be:                                       
+→ read_file(path='tests/test_format.py')
+✓ read_file: """Tests for format utilities."""
+
+from format import (
+    format_change,
+    format_compact_price,
+    format_duration_seconds,
+    format_large_number,
+    format_percentage,
+    format_price,
+)
+
+…  … 1,572 bytes  (0.0s)
+Now I can see the issue clearly. The format_price function doesn't handle None  
+values like the other format functions do. Looking at the test, there's already 
+a test case test_format_price_none that expects format_price(None) to return    
+"—", but the current implementation raises a TypeError.                         
+
+Let me run the tests to confirm the failure:                                    
+→ verify_work(command='python -m pytest tests/ -v')
+✗ verify_work: FAILED (exit 1)
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0 -- 
+/Users/leiro/workspace/harness/.venv…  … 3,040 bytes  (0.2s)
+Perfect! The test confirms the issue. The format_price function raises a        
+TypeError when None is passed because it tries to convert None to a float.      
+
+Looking at the code, I can see that other functions like format_percentage,     
+format_large_number, format_compact_price, etc. all have None guards that return
+"—" when their input is None.                                                   
+
+Let me fix the format_price function by adding a None guard at the beginning,   
+similar to the pattern used in other functions:                                 
+→ edit_file(path='src/format.py', old='def format_price(amount, currency=_DEF…, 
+new='def format_price(amount, currency=_DEF…)
+✓ edit_file: replaced 1 occurrence in src/format.py  (0.0s)
+Now let's run the tests to see if our fix works:                                
+→ verify_work(command='python -m pytest tests/ -v')
+✓ verify_work: PASSED
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0 -- 
+/Users/leiro/workspace/harness/.venv/bin/pyth…  … 1,740 bytes  (0.2s)
+Great! All tests are now passing, including the test_format_price_none test that
+was previously failing.                                                         
+
+Let me just double-check that our implementation follows the same pattern as the
+other functions by looking at the updated code:                                 
+→ read_file(path='src/format.py', start_line=25, end_line=40)
+✓ read_file: """Price and number formatting utilities.
+
+TODO(PLAT-1842): Add comprehensive type hints throughout this module.
+TODO(PLAT-1842): Unify None-handling strategy (currently inconsistent).
+TODO(PLAT-1842…  … 3,395 bytes  (0.0s)
+Perfect! The fix is implemented correctly. The format_price function now has a  
+null guard that returns "—" when amount is None, following the same pattern as  
+the other format functions in the module.                                       
+
+The fix is:                                                                     
+
+ 1 Minimal as requested - only added the null check without changing any other  
+   behavior                                                                     
+ 2 Consistent with the existing codebase patterns                               
+ 3 Makes the tests pass                                                         
+ 4 Doesn't interfere with the existing functionality for valid inputs           
+
+Summary                                                                         
+
+I've fixed the null handling in format_price by adding a simple null guard at   
+the beginning of the function:                                                  
+
+                                                                                
+ if amount is None:                                                             
+     return "—"                                                                 
+                                                                                
+
+This follows the exact same pattern used by other format functions in the module
+(format_percentage, format_large_number, format_compact_price, etc.) and makes  
+the test_format_price_none test pass. The fix is minimal and doesn't change any 
+other behavior of the function.                                                 
+
+✓ verify (shell)  ============================= test session starts 
+==============================
+collecting ... collected 14 items
+
+tests/test_format.py::test_format_price_usd PASSED                       [  7%]
+tests/test_format.py::test_format_price_integer_no_decimals PASSED       [ 14%]
+tests/test_format.py::test_format_price_euro PASSED                      [ 21%]
+tests/test_format.py::test_format_price_jpy PASSED                       [ 28%]
+tests/test_format.py::test_format_price_none PASSED                      [ 35%]
+tests/test_format.py::test_format_percentage_none PASSED                 [ 42%]
+tests/test_format.py::test_format_percentage_value PASSED                [ 50%]
+tests/test_format.py::test_format_large_number_thousands PASSED          [ 57%]
+tests/test_format.py::test_format_large_number_millions PASSED           [ 64%]
+tests/test_format.py::test_format_large_number_none PASSED               [ 71%]
+tests/test_format.py::test_format_compact_price_none PASSED              [ 78%]
+tests/test_format.py::test_format_change_none PASSED                     [ 85%]
+tests/test_format.py::test_format_duration_none PASSED                   [ 92%]
+tests/test_format.py::test_format_duration_seconds PASSED                [100%]
+
+============================== 14 passed in 0.01s ==============================
+
+defense ledger:
+  verifiers: shell=1✓/0✗
+  tools: read_file x3, verify_work x2 (err x1), glob x1, edit_file x1
+  lifeharness: L2 tips x3

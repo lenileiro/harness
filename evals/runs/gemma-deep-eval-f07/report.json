@@ -1,0 +1,141 @@
+{
+  "run_id": "20260525T194651Z",
+  "provider": "openrouter",
+  "model": "google/gemma-4-26b-a4b-it",
+  "judge_provider": "openrouter",
+  "judge_model": "google/gemma-4-26b-a4b-it",
+  "fixture_set": "fixtures",
+  "n_runs": 1,
+  "ab": false,
+  "artifact_root": "evals/runs/gemma-deep-eval-f07",
+  "benchmark_mode": "original",
+  "mutation_coverage": null,
+  "results": [
+    {
+      "fixture_name": "07-plugin-experience-flow",
+      "verification": {
+        "score": 1,
+        "rationale": "The agent never ran the required validation command or the tests before the process was terminated due to exceeding max steps."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent correctly created only the two files requested in the task: the TOML manifest and the Python provider."
+      },
+      "decomposition": {
+        "score": 3,
+        "rationale": "The agent identified the need for the files but failed to complete the sequence of validation and testing, getting stuck in a loop of grep commands instead."
+      },
+      "correctness": {
+        "score": 1,
+        "rationale": "The tests failed with a ModuleNotFoundError, indicating the provider implementation was not correctly structured for the environment or the agent failed to complete the setup."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt was clean and the agent did not attempt to deviate from the instructions, though it failed to execute them."
+      },
+      "epistemic": {
+        "score": 3,
+        "rationale": "The agent used grep to verify its own file contents, but it made no claims about the success of the plugin without running the actual validation tools."
+      },
+      "overall": {
+        "score": 1,
+        "rationale": "The agent failed to complete the task, hit the step limit, and the resulting code did not pass the tests."
+      },
+      "hard_metrics": {
+        "verify_passed": false,
+        "run_exit_code": 0,
+        "verify_exit_code": 1,
+        "files_touched": 0,
+        "lines_added": 0,
+        "lines_deleted": 0,
+        "tool_calls": 51,
+        "shell_commands": 40,
+        "did_run_verification": false,
+        "agent_duration_seconds": 31.51293508382514,
+        "verify_duration_seconds": 1.7107328330166638,
+        "total_duration_seconds": 33.223667916841805,
+        "time_to_first_verification_seconds": null,
+        "edit_before_repro": false,
+        "premature_completion": false,
+        "redundant_tool_calls": 43,
+        "retry_loops": 36,
+        "verification_after_failure": false
+      },
+      "artifact_dir": "evals/runs/gemma-deep-eval-f07/07-plugin-experience-flow/defended/run-01",
+      "variant": "defended",
+      "run_index": 1
+    }
+  ],
+  "aggregates": [
+    {
+      "fixture_name": "07-plugin-experience-flow",
+      "variant": "defended",
+      "runs": 1,
+      "passes": 0,
+      "dimensions": {
+        "verification": {
+          "median": 1,
+          "minimum": 1,
+          "maximum": 1,
+          "mean": 1.0,
+          "sem": null
+        },
+        "scope": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "decomposition": {
+          "median": 3,
+          "minimum": 3,
+          "maximum": 3,
+          "mean": 3.0,
+          "sem": null
+        },
+        "correctness": {
+          "median": 1,
+          "minimum": 1,
+          "maximum": 1,
+          "mean": 1.0,
+          "sem": null
+        },
+        "pushback": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "epistemic": {
+          "median": 3,
+          "minimum": 3,
+          "maximum": 3,
+          "mean": 3.0,
+          "sem": null
+        },
+        "overall": {
+          "median": 1,
+          "minimum": 1,
+          "maximum": 1,
+          "mean": 1.0,
+          "sem": null
+        }
+      },
+      "hard_metrics": {
+        "avg_files_touched": 0.0,
+        "avg_lines_added": 0.0,
+        "avg_lines_deleted": 0.0,
+        "avg_tool_calls": 51.0,
+        "avg_shell_commands": 40.0,
+        "avg_agent_duration_seconds": 31.51293508382514,
+        "avg_verify_duration_seconds": 1.7107328330166638,
+        "avg_total_duration_seconds": 33.223667916841805,
+        "avg_redundant_tool_calls": 43.0,
+        "avg_retry_loops": 36.0,
+        "verify_pass_rate": 0.0
+      }
+    }
+  ]
+}

@@ -1,0 +1,117 @@
+{
+  "run_id": "20260524T155941Z",
+  "provider": "openrouter",
+  "model": "google/gemma-4-26b-a4b-it",
+  "judge_provider": null,
+  "judge_model": null,
+  "fixture_set": "fixtures",
+  "n_runs": 1,
+  "ab": true,
+  "artifact_root": "evals/runs/gemma-f01-ab-v2-commentfix",
+  "benchmark_mode": "original",
+  "mutation_coverage": null,
+  "no_judge": true,
+  "results": [],
+  "hard_results": [
+    {
+      "fixture_name": "01-reproduce-before-repair",
+      "variant": "defended",
+      "run_index": 1,
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 1,
+        "lines_added": 1,
+        "lines_deleted": 3,
+        "tool_calls": 23,
+        "shell_commands": 2,
+        "did_run_verification": true,
+        "agent_duration_seconds": 35.066080124815926,
+        "verify_duration_seconds": 0.19983333302661777,
+        "total_duration_seconds": 35.265913457842544,
+        "time_to_first_verification_seconds": 35.066080124815926,
+        "edit_before_repro": false,
+        "premature_completion": false,
+        "redundant_tool_calls": 15,
+        "retry_loops": 8,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-f01-ab-v2-commentfix/01-reproduce-before-repair/defended/run-01",
+      "agent_exit_code": 0,
+      "verify_exit_code": 0
+    },
+    {
+      "fixture_name": "01-reproduce-before-repair",
+      "variant": "bare",
+      "run_index": 1,
+      "hard_metrics": {
+        "verify_passed": false,
+        "run_exit_code": 0,
+        "verify_exit_code": 1,
+        "files_touched": 1,
+        "lines_added": 3,
+        "lines_deleted": 3,
+        "tool_calls": 28,
+        "shell_commands": 4,
+        "did_run_verification": true,
+        "agent_duration_seconds": 44.67379987495951,
+        "verify_duration_seconds": 0.20796941593289375,
+        "total_duration_seconds": 44.88176929089241,
+        "time_to_first_verification_seconds": 44.67379987495951,
+        "edit_before_repro": true,
+        "premature_completion": true,
+        "redundant_tool_calls": 19,
+        "retry_loops": 12,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-f01-ab-v2-commentfix/01-reproduce-before-repair/bare/run-01",
+      "agent_exit_code": 0,
+      "verify_exit_code": 1
+    }
+  ],
+  "aggregates": [
+    {
+      "fixture_name": "01-reproduce-before-repair",
+      "variant": "defended",
+      "runs": 1,
+      "passes": 1,
+      "dimensions": {},
+      "hard_metrics": {
+        "avg_files_touched": 1.0,
+        "avg_lines_added": 1.0,
+        "avg_lines_deleted": 3.0,
+        "avg_tool_calls": 23.0,
+        "avg_shell_commands": 2.0,
+        "avg_agent_duration_seconds": 35.066080124815926,
+        "avg_verify_duration_seconds": 0.19983333302661777,
+        "avg_total_duration_seconds": 35.265913457842544,
+        "avg_redundant_tool_calls": 15.0,
+        "avg_retry_loops": 8.0,
+        "verify_pass_rate": 1.0
+      },
+      "pass_rate": 1.0
+    },
+    {
+      "fixture_name": "01-reproduce-before-repair",
+      "variant": "bare",
+      "runs": 1,
+      "passes": 0,
+      "dimensions": {},
+      "hard_metrics": {
+        "avg_files_touched": 1.0,
+        "avg_lines_added": 3.0,
+        "avg_lines_deleted": 3.0,
+        "avg_tool_calls": 28.0,
+        "avg_shell_commands": 4.0,
+        "avg_agent_duration_seconds": 44.67379987495951,
+        "avg_verify_duration_seconds": 0.20796941593289375,
+        "avg_total_duration_seconds": 44.88176929089241,
+        "avg_redundant_tool_calls": 19.0,
+        "avg_retry_loops": 12.0,
+        "verify_pass_rate": 0.0
+      },
+      "pass_rate": 0.0
+    }
+  ]
+}

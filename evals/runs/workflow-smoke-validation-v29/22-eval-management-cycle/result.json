@@ -1,0 +1,140 @@
+{
+  "fixture_name": "22-eval-management-cycle",
+  "passed": true,
+  "steps_total": 8,
+  "steps_passed": 8,
+  "step_results": [
+    {
+      "name": "eval-list",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_85v867dt/workspace/fake-harness",
+        "eval",
+        "list",
+        "--fixture-set",
+        "fixtures"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2513\n\u2503 Fixture \u2503 Family       \u2503 Primary Dimension \u2503 Trap (summary) \u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2529\n\u2502 01-demo \u2502 verification \u2502 verification      \u2502 broad patching \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.7356411251239479
+    },
+    {
+      "name": "eval-mutate",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_85v867dt/workspace/fake-harness",
+        "eval",
+        "mutate",
+        "01-demo",
+        "--seed",
+        "1"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "Mutated 01-demo \u2192 \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_8\n5v867dt/workspace/evals/fixtures-mutated/0001-01-demo\nRenames:\n  Calculator \u2192 MathOps\nTouched 1 file(s).\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.34104862506501377
+    },
+    {
+      "name": "eval-validate",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_85v867dt/workspace/fake-harness",
+        "eval",
+        "validate"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "    Eval asset validation    \n\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2513\n\u2503 Fixture set       \u2503 Count \u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2529\n\u2502 fixtures          \u2502     1 \u2502\n\u2502 fixtures-mutated  \u2502     1 \u2502\n\u2502 fixtures-holdout  \u2502     1 \u2502\n\u2502 review-fixtures   \u2502     1 \u2502\n\u2502 research-fixtures \u2502     1 \u2502\n\u2502 docs-fixtures     \u2502     1 \u2502\n\u2502 workflow-fixtures \u2502     1 \u2502\n\u2502 gold labels       \u2502     6 \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.338795708026737
+    },
+    {
+      "name": "eval-history",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_85v867dt/workspace/fake-harness",
+        "eval",
+        "history",
+        "--limit",
+        "1"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "                                  Eval history                                  \n\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2513\n\u2503 Run      \u2503 Model           \u2503 Judge           \u2503 Set      \u2503 Mode     \u2503 R\u2026 \u2503 R\u2026 \u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2529\n\u2502 demo-run \u2502 mock/mock-model \u2502 mock/mock-model \u2502 fixtures \u2502 original \u2502  1 \u2502  0 \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2518\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.3312793751247227
+    },
+    {
+      "name": "eval-adjustments",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_85v867dt/workspace/fake-harness",
+        "eval",
+        "adjustments",
+        "evals/runs"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "                              Harness adjustments                               \n\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2513\n\u2503 Kind        \u2503 Fixture \u2503 Variant  \u2503 Weight \u2503 Text                             \u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2529\n\u2502 tests_first \u2502 01-demo \u2502 defended \u2502    2.4 \u2502 run the targeted test before     \u2502\n\u2502             \u2502         \u2502          \u2502        \u2502 editing                          \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.35277545801363885
+    },
+    {
+      "name": "eval-export-adjustments",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_85v867dt/workspace/fake-harness",
+        "eval",
+        "export-adjustments",
+        "adjustments.jsonl",
+        "--root",
+        "evals/runs"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "Exported 1 adjustment(s) to adjustments.jsonl\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.35646854201331735
+    },
+    {
+      "name": "eval-calibrate",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_85v867dt/workspace/fake-harness",
+        "eval",
+        "calibrate",
+        "report.json",
+        "--gold-dir",
+        "evals/gold"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "         Judge calibration         \n\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2513\n\u2503 Dimension    \u2503 N \u2503 Exact \u2503  MAE \u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2529\n\u2502 verification \u2502 1 \u2502  1.00 \u2502 0.00 \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.34709395794197917
+    },
+    {
+      "name": "eval-workflow",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_85v867dt/workspace/fake-harness",
+        "eval",
+        "workflow",
+        "01-workflow",
+        "--output-dir",
+        "evals/runs/workflow-local",
+        "--json-out"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "\n\u25b6 workflow 01-workflow\n  PASS steps=1/1 secs=0.1\n  artifacts evals/runs/workflow-local/01-workflow\n{\n  \"run_id\": \"20260525T073538Z-workflow\",\n  \"artifact_root\": \"evals/runs/workflow-local\",\n  \"results\": [\n    {\n      \"fixture_name\": \"01-workflow\",\n      \"passed\": true,\n      \"steps_total\": 1,\n      \"steps_passed\": 1,\n      \"step_results\": [],\n      \"artifact_dir\": \"evals/runs/workflow-local/01-workflow\",\n      \"duration_seconds\": 0.1\n    }\n  ]\n}\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.3858798330184072
+    }
+  ],
+  "artifact_dir": "evals/runs/workflow-smoke-validation-v29/22-eval-management-cycle",
+  "duration_seconds": 3.1970384591259062
+}

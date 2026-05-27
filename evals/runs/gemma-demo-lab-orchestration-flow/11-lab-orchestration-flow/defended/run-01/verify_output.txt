@@ -1,0 +1,6 @@
+============================= test session starts ==============================
+collecting ... collected 1 item
+
+tests/test_lab_orchestration_flow.py::test_lab_orchestration_flow PASSED [100%]
+
+============================== 1 passed in 0.16s ===============================

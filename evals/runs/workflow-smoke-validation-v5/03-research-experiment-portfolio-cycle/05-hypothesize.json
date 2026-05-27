@@ -1,0 +1,26 @@
+{
+  "name": "hypothesize",
+  "argv": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "research",
+    "hypothesize",
+    "--opportunity",
+    "opp-compare-workflow-checks-d0b696bd",
+    "--claim",
+    "Simple deterministic checks are enough to validate experiment storage.",
+    "--expected-win",
+    "Broader workflow eval coverage.",
+    "--risk-level",
+    "low",
+    "--change-mode",
+    "build_on",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_qilh1m6p/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Created hypothesis hyp-simple-deterministic-checks-are--d49b947b at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_q\nilh1m6p/workspace/.harness/research/hypotheses/hyp-simple-deterministic-checks-a\nre--d49b947b\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.406718332786113
+}

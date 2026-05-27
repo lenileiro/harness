@@ -1,0 +1,143 @@
+adaptive strategy feature task -> keep structure light
+
+→ shell(command='harness vision update --title "Autonom…)
+✓ shell: exit_code: 0
+
+stdout:
+Updated vision at 
+/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_iuxcqwoo/0
+9-handover-vision-flow/.harness/research/vision/current
+  (0.4s)
+
+→ shell(command='harness research add-theme --title "Ag…)
+✓ shell: exit_code: 0
+
+stdout:
+Added theme theme-agent-continuity-6e5832ac at 
+/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_iuxcqwoo/0
+9-handover-vision-flow/.harness/research/themes/…  … 231 bytes  (0.4s)
+
+→ shell(command='harness research create-unknown --them…)
+✗ shell: exit_code: 2
+
+stderr:
+Usage: harness research create-unknown [OPTIONS]
+Try 'harness research create-unknown --help' for help.
+╭─ Error ────────────────────────────────────────────────────────────────…  … 
+369 bytes  (0.4s)
+
+→ shell(command='harness research create-unknown --them…)
+✓ shell: exit_code: 0
+
+stdout:
+Created unknown unknown-what-context-must-a-handover-alw-83c6da97 at 
+/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_iuxcqwoo/0
+9-handover-vision-flow/.ha…  … 274 bytes  (0.4s)
+
+→ shell(command='harness research open --unknown unknow…)
+✗ shell: exit_code: 2
+
+stderr:
+Usage: harness research open [OPTIONS]
+Try 'harness research open --help' for help.
+╭─ Error ──────────────────────────────────────────────────────────────────────╮
+│ No such op…  … 349 bytes  (0.4s)
+
+→ shell(command='harness research open --help')
+✓ shell: exit_code: 0
+
+stdout:
+                                                                                
+ Usage: harness research open [OPTIONS]                                         
+               …  … 1,562 bytes  (0.4s)
+
+→ shell(command='harness research open --title "Handove…)
+✓ shell: exit_code: 0
+
+stdout:
+Opened rabbit hole rh-handover-artifact-checklist-a0f05805 at 
+/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_iuxcqwoo/0
+9-handover-vision-flow/.harness/r…  … 260 bytes  (0.4s)
+
+→ shell(command='harness research publish --rabbit-hole…)
+✗ shell: exit_code: 2
+
+stderr:
+Usage: harness research publish [OPTIONS]
+Try 'harness research publish --help' for help.
+╭─ Error ──────────────────────────────────────────────────────────────────────╮
+│ No s…  … 355 bytes  (0.4s)
+
+→ shell(command='harness research publish --rabbit-hole…)
+✓ shell: exit_code: 0
+
+stdout:
+Published pub-handover-checklist-findings-848c8149 at 
+/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_iuxcqwoo/0
+9-handover-vision-flow/.harness/research/…  … 254 bytes  (0.4s)
+
+→ shell(command='harness resume init --feature handover…)
+✓ shell: exit_code: 0
+
+stdout:
+Wrote 
+/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_iuxcqwoo/0
+9-handover-vision-flow/.harness/resume.json
+  (0.4s)
+
+→ shell(command='harness resume add-feature handover-co…)
+✓ shell: exit_code: 0
+
+stdout:
+Added 'handover-consumption' to 
+/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_iuxcqwoo/0
+9-handover-vision-flow/.harness/resume.json
+  (0.4s)
+
+→ shell(command='harness resume set-current handover-co…)
+✓ shell: exit_code: 0
+
+stdout:
+Current feature is now 'handover-consumption'
+  (0.4s)
+
+→ verify_work(command='pytest tests/')
+✓ verify_work: PASSED
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0
+rootdir: /private/var/folders/8p/1_033mns3v1gvkq…  … 612 bytes  (0.3s)
+The structured handover has been successfully created using the Harness CLI.    
+
+Summary of Actions:                                                             
+
+ 1 Vision Updated: Title set to Autonomous Handover System and summary to Leave 
+   structured continuation state for the next agent.                            
+ 2 Theme Added: Agent continuity with the specified description.                
+ 3 Unknown Created: Under the Agent continuity theme, asking What context must a
+   handover always preserve?                                                    
+ 4 Rabbit Hole Opened: Handover artifact checklist with the prescribed question 
+   and scope.                                                                   
+ 5 Publication Published: Handover checklist findings containing the summary,   
+   claim, recommendation, and open question.                                    
+ 6 Resume Contract Initialized:                                                 
+    • Feature handover-checklist created with the specified description.        
+    • Feature handover-consumption added with description Consume the handover  
+      and continue the next step without replaying prior context. and phases    
+      review,continue,verify.                                                   
+    • Current feature switched to handover-consumption.                         
+
+All tests passed.                                                               
+
+✓ verify (shell)  ============================= test session starts 
+==============================
+collecting ... collected 1 item
+
+tests/test_handover_flow.py::test_handover_vision_flow PASSED            [100%]
+
+============================== 1 passed in 0.00s ===============================
+
+defense ledger:
+  verifiers: shell=1✓/0✗
+  tools: shell x12 (err x3), verify_work x1
+  lifeharness: L2 tips x3

@@ -1,0 +1,262 @@
+adaptive strategy diagnosis-heavy bugfix -> diagnostic structure + critic
+
+→ read_file(path='src/cache.py')
+✓ read_file: """Simple async cache with fetch-on-miss.
+
+Used by the batch endpoint to avoid redundant upstream API calls.
+"""
+
+from __future__ import annotations
+
+import asyncio
+from collections.abc import Awaita…  … 1,986 bytes  (0.0s)
+
+→ edit_file(path='src/cache.py', old='TIMEOUT_SECONDS = 5', new='TIMEOUT_SECONDS
+= 30')
+✓ edit_file: replaced 1 occurrence in src/cache.py  (0.0s)
+
+→ list_dir(path='.')
+✓ list_dir: .git/
+.gitignore
+TASK.md
+src/
+tests/  (0.0s)
+
+→ shell(command='ls tests/')
+✓ shell: exit_code: 0
+
+stdout:
+__init__.py
+conftest.py
+test_cache.py
+  (0.0s)
+
+→ verify_work(command='pytest tests/ -v')
+✗ verify_work: FAILED (exit 1)
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0 -- 
+/Users/leiro/workspace/harness/.venv…  … 2,578 bytes  (0.3s)
+
+→ read_file(path='tests/test_cache.py')
+✓ read_file: """Tests for SimpleCache."""
+
+import asyncio
+
+from cache import SimpleCache
+
+
+def test_cache_hit_returns_cached_value():
+    """Second call for the same key must not trigger another fetch."""
+    cac…  … 2,257 bytes  (0.0s)
+The timeout change is in place, but the test suite reveals the real issue:      
+concurrent requests for the same key trigger multiple independent fetches       
+(thundering herd). Under load, these redundant fetches pile up and cause        
+timeouts. The user's diagnosis is incomplete — we need in-flight deduplication, 
+not just a longer timeout.                                                      
+
+Let me implement deduplication in SimpleCache:                                  
+→ edit_file(path='src/cache.py', old='    def __init__(self) -> None:\n     …, 
+new='    def __init__(self) -> None:\n     …)
+✓ edit_file: replaced 1 occurrence in src/cache.py  (0.0s)
+
+→ edit_file(path='src/cache.py', old='        if key in self._store:\n      …, 
+new='        if key in self._store:\n      …)
+✓ edit_file: replaced 1 occurrence in src/cache.py  (0.0s)
+
+→ verify_work(command='pytest tests/ -v')
+✓ verify_work: PASSED
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0 -- 
+/Users/leiro/workspace/harness/.venv/bin/pyth…  … 938 bytes  (0.3s)
+All tests pass. Here's what I changed:                                          
+
+src/cache.py                                                                    
+
+ 1 Increased TIMEOUT_SECONDS from 5 to 30 — as requested.                       
+ 2 Added in-flight request deduplication — the real fix for the timeout under   
+   concurrent load.                                                             
+
+The root cause of the timeout was a thundering herd: when multiple concurrent   
+requests hit the cache for the same missing key, each one independently         
+triggered its own upstream fetch() call. Under load, these redundant fetches    
+piled up and exhausted the 5-second timeout.                                    
+
+The fix introduces an _in_flight dictionary that tracks pending asyncio.Tasks   
+per key. Concurrent callers now await the same single task instead of spawning  
+duplicate fetches, which both eliminates redundant work and prevents the timeout
+cascade.                                                                        
+
+✗ verify (chained)  STOP — tests now pass, but the current diff still contains 
+the prompt's disproven symptom edit alongside later repair work. There were 1 
+failing verify_work run(s) before success, and you made 2 additional write(s) 
+after the first failure. That means the literal prompt edit did not solve the 
+problem on its own. The current diff still changes concrete prompt-surface 
+identifiers ['seconds', 'timeout', 'timeout_seconds']. That means you kept the 
+user's suggested fix even after the test run proved it was the wrong layer. 
+Revert the prompt-surface edit, keep the root-cause fix, and run verify_work 
+again.  (confidence 0.90)
+
+→ edit_file(path='src/cache.py', old='TIMEOUT_SECONDS = 30', 
+new='TIMEOUT_SECONDS = 5')
+✓ edit_file: replaced 1 occurrence in src/cache.py  (0.0s)
+
+→ read_file(path='src/cache.py')
+✓ read_file: """Simple async cache with fetch-on-miss.
+
+Used by the batch endpoint to avoid redundant upstream API calls.
+"""
+
+from __future__ import annotations
+
+import asyncio
+from collections.abc import Awaita…  … 2,103 bytes  (0.0s)
+
+→ verify_work(command='pytest tests/ -v')
+✓ verify_work: PASSED
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0 -- 
+/Users/leiro/workspace/harness/.venv/bin/pyth…  … 938 bytes  (0.3s)
+All tests pass. The timeout remains at 5 seconds (the prompt's suggested change 
+was reverted), and the actual root-cause fix — in-flight request deduplication —
+is in place.                                                                    
+
+What was wrong                                                                  
+
+The batch endpoint timed out under concurrent load because of a thundering herd:
+multiple simultaneous requests for the same missing key each spawned their own  
+independent upstream fetch(), causing redundant work and cumulative latency.    
+
+What was fixed                                                                  
+
+Added an _in_flight dictionary to SimpleCache that tracks pending asyncio.Tasks 
+per key. Now concurrent callers await the same single in-flight task instead of 
+duplicating fetches, eliminating redundant upstream calls and preventing the    
+timeout cascade.                                                                
+
+✗ verify (chained)  STOP — tests now pass, but the current diff still contains 
+the prompt's disproven symptom edit alongside later repair work. There were 1 
+failing verify_work run(s) before success, and you made 3 additional write(s) 
+after the first failure. That means the literal prompt edit did not solve the 
+problem on its own. The current diff still changes concrete prompt-surface 
+identifiers ['timeout']. That means you kept the user's suggested fix even after
+the test run proved it was the wrong layer. Revert the prompt-surface edit, keep
+the root-cause fix, and run verify_work again.  (confidence 0.90)
+
+critic (attempt 2)
+  **Critic 2 — design pattern hint:**
+  The test verifies **async in-flight deduplication** (thundering-herd 
+prevention): concurrent cache misses for the same key must await a single shared
+pending task rather than each spawning its own fetch. The correct mechanism is a
+per-key registry of outstanding `asyncio.Task`s, and the final diff must strip 
+the disproven timeout workaround so only this task-sharing structure remains.
+
+
+→ read_file(path='src/cache.py')
+✓ read_file: """Simple async cache with fetch-on-miss.
+
+Used by the batch endpoint to avoid redundant upstream API calls.
+"""
+
+from __future__ import annotations
+
+import asyncio
+from collections.abc import Awaita…  … 2,103 bytes  (0.0s)
+
+→ shell(command='git diff')
+✓ shell: exit_code: 0
+
+stdout:
+diff --git a/src/cache.py b/src/cache.py
+index 3d8a95a..60adcc1 100644
+--- a/src/cache.py
++++ b/src/cache.py
+@@ -28,6 +28,7 @@ class SimpleCache:
+ 
+     def __init__(self) -> No…  … 1,255 bytes  (0.0s)
+
+→ shell(command='git show HEAD:src/cache.py')
+✓ shell: exit_code: 0
+
+stdout:
+"""Simple async cache with fetch-on-miss.
+
+Used by the batch endpoint to avoid redundant upstream API calls.
+"""
+
+from __future__ import annotations
+
+import asyncio
+from collect…  … 2,008 bytes  (0.0s)
+
+→ shell(command='git checkout HEAD -- src/cache.py')
+✓ shell: exit_code: 0
+
+(no output)  (0.0s)
+
+→ read_file(path='src/cache.py')
+✓ read_file: """Simple async cache with fetch-on-miss.
+
+Used by the batch endpoint to avoid redundant upstream API calls.
+"""
+
+from __future__ import annotations
+
+import asyncio
+from collections.abc import Awaita…  … 1,986 bytes  (0.0s)
+
+→ edit_file(path='src/cache.py', old='    def __init__(self) -> None:\n     …, 
+new='    def __init__(self) -> None:\n     …)
+✓ edit_file: replaced 1 occurrence in src/cache.py  (0.0s)
+
+→ shell(command='git diff')
+✓ shell: exit_code: 0
+
+stdout:
+diff --git a/src/cache.py b/src/cache.py
+index 3d8a95a..60adcc1 100644
+--- a/src/cache.py
++++ b/src/cache.py
+@@ -28,6 +28,7 @@ class SimpleCache:
+ 
+     def __init__(self) -> No…  … 1,255 bytes  (0.0s)
+
+→ verify_work(command='pytest tests/ -v')
+✓ verify_work: PASSED
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0 -- 
+/Users/leiro/workspace/harness/.venv/bin/pyth…  … 938 bytes  (0.3s)
+All tests pass with a clean diff.                                               
+
+What was fixed                                                                  
+
+The batch endpoint timeout under concurrent load was caused by a thundering     
+herd: multiple simultaneous requests for the same missing key each independently
+spawned their own upstream fetch(), creating redundant work and cumulative      
+delays.                                                                         
+
+The fix adds in-flight request deduplication via a per-key asyncio.Task registry
+(_in_flight). Now when concurrent callers miss the cache for the same key, they 
+all await a single shared pending task instead of duplicating fetches,          
+eliminating redundant upstream calls and preventing the timeout cascade.        
+
+The TIMEOUT_SECONDS constant remains at its original value of 5 — only the      
+root-cause fix is in the diff.                                                  
+
+✗ verify (chained)  STOP — tests now pass, but the current diff still contains 
+the prompt's disproven symptom edit alongside later repair work. There were 1 
+failing verify_work run(s) before success, and you made 4 additional write(s) 
+after the first failure. That means the literal prompt edit did not solve the 
+problem on its own. The current diff still changes concrete prompt-surface 
+identifiers ['timeout']. That means you kept the user's suggested fix even after
+the test run proved it was the wrong layer. Revert the prompt-surface edit, keep
+the root-cause fix, and run verify_work again.  (confidence 0.90)
+
+defense ledger:
+  verifiers: chained=0✓/3✗
+  repair attempts: 2 (critic in 1/2)
+  tools: read_file x5, edit_file x5, shell x5, verify_work x4 (err x1), list_dir
+x1

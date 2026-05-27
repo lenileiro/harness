@@ -1,0 +1,28 @@
+{
+  "name": "ingest-repo",
+  "argv": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "research",
+    "ingest-repo",
+    "--title",
+    "Hermes Agent",
+    "--repo",
+    "https://github.com/nousresearch/hermes-agent",
+    "--summary",
+    "External agent platform with plugin and memory ideas.",
+    "--excerpt",
+    "Plugin and memory abstractions are reusable.",
+    "--themes",
+    "autonomous-improvement,extensions",
+    "--related-sections",
+    "plugins,experience",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_a1w5n382/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Recorded inspiration insp-hermes-agent-7c9bffad at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_a\n1w5n382/workspace/.harness/research/inspiration/insp-hermes-agent-7c9bffad\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.4081430830992758
+}

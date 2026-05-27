@@ -1,0 +1,19 @@
+{
+  "name": "experience-curate",
+  "argv": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "experience",
+    "curate",
+    "--scope",
+    "repo",
+    "--dry-run",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_13ivezfs/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "scanned=2 archived=1 dry_run=yes\n\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2513\n\u2503 Kind      \u2503 Procedure        \u2503 Reason                \u2503 Archive path          \u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2529\n\u2502 duplicate \u2502 Scope discipline \u2502 Exact duplicate of    \u2502 /private/var/folders/ \u2502\n\u2502           \u2502                  \u2502 higher-confidence     \u2502 8p/1_033mns3v1gvkq95_ \u2502\n\u2502           \u2502                  \u2502 procedure             \u2502 wfx4xr0000gn/T/harnes \u2502\n\u2502           \u2502                  \u2502 proc_6e064e50b6       \u2502 s_workflow_eval_13ive \u2502\n\u2502           \u2502                  \u2502                       \u2502 zfs/workspace/.harnes \u2502\n\u2502           \u2502                  \u2502                       \u2502 s/procedures/.archive \u2502\n\u2502           \u2502                  \u2502                       \u2502 /scope-discipline-177 \u2502\n\u2502           \u2502                  \u2502                       \u2502 9693853               \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.33788008289411664
+}

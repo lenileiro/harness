@@ -1,0 +1,18 @@
+{
+  "name": "tasks-rm",
+  "argv": [
+    "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_73ax6a_a/workspace/fake-harness",
+    "tasks",
+    "rm",
+    "T-001",
+    "--db",
+    ".harness/harness.db",
+    "--yes"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Deleted T-001\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.36695591709576547
+}

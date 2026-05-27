@@ -1,0 +1,24 @@
+{
+  "id": "gw-whatsapp-172125595893921-1721255-c61cf420",
+  "transport": "whatsapp",
+  "user_id": "172125595893921",
+  "thread_id": "172125595893921@lid",
+  "current_mission_id": "",
+  "last_job_id": "sched-reminder-go-sleep-71e21c72",
+  "last_run_id": "",
+  "last_command": "unknown",
+  "updated_at": "2026-05-27T16:37:12+00:00",
+  "metadata": {
+    "harness_session_id": "sess_gw_whatsapp_172125595893921_1721255_c61cf420",
+    "thread_context": [
+      "user: Hi",
+      "assistant: Harness could not generate a conversational reply. Configure a working model/provider for chat runs, then try again.",
+      "user: hello",
+      "assistant: Hello! How can I help you today?",
+      "user: hello",
+      "assistant: Hello! I'm here and ready to help. Is there something specific you'd like to work on, or would you like me to help you explore your project?",
+      "user: Hello",
+      "assistant: Hello! How can I help you today?"
+    ]
+  }
+}

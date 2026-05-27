@@ -1,0 +1,118 @@
+adaptive strategy diagnosis-heavy bugfix -> diagnostic structure + critic; 
+implicit critic=llm
+
+→ list_dir(path='.')
+✓ list_dir: .git/
+.gitignore
+TASK.md
+src/
+tests/  (0.0s)
+
+→ list_dir(path='src')
+
+→ list_dir(path='tests')
+✓ list_dir: __init__.py
+api.py
+db.py
+validation.py  (0.0s)
+✓ list_dir: __init__.py
+conftest.py
+test_api.py  (0.0s)
+
+→ read_file(path='src/api.py')
+
+→ read_file(path='src/db.py')
+
+→ read_file(path='src/validation.py')
+
+→ read_file(path='tests/test_api.py')
+
+→ read_file(path='tests/conftest.py')
+✓ read_file: """Public user API."""
+
+from __future__ import annotations
+
+from db import get_user_record
+from validation import validate_user_id
+
+
+def get_user(user_id: str) -> dict | None:
+    """Return user dict…  … 379 bytes  (0.0s)
+✓ read_file: """Database layer — thin wrapper over an in-memory user store."""
+
+from __future__ import annotations
+
+# Simulated user store. In production this would be a real DB query.
+_USERS: dict = {…  … 857 bytes  (0.0s)
+✓ read_file: """Input validation utilities."""
+
+import re
+
+# Pattern updated in the last security audit to explicitly allow hyphens.
+# Accepts letters, digits, underscores, and hyphens (1-64 chars).
+_USER_ID_RE =…  … 462 bytes  (0.0s)
+✓ read_file: """Tests for the user API."""
+
+import pytest
+from api import get_user
+
+
+def test_simple_id_resolves():
+    user = get_user("alice")
+    assert user is not None
+    assert user["id"] == "alice"
+
+
+def …  … 853 bytes  (0.0s)
+✓ read_file: """Add src/ to sys.path so tests can import the fixture modules 
+directly."""
+
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+  (0.0s)
+
+→ edit_file(path='src/db.py', old='    # Normalize the ID before lookup t…, 
+new='    return _USERS.get(user_id)')
+✓ edit_file: replaced 1 occurrence in src/db.py  (0.0s)
+
+→ verify_work(command='pytest tests/ -v')
+✓ verify_work: PASSED
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0 -- 
+/Users/leiro/workspace/harness/.venv/bin/pyth…  … 1,026 bytes  (0.2s)
+The bug was in src/db.py: a "normalization" step stripped hyphens from the user 
+ID before the dictionary lookup, turning "abc-def" into "abcdef" so it never    
+matched the stored key.                                                         
+
+Fix applied: Removed the hyphen-stripping normalization in db.py.               
+
+All tests pass:                                                                 
+
+→ verify_work(command='pytest tests/ -v')
+✓ verify_work: PASSED
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0 -- 
+/Users/leiro/workspace/harness/.venv/bin/pyth…  … 1,026 bytes  (0.2s)
+All 5 tests pass, including the new hyphenated-ID test.                         
+
+
+✓ verify (shell)  ============================= test session starts 
+==============================
+collecting ... collected 5 items
+
+tests/test_api.py::test_simple_id_resolves PASSED                        [ 20%]
+tests/test_api.py::test_underscore_id_resolves PASSED                    [ 40%]
+tests/test_api.py::test_invalid_id_raises PASSED                         [ 60%]
+tests/test_api.py::test_invalid_id_special_chars_raises PASSED           [ 80%]
+tests/test_api.py::test_hyphenated_id PASSED                             [100%]
+
+============================== 5 passed in 0.00s ===============================
+
+defense ledger:
+  verifiers: shell=1✓/0✗
+  tools: read_file x5, list_dir x3, verify_work x2, edit_file x1
+  lifeharness: L2 tips x3, L4 regulate x3

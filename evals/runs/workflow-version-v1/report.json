@@ -1,0 +1,34 @@
+{
+  "run_id": "20260525T073708Z-workflow",
+  "artifact_root": "evals/runs/workflow-version-v1",
+  "results": [
+    {
+      "fixture_name": "24-version-cycle",
+      "passed": false,
+      "steps_total": 1,
+      "steps_passed": 0,
+      "step_results": [
+        {
+          "name": "version",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "version",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_p4p8hf3g/workspace"
+          ],
+          "passed": false,
+          "returncode": 2,
+          "stdout": "",
+          "stderr": "Usage: harness version [OPTIONS]\nTry 'harness version --help' for help.\n\u256d\u2500 Error \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256e\n\u2502 No such option '--cwd'.                                                      \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\n",
+          "failures": [
+            "returncode=2",
+            "stdout~0.0.0"
+          ],
+          "duration_seconds": 0.48371862480416894
+        }
+      ],
+      "artifact_dir": "evals/runs/workflow-version-v1/24-version-cycle",
+      "duration_seconds": 0.48482874990440905
+    }
+  ]
+}

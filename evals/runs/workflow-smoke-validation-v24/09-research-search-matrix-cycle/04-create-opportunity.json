@@ -1,0 +1,30 @@
+{
+  "name": "create-opportunity",
+  "argv": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "research",
+    "create-opportunity",
+    "--title",
+    "Unify verifier search surfaces",
+    "--summary",
+    "Improve cross-linking between verifier, promotion, and reporting records.",
+    "--related-sections",
+    "verification,promotion,research",
+    "--origin-observations",
+    "obs-verifier-coordination-debt-054771de",
+    "--change-modes",
+    "improve,extend",
+    "--theme",
+    "verification",
+    "--priority",
+    "medium",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_3a6groav/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Created opportunity opp-unify-verifier-search-surfaces-a9d985a3 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_3\na6groav/workspace/.harness/research/opportunities/opp-unify-verifier-search-surf\naces-a9d985a3\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.39493079110980034
+}

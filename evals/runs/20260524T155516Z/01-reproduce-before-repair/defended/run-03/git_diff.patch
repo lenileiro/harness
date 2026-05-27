@@ -1,0 +1,17 @@
+diff --git a/src/db.py b/src/db.py
+index 7f5b5a6..64e8f5b 100644
+--- a/src/db.py
++++ b/src/db.py
+@@ -13,7 +13,10 @@ _USERS: dict[str, dict] = {
+ 
+ def get_user_record(user_id: str) -> dict | None:
+     """Fetch a raw user record by id. Returns None if not found."""
+-    # Normalize the ID before lookup to handle legacy system quirks.
+-    # BUG: this strips hyphens, so "abc-def" becomes "abcdef" — no match.
++    # Try direct lookup first
++    if user_id in _USERS:
++        return _USERS[user_id]
++    
++    # Fallback to legacy normalization (stripping hyphens) if direct lookup fails
+     normalized = user_id.replace("-", "")
+     return _USERS.get(normalized)

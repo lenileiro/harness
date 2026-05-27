@@ -1,0 +1,25 @@
+[
+  {
+    "id": "adj_c48a9d436e",
+    "kind": "general",
+    "text": "Use the smallest evidence-backed patch that satisfies the failing verification path before expanding scope.",
+    "triggers": [
+      "workspaceexperienceprovider",
+      "plugin",
+      "create",
+      "validate",
+      "workspace",
+      "experience",
+      "mechanism",
+      "fixture"
+    ],
+    "weight": 1.0,
+    "source_fixture_name": "07-plugin-experience-flow",
+    "source_variant": "defended",
+    "source_artifact_dir": "evals/runs/gemma-deep-eval-f07/07-plugin-experience-flow/defended/run-01",
+    "rationale": "Fallback adjustment when no narrower failure pattern was detected.",
+    "evidence": {
+      "verify_passed": false
+    }
+  }
+]

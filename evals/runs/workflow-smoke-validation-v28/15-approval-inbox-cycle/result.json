@@ -1,0 +1,228 @@
+{
+  "fixture_name": "15-approval-inbox-cycle",
+  "passed": true,
+  "steps_total": 11,
+  "steps_passed": 11,
+  "step_results": [
+    {
+      "name": "init-workspace",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_le3wezu2/workspace/fake-harness",
+        "init",
+        "--cwd",
+        "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_le3wezu2/workspace"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "Initialized harness workspace at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_l\ne3wezu2/workspace/.harness\nFuture commands run from this directory will use .harness/harness.db\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.6485788749996573
+    },
+    {
+      "name": "queue-grant-run",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_le3wezu2/workspace/fake-harness",
+        "run",
+        "read the file",
+        "--provider",
+        "ollama",
+        "--model",
+        "test-model",
+        "--db",
+        ".harness/harness.db",
+        "--config",
+        "config.toml",
+        "--session",
+        "sess_inbox",
+        "--inbox",
+        "--verify",
+        "none",
+        "--cwd",
+        "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_le3wezu2/workspace"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "adaptive strategy default adaptive path -> minimal structure\n\n\u2192 read_file(path='note.txt')\n\u2717 read_file: queued for approval \u2014 review with `harness approvals list`  (0.0s)\nqueued; will resume later                                                       \n\n\u2713 verify (verify_before_done)  No modifying tool calls detected \u2014 verification \nnot required.\n\ndefense ledger:\n  verifiers: verify_before_done=1\u2713/0\u2717\n  tools: read_file x1 (err x1)\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.39378733304329216
+    },
+    {
+      "name": "approvals-list-pending",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_le3wezu2/workspace/fake-harness",
+        "approvals",
+        "list",
+        "--db",
+        ".harness/harness.db",
+        "--pending",
+        "--session",
+        "sess_inbox"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2513\n\u2503 ID                \u2503 Status  \u2503 Tool      \u2503 Args      \u2503 Session    \u2503 Requested \u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2529\n\u2502 appr_de5567f977ce \u2502 pending \u2502 read_file \u2502 {'path':  \u2502 sess_inbox \u2502 0s ago    \u2502\n\u2502                   \u2502         \u2502           \u2502 'note.tx\u2026 \u2502            \u2502           \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.369696042034775
+    },
+    {
+      "name": "approvals-show",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_le3wezu2/workspace/fake-harness",
+        "approvals",
+        "show",
+        "{latest_approval_id}",
+        "--db",
+        ".harness/harness.db"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "\u256d\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 approval \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256e\n\u2502 appr_de5567f977ce  pending  read_file \u2502\n\u2502 session: sess_inbox                   \u2502\n\u2502 tool_call_id: c1                      \u2502\n\u2502 requested 0s ago                      \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\n\u256d\u2500\u2500\u2500\u2500\u2500 arguments \u2500\u2500\u2500\u2500\u2500\u2500\u256e\n\u2502 {                    \u2502\n\u2502   \"path\": \"note.txt\" \u2502\n\u2502 }                    \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.37860816600732505
+    },
+    {
+      "name": "approvals-grant",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_le3wezu2/workspace/fake-harness",
+        "approvals",
+        "grant",
+        "{latest_approval_id}",
+        "--db",
+        ".harness/harness.db"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "Granted appr_de5567f977ce  (read_file)  \u2014 resume the session to dispatch.\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.37608870794065297
+    },
+    {
+      "name": "sessions-resume-granted",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_le3wezu2/workspace/fake-harness",
+        "sessions",
+        "resume",
+        "sess_inbox",
+        "what does it say?",
+        "--db",
+        ".harness/harness.db",
+        "--config",
+        "config.toml",
+        "--cwd",
+        "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_le3wezu2/workspace"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "now I know it's 42                                                              \n\n\u2713 verify (verify_before_done)  No modifying tool calls detected \u2014 verification \nnot required.\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.39513595891185105
+    },
+    {
+      "name": "sessions-show-granted",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_le3wezu2/workspace/fake-harness",
+        "sessions",
+        "show",
+        "sess_inbox",
+        "--db",
+        ".harness/harness.db"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "\u256d\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 session \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256e\n\u2502 sess_inbox  done  ollama/test-model                                          \u2502\n\u2502 created 1s ago, updated 0s ago                                               \u2502\n\u2502 cwd:                                                                         \u2502\n\u2502 /private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_ev \u2502\n\u2502 al_le3wezu2/workspace                                                        \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\n\u256d\u2500\u2500\u2500\u2500 user \u2500\u2500\u2500\u2500\u2500\u256e\n\u2502 read the file \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\n\u256d\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 assistant \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256e\n\u2502 \u2192 read_file(path='note.txt')  (c1) \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\n\u256d\u2500 tool: read_file  (c1) \u2500\u256e\n\u2502 the answer is 42        \u2502\n\u2502                         \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\n\u256d\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 assistant \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256e\n\u2502 queued; will resume later \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\n\u256d\u2500\u2500\u2500\u2500\u2500\u2500 user \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256e\n\u2502 what does it say? \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\n\u256d\u2500\u2500\u2500\u2500 assistant \u2500\u2500\u2500\u2500\u2500\u256e\n\u2502 now I know it's 42 \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.3652010830119252
+    },
+    {
+      "name": "evidence-session-filter",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_le3wezu2/workspace/fake-harness",
+        "evidence",
+        "list",
+        "--db",
+        ".harness/harness.db",
+        "--session",
+        "sess_inbox"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2513\n\u2503 When   \u2503 Tool      \u2503 Args                 \u2503 Status \u2503 ms \u2503 Evidence \u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2529\n\u2502 2s ago \u2502 read_file \u2502 {'path': 'note.txt'} \u2502 error  \u2502  \u2014 \u2502 \u2014        \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.37986775022000074
+    },
+    {
+      "name": "queue-deny-run",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_le3wezu2/workspace/fake-harness",
+        "run",
+        "read the denied file",
+        "--provider",
+        "ollama",
+        "--model",
+        "test-model",
+        "--db",
+        ".harness/harness.db",
+        "--config",
+        "config.toml",
+        "--session",
+        "sess_deny",
+        "--inbox",
+        "--verify",
+        "none",
+        "--cwd",
+        "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_le3wezu2/workspace"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "adaptive strategy default adaptive path -> minimal structure\n\n\u2192 read_file(path='deny.txt')\n\u2717 read_file: queued for approval \u2014 review with `harness approvals list`  (0.0s)\nqueued                                                                          \n\n\u2713 verify (verify_before_done)  No modifying tool calls detected \u2014 verification \nnot required.\n\ndefense ledger:\n  verifiers: verify_before_done=1\u2713/0\u2717\n  tools: read_file x1 (err x1)\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.38174916710704565
+    },
+    {
+      "name": "approvals-deny",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_le3wezu2/workspace/fake-harness",
+        "approvals",
+        "deny",
+        "{latest_approval_id}",
+        "--db",
+        ".harness/harness.db"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "Denied appr_24aa58efa99e  (read_file)\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.37664854200556874
+    },
+    {
+      "name": "approvals-list-denied",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_le3wezu2/workspace/fake-harness",
+        "approvals",
+        "list",
+        "--db",
+        ".harness/harness.db",
+        "--session",
+        "sess_deny"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2513\n\u2503 ID                \u2503 Status \u2503 Tool      \u2503 Args        \u2503 Session   \u2503 Requested \u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2529\n\u2502 appr_24aa58efa99e \u2502 denied \u2502 read_file \u2502 {'path':    \u2502 sess_deny \u2502 0s ago    \u2502\n\u2502                   \u2502        \u2502           \u2502 'deny.txt'} \u2502           \u2502           \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.37000304087996483
+    }
+  ],
+  "artifact_dir": "evals/runs/workflow-smoke-validation-v28/15-approval-inbox-cycle",
+  "duration_seconds": 4.4460216669831425
+}

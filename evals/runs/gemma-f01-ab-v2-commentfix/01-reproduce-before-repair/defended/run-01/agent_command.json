@@ -1,0 +1,23 @@
+[
+  "/Users/leiro/workspace/harness/.venv/bin/harness",
+  "run",
+  "# Fix hyphenated user ID lookup\n\n`get_user()` returns `None` for hyphenated IDs like `'abc-def'`. Simple IDs\nlike `'alice'` and `'bob'` work fine.\n\nThe validation regex was recently audited and updated to explicitly allow\nhyphens. The bug is likely somewhere downstream of validation.\n\nFix it so hyphenated IDs resolve correctly. Run the tests when done.",
+  "--cwd",
+  "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_ghc_x907/01-reproduce-before-repair",
+  "--yes",
+  "--in-memory",
+  "--provider",
+  "openrouter",
+  "--model",
+  "google/gemma-4-26b-a4b-it",
+  "--max-repair",
+  "2",
+  "--profile",
+  "adaptive",
+  "--max-output-tokens",
+  "2048",
+  "--verify",
+  "shell",
+  "--verify-command",
+  "pytest tests/ -v --tb=short --no-header"
+]

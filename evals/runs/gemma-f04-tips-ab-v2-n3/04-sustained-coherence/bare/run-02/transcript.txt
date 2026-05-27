@@ -1,0 +1,7 @@
+2026-05-24T16:21:15.565082Z [warning  ] agent.step.error               attempt=0 error='Ollama returned 404 — model likely not pulled. Body: {"error":{"message":"model \'openrouter/google/gemma-4-26b-a4b-it\' not found","type":"not_found_error","param":null,"code":null}}\n' kind=model_unavailable provider=ollama
+2026-05-24T16:21:15.565184Z [error    ] agent.run.failed               error='Ollama returned 404 — model likely not pulled. Body: {"error":{"message":"model \'openrouter/google/gemma-4-26b-a4b-it\' not found","type":"not_found_error","param":null,"code":null}}\n' kind=model_unavailable
+
+Error (model_unavailable): Ollama returned 404 — model likely not pulled. Body: 
+{"error":{"message":"model 'openrouter/google/gemma-4-26b-a4b-it' not 
+found","type":"not_found_error","param":null,"code":null}}
+

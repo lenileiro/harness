@@ -1,0 +1,19 @@
+{
+  "name": "research-show-candidate",
+  "argv": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "research",
+    "show-candidate",
+    "promo-mission-bridge-candidate-4486e77d",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_4t649z_5/workspace"
+  ],
+  "passed": false,
+  "returncode": 0,
+  "stdout": "Mission bridge candidate\nPromote the validated bridge feature into the research lane.\n\nTarget Files\n- app/bridge.py\n",
+  "stderr": "",
+  "failures": [
+    "stdout~Mission Features"
+  ],
+  "duration_seconds": 0.40530020790174603
+}

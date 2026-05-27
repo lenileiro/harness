@@ -1,0 +1,17 @@
+{
+  "name": "show-publication",
+  "argv": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "research",
+    "show-publication",
+    "pub-citation-graph-findings-35e9a4e7",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_hdbv019o/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Citation graph findings\nLater findings should cite earlier archival work.\nclaim: Citations preserve research lineage.\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.32482958398759365
+}

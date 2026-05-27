@@ -1,0 +1,20 @@
+{
+  "name": "lab-run",
+  "argv": [
+    "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_jwudi4nu/workspace/fake-harness",
+    "lab",
+    "run",
+    "do work",
+    "--cwd",
+    ".",
+    "--no-judge",
+    "--db",
+    "lab.db"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "harness lab run \u2014 2 workers  max-steps=20\nprovider=ollama  model=llama3.2\n\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.7023535410407931
+}

@@ -1,0 +1,213 @@
+adaptive strategy diagnosis-heavy bugfix -> diagnostic structure + critic
+
+→ shell(command='harness --help')
+✓ shell: exit_code: 0
+
+stdout:
+                                                                                
+ Usage: harness [OPTIONS] COMMAND [ARGS]...                                     
+               …  … 3,992 bytes  (0.4s)
+
+→ shell(command='harness vision update --title "Promoti…)
+✓ shell: exit_code: 0
+
+stdout:
+Updated vision at 
+/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_louyt6sq/0
+8-promotion-draft-flow/.harness/research/vision/current
+  (0.5s)
+
+→ shell(command='harness research add-theme --title "Pr…)
+✗ shell: exit_code: 2
+
+stderr:
+Usage: harness research add-theme [OPTIONS]
+Try 'harness research add-theme --help' for help.
+╭─ Error ──────────────────────────────────────────────────────────────────────╮
+│ …  … 359 bytes  (0.5s)
+
+→ shell(command='harness research add-theme --help')
+✓ shell: exit_code: 0
+
+stdout:
+                                                                                
+ Usage: harness research add-theme [OPTIONS]                                    
+               …  … 995 bytes  (0.4s)
+
+→ shell(command='harness research add-theme --title "Pr…)
+✓ shell: exit_code: 0
+
+stdout:
+Added theme theme-promotion-reliability-709a2050 at 
+/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_louyt6sq/0
+8-promotion-draft-flow/.harness/research/th…  … 242 bytes  (0.4s)
+
+→ shell(command='harness research open --help')
+✓ shell: exit_code: 0
+
+stdout:
+                                                                                
+ Usage: harness research open [OPTIONS]                                         
+               …  … 1,562 bytes  (0.4s)
+
+→ shell(command='harness research open --title "Promoti…)
+✓ shell: exit_code: 0
+
+stdout:
+Opened rabbit hole rh-promotion-evidence-checklist-2ce78ebf at 
+/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_louyt6sq/0
+8-promotion-draft-flow/.harness/…  … 262 bytes  (0.4s)
+
+→ shell(command='harness research publish --help')
+✓ shell: exit_code: 0
+
+stdout:
+                                                                                
+ Usage: harness research publish [OPTIONS]                                      
+               …  … 2,048 bytes  (0.4s)
+
+→ shell(command='harness research publish --rabbit-hole…)
+✓ shell: exit_code: 0
+
+stdout:
+Published pub-promotion-evidence-findings-f042b7cb at 
+/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_louyt6sq/0
+8-promotion-draft-flow/.harness/research/…  … 254 bytes  (0.4s)
+
+→ shell(command='harness research create-opportunity --…)
+✓ shell: exit_code: 0
+
+stdout:
+                                                                                
+ Usage: harness research create-opportunity [OPTIONS]                           
+               …  … 1,238 bytes  (0.4s)
+
+→ shell(command='harness research create-opportunity --…)
+✓ shell: exit_code: 0
+
+stdout:
+Created opportunity opp-tighten-promotion-drafts-c798ae0b at 
+/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_louyt6sq/0
+8-promotion-draft-flow/.harness/re…  … 259 bytes  (0.4s)
+
+→ shell(command='harness research hypothesize --help')
+✓ shell: exit_code: 0
+
+stdout:
+                                                                                
+ Usage: harness research hypothesize [OPTIONS]                                  
+               …  … 1,076 bytes  (0.4s)
+
+→ shell(command='harness research hypothesize --opportu…)
+✓ shell: exit_code: 0
+
+stdout:
+Created hypothesis hyp-explicit-evidence-sections-will--5e0c5d99 at 
+/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_louyt6sq/0
+8-promotion-draft-flow/.har…  … 271 bytes  (0.4s)
+
+→ shell(command='harness research refine --help')
+✓ shell: exit_code: 0
+
+stdout:
+                                                                                
+ Usage: harness research refine [OPTIONS]                                       
+               …  … 1,724 bytes  (0.4s)
+
+→ shell(command='harness research refine --title "Promo…)
+✓ shell: exit_code: 0
+
+stdout:
+Created promotion candidate promo-promotion-draft-evidence-section-0ebd3b37 at 
+/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_louyt6sq/0
+8-promotion-draf…  … 284 bytes  (0.4s)
+
+→ shell(command='harness research promote --help')
+✓ shell: exit_code: 0
+
+stdout:
+                                                                                
+ Usage: harness research promote [OPTIONS]                                      
+               …  … 995 bytes  (0.4s)
+
+→ shell(command='harness research promote --candidate "…)
+✓ shell: exit_code: 0
+
+stdout:
+Prepared promotion draft for promo-promotion-draft-evidence-section-0ebd3b37
+branch=research/promo-promotion-draft-evidence-section-0ebd3b37
+commit_message=research: promote Pro…  … 644 bytes  (0.4s)
+
+→ shell(command='harness research pr --help')
+✓ shell: exit_code: 0
+
+stdout:
+                                                                                
+ Usage: harness research pr [OPTIONS]                                           
+               …  … 995 bytes  (0.4s)
+
+→ shell(command='harness research pr --candidate "promo…)
+✓ shell: exit_code: 0
+
+stdout:
+Prepared PR payload for promo-promotion-draft-evidence-section-0ebd3b37
+title=research: Promotion draft evidence section
+branch=research/promo-promotion-draft-evidence-section-0…  … 405 bytes  (0.6s)
+
+→ shell(command='pytest')
+✗ shell: exit_code: 1
+
+stdout:
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0
+rootdir: /private/var/folders/8p/1…  … 3,292 bytes  (0.2s)
+
+→ read_file(path='.harness/research/promotions/promo-pro…)
+✓ read_file: {
+  "id": "promo-promotion-draft-evidence-section-0ebd3b37",
+  "title": "Promotion draft evidence section",
+  "summary": "Add an evidence section to the promotion candidate template.",
+  "source_publ…  … 533 bytes  (0.0s)
+
+→ shell(command='harness research refine --help')
+✓ shell: exit_code: 0
+
+stdout:
+                                                                                
+ Usage: harness research refine [OPTIONS]                                       
+               …  … 1,724 bytes  (0.4s)
+
+→ shell(command='harness research refine --title "Promo…)
+✓ shell: exit_code: 0
+
+stdout:
+Created promotion candidate promo-promotion-draft-evidence-section-42397b70 at 
+/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_louyt6sq/0
+8-promotion-draf…  … 284 bytes  (0.4s)
+
+→ shell(command='harness research promote --candidate "…)
+✓ shell: exit_code: 0
+
+stdout:
+Prepared promotion draft for promo-promotion-draft-evidence-section-42397b70
+branch=research/promo-promotion-draft-evidence-section-42397b70
+commit_message=research: promote Pro…  … 644 bytes  (0.4s)
+
+→ shell(command='harness research pr --candidate "promo…)
+✓ shell: exit_code: 0
+
+stdout:
+Prepared PR payload for promo-promotion-draft-evidence-section-42397b70
+title=research: Promotion draft evidence section
+branch=research/promo-promotion-draft-evidence-section-4…  … 405 bytes  (0.4s)
+2026-05-25T19:47:32.820599Z [warning  ] agent.step.error               attempt=0 error='exceeded max_steps=25 without final answer' kind=internal provider=openrouter
+2026-05-25T19:47:32.820710Z [error    ] agent.run.failed               error='exceeded max_steps=25 without final answer' kind=internal
+
+Error (internal): exceeded max_steps=25 without final answer
+
+defense ledger:
+  tools: shell x24 (err x2), read_file x1
+  lifeharness: L2 tips x3
+Task exception was never retrieved
+future: <Task finished name='Task-388' coro=<<async_generator_athrow without __name__>()> exception=RuntimeError('aclose(): asynchronous generator is already running')>
+RuntimeError: aclose(): asynchronous generator is already running

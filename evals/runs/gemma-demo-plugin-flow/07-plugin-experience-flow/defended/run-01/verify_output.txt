@@ -1,0 +1,6 @@
+============================= test session starts ==============================
+collecting ... collected 1 item
+
+tests/test_plugin_flow.py::test_workspace_experience_plugin_loads_and_queries PASSED [100%]
+
+============================== 1 passed in 1.21s ===============================

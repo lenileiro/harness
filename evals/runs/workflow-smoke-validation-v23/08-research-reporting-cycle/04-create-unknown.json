@@ -1,0 +1,26 @@
+{
+  "name": "create-unknown",
+  "argv": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "research",
+    "create-unknown",
+    "--theme-id",
+    "theme-research-reporting-65082635",
+    "--question",
+    "Which reporting views best expose autonomous research progress?",
+    "--why-it-matters",
+    "Agents need shared situational awareness.",
+    "--confidence",
+    "0.4",
+    "--related-sections",
+    "research,promotion",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_7x49t1j0/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Created unknown unknown-which-reporting-views-best-expos-c676c147 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_7\nx49t1j0/workspace/.harness/research/unknowns/unknown-which-reporting-views-best-\nexpos-c676c147\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.3995121670886874
+}

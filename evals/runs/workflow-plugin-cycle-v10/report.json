@@ -1,0 +1,140 @@
+{
+  "run_id": "20260525T004332Z-workflow",
+  "artifact_root": "evals/runs/workflow-plugin-cycle-v10",
+  "results": [
+    {
+      "fixture_name": "04-plugin-experience-cycle",
+      "passed": true,
+      "steps_total": 6,
+      "steps_passed": 6,
+      "step_results": [
+        {
+          "name": "plugins-list",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "plugins",
+            "list",
+            "--kind",
+            "tool",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_aawldkzm/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2513\n\u2503 Plugin  \u2503 Kind \u2503 Source    \u2503 Provider       \u2503 Path          \u2503 Description    \u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2529\n\u2502 builtin \u2502 tool \u2502 bundled   \u2502 harness.cli.bu \u2502 \u2014             \u2502 Standard       \u2502\n\u2502         \u2502      \u2502           \u2502 iltin_tools:Bu \u2502               \u2502 Harness CLI    \u2502\n\u2502         \u2502      \u2502           \u2502 iltinToolProvi \u2502               \u2502 toolset.       \u2502\n\u2502         \u2502      \u2502           \u2502 der            \u2502               \u2502                \u2502\n\u2502 demo    \u2502 tool \u2502 workspace \u2502 workspace_plug \u2502 /private/var\u2026 \u2502 Local demo     \u2502\n\u2502         \u2502      \u2502           \u2502 in:DemoProvide \u2502               \u2502 plugin         \u2502\n\u2502         \u2502      \u2502           \u2502 r              \u2502               \u2502                \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.3991584579925984
+        },
+        {
+          "name": "plugins-validate",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "plugins",
+            "validate",
+            "--kind",
+            "tool",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_aawldkzm/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2513\n\u2503 Plugin  \u2503 Kind \u2503 Source    \u2503 Status \u2503 Detail \u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2529\n\u2502 builtin \u2502 tool \u2502 bundled   \u2502 ok     \u2502 ok     \u2502\n\u2502 demo    \u2502 tool \u2502 workspace \u2502 ok     \u2502 ok     \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.3997211658861488
+        },
+        {
+          "name": "procedures-add",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "experience",
+            "procedures",
+            "add",
+            "--name",
+            "Scope discipline",
+            "--body",
+            "Keep the patch in the named formatter only.",
+            "--triggers",
+            "format_price,minimal fix",
+            "--scope",
+            "repo",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_aawldkzm/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "Added procedure proc_b5d6367fac at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_a\nawldkzm/workspace/.harness/procedures/scope-discipline\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.39883245900273323
+        },
+        {
+          "name": "procedures-add-duplicate",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "experience",
+            "procedures",
+            "add",
+            "--name",
+            "Scope discipline duplicate",
+            "--body",
+            "Keep the patch in the named formatter only.",
+            "--triggers",
+            "format_price,minimal fix",
+            "--scope",
+            "repo",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_aawldkzm/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "Added procedure proc_449b07f506 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_a\nawldkzm/workspace/.harness/procedures/scope-discipline-duplicate\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.4111624590586871
+        },
+        {
+          "name": "procedures-list",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "experience",
+            "procedures",
+            "list",
+            "--scope",
+            "repo",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_aawldkzm/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2513\n\u2503 ID              \u2503 Name        \u2503 Domain  \u2503 Confidence \u2503 Triggers     \u2503 Source \u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2529\n\u2502 proc_449b07f506 \u2502 Scope       \u2502 general \u2502        1.0 \u2502 format_pric\u2026 \u2502 human  \u2502\n\u2502                 \u2502 discipline  \u2502         \u2502            \u2502 minimal fix  \u2502        \u2502\n\u2502                 \u2502 duplicate   \u2502         \u2502            \u2502              \u2502        \u2502\n\u2502 proc_b5d6367fac \u2502 Scope       \u2502 general \u2502        1.0 \u2502 format_pric\u2026 \u2502 human  \u2502\n\u2502                 \u2502 discipline  \u2502         \u2502            \u2502 minimal fix  \u2502        \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.414760708110407
+        },
+        {
+          "name": "experience-curate",
+          "argv": [
+            "/Users/leiro/workspace/harness/.venv/bin/harness",
+            "experience",
+            "curate",
+            "--scope",
+            "repo",
+            "--dry-run",
+            "--cwd",
+            "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_aawldkzm/workspace"
+          ],
+          "passed": true,
+          "returncode": 0,
+          "stdout": "scanned=2 archived=1 dry_run=yes\n\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2513\n\u2503 Kind      \u2503 Procedure        \u2503 Reason                \u2503 Archive path          \u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2529\n\u2502 duplicate \u2502 Scope discipline \u2502 Exact duplicate of    \u2502 /private/var/folders/ \u2502\n\u2502           \u2502                  \u2502 higher-confidence     \u2502 8p/1_033mns3v1gvkq95_ \u2502\n\u2502           \u2502                  \u2502 procedure             \u2502 wfx4xr0000gn/T/harnes \u2502\n\u2502           \u2502                  \u2502 proc_449b07f506       \u2502 s_workflow_eval_aawld \u2502\n\u2502           \u2502                  \u2502                       \u2502 kzm/workspace/.harnes \u2502\n\u2502           \u2502                  \u2502                       \u2502 s/procedures/.archive \u2502\n\u2502           \u2502                  \u2502                       \u2502 /scope-discipline-177 \u2502\n\u2502           \u2502                  \u2502                       \u2502 9669814               \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n",
+          "stderr": "",
+          "failures": [],
+          "duration_seconds": 0.4135872919578105
+        }
+      ],
+      "artifact_dir": "evals/runs/workflow-plugin-cycle-v10/04-plugin-experience-cycle",
+      "duration_seconds": 2.4438107919413596
+    }
+  ]
+}

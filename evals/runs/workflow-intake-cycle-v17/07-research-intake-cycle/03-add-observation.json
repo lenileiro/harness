@@ -1,0 +1,28 @@
+{
+  "name": "add-observation",
+  "argv": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "research",
+    "add-observation",
+    "--title",
+    "Verifier prompt drift",
+    "--summary",
+    "Prompt-heavy verifier paths overreact to unrelated changes.",
+    "--source-type",
+    "repo",
+    "--source-ref",
+    "packages/core/src/harness/core/verification_behavioral.py",
+    "--related-sections",
+    "verification,runtime",
+    "--theme",
+    "verifier-reliability",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_uyzwt7gp/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Recorded observation obs-verifier-prompt-drift-13ffed75 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_u\nyzwt7gp/workspace/.harness/research/observations/obs-verifier-prompt-drift-13ffe\nd75\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.41289187502115965
+}

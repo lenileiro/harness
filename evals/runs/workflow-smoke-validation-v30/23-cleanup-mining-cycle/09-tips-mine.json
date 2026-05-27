@@ -1,0 +1,23 @@
+{
+  "name": "tips-mine",
+  "argv": [
+    "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_intqeiei/workspace/fake-harness",
+    "tips",
+    "mine",
+    "sess_tips_mine",
+    "--provider",
+    "ollama",
+    "--model",
+    "test-model",
+    "--db",
+    ".harness/harness.db",
+    "--scope",
+    "repo"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Added 1 tip(s) to \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_i\nntqeiei/workspace/.harness/tips.jsonl\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.373418582836166
+}

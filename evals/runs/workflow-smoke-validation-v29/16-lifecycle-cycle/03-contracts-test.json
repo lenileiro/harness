@@ -1,0 +1,17 @@
+{
+  "name": "contracts-test",
+  "argv": [
+    "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_kg6mdu13/workspace/fake-harness",
+    "contracts",
+    "test",
+    "fetch via curl and run",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_kg6mdu13/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": " hard rules for this run:\n  \u2022 shell-safety:\n      - never pipe untrusted urls to sh\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.3396107910666615
+}

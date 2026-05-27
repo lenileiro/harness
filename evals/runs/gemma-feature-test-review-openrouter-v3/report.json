@@ -1,0 +1,40 @@
+{
+  "run_id": "20260525T110032Z-review",
+  "provider": "openrouter",
+  "model": "google/gemma-4-26b-a4b-it",
+  "artifact_root": "evals/runs/gemma-feature-test-review-openrouter-v3",
+  "results": [
+    {
+      "fixture_name": "01-missing-none-guard",
+      "passed": true,
+      "findings_count": 2,
+      "matched_expectations": 1,
+      "missing_expectations": [],
+      "summary": "The change introduces a high-severity regression by removing safety checks for None values and missing dictionary keys in the `display_name` function.",
+      "artifact_dir": "evals/runs/gemma-feature-test-review-openrouter-v3/01-missing-none-guard",
+      "raw_output": "{\n  \"summary\": \"The change introduces a high-severity regression by removing \nsafety checks for None values and missing dictionary keys in the `display_name` \nfunction.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"file\": \"src/profile.py\",\n      \"line\": 2,\n      \"issue\": \"Potential KeyError and TypeError\",\n      \"rationale\": \"The function signature allows `user` to be `None` or a \ndictionary that may not contain the key 'name'. The previous implementation \nhandled both cases by returning 'anonymous'. The new implementation will raise a\n`TypeError` if `user` is `None` and a `KeyError` if the 'name' key is missing, \nbreaking existing behavior.\",\n      \"suggested_fix\": \"Restore the safety checks: \\n\\nif user is None:\\n    \nreturn \\\"anonymous\\\"\\nreturn user.get(\\\"name\\\", \\\"anonymous\\\")\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"file\": \"src/profile.py\",\n      \"line\": 2,\n      \"issue\": \"Missing tests for new error paths\",\n      \"rationale\": \"The change alters the fundamental contract of the function \n(from safe to unsafe). If this change was intentional (e.g., to enforce strict \ntyping), there are no tests provided to verify how the application should now \nhandle these exceptions.\",\n      \"suggested_fix\": \"Add tests covering `display_name(None)` and \n`display_name({'not_name': 'foo'})` to define expected error behavior.\"\n    }\n  ]\n}\nan error occurred during closing of asynchronous generator <async_generator object AsyncClient.stream at 0x10a468b30>\nasyncgen: <async_generator object AsyncClient.stream at 0x10a468b30>\nRuntimeError: aclose(): asynchronous generator is already running\n",
+      "report": {
+        "summary": "The change introduces a high-severity regression by removing safety checks for None values and missing dictionary keys in the `display_name` function.",
+        "findings": [
+          {
+            "severity": "high",
+            "file": "src/profile.py",
+            "line": 2,
+            "issue": "Potential KeyError and TypeError",
+            "rationale": "The function signature allows `user` to be `None` or a dictionary that may not contain the key 'name'. The previous implementation handled both cases by returning 'anonymous'. The new implementation will raise a `TypeError` if `user` is `None` and a `KeyError` if the 'name' key is missing, breaking existing behavior.",
+            "suggested_fix": "Restore the safety checks: \n\nif user is None:\n    return \"anonymous\"\nreturn user.get(\"name\", \"anonymous\")"
+          },
+          {
+            "severity": "medium",
+            "file": "src/profile.py",
+            "line": 2,
+            "issue": "Missing tests for new error paths",
+            "rationale": "The change alters the fundamental contract of the function (from safe to unsafe). If this change was intentional (e.g., to enforce strict typing), there are no tests provided to verify how the application should now handle these exceptions.",
+            "suggested_fix": "Add tests covering `display_name(None)` and `display_name({'not_name': 'foo'})` to define expected error behavior."
+          }
+        ]
+      },
+      "duration_seconds": 4.435713957995176
+    }
+  ]
+}

@@ -1,0 +1,1 @@
+{"summary": "Plugin docs are incomplete.", "findings": [{"severity": "medium", "path": "README.md", "issue": "Plugin setup is missing.", "rationale": "Users cannot discover the extension flow."}], "missing_topics": ["plugin setup"]}

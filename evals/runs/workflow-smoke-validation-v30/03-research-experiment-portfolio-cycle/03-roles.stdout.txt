@@ -1,0 +1,24 @@
+┏━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Role                 ┃ Description                                           ┃
+┡━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ section-investigator │ Map one subsystem deeply and surface local leverage   │
+│                      │ points.                                               │
+│ scout                │ Gather inspiration from repo artifacts, peers,        │
+│                      │ papers, trends, and the web.                          │
+│ synthesizer          │ Link multiple sections and observations into          │
+│                      │ cross-cutting opportunities.                          │
+│ hypothesis-agent     │ Propose multiple competing improvement angles for one │
+│                      │ opportunity.                                          │
+│ experiment-agent     │ Run one bounded experiment and capture concrete       │
+│                      │ evidence.                                             │
+│ publisher            │ Turn deep investigations into structured              │
+│                      │ publications.                                         │
+│ challenger           │ Retest or disprove prior claims and stale             │
+│                      │ assumptions.                                          │
+│ refiner              │ Simplify promising experiments into promotion         │
+│                      │ candidates.                                           │
+│ promotion-agent      │ Prepare bounded branches, commits, and PR payloads    │
+│                      │ with evidence.                                        │
+│ archivist            │ Archive weak or superseded work so it is not retried  │
+│                      │ blindly.                                              │
+└──────────────────────┴───────────────────────────────────────────────────────┘

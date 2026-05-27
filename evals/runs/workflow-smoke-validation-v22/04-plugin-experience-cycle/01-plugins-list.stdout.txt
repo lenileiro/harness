@@ -1,0 +1,11 @@
+┏━━━━━━━━━┳━━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━┓
+┃ Plugin  ┃ Kind ┃ Source    ┃ Provider       ┃ Path          ┃ Description    ┃
+┡━━━━━━━━━╇━━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━┩
+│ builtin │ tool │ bundled   │ harness.cli.bu │ —             │ Standard       │
+│         │      │           │ iltin_tools:Bu │               │ Harness CLI    │
+│         │      │           │ iltinToolProvi │               │ toolset.       │
+│         │      │           │ der            │               │                │
+│ demo    │ tool │ workspace │ workspace_plug │ /private/var… │ Local demo     │
+│         │      │           │ in:DemoProvide │               │ plugin         │
+│         │      │           │ r              │               │                │
+└─────────┴──────┴───────────┴────────────────┴───────────────┴────────────────┘

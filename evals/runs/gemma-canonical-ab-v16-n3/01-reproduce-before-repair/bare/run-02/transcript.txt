@@ -1,0 +1,81 @@
+
+→ list_dir(path='.')
+✓ list_dir: .git/
+.gitignore
+TASK.md
+src/
+tests/  (0.0s)
+
+→ list_dir(path='src')
+✓ list_dir: __init__.py
+api.py
+db.py
+validation.py  (0.0s)
+
+→ list_dir(path='tests')
+✓ list_dir: __init__.py
+conftest.py
+test_api.py  (0.0s)
+
+→ read_file(path='tests/test_api.py')
+✓ read_file: """Tests for the user API."""
+
+import pytest
+from api import get_user
+
+
+def test_simple_id_resolves():
+    user = get_user("alice")
+    assert user is not None
+    assert user["id"] == "alice"
+
+
+def …  … 853 bytes  (0.0s)
+
+→ verify_work(command='pytest tests/test_api.py')
+✗ verify_work: FAILED (exit 1)
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0
+rootdir: /private/var/folders/8p/1_033m…  … 1,461 bytes  (0.2s)
+
+→ read_file(path='src/api.py')
+✓ read_file: """Public user API."""
+
+from __future__ import annotations
+
+from db import get_user_record
+from validation import validate_user_id
+
+
+def get_user(user_id: str) -> dict | None:
+    """Return user dict…  … 379 bytes  (0.0s)
+
+→ read_file(path='src/validation.py')
+✓ read_file: """Input validation utilities."""
+
+import re
+
+# Pattern updated in the last security audit to explicitly allow hyphens.
+# Accepts letters, digits, underscores, and hyphens (1-64 chars).
+_USER_ID_RE =…  … 462 bytes  (0.0s)
+
+→ read_file(path='src/db.py')
+✓ read_file: """Database layer — thin wrapper over an in-memory user store."""
+
+from __future__ import annotations
+
+# Simulated user store. In production this would be a real DB query.
+_USERS: dict = {…  … 857 bytes  (0.0s)
+2026-05-24T14:53:44.760311Z [warning  ] agent.step.error               attempt=0 error='OpenRouter 402 (out of credits). Body: {"error":{"message":"This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 10952. To increase, visit https://openrouter.ai/settings/credits and add more credits","code":402,"metadata":{"provider_name":null}},"user_id":"user_385huHaWh47hA0WSioz7xgn5BgT"}' kind=configuration provider=openrouter
+2026-05-24T14:53:44.760504Z [error    ] agent.run.failed               error='OpenRouter 402 (out of credits). Body: {"error":{"message":"This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 10952. To increase, visit https://openrouter.ai/settings/credits and add more credits","code":402,"metadata":{"provider_name":null}},"user_id":"user_385huHaWh47hA0WSioz7xgn5BgT"}' kind=configuration
+
+Error (configuration): OpenRouter 402 (out of credits). Body: 
+{"error":{"message":"This request requires more credits, or fewer max_tokens. 
+You requested up to 65536 tokens, but can only afford 10952. To increase, visit 
+https://openrouter.ai/settings/credits and add more 
+credits","code":402,"metadata":{"provider_name":null}},"user_id":"user_385huHaWh
+47hA0WSioz7xgn5BgT"}
+
+defense ledger:
+  tools: read_file x4, list_dir x3, verify_work x1 (err x1)

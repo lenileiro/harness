@@ -1,0 +1,35 @@
+{
+  "fixture_name": "01-missing-none-guard",
+  "passed": false,
+  "findings_count": 2,
+  "matched_expectations": 0,
+  "missing_expectations": [
+    "src/profile.py:high:None",
+    "summary~review"
+  ],
+  "summary": "The change introduces a high-severity regression by removing null safety and key existence checks in the `display_name` function.",
+  "artifact_dir": "evals/runs/gemma-feature-test-review-openrouter-v2/01-missing-none-guard",
+  "raw_output": "{\n  \"summary\": \"The change introduces a high-severity regression by removing null \nsafety and key existence checks in the `display_name` function.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"file\": \"src/profile.py\",\n      \"line\": 3,\n      \"issue\": \"Potential KeyError and TypeError\",\n      \"rationale\": \"The previous implementation safely handled cases where \n`user` was `None` or where the `\\\"name\\\"` key was missing from the dictionary. \nThe new implementation will raise a `TypeError` if `user` is `None` and a \n`KeyError` if the `\\\"name\\\"` key is missing, which contradicts the function's \ntype hint and intended fallback behavior.\",\n      \"suggested_fix\": \"Restore the safety checks: \\n\\nif user is None:\\n    \nreturn \\\"anonymous\\\"\\nreturn user.get(\\\"name\\\", \\\"anonymous\\\")\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"file\": \"src/profile.py\",\n      \"line\": 3,\n      \"issue\": \"Missing tests for edge cases\",\n      \"rationale\": \"The change significantly alters the function's behavior for \n`None` and empty dictionaries. If this change was intentional (e.g., to enforce \nstricter data integrity upstream), there are no accompanying tests to verify how\nthe system should now handle these failures.\",\n      \"suggested_fix\": \"If the change is intentional, add test cases for \n`display_name(None)` and `display_name({})` to document the new expected \nexceptions.\"\n    }\n  ]\n}\nan error occurred during closing of asynchronous generator <async_generator object AsyncClient.stream at 0x108c38b30>\nasyncgen: <async_generator object AsyncClient.stream at 0x108c38b30>\nRuntimeError: aclose(): asynchronous generator is already running\n",
+  "report": {
+    "summary": "The change introduces a high-severity regression by removing null safety and key existence checks in the `display_name` function.",
+    "findings": [
+      {
+        "severity": "high",
+        "file": "src/profile.py",
+        "line": 3,
+        "issue": "Potential KeyError and TypeError",
+        "rationale": "The previous implementation safely handled cases where `user` was `None` or where the `\\\"name\\\"` key was missing from the dictionary. The new implementation will raise a `TypeError` if `user` is `None` and a `KeyError` if the `\\\"name\\\"` key is missing, which contradicts the function's type hint and intended fallback behavior.",
+        "suggested_fix": "Restore the safety checks: \n\nif user is None:\n    return \"anonymous\"\nreturn user.get(\"name\", \"anonymous\")"
+      },
+      {
+        "severity": "medium",
+        "file": "src/profile.py",
+        "line": 3,
+        "issue": "Missing tests for edge cases",
+        "rationale": "The change significantly alters the function's behavior for `None` and empty dictionaries. If this change was intentional (e.g., to enforce stricter data integrity upstream), there are no accompanying tests to verify how the system should now handle these failures.",
+        "suggested_fix": "If the change is intentional, add test cases for `display_name(None)` and `display_name({})` to document the new expected exceptions."
+      }
+    ]
+  },
+  "duration_seconds": 3.0390115410555154
+}

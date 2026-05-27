@@ -1,0 +1,23 @@
+{
+  "run_id": "20260524T222914Z-docs",
+  "provider": "openrouter",
+  "model": "google/gemma-4-26b-a4b-it",
+  "artifact_root": "evals/runs/post-roadmap-docs-live-v2",
+  "results": [
+    {
+      "fixture_name": "01-missing-plugin-docs",
+      "passed": false,
+      "findings_count": 0,
+      "matched_expectations": 0,
+      "matched_topics": 0,
+      "missing_expectations": [
+        "docs output was not valid JSON"
+      ],
+      "summary": "",
+      "artifact_dir": "evals/runs/post-roadmap-docs-live-v2/01-missing-plugin-docs",
+      "raw_output": "{\n  \"summary\": \"The repository documentation is critically insufficient. The \ncurrent README provides only a high-level definition of the project without any \ninstallation instructions, usage examples, API references, or configuration \ndetails. Most importantly, there is no documentation regarding the plugin or \nextension architecture, making it impossible for users to understand how to \nextend the runtime.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"path\": \"README.md\",\n      \"issue\": \"Complete absence of setup and installation instructions.\",\n      \"rationale\": \"Users cannot adopt or use the tool if they do not know how \nto install the dependencies or run the agent runtime.\",\n      \"suggested_update\": \"Add sections for 'Installation', 'Quick Start', and \n'Prerequisites'.\"\n    },\n    {\n      \"severity\": \"high\",\n      \"path\": \"README.md\",\n      \"issue\": \"Missing plugin and extension documentation.\",\n      \"rationale\": \"The prompt specifically requires guidance on plugins. \nCurrently, there is zero information on how to develop, load, list, or discover \nplugins, which prevents ecosystem growth and safe extension.\",\n      \"suggested_update\": \"Create a `docs/extensions.md` or add a 'Plugin \nArchitecture' section to the README detailing the plugin lifecycle, interface \nrequirements, and loading mechanisms.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"path\": \"README.md\",\n      \"issue\": \"Lack of usage examples for the 'eval framework'.\",\n      \"rationale\": \"The README claims it supports benchmarking and task running,\nbut provides no syntax or command examples, leaving the core value proposition \nopaque.\",\n      \"suggested_update\": \"Include code snippets or CLI examples showing how to \nrun a task and how to execute a benchmark.\"\n    }\n  ],\n  \"missing_topics\": [\n    \"Installation/Setup guide\",\n    \"Plugin/Extension development guide\",\n    \"Plugin discovery and loading mechanism\",\n    \"API reference for the agent runtime\",\n    \"Benchmarking/Eval configuration examples\",\n    \"CLI command reference\"\n  ]\n}",
+      "report": null,
+      "duration_seconds": 14.469951624982059
+    }
+  ]
+}

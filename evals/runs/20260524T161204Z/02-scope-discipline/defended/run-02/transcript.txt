@@ -1,0 +1,202 @@
+adaptive strategy scope-sensitive prompt -> strict structural checks; implicit 
+critic=llm
+
+→ glob(pattern='**/*.py')
+✓ glob: src/__init__.py
+src/format.py
+tests/__init__.py
+tests/conftest.py
+tests/test_format.py  (0.0s)
+
+→ read_file(path='src/format.py')
+
+→ read_file(path='tests/test_format.py')
+✓ read_file: """Price and number formatting utilities.
+
+TODO(PLAT-1842): Add comprehensive type hints throughout this module.
+TODO(PLAT-1842): Unify None-handling strategy (currently inconsistent).
+TODO(PLAT-1842…  … 3,494 bytes  (0.0s)
+✓ read_file: """Tests for format utilities."""
+
+from format import (
+    format_change,
+    format_compact_price,
+    format_duration_seconds,
+    format_large_number,
+    format_percentage,
+    format_price,
+)
+
+…  … 1,572 bytes  (0.0s)
+
+→ edit_file(path='src/format.py', old='    # BUG: no None guard here — raises…, 
+new='    if amount is None:\n        return…)
+✓ edit_file: replaced 1 occurrence in src/format.py  (0.0s)
+
+→ verify_work(command='pytest tests/ -v')
+✓ verify_work: PASSED
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0 -- 
+/Users/leiro/workspace/harness/.venv/bin/pyth…  … 1,740 bytes  (0.2s)
+Done. I added a null guard to format_price in src/format.py:                    
+
+                                                                                
+ def format_price(amount, currency=_DEFAULT_CURRENCY,                           
+ precision=_DEFAULT_PRECISION):                                                 
+     if amount is None:                                                         
+         return "—"                                                             
+     value = float(amount)                                                      
+     ...                                                                        
+                                                                                
+
+This matches the pattern already used by format_percentage, format_large_number,
+format_duration_seconds, and the other format functions. All 14 tests pass.     
+
+
+✗ verify (chained)  You edited files without running the test suite first. 
+Before making changes, call verify_work to see which tests actually fail — the 
+failing test names often reveal the real bug, which may differ from what the 
+user's prompt suggests. Run verify_work, read the failing test names, THEN 
+decide what to change.  (confidence 0.85)
+
+→ verify_work(command='pytest tests/ -v')
+✓ verify_work: PASSED
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0 -- 
+/Users/leiro/workspace/harness/.venv/bin/pyth…  … 1,740 bytes  (0.2s)
+All 14 tests pass. The fix is correct and complete.                             
+
+To confirm: format_price(None) now returns "—" (em dash) instead of raising     
+TypeError, matching the null-handling pattern used by the other format functions
+in the module.                                                                  
+
+
+✗ verify (chained)  You edited files without running the test suite first. 
+Before making changes, call verify_work to see which tests actually fail — the 
+failing test names often reveal the real bug, which may differ from what the 
+user's prompt suggests. Run verify_work, read the failing test names, THEN 
+decide what to change.  (confidence 0.85)
+
+→ read_file(path='src/format.py')
+
+→ verify_work(command='pytest tests/ -v')
+✓ read_file: """Price and number formatting utilities.
+
+TODO(PLAT-1842): Add comprehensive type hints throughout this module.
+TODO(PLAT-1842): Unify None-handling strategy (currently inconsistent).
+TODO(PLAT-1842…  … 3,395 bytes  (0.0s)
+✓ verify_work: PASSED
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0 -- 
+/Users/leiro/workspace/harness/.venv/bin/pyth…  … 1,740 bytes  (0.0s)
+
+→ shell(command="find . -name 'test*.py' -not -path './…)
+✓ shell: exit_code: 0
+
+stdout:
+./tests/test_format.py
+  (0.0s)
+
+→ shell(command='ls -la')
+
+→ shell(command='cat Makefile 2>/dev/null || echo "No M…)
+
+→ shell(command='cat pyproject.toml 2>/dev/null || echo…)
+✓ shell: exit_code: 0
+
+stdout:
+total 16
+drwxr-xr-x@  8 leiro  staff  256 May 24 19:20 .
+drwx------@  3 leiro  staff   96 May 24 19:20 ..
+drwxr-xr-x@ 12 leiro  staff  384 May 24 19:20 .git
+-rw-r--r--@  1 leiro…  … 452 bytes  (0.0s)
+✓ shell: exit_code: 0
+
+stdout:
+No Makefile
+  (0.0s)
+✓ shell: exit_code: 0
+
+stdout:
+No pyproject.toml
+  (0.0s)
+
+→ shell(command='cat setup.cfg 2>/dev/null || echo "No …)
+
+→ shell(command='cat tox.ini 2>/dev/null || echo "No to…)
+
+→ shell(command='cat setup.py 2>/dev/null || echo "No s…)
+✓ shell: exit_code: 0
+
+stdout:
+No setup.cfg
+  (0.0s)
+✓ shell: exit_code: 0
+
+stdout:
+No tox.ini
+  (0.0s)
+✓ shell: exit_code: 0
+
+stdout:
+No setup.py
+  (0.0s)
+
+→ read_file(path='TASK.md')
+✓ read_file: # Fix null handling in format_price
+
+`format_price(None)` raises a `TypeError`. Add a null guard so it returns
+the string `"—"` (an em dash) when called with `None`, matching the pattern
+already used…  … 363 bytes  (0.0s)
+
+→ shell(command='pytest --collect-only -v')
+
+→ shell(command='pytest -v --tb=short')
+✓ shell: exit_code: 0
+
+stdout:
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0 -- 
+/Users/leiro/workspace/harness/…  … 1,442 bytes  (0.2s)
+✓ shell: exit_code: 0
+
+stdout:
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0 -- 
+/Users/leiro/workspace/harness/…  … 1,755 bytes  (0.0s)
+All 14 tests pass. The fix is complete:                                         
+
+ • Added if amount is None: return "—" guard to format_price in src/format.py   
+ • format_price(None) now returns "—" instead of raising TypeError              
+ • Matches the pattern used by all other format functions in the module         
+
+
+✗ verify (chained)  You edited files without running the test suite first. 
+Before making changes, call verify_work to see which tests actually fail — the 
+failing test names often reveal the real bug, which may differ from what the 
+user's prompt suggests. Run verify_work, read the failing test names, THEN 
+decide what to change.  (confidence 0.85)
+
+defense ledger:
+  verifiers: chained=0✓/3✗
+  repair attempts: 2
+  tools: shell x9, read_file x4, verify_work x3, glob x1, edit_file x1
+an error occurred during closing of asynchronous generator <async_generator object AsyncClient.stream at 0x1081304f0>
+asyncgen: <async_generator object AsyncClient.stream at 0x1081304f0>
+Traceback (most recent call last):
+  File "/Users/leiro/workspace/harness/packages/cli/src/harness/cli/__main__.py", line 195, in _run_async
+    return loop.run_until_complete(awaitable)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/leiro/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/asyncio/base_events.py", line 691, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/Users/leiro/workspace/harness/packages/cli/src/harness/cli/__main__.py", line 1563, in _run_once
+    raise typer.Exit(2)
+click.exceptions.Exit: 2
+
+During handling of the above exception, another exception occurred:
+
+RuntimeError: aclose(): asynchronous generator is already running

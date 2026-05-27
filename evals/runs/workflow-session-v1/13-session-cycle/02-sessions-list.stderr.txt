@@ -1,0 +1,5 @@
+Usage: fake-harness sessions list [OPTIONS]
+Try 'fake-harness sessions list --help' for help.
+╭─ Error ──────────────────────────────────────────────────────────────────────╮
+│ No such option '--cwd'. Did you mean '--db'?                                 │
+╰──────────────────────────────────────────────────────────────────────────────╯

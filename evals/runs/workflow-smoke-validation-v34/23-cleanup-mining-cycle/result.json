@@ -1,0 +1,210 @@
+{
+  "fixture_name": "23-cleanup-mining-cycle",
+  "passed": true,
+  "steps_total": 11,
+  "steps_passed": 11,
+  "step_results": [
+    {
+      "name": "init-workspace",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval__7mxo0fp/workspace/fake-harness",
+        "init",
+        "--cwd",
+        "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval__7mxo0fp/workspace"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "Initialized harness workspace at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval__\n7mxo0fp/workspace/.harness\nFuture commands run from this directory will use .harness/harness.db\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.6549315832089633
+    },
+    {
+      "name": "memory-save",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval__7mxo0fp/workspace/fake-harness",
+        "memory",
+        "save",
+        "Temporary cleanup note",
+        "--kind",
+        "project_fact",
+        "--db",
+        ".harness/harness.db"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "Saved mem_863dbed28d61  (project_fact)  Temporary cleanup note\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.4105535000562668
+    },
+    {
+      "name": "memory-rm",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval__7mxo0fp/workspace/fake-harness",
+        "memory",
+        "rm",
+        "{latest_memory_id}",
+        "--db",
+        ".harness/harness.db",
+        "--yes"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "Deleted mem_863dbed28d61\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.4043053339701146
+    },
+    {
+      "name": "memory-list-empty",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval__7mxo0fp/workspace/fake-harness",
+        "memory",
+        "list",
+        "--db",
+        ".harness/harness.db"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "No memories stored.\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.3993660828564316
+    },
+    {
+      "name": "tasks-new",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval__7mxo0fp/workspace/fake-harness",
+        "tasks",
+        "new",
+        "Temporary cleanup task",
+        "--db",
+        ".harness/harness.db",
+        "--cwd",
+        "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval__7mxo0fp/workspace"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "Created T-001  Temporary cleanup task\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.4031625420320779
+    },
+    {
+      "name": "tasks-rm",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval__7mxo0fp/workspace/fake-harness",
+        "tasks",
+        "rm",
+        "T-001",
+        "--db",
+        ".harness/harness.db",
+        "--yes"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "Deleted T-001\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.39262854191474617
+    },
+    {
+      "name": "tasks-list-empty",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval__7mxo0fp/workspace/fake-harness",
+        "tasks",
+        "list",
+        "--db",
+        ".harness/harness.db"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "No tasks.\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.38979650009423494
+    },
+    {
+      "name": "run-bootstrap-session",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval__7mxo0fp/workspace/fake-harness",
+        "run",
+        "Investigate why cleanup and mining flows matter",
+        "--provider",
+        "ollama",
+        "--model",
+        "test-model",
+        "--db",
+        ".harness/harness.db",
+        "--session",
+        "sess_tips_mine",
+        "--yes",
+        "--verify",
+        "none",
+        "--cwd",
+        "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval__7mxo0fp/workspace"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "adaptive strategy default adaptive path -> minimal structure\ncleanup mining bootstrap ok                                                     \n\n\u2713 verify (verify_before_done)  No modifying tool calls detected \u2014 verification \nnot required.\n\ndefense ledger:\n  verifiers: verify_before_done=1\u2713/0\u2717\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.3948857500217855
+    },
+    {
+      "name": "tips-mine",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval__7mxo0fp/workspace/fake-harness",
+        "tips",
+        "mine",
+        "sess_tips_mine",
+        "--provider",
+        "ollama",
+        "--model",
+        "test-model",
+        "--db",
+        ".harness/harness.db",
+        "--scope",
+        "repo"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "Added 1 tip(s) to \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval__\n7mxo0fp/workspace/.harness/tips.jsonl\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.38783862511627376
+    },
+    {
+      "name": "tips-list-mined",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval__7mxo0fp/workspace/fake-harness",
+        "tips",
+        "list"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2513\n\u2503 ID             \u2503 Weight \u2503 Triggers        \u2503 Tip             \u2503 Source session \u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2529\n\u2502 tip_15a3ce2c89 \u2502    1.0 \u2502 workflow        \u2502 Persist cleanup \u2502 sess_tips_mine \u2502\n\u2502                \u2502        \u2502 cleanup,        \u2502 learnings as    \u2502                \u2502\n\u2502                \u2502        \u2502 repetitive      \u2502 tips after      \u2502                \u2502\n\u2502                \u2502        \u2502 failures        \u2502 repetitive      \u2502                \u2502\n\u2502                \u2502        \u2502                 \u2502 failures.       \u2502                \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.37856450001709163
+    },
+    {
+      "name": "tips-test-mined",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval__7mxo0fp/workspace/fake-harness",
+        "tips",
+        "test",
+        "Use workflow cleanup before retrying repetitive failures"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": " lessons from prior runs:\n  \u2022 Persist cleanup learnings as tips after repetitive failures.\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.3860210001002997
+    }
+  ],
+  "artifact_dir": "evals/runs/workflow-smoke-validation-v34/23-cleanup-mining-cycle",
+  "duration_seconds": 4.614455125061795
+}

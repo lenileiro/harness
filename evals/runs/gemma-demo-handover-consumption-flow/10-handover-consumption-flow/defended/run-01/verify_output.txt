@@ -1,0 +1,7 @@
+============================= test session starts ==============================
+collecting ... collected 2 items
+
+tests/test_handover_consumption_flow.py::test_handover_consumption_flow PASSED [ 50%]
+tests/test_smoke.py::test_smoke PASSED                                   [100%]
+
+============================== 2 passed in 0.01s ===============================

@@ -1,0 +1,56 @@
+{
+  "fixture_name": "03-research-experiment-portfolio-cycle",
+  "passed": false,
+  "steps_total": 10,
+  "steps_passed": 1,
+  "step_results": [
+    {
+      "name": "ingest-web",
+      "argv": [
+        "/Users/leiro/workspace/harness/.venv/bin/harness",
+        "research",
+        "ingest-web",
+        "--title",
+        "Verifier routing note",
+        "--url",
+        "https://example.com/verifier-routing",
+        "--summary",
+        "Scoped routing reduces verifier noise.",
+        "--themes",
+        "autonomous-improvement",
+        "--related-sections",
+        "verification,runtime",
+        "--cwd",
+        "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_7de7do16/workspace"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "Recorded inspiration insp-verifier-routing-note-eefce99d at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_7\nde7do16/workspace/.harness/research/inspiration/insp-verifier-routing-note-eefce\n99d\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.41772025008685887
+    },
+    {
+      "name": "scout",
+      "argv": [
+        "/Users/leiro/workspace/harness/.venv/bin/harness",
+        "research",
+        "scout",
+        "--source-kind",
+        "web",
+        "--cwd",
+        "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_7de7do16/workspace"
+      ],
+      "passed": false,
+      "returncode": 0,
+      "stdout": "\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2513\n\u2503 ID                                  \u2503 Kind \u2503 Title          \u2503 Summary        \u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2529\n\u2502 insp-verifier-routing-note-eefce99d \u2502 web  \u2502 Verifier       \u2502 Scoped routing \u2502\n\u2502                                     \u2502      \u2502 routing note   \u2502 reduces        \u2502\n\u2502                                     \u2502      \u2502                \u2502 verifier       \u2502\n\u2502                                     \u2502      \u2502                \u2502 noise.         \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n",
+      "stderr": "",
+      "failures": [
+        "stdout~Verifier routing note"
+      ],
+      "duration_seconds": 0.40233720815740526
+    }
+  ],
+  "artifact_dir": "evals/runs/workflow-smoke-validation-v3/03-research-experiment-portfolio-cycle",
+  "duration_seconds": 0.8234264999628067
+}

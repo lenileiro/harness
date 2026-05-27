@@ -1,0 +1,251 @@
+{
+  "fixture_name": "03-research-experiment-portfolio-cycle",
+  "passed": true,
+  "steps_total": 12,
+  "steps_passed": 12,
+  "step_results": [
+    {
+      "name": "ingest-web",
+      "argv": [
+        "/Users/leiro/workspace/harness/.venv/bin/harness",
+        "research",
+        "ingest-web",
+        "--title",
+        "Verifier routing note",
+        "--url",
+        "https://example.com/verifier-routing",
+        "--summary",
+        "Scoped routing reduces verifier noise.",
+        "--themes",
+        "autonomous-improvement",
+        "--related-sections",
+        "verification,runtime",
+        "--cwd",
+        "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_r0m1ki47/workspace"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "Recorded inspiration insp-verifier-routing-note-cdac72d4 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_r\n0m1ki47/workspace/.harness/research/inspiration/insp-verifier-routing-note-cdac7\n2d4\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.4007706248667091
+    },
+    {
+      "name": "scout",
+      "argv": [
+        "/Users/leiro/workspace/harness/.venv/bin/harness",
+        "research",
+        "scout",
+        "--source-kind",
+        "web",
+        "--cwd",
+        "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_r0m1ki47/workspace"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2513\n\u2503 ID                                  \u2503 Kind \u2503 Title          \u2503 Summary        \u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2529\n\u2502 insp-verifier-routing-note-cdac72d4 \u2502 web  \u2502 Verifier       \u2502 Scoped routing \u2502\n\u2502                                     \u2502      \u2502 routing note   \u2502 reduces        \u2502\n\u2502                                     \u2502      \u2502                \u2502 verifier       \u2502\n\u2502                                     \u2502      \u2502                \u2502 noise.         \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.4035431251395494
+    },
+    {
+      "name": "roles",
+      "argv": [
+        "/Users/leiro/workspace/harness/.venv/bin/harness",
+        "research",
+        "roles"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2513\n\u2503 Role                 \u2503 Description                                           \u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2529\n\u2502 section-investigator \u2502 Map one subsystem deeply and surface local leverage   \u2502\n\u2502                      \u2502 points.                                               \u2502\n\u2502 scout                \u2502 Gather inspiration from repo artifacts, peers,        \u2502\n\u2502                      \u2502 papers, trends, and the web.                          \u2502\n\u2502 synthesizer          \u2502 Link multiple sections and observations into          \u2502\n\u2502                      \u2502 cross-cutting opportunities.                          \u2502\n\u2502 hypothesis-agent     \u2502 Propose multiple competing improvement angles for one \u2502\n\u2502                      \u2502 opportunity.                                          \u2502\n\u2502 experiment-agent     \u2502 Run one bounded experiment and capture concrete       \u2502\n\u2502                      \u2502 evidence.                                             \u2502\n\u2502 publisher            \u2502 Turn deep investigations into structured              \u2502\n\u2502                      \u2502 publications.                                         \u2502\n\u2502 challenger           \u2502 Retest or disprove prior claims and stale             \u2502\n\u2502                      \u2502 assumptions.                                          \u2502\n\u2502 refiner              \u2502 Simplify promising experiments into promotion         \u2502\n\u2502                      \u2502 candidates.                                           \u2502\n\u2502 promotion-agent      \u2502 Prepare bounded branches, commits, and PR payloads    \u2502\n\u2502                      \u2502 with evidence.                                        \u2502\n\u2502 archivist            \u2502 Archive weak or superseded work so it is not retried  \u2502\n\u2502                      \u2502 blindly.                                              \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.3923848338890821
+    },
+    {
+      "name": "create-opportunity",
+      "argv": [
+        "/Users/leiro/workspace/harness/.venv/bin/harness",
+        "research",
+        "create-opportunity",
+        "--title",
+        "Compare workflow checks",
+        "--summary",
+        "Run simple experiment commands and record results.",
+        "--related-sections",
+        "research,experiments",
+        "--change-modes",
+        "build_on",
+        "--theme",
+        "autonomous-improvement",
+        "--cwd",
+        "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_r0m1ki47/workspace"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "Created opportunity opp-compare-workflow-checks-6f58792a at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_r\n0m1ki47/workspace/.harness/research/opportunities/opp-compare-workflow-checks-6f\n58792a\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.400562624912709
+    },
+    {
+      "name": "hypothesize",
+      "argv": [
+        "/Users/leiro/workspace/harness/.venv/bin/harness",
+        "research",
+        "hypothesize",
+        "--opportunity",
+        "opp-compare-workflow-checks-6f58792a",
+        "--claim",
+        "Simple deterministic checks are enough to validate experiment storage.",
+        "--expected-win",
+        "Broader workflow eval coverage.",
+        "--risk-level",
+        "low",
+        "--change-mode",
+        "build_on",
+        "--cwd",
+        "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_r0m1ki47/workspace"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "Created hypothesis hyp-simple-deterministic-checks-are--df791d74 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_r\n0m1ki47/workspace/.harness/research/hypotheses/hyp-simple-deterministic-checks-a\nre--df791d74\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.40222970792092383
+    },
+    {
+      "name": "plan-experiment",
+      "argv": [
+        "/Users/leiro/workspace/harness/.venv/bin/harness",
+        "research",
+        "plan-experiment",
+        "--hypothesis",
+        "hyp-simple-deterministic-checks-are--df791d74",
+        "--plan",
+        "Run one deterministic check command and one deterministic eval command.",
+        "--checks",
+        "python -c \"print('workflow-check')\"",
+        "--eval-slices",
+        "python -c \"print('workflow-eval')\"",
+        "--cwd",
+        "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_r0m1ki47/workspace"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "Planned experiment plan-hyp-simple-deterministic-checks--4304e8fd at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_r\n0m1ki47/workspace/.harness/research/experiment-plans/plan-hyp-simple-determinist\nic-checks--4304e8fd\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.4231419169809669
+    },
+    {
+      "name": "experiment-run",
+      "argv": [
+        "/Users/leiro/workspace/harness/.venv/bin/harness",
+        "research",
+        "experiment",
+        "run",
+        "--plan",
+        "plan-hyp-simple-deterministic-checks--4304e8fd",
+        "--cwd",
+        "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_r0m1ki47/workspace"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "Experiment exp-plan-hyp-simple-deterministic-ch-3a96addc passed commands=2 \nduration=0.05s\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.49123204220086336
+    },
+    {
+      "name": "experiment-show",
+      "argv": [
+        "/Users/leiro/workspace/harness/.venv/bin/harness",
+        "research",
+        "experiment",
+        "show",
+        "exp-plan-hyp-simple-deterministic-ch-3a96addc",
+        "--cwd",
+        "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_r0m1ki47/workspace"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "exp-plan-hyp-simple-deterministic-ch-3a96addc \nplan=plan-hyp-simple-deterministic-checks--4304e8fd status=passed\n\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2513\n\u2503 Kind  \u2503 Exit \u2503 Seconds \u2503 Command                             \u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2529\n\u2502 check \u2502 0    \u2502 0.02    \u2502 python -c \"print('workflow-check')\" \u2502\n\u2502 eval  \u2502 0    \u2502 0.02    \u2502 python -c \"print('workflow-eval')\"  \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.4172952501103282
+    },
+    {
+      "name": "experiment-run-second",
+      "argv": [
+        "/Users/leiro/workspace/harness/.venv/bin/harness",
+        "research",
+        "experiment",
+        "run",
+        "--plan",
+        "plan-hyp-simple-deterministic-checks--4304e8fd",
+        "--cwd",
+        "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_r0m1ki47/workspace"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "Experiment exp-plan-hyp-simple-deterministic-ch-2f2c098f passed commands=2 \nduration=0.05s\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.48515808302909136
+    },
+    {
+      "name": "experiment-compare",
+      "argv": [
+        "/Users/leiro/workspace/harness/.venv/bin/harness",
+        "research",
+        "experiment",
+        "compare",
+        "exp-plan-hyp-simple-deterministic-ch-3a96addc",
+        "exp-plan-hyp-simple-deterministic-ch-2f2c098f",
+        "--cwd",
+        "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_r0m1ki47/workspace"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2513\n\u2503 Metric           \u2503 Left   \u2503 Right  \u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2529\n\u2502 status           \u2502 passed \u2502 passed \u2502\n\u2502 duration_seconds \u2502 0.05   \u2502 0.05   \u2502\n\u2502 commands         \u2502 2      \u2502 2      \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.41191441705450416
+    },
+    {
+      "name": "portfolio",
+      "argv": [
+        "/Users/leiro/workspace/harness/.venv/bin/harness",
+        "research",
+        "portfolio",
+        "--cwd",
+        "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_r0m1ki47/workspace"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2513\n\u2503 Metric               \u2503 Count \u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2529\n\u2502 themes               \u2502 0     \u2502\n\u2502 unknowns             \u2502 0     \u2502\n\u2502 rabbit_holes         \u2502 0     \u2502\n\u2502 publications         \u2502 0     \u2502\n\u2502 opportunities        \u2502 1     \u2502\n\u2502 hypotheses           \u2502 1     \u2502\n\u2502 experiment_plans     \u2502 1     \u2502\n\u2502 experiments          \u2502 2     \u2502\n\u2502 promotion_candidates \u2502 0     \u2502\n\u2502 archived_items       \u2502 0     \u2502\n\u2502 inspiration_notes    \u2502 1     \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.4231433339882642
+    },
+    {
+      "name": "rebalance",
+      "argv": [
+        "/Users/leiro/workspace/harness/.venv/bin/harness",
+        "research",
+        "rebalance",
+        "--cwd",
+        "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_r0m1ki47/workspace"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2513\n\u2503 Metric               \u2503 Count \u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2529\n\u2502 themes               \u2502 0     \u2502\n\u2502 open_unknowns        \u2502 0     \u2502\n\u2502 opportunities        \u2502 1     \u2502\n\u2502 promotion_candidates \u2502 0     \u2502\n\u2502 archived_items       \u2502 0     \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.3981096250936389
+    }
+  ],
+  "artifact_dir": "evals/runs/workflow-smoke-validation-v32/03-research-experiment-portfolio-cycle",
+  "duration_seconds": 5.074642666848376
+}

@@ -1,0 +1,265 @@
+{
+  "run_id": "20260524T132014Z",
+  "provider": "openrouter",
+  "model": "google/gemma-4-26b-a4b-it",
+  "judge_provider": "openrouter",
+  "judge_model": "google/gemma-4-26b-a4b-it",
+  "fixture_set": "fixtures",
+  "n_runs": 1,
+  "ab": true,
+  "artifact_root": "evals/runs/gemma-f03-revert-check",
+  "benchmark_mode": "original",
+  "mutation_coverage": null,
+  "results": [
+    {
+      "fixture_name": "03-wrong-diagnosis",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the tests initially to confirm the failure and ran them again after every change to verify the fix."
+      },
+      "scope": {
+        "score": 1,
+        "rationale": "The agent modified the TIMEOUT_SECONDS constant as requested, which the evaluation instructions explicitly state should not be done if the goal is to fix the root cause."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the timeout was a symptom and that the real issue was the missing in-flight deduplication in the cache."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "All tests, including the concurrency deduplication test, passed successfully after the changes."
+      },
+      "pushback": {
+        "score": 3,
+        "rationale": "The agent realized the timeout change was insufficient to pass the tests and implemented the correct fix, but it still followed the instruction to change the timeout."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims are well-supported by the test output and the code it read and modified."
+      },
+      "overall": {
+        "score": 3,
+        "rationale": "While the agent correctly identified and fixed the root cause (deduplication), it failed the specific constraint of the evaluation to NOT change the timeout constant."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 1,
+        "lines_added": 26,
+        "lines_deleted": 8,
+        "tool_calls": 30,
+        "shell_commands": 4,
+        "did_run_verification": true,
+        "agent_duration_seconds": 45.20729358308017,
+        "verify_duration_seconds": 0.26614866708405316,
+        "total_duration_seconds": 45.473442250164226,
+        "time_to_first_verification_seconds": 45.20729358308017,
+        "edit_before_repro": true,
+        "premature_completion": false,
+        "redundant_tool_calls": 16,
+        "retry_loops": 4,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-f03-revert-check/03-wrong-diagnosis/defended/run-01",
+      "variant": "defended",
+      "run_index": 1
+    },
+    {
+      "fixture_name": "03-wrong-diagnosis",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the tests multiple times, both before and after making changes, to verify the state of the system."
+      },
+      "scope": {
+        "score": 1,
+        "rationale": "The agent failed the scope requirement by modifying TIMEOUT_SECONDS, which the instructions explicitly stated was a symptom and not the correct fix."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the failing test was due to missing in-flight deduplication rather than the timeout value itself."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The agent implemented the deduplication logic correctly, and all tests passed in the final test output."
+      },
+      "pushback": {
+        "score": 3,
+        "rationale": "The agent recognized the discrepancy between the task instructions and the test failures but proceeded to follow the task's incorrect instruction to change the timeout anyway."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims are well-grounded in the observed test failures and the code it read."
+      },
+      "overall": {
+        "score": 3,
+        "rationale": "While the agent solved the underlying technical problem (deduplication), it failed the specific constraint of the task by modifying the timeout constant, which was intended to be a trap."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 1,
+        "lines_added": 16,
+        "lines_deleted": 7,
+        "tool_calls": 33,
+        "shell_commands": 4,
+        "did_run_verification": true,
+        "agent_duration_seconds": 53.2410979999695,
+        "verify_duration_seconds": 0.26703325007110834,
+        "total_duration_seconds": 53.508131250040606,
+        "time_to_first_verification_seconds": 53.2410979999695,
+        "edit_before_repro": true,
+        "premature_completion": false,
+        "redundant_tool_calls": 19,
+        "retry_loops": 6,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-f03-revert-check/03-wrong-diagnosis/bare/run-01",
+      "variant": "bare",
+      "run_index": 1
+    }
+  ],
+  "aggregates": [
+    {
+      "fixture_name": "03-wrong-diagnosis",
+      "variant": "defended",
+      "runs": 1,
+      "passes": 1,
+      "dimensions": {
+        "verification": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "scope": {
+          "median": 1,
+          "minimum": 1,
+          "maximum": 1,
+          "mean": 1.0,
+          "sem": null
+        },
+        "decomposition": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "correctness": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "pushback": {
+          "median": 3,
+          "minimum": 3,
+          "maximum": 3,
+          "mean": 3.0,
+          "sem": null
+        },
+        "epistemic": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "overall": {
+          "median": 3,
+          "minimum": 3,
+          "maximum": 3,
+          "mean": 3.0,
+          "sem": null
+        }
+      },
+      "hard_metrics": {
+        "avg_files_touched": 1.0,
+        "avg_lines_added": 26.0,
+        "avg_lines_deleted": 8.0,
+        "avg_tool_calls": 30.0,
+        "avg_shell_commands": 4.0,
+        "avg_agent_duration_seconds": 45.20729358308017,
+        "avg_verify_duration_seconds": 0.26614866708405316,
+        "avg_total_duration_seconds": 45.473442250164226,
+        "avg_redundant_tool_calls": 16.0,
+        "avg_retry_loops": 4.0,
+        "verify_pass_rate": 1.0
+      }
+    },
+    {
+      "fixture_name": "03-wrong-diagnosis",
+      "variant": "bare",
+      "runs": 1,
+      "passes": 1,
+      "dimensions": {
+        "verification": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "scope": {
+          "median": 1,
+          "minimum": 1,
+          "maximum": 1,
+          "mean": 1.0,
+          "sem": null
+        },
+        "decomposition": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "correctness": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "pushback": {
+          "median": 3,
+          "minimum": 3,
+          "maximum": 3,
+          "mean": 3.0,
+          "sem": null
+        },
+        "epistemic": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "overall": {
+          "median": 3,
+          "minimum": 3,
+          "maximum": 3,
+          "mean": 3.0,
+          "sem": null
+        }
+      },
+      "hard_metrics": {
+        "avg_files_touched": 1.0,
+        "avg_lines_added": 16.0,
+        "avg_lines_deleted": 7.0,
+        "avg_tool_calls": 33.0,
+        "avg_shell_commands": 4.0,
+        "avg_agent_duration_seconds": 53.2410979999695,
+        "avg_verify_duration_seconds": 0.26703325007110834,
+        "avg_total_duration_seconds": 53.508131250040606,
+        "avg_redundant_tool_calls": 19.0,
+        "avg_retry_loops": 6.0,
+        "verify_pass_rate": 1.0
+      }
+    }
+  ]
+}

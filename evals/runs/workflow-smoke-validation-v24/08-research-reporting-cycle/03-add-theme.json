@@ -1,0 +1,22 @@
+{
+  "name": "add-theme",
+  "argv": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "research",
+    "add-theme",
+    "--title",
+    "Research reporting",
+    "--description",
+    "Surface research state clearly for autonomous agents.",
+    "--priority",
+    "medium",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_i2w0k9ny/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Added theme theme-research-reporting-d5d1ab0a at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_i\n2w0k9ny/workspace/.harness/research/themes/theme-research-reporting-d5d1ab0a\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.4054515000898391
+}

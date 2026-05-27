@@ -1,0 +1,162 @@
+adaptive strategy diagnosis-heavy bugfix -> diagnostic structure + critic; 
+implicit critic=llm
+I'll help you fix the issue with hyphenated user ID lookup. Let's start by      
+understanding the codebase and locating the relevant files.                     
+→ glob(pattern='**/*.py')
+✓ glob: src/__init__.py
+src/api.py
+src/db.py
+src/validation.py
+tests/__init__.py
+tests/conftest.py
+tests/test_api.py  (0.0s)
+Let's first check the total size of the source files to determine if we need to 
+spawn agents or can read directly:                                              
+→ shell(command="find src tests -name '*.py' | xargs wc…)
+✓ shell: exit_code: 0
+
+stdout:
+    2734 total
+  (0.1s)
+The total size is small enough to read the files directly. Let's start by       
+looking at the validation module since the prompt mentioned the validation regex
+was recently updated:                                                           
+→ read_file(path='src/validation.py')
+✓ read_file: """Input validation utilities."""
+
+import re
+
+# Pattern updated in the last security audit to explicitly allow hyphens.
+# Accepts letters, digits, underscores, and hyphens (1-64 chars).
+_USER_ID_RE =…  … 462 bytes  (0.0s)
+Now let's check the database module since that's likely where the get_user()    
+function is implemented:                                                        
+→ read_file(path='src/db.py')
+✓ read_file: """Database layer — thin wrapper over an in-memory user store."""
+
+from __future__ import annotations
+
+# Simulated user store. In production this would be a real DB query.
+_USERS: dict = {…  … 857 bytes  (0.0s)
+Let's also check the API module to understand how get_user() is used:           
+→ read_file(path='src/api.py')
+✓ read_file: """Public user API."""
+
+from __future__ import annotations
+
+from db import get_user_record
+from validation import validate_user_id
+
+
+def get_user(user_id: str) -> dict | None:
+    """Return user dict…  … 379 bytes  (0.0s)
+Now let's look at the tests to understand what's expected:                      
+→ read_file(path='tests/test_api.py')
+✓ read_file: """Tests for the user API."""
+
+import pytest
+from api import get_user
+
+
+def test_simple_id_resolves():
+    user = get_user("alice")
+    assert user is not None
+    assert user["id"] == "alice"
+
+
+def …  … 853 bytes  (0.0s)
+Now I understand the issue. In src/db.py, the get_user_record function          
+normalizes user IDs by removing hyphens before lookup:                          
+
+                                                                                
+ # BUG: this strips hyphens, so "abc-def" becomes "abcdef" — no match.          
+ normalized = user_id.replace("-", "")                                          
+                                                                                
+
+This was likely meant to handle legacy systems but breaks the lookup for        
+legitimate hyphenated IDs that are stored with their hyphens intact.            
+
+Let's fix this by removing the normalization that strips hyphens:               
+→ edit_file(path='src/db.py', old='def get_user_record(user_id: str) -> d…, 
+new='def get_user_record(user_id: str) -> d…)
+✓ edit_file: replaced 1 occurrence in src/db.py  (0.0s)
+Now let's run the tests to verify our fix:                                      
+→ verify_work(command='pytest tests/ -v')
+✓ verify_work: PASSED
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0 -- 
+/Users/leiro/workspace/harness/.venv/bin/pyth…  … 1,026 bytes  (0.2s)
+Great! All tests are now passing, including the test_hyphenated_id test that was
+previously failing.                                                             
+
+Let's summarize what we did to fix the issue:                                   
+
+ 1 Problem Identification: The bug was in src/db.py in the get_user_record      
+   function, which was incorrectly removing hyphens from user IDs before lookup.
+   This caused hyphenated IDs like "abc-def" to be normalized to "abcdef", which
+   didn't match the actual stored user ID.                                      
+ 2 Root Cause: The comment indicated this normalization was meant to handle     
+   legacy system quirks, but it was preventing proper lookup of legitimate      
+   hyphenated IDs that are stored exactly as they are (e.g., "abc-def" in the   
+   _USERS dictionary).                                                          
+ 3 Fix: We removed the normalization logic that stripped hyphens, allowing the  
+   function to look up user IDs exactly as provided, which correctly matches the
+   stored hyphenated IDs.                                                       
+ 4 Verification: All tests pass, including the specific test for hyphenated IDs 
+   that was previously failing.                                                 
+
+The fix was simple but important - removing the problematic normalization while 
+maintaining all other functionality. The validation still properly allows       
+hyphens (as updated in the recent security audit), and now the lookup works     
+correctly for hyphenated IDs.                                                   
+
+✗ verify (chained)  STOP — this bugfix prompt did not ask for source comment 
+updates, but the current diff adds new source comment lines (src/db.py: # Look 
+up the user ID directly without normalization., src/db.py: # Hyphenated IDs like
+"abc-def" should match exactly as stored.). Remove the explanatory comment 
+rewrite and keep only the code change.  (confidence 0.90)
+You're right. Let me fix this by removing the explanatory comments I added and  
+keeping only the essential code change.                                         
+→ edit_file(path='src/db.py', old='def get_user_record(user_id: str) -> d…, 
+new='def get_user_record(user_id: str) -> d…)
+✓ edit_file: replaced 1 occurrence in src/db.py  (0.0s)
+Now let's verify our fix again:                                                 
+→ verify_work(command='pytest tests/ -v')
+✓ verify_work: PASSED
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0 -- 
+/Users/leiro/workspace/harness/.venv/bin/pyth…  … 1,026 bytes  (0.2s)
+Perfect! The fix is working correctly. Let me explain what was done:            
+
+ 1 Problem: The get_user_record function in src/db.py was incorrectly removing  
+   hyphens from user IDs before lookup, causing hyphenated IDs like "abc-def" to
+   be converted to "abcdef" which didn't match the actual stored ID.            
+ 2 Solution: I removed the line normalized = user_id.replace("-", "") and       
+   changed the return statement to directly use user_id instead of normalized.  
+   This allows hyphenated IDs to be looked up exactly as they're stored in the  
+   database.                                                                    
+ 3 Result: All tests now pass, including the test_hyphenated_id test that was   
+   previously failing.                                                          
+
+The fix was simple but effective - removing the problematic normalization that  
+was preventing proper lookup of legitimate hyphenated user IDs.                 
+
+✓ verify (shell)  ============================= test session starts 
+==============================
+collecting ... collected 5 items
+
+tests/test_api.py::test_simple_id_resolves PASSED                        [ 20%]
+tests/test_api.py::test_underscore_id_resolves PASSED                    [ 40%]
+tests/test_api.py::test_invalid_id_raises PASSED                         [ 60%]
+tests/test_api.py::test_invalid_id_special_chars_raises PASSED           [ 80%]
+tests/test_api.py::test_hyphenated_id PASSED                             [100%]
+
+============================== 5 passed in 0.01s ===============================
+
+defense ledger:
+  verifiers: chained=0✓/1✗, shell=1✓/0✗
+  repair attempts: 1
+  tools: read_file x4, edit_file x2, verify_work x2, glob x1, shell x1
+  lifeharness: L2 tips x3

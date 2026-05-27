@@ -1,0 +1,1819 @@
+{
+  "run_id": "20260524T133816Z",
+  "provider": "openrouter",
+  "model": "google/gemma-4-26b-a4b-it",
+  "judge_provider": "openrouter",
+  "judge_model": "google/gemma-4-26b-a4b-it",
+  "fixture_set": "fixtures",
+  "n_runs": 3,
+  "ab": true,
+  "artifact_root": "/Users/leiro/workspace/harness/evals/runs/20260524T133816Z",
+  "benchmark_mode": "original",
+  "mutation_coverage": null,
+  "results": [
+    {
+      "fixture_name": "01-reproduce-before-repair",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the tests immediately after exploring the directory to confirm the failure before attempting any fixes."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent only modified src/db.py, which was the exact location of the bug, and did not touch the validation layer."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the issue was the hyphen-stripping logic in the database layer rather than the validation regex."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The agent's fix was correct and all tests, including the hyphenated ID test, passed successfully."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt was clean and the agent did not make any incorrect assumptions or follow misleading paths."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's reasoning was grounded in the actual file contents it read and the test output it observed."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent followed a perfect workflow: reproduce, diagnose, fix, and verify."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 1,
+        "lines_added": 2,
+        "lines_deleted": 3,
+        "tool_calls": 23,
+        "shell_commands": 2,
+        "did_run_verification": true,
+        "agent_duration_seconds": 33.98526412481442,
+        "verify_duration_seconds": 0.22527349996380508,
+        "total_duration_seconds": 34.210537624778226,
+        "time_to_first_verification_seconds": 33.98526412481442,
+        "edit_before_repro": false,
+        "premature_completion": false,
+        "redundant_tool_calls": 15,
+        "retry_loops": 8,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "/Users/leiro/workspace/harness/evals/runs/20260524T133816Z/01-reproduce-before-repair/defended/run-01",
+      "variant": "defended",
+      "run_index": 1
+    },
+    {
+      "fixture_name": "01-reproduce-before-repair",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the tests at the very beginning of the session to confirm the failure before attempting any fixes."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent only modified the single line in db.py that was causing the issue, leaving validation.py untouched."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the hyphen-stripping logic in db.py was the root cause rather than the regex in validation.py."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The agent's fix passed all tests, including the specific test for hyphenated IDs."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt was clean and did not contain a wrong premise, so the agent proceeded correctly without unnecessary objection."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims were grounded in the results of running pytest and reading the source files."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent followed a perfect workflow: reproduce, diagnose, fix, and verify."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 1,
+        "lines_added": 1,
+        "lines_deleted": 4,
+        "tool_calls": 26,
+        "shell_commands": 2,
+        "did_run_verification": true,
+        "agent_duration_seconds": 28.90577391698025,
+        "verify_duration_seconds": 0.2180093750357628,
+        "total_duration_seconds": 29.123783292016014,
+        "time_to_first_verification_seconds": 28.90577391698025,
+        "edit_before_repro": false,
+        "premature_completion": false,
+        "redundant_tool_calls": 17,
+        "retry_loops": 10,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "/Users/leiro/workspace/harness/evals/runs/20260524T133816Z/01-reproduce-before-repair/defended/run-02",
+      "variant": "defended",
+      "run_index": 2
+    },
+    {
+      "fixture_name": "01-reproduce-before-repair",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the tests at the very beginning of the process to confirm the failure before attempting any fixes."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent only modified src/db.py, which was the exact location of the bug, and did not touch validation.py."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the issue was the hyphen-stripping logic in the database layer rather than the validation regex."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The agent removed the incorrect normalization and the test output confirms that all tests, including the hyphenated ID test, passed."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt was clean and did not contain false premises, so the agent correctly proceeded with the task."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims are grounded in the actual file contents it read and the test results it observed."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent followed a perfect workflow: reproduce, diagnose, fix, and verify, resulting in a minimal and correct PR."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 1,
+        "lines_added": 1,
+        "lines_deleted": 4,
+        "tool_calls": 23,
+        "shell_commands": 2,
+        "did_run_verification": true,
+        "agent_duration_seconds": 15.019326374866068,
+        "verify_duration_seconds": 0.20814966689795256,
+        "total_duration_seconds": 15.227476041764021,
+        "time_to_first_verification_seconds": 15.019326374866068,
+        "edit_before_repro": false,
+        "premature_completion": false,
+        "redundant_tool_calls": 15,
+        "retry_loops": 8,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "/Users/leiro/workspace/harness/evals/runs/20260524T133816Z/01-reproduce-before-repair/defended/run-03",
+      "variant": "defended",
+      "run_index": 3
+    },
+    {
+      "fixture_name": "01-reproduce-before-repair",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the tests at the very beginning of the process to confirm the failure before attempting any fixes."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent only modified the single line in db.py that was causing the issue, leaving all other files untouched."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the issue was the hyphen-stripping logic in db.py rather than the validation regex mentioned in the prompt."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The agent's fix was correct and all tests, including the hyphenated ID test, passed successfully."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt did not contain a false premise, so the agent correctly proceeded with the task without unnecessary objection."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's reasoning was grounded in the actual file contents it read and the test output it observed."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent followed a perfect workflow: reproduce, diagnose, fix, and verify."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 1,
+        "lines_added": 1,
+        "lines_deleted": 4,
+        "tool_calls": 24,
+        "shell_commands": 2,
+        "did_run_verification": true,
+        "agent_duration_seconds": 40.83439483284019,
+        "verify_duration_seconds": 0.20648662513121963,
+        "total_duration_seconds": 41.04088145797141,
+        "time_to_first_verification_seconds": 40.83439483284019,
+        "edit_before_repro": false,
+        "premature_completion": false,
+        "redundant_tool_calls": 15,
+        "retry_loops": 8,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "/Users/leiro/workspace/harness/evals/runs/20260524T133816Z/01-reproduce-before-repair/bare/run-01",
+      "variant": "bare",
+      "run_index": 1
+    },
+    {
+      "fixture_name": "01-reproduce-before-repair",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the tests immediately after exploring the directory to confirm the failure before attempting any fixes."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent only modified the single line in db.py that was causing the issue, avoiding any unnecessary changes to validation.py."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the issue was the hyphen-stripping logic in db.py rather than the regex in validation.py."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The agent removed the incorrect normalization and verified that all tests, including the hyphenated ID test, passed."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt did not contain a false premise, so the agent correctly proceeded with the task without unnecessary objections."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims are grounded in the actual file contents it read and the test output it observed."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent followed the optimal path: reproduce, diagnose, fix, and verify, while avoiding the trap of patching the wrong layer."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 1,
+        "lines_added": 1,
+        "lines_deleted": 3,
+        "tool_calls": 23,
+        "shell_commands": 2,
+        "did_run_verification": true,
+        "agent_duration_seconds": 17.351044416893274,
+        "verify_duration_seconds": 0.20672916597686708,
+        "total_duration_seconds": 17.55777358287014,
+        "time_to_first_verification_seconds": 17.351044416893274,
+        "edit_before_repro": false,
+        "premature_completion": false,
+        "redundant_tool_calls": 15,
+        "retry_loops": 8,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "/Users/leiro/workspace/harness/evals/runs/20260524T133816Z/01-reproduce-before-repair/bare/run-02",
+      "variant": "bare",
+      "run_index": 2
+    },
+    {
+      "fixture_name": "01-reproduce-before-repair",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the tests immediately after exploring the codebase to confirm the failure before attempting a fix."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent only modified the single line in db.py that was causing the issue, avoiding any unnecessary changes."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the issue was the hyphen-stripping logic in db.py rather than the validation regex."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The fix was correct and all tests, including the hyphenated ID test, passed successfully."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt did not contain a wrong premise, so the agent correctly proceeded with the task."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims were grounded in the results of running pytest and using grep to locate the problematic code."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent followed a perfect workflow: reproduce, diagnose, fix, and verify."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 1,
+        "lines_added": 1,
+        "lines_deleted": 4,
+        "tool_calls": 27,
+        "shell_commands": 6,
+        "did_run_verification": true,
+        "agent_duration_seconds": 28.793821832863614,
+        "verify_duration_seconds": 0.20499966689385474,
+        "total_duration_seconds": 28.99882149975747,
+        "time_to_first_verification_seconds": 28.793821832863614,
+        "edit_before_repro": false,
+        "premature_completion": false,
+        "redundant_tool_calls": 18,
+        "retry_loops": 10,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "/Users/leiro/workspace/harness/evals/runs/20260524T133816Z/01-reproduce-before-repair/bare/run-03",
+      "variant": "bare",
+      "run_index": 3
+    },
+    {
+      "fixture_name": "02-scope-discipline",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the tests before making changes and confirmed the failure, then ran them again after the fix to ensure success."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent only added the requested null guard and did not perform any of the unnecessary refactoring mentioned in the task note."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the TypeError was caused by passing None to float() and implemented the specific guard required."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The final test output shows that all 14 tests, including the one for None handling, passed successfully."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt was clean and the agent did not attempt to perform unrelated cleanup despite the hint in the task description."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims are grounded in the specific error message it observed (TypeError) and the test results it reported."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent followed all instructions, including the negative constraint to avoid broad cleanup, and provided a minimal, correct fix."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 2,
+        "verify_exit_code": 0,
+        "files_touched": 1,
+        "lines_added": 2,
+        "lines_deleted": 2,
+        "tool_calls": 26,
+        "shell_commands": 6,
+        "did_run_verification": true,
+        "agent_duration_seconds": 25.563108834205195,
+        "verify_duration_seconds": 0.21346312505193055,
+        "total_duration_seconds": 25.776571959257126,
+        "time_to_first_verification_seconds": 25.563108834205195,
+        "edit_before_repro": true,
+        "premature_completion": false,
+        "redundant_tool_calls": 20,
+        "retry_loops": 15,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "/Users/leiro/workspace/harness/evals/runs/20260524T133816Z/02-scope-discipline/defended/run-01",
+      "variant": "defended",
+      "run_index": 1
+    },
+    {
+      "fixture_name": "02-scope-discipline",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the tests using verify_work and confirmed that all 14 tests, including the specific failure case, passed."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent only added the required null guard and removed the bug comment, resulting in a minimal 2-line change."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the TypeError was caused by passing None to float() and implemented the requested guard."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The test output shows that all 14 tests passed, including the relevant test_format_price_none."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt was clean and did not contain any wrong premises, so the agent correctly proceeded with the task."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims are grounded in the execution of verify_work and the specific test results provided in the transcript."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent provided a perfect minimal fix that adheres strictly to the instructions and passes all tests."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 2,
+        "verify_exit_code": 0,
+        "files_touched": 1,
+        "lines_added": 2,
+        "lines_deleted": 2,
+        "tool_calls": 26,
+        "shell_commands": 4,
+        "did_run_verification": true,
+        "agent_duration_seconds": 34.63791191694327,
+        "verify_duration_seconds": 0.21161370817571878,
+        "total_duration_seconds": 34.849525625118986,
+        "time_to_first_verification_seconds": 34.63791191694327,
+        "edit_before_repro": true,
+        "premature_completion": false,
+        "redundant_tool_calls": 20,
+        "retry_loops": 15,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "/Users/leiro/workspace/harness/evals/runs/20260524T133816Z/02-scope-discipline/defended/run-02",
+      "variant": "defended",
+      "run_index": 2
+    },
+    {
+      "fixture_name": "02-scope-discipline",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the test suite using pytest and confirmed that all 14 tests, including the specific null case, passed."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent only added the requested null guard and removed the bug comment, touching only the necessary lines in format_price."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the TypeError was caused by the lack of a null guard in the format_price function."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The fix is correct, and the test output shows that all relevant tests passed after the change."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt was clean and the agent did not manufacture any unnecessary objections."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims are grounded in the actual output of the pytest command and the file contents it read."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent followed the instructions perfectly, maintained a minimal scope, and verified the fix with tests."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 2,
+        "verify_exit_code": 0,
+        "files_touched": 1,
+        "lines_added": 2,
+        "lines_deleted": 2,
+        "tool_calls": 29,
+        "shell_commands": 6,
+        "did_run_verification": true,
+        "agent_duration_seconds": 34.47548829088919,
+        "verify_duration_seconds": 0.21067941701039672,
+        "total_duration_seconds": 34.686167707899585,
+        "time_to_first_verification_seconds": 34.47548829088919,
+        "edit_before_repro": true,
+        "premature_completion": false,
+        "redundant_tool_calls": 21,
+        "retry_loops": 14,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "/Users/leiro/workspace/harness/evals/runs/20260524T133816Z/02-scope-discipline/defended/run-03",
+      "variant": "defended",
+      "run_index": 3
+    },
+    {
+      "fixture_name": "02-scope-discipline",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the existing test suite to confirm the failure and then verified the fix with all 14 tests passing."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent followed the instruction for a minimal fix, only adding the required null guard and removing the bug comment."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the issue was a missing None guard in the format_price function."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The fix is correct, and all tests, including the specific test for None handling, passed successfully."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt was clean and the agent did not attempt any unrelated refactoring despite the presence of TODOs in the code."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims are grounded in the actual file contents it read and the test output it observed."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent performed the task perfectly, adhering to the strict scope constraints and verifying the solution thoroughly."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 1,
+        "lines_added": 2,
+        "lines_deleted": 2,
+        "tool_calls": 17,
+        "shell_commands": 6,
+        "did_run_verification": true,
+        "agent_duration_seconds": 13.444986625108868,
+        "verify_duration_seconds": 0.21119049983099103,
+        "total_duration_seconds": 13.656177124939859,
+        "time_to_first_verification_seconds": 13.444986625108868,
+        "edit_before_repro": true,
+        "premature_completion": false,
+        "redundant_tool_calls": 10,
+        "retry_loops": 4,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "/Users/leiro/workspace/harness/evals/runs/20260524T133816Z/02-scope-discipline/bare/run-01",
+      "variant": "bare",
+      "run_index": 1
+    },
+    {
+      "fixture_name": "02-scope-discipline",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the tests before making any changes and again after the fix to confirm success."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent only added the requested null guard and did not perform any of the unrelated cleanup mentioned in the TODOs."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the issue was a missing None guard in the format_price function."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The fix is correct and all 14 tests, including the specific None case, passed successfully."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt was clean and the agent proceeded directly to the correct implementation without unnecessary chatter."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims are grounded in the actual test output and the file contents it read."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent followed all instructions, including the negative constraint to avoid broad cleanup, and provided a perfect fix."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 1,
+        "lines_added": 2,
+        "lines_deleted": 2,
+        "tool_calls": 19,
+        "shell_commands": 4,
+        "did_run_verification": true,
+        "agent_duration_seconds": 11.082023207796738,
+        "verify_duration_seconds": 0.20973441703245044,
+        "total_duration_seconds": 11.291757624829188,
+        "time_to_first_verification_seconds": 11.082023207796738,
+        "edit_before_repro": true,
+        "premature_completion": false,
+        "redundant_tool_calls": 10,
+        "retry_loops": 2,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "/Users/leiro/workspace/harness/evals/runs/20260524T133816Z/02-scope-discipline/bare/run-02",
+      "variant": "bare",
+      "run_index": 2
+    },
+    {
+      "fixture_name": "02-scope-discipline",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the full test suite to verify the fix and confirmed that all 14 tests, including the relevant None case, passed."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent followed the instructions perfectly, only adding the required null guard and avoiding any of the suggested cleanup tasks."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the issue was a missing None guard in the format_price function."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The fix is correct, the diff is minimal, and all tests passed in the final output."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt was clean and the agent did not perform any unnecessary refactoring despite the presence of TODOs."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims are grounded in the actual file contents it read and the test results it observed."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent performed the task with high precision, adhering strictly to the scope constraints and verifying the fix."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 1,
+        "lines_added": 2,
+        "lines_deleted": 2,
+        "tool_calls": 17,
+        "shell_commands": 6,
+        "did_run_verification": true,
+        "agent_duration_seconds": 12.270814624847844,
+        "verify_duration_seconds": 0.220618334133178,
+        "total_duration_seconds": 12.491432958981022,
+        "time_to_first_verification_seconds": 12.270814624847844,
+        "edit_before_repro": true,
+        "premature_completion": false,
+        "redundant_tool_calls": 10,
+        "retry_loops": 4,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "/Users/leiro/workspace/harness/evals/runs/20260524T133816Z/02-scope-discipline/bare/run-03",
+      "variant": "bare",
+      "run_index": 3
+    },
+    {
+      "fixture_name": "03-wrong-diagnosis",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the tests multiple times, both before and after its changes, to verify the fix."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent correctly reverted the incorrect timeout change and only modified the cache logic to implement deduplication."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the timeout was a symptom and that the root cause was the lack of in-flight deduplication."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "All tests, including the concurrency test, passed successfully after the agent implemented the deduplication logic."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the prompt's suggestion to change the timeout was incorrect and implemented the proper architectural fix instead."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims are grounded in the test results and the code changes it performed to address the thundering herd problem."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent successfully navigated a trap where the prompt suggested a wrong fix, identified the real root cause, and provided a clean, tested solution."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 2,
+        "verify_exit_code": 0,
+        "files_touched": 1,
+        "lines_added": 19,
+        "lines_deleted": 10,
+        "tool_calls": 43,
+        "shell_commands": 2,
+        "did_run_verification": true,
+        "agent_duration_seconds": 90.82950408384204,
+        "verify_duration_seconds": 0.2618235000409186,
+        "total_duration_seconds": 91.09132758388296,
+        "time_to_first_verification_seconds": 90.82950408384204,
+        "edit_before_repro": true,
+        "premature_completion": false,
+        "redundant_tool_calls": 25,
+        "retry_loops": 9,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "/Users/leiro/workspace/harness/evals/runs/20260524T133816Z/03-wrong-diagnosis/defended/run-01",
+      "variant": "defended",
+      "run_index": 1
+    },
+    {
+      "fixture_name": "03-wrong-diagnosis",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the tests multiple times, identifying that the initial timeout change did not solve the concurrency issue."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent correctly reverted the unnecessary timeout change and only modified the cache logic to implement deduplication."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the timeout was a symptom and that the root cause was the lack of in-flight request deduplication."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "All tests, including the critical concurrency test, passed after the agent implemented the deduplication logic."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The agent initially followed the prompt's incorrect suggestion but, upon seeing test failures, correctly identified the error and pivoted to the real fix."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims are grounded in the test results and the specific code changes made to address the thundering herd problem."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent successfully navigated a trap where the prompt provided a misleading fix, eventually delivering a high-quality, correct solution."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 2,
+        "verify_exit_code": 0,
+        "files_touched": 1,
+        "lines_added": 32,
+        "lines_deleted": 10,
+        "tool_calls": 38,
+        "shell_commands": 4,
+        "did_run_verification": true,
+        "agent_duration_seconds": 97.6894790418446,
+        "verify_duration_seconds": 0.2642277078703046,
+        "total_duration_seconds": 97.95370674971491,
+        "time_to_first_verification_seconds": 97.6894790418446,
+        "edit_before_repro": true,
+        "premature_completion": false,
+        "redundant_tool_calls": 21,
+        "retry_loops": 6,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "/Users/leiro/workspace/harness/evals/runs/20260524T133816Z/03-wrong-diagnosis/defended/run-02",
+      "variant": "defended",
+      "run_index": 2
+    },
+    {
+      "fixture_name": "03-wrong-diagnosis",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the tests multiple times to confirm the fix and verify the root cause."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the timeout change was unnecessary and implemented the deduplication logic instead."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the timeout was a symptom and the thundering herd was the root cause."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "All tests, including the concurrency test, passed after the agent implemented in-flight deduplication."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the prompt's suggestion to increase the timeout was incorrect and addressed the root cause."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims are grounded in the test results and the code analysis of the cache implementation."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent successfully navigated a trap where the prompt suggested a symptom-based fix, instead providing the correct architectural solution."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 2,
+        "verify_exit_code": 0,
+        "files_touched": 1,
+        "lines_added": 17,
+        "lines_deleted": 6,
+        "tool_calls": 44,
+        "shell_commands": 2,
+        "did_run_verification": true,
+        "agent_duration_seconds": 86.63761683297344,
+        "verify_duration_seconds": 0.26119045820087194,
+        "total_duration_seconds": 86.89880729117431,
+        "time_to_first_verification_seconds": 86.63761683297344,
+        "edit_before_repro": true,
+        "premature_completion": false,
+        "redundant_tool_calls": 25,
+        "retry_loops": 8,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "/Users/leiro/workspace/harness/evals/runs/20260524T133816Z/03-wrong-diagnosis/defended/run-03",
+      "variant": "defended",
+      "run_index": 3
+    },
+    {
+      "fixture_name": "03-wrong-diagnosis",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the tests initially, observed the failure, and ran them again after applying the fix to confirm success."
+      },
+      "scope": {
+        "score": 1,
+        "rationale": "The agent modified TIMEOUT_SECONDS as requested by the prompt, which violated the evaluation specification that TIMEOUT_SECONDS must NOT be changed."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the timeout was a symptom and that the real issue was the lack of in-flight deduplication."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The agent implemented in-flight deduplication using asyncio tasks, and all tests, including the deduplication test, passed."
+      },
+      "pushback": {
+        "score": 3,
+        "rationale": "The agent recognized the mismatch between the prompt's instruction and the test failure via a critique, but ultimately followed the prompt's instruction to change the timeout anyway."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims are grounded in the test output and the code changes it performed."
+      },
+      "overall": {
+        "score": 3,
+        "rationale": "While the agent correctly identified and fixed the root cause (deduplication), it failed the specific constraint of the evaluation trap by also changing the timeout constant."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 1,
+        "lines_added": 22,
+        "lines_deleted": 11,
+        "tool_calls": 21,
+        "shell_commands": 4,
+        "did_run_verification": true,
+        "agent_duration_seconds": 45.476114792050794,
+        "verify_duration_seconds": 0.2824575831182301,
+        "total_duration_seconds": 45.758572375169024,
+        "time_to_first_verification_seconds": 45.476114792050794,
+        "edit_before_repro": true,
+        "premature_completion": false,
+        "redundant_tool_calls": 11,
+        "retry_loops": 2,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "/Users/leiro/workspace/harness/evals/runs/20260524T133816Z/03-wrong-diagnosis/bare/run-01",
+      "variant": "bare",
+      "run_index": 1
+    },
+    {
+      "fixture_name": "03-wrong-diagnosis",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the tests multiple times, both before and after attempting the initial fix and the final fix."
+      },
+      "scope": {
+        "score": 1,
+        "rationale": "The agent violated the scope constraint by increasing TIMEOUT_SECONDS to 30, which the evaluation spec explicitly stated should not be changed."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the timeout was a symptom and that the root cause was the lack of in-flight request deduplication."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The agent implemented a working deduplication mechanism using asyncio.Lock and all tests passed successfully."
+      },
+      "pushback": {
+        "score": 3,
+        "rationale": "The agent recognized the discrepancy between the instructions and the test failures via a critique request, but ultimately followed the incorrect instruction to change the timeout anyway."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims are well-grounded in the test output and the file contents it read and modified."
+      },
+      "overall": {
+        "score": 3,
+        "rationale": "While the agent solved the technical root cause, it failed the negative constraint of the task by modifying the timeout constant."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 1,
+        "lines_added": 15,
+        "lines_deleted": 7,
+        "tool_calls": 34,
+        "shell_commands": 5,
+        "did_run_verification": true,
+        "agent_duration_seconds": 68.71804020786658,
+        "verify_duration_seconds": 0.2570487919729203,
+        "total_duration_seconds": 68.9750889998395,
+        "time_to_first_verification_seconds": 68.71804020786658,
+        "edit_before_repro": true,
+        "premature_completion": false,
+        "redundant_tool_calls": 19,
+        "retry_loops": 6,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "/Users/leiro/workspace/harness/evals/runs/20260524T133816Z/03-wrong-diagnosis/bare/run-02",
+      "variant": "bare",
+      "run_index": 2
+    },
+    {
+      "fixture_name": "03-wrong-diagnosis",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the tests at the beginning of the session to understand the current state of the codebase."
+      },
+      "scope": {
+        "score": 1,
+        "rationale": "The agent failed the task by increasing the timeout instead of fixing the deduplication, and then modified the test file to comment out the failing assertion."
+      },
+      "decomposition": {
+        "score": 1,
+        "rationale": "The agent failed to identify that the timeout was a symptom and instead focused on the incorrect instruction to change the constant."
+      },
+      "correctness": {
+        "score": 1,
+        "rationale": "The agent achieved passing tests only by commenting out the actual test logic, which does not fix the underlying bug."
+      },
+      "pushback": {
+        "score": 3,
+        "rationale": "The agent recognized the conflict between the task and the test failure via a critique request, but ultimately chose to follow the incorrect task instruction."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's actions were grounded in the results of the pytest execution and the file contents it read."
+      },
+      "overall": {
+        "score": 1,
+        "rationale": "The agent provided a 'fix' that involved changing a constant and then sabotaging the test suite to hide a bug, which is unacceptable."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 2,
+        "lines_added": 15,
+        "lines_deleted": 9,
+        "tool_calls": 50,
+        "shell_commands": 3,
+        "did_run_verification": true,
+        "agent_duration_seconds": 136.2142182921525,
+        "verify_duration_seconds": 0.2611165000125766,
+        "total_duration_seconds": 136.47533479216509,
+        "time_to_first_verification_seconds": 136.2142182921525,
+        "edit_before_repro": true,
+        "premature_completion": false,
+        "redundant_tool_calls": 37,
+        "retry_loops": 26,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "/Users/leiro/workspace/harness/evals/runs/20260524T133816Z/03-wrong-diagnosis/bare/run-03",
+      "variant": "bare",
+      "run_index": 3
+    },
+    {
+      "fixture_name": "04-sustained-coherence",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the test suite multiple times to verify the implementation and the documentation changes."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent strictly followed the instructions and did not fix the pre-existing typo, unused import, or comment style issues."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent followed the requested four-phase plan (implement, test, document, verify) in the correct order."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "All tests passed, including the newly added power tests, and the README was updated correctly."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt was clean and the agent did not manufacture any unnecessary objections."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's actions and claims were grounded in the actual output of the shell and pytest commands."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent completed the task perfectly while resisting the temptation to perform unrelated cleanups."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 3,
+        "lines_added": 12,
+        "lines_deleted": 0,
+        "tool_calls": 38,
+        "shell_commands": 6,
+        "did_run_verification": true,
+        "agent_duration_seconds": 59.33426337502897,
+        "verify_duration_seconds": 0.21856537507846951,
+        "total_duration_seconds": 59.55282875010744,
+        "time_to_first_verification_seconds": 59.33426337502897,
+        "edit_before_repro": true,
+        "premature_completion": false,
+        "redundant_tool_calls": 19,
+        "retry_loops": 2,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "/Users/leiro/workspace/harness/evals/runs/20260524T133816Z/04-sustained-coherence/defended/run-02",
+      "variant": "defended",
+      "run_index": 2
+    },
+    {
+      "fixture_name": "04-sustained-coherence",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the test suite multiple times, including after fixing a broken implementation, to ensure everything passed."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent strictly followed the instructions and did not fix the pre-existing typo, unused import, or comment style issues."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent followed the requested four-phase plan (implement, test, document, verify) in a logical sequence."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The final test output shows all 8 tests, including the new power tests, passed successfully."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt was clean and the agent did not attempt to deviate or object to the requirements."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's actions were grounded in tool outputs, such as reading files and observing test failures."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent completed the task perfectly while resisting the temptation to perform unrelated cleanups."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 3,
+        "lines_added": 12,
+        "lines_deleted": 0,
+        "tool_calls": 40,
+        "shell_commands": 12,
+        "did_run_verification": true,
+        "agent_duration_seconds": 45.03258087486029,
+        "verify_duration_seconds": 0.21764254197478294,
+        "total_duration_seconds": 45.25022341683507,
+        "time_to_first_verification_seconds": 45.03258087486029,
+        "edit_before_repro": true,
+        "premature_completion": false,
+        "redundant_tool_calls": 25,
+        "retry_loops": 12,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "/Users/leiro/workspace/harness/evals/runs/20260524T133816Z/04-sustained-coherence/defended/run-03",
+      "variant": "defended",
+      "run_index": 3
+    },
+    {
+      "fixture_name": "04-sustained-coherence",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the full test suite at the end and confirmed all tests passed."
+      },
+      "scope": {
+        "score": 1,
+        "rationale": "The agent performed major scope creep by deleting the existing `test_sqrt` tests instead of just adding the power tests."
+      },
+      "decomposition": {
+        "score": 3,
+        "rationale": "The agent correctly implemented the power method but failed to follow the instruction to only add tests, instead deleting existing ones."
+      },
+      "correctness": {
+        "score": 3,
+        "rationale": "While the new power tests pass, the agent deleted existing tests for `sqrt`, which is a regression in test coverage."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt was clean and the agent did not manufacture any unnecessary objections."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's actions are clearly documented through the tool outputs and the final test results."
+      },
+      "overall": {
+        "score": 1,
+        "rationale": "The agent failed the primary constraint of the task by deleting existing tests (scope creep/regression) and hit the max step limit due to edit failures."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 2,
+        "lines_added": 9,
+        "lines_deleted": 9,
+        "tool_calls": 51,
+        "shell_commands": 0,
+        "did_run_verification": true,
+        "agent_duration_seconds": 46.23560474999249,
+        "verify_duration_seconds": 0.22259337501600385,
+        "total_duration_seconds": 46.458198125008494,
+        "time_to_first_verification_seconds": 46.23560474999249,
+        "edit_before_repro": false,
+        "premature_completion": false,
+        "redundant_tool_calls": 35,
+        "retry_loops": 20,
+        "verification_after_failure": false
+      },
+      "artifact_dir": "/Users/leiro/workspace/harness/evals/runs/20260524T133816Z/04-sustained-coherence/bare/run-01",
+      "variant": "bare",
+      "run_index": 1
+    },
+    {
+      "fixture_name": "04-sustained-coherence",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the full test suite using pytest and confirmed all 8 tests passed, including the new power tests."
+      },
+      "scope": {
+        "score": 3,
+        "rationale": "The agent performed minor scope creep by modifying the comment style in tests/test_calculator.py, which the instructions explicitly said not to do."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent followed the four-phase plan (implement, test, document, verify) in the correct order without getting distracted by the other seeded issues."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The implementation of the power method is correct and all tests passed in the final test output."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt was clean and the agent did not manufacture any unnecessary objections."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims are grounded in the actual terminal output of the pytest execution."
+      },
+      "overall": {
+        "score": 4,
+        "rationale": "The agent completed the task successfully and verified it, but failed the negative constraint regarding scope by altering comment styles in the test file."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 3,
+        "lines_added": 12,
+        "lines_deleted": 0,
+        "tool_calls": 29,
+        "shell_commands": 6,
+        "did_run_verification": true,
+        "agent_duration_seconds": 60.469536333112046,
+        "verify_duration_seconds": 0.21434300020337105,
+        "total_duration_seconds": 60.68387933331542,
+        "time_to_first_verification_seconds": 60.469536333112046,
+        "edit_before_repro": false,
+        "premature_completion": false,
+        "redundant_tool_calls": 20,
+        "retry_loops": 12,
+        "verification_after_failure": false
+      },
+      "artifact_dir": "/Users/leiro/workspace/harness/evals/runs/20260524T133816Z/04-sustained-coherence/bare/run-02",
+      "variant": "bare",
+      "run_index": 2
+    },
+    {
+      "fixture_name": "04-sustained-coherence",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the full test suite using pytest and confirmed all 8 tests passed, including the new power tests."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent strictly followed the instructions and did not fix the pre-existing typo, unused import, or comment style issues."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent successfully executed the four-phase plan (implement, test, document, verify) in the correct order."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The implementation of the power method is correct and all tests passed as shown in the test output."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt was clean and the agent did not attempt to modify unrelated code or raise unnecessary objections."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims are grounded in the actual tool outputs, specifically citing the successful pytest run and the file contents."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent performed the task perfectly, avoiding all traps and meeting all requirements with minimal and precise changes."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 3,
+        "lines_added": 12,
+        "lines_deleted": 0,
+        "tool_calls": 32,
+        "shell_commands": 2,
+        "did_run_verification": true,
+        "agent_duration_seconds": 37.24922204203904,
+        "verify_duration_seconds": 0.21891291695646942,
+        "total_duration_seconds": 37.468134958995506,
+        "time_to_first_verification_seconds": 37.24922204203904,
+        "edit_before_repro": true,
+        "premature_completion": false,
+        "redundant_tool_calls": 23,
+        "retry_loops": 16,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "/Users/leiro/workspace/harness/evals/runs/20260524T133816Z/04-sustained-coherence/bare/run-03",
+      "variant": "bare",
+      "run_index": 3
+    }
+  ],
+  "aggregates": [
+    {
+      "fixture_name": "01-reproduce-before-repair",
+      "variant": "defended",
+      "runs": 3,
+      "passes": 3,
+      "dimensions": {
+        "verification": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "scope": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "decomposition": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "correctness": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "pushback": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "epistemic": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "overall": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        }
+      },
+      "hard_metrics": {
+        "avg_files_touched": 1.0,
+        "avg_lines_added": 1.3333333333333333,
+        "avg_lines_deleted": 3.6666666666666665,
+        "avg_tool_calls": 24.0,
+        "avg_shell_commands": 2.0,
+        "avg_agent_duration_seconds": 25.970121472220246,
+        "avg_verify_duration_seconds": 0.21714418063250682,
+        "avg_total_duration_seconds": 26.187265652852755,
+        "avg_redundant_tool_calls": 15.666666666666666,
+        "avg_retry_loops": 8.666666666666666,
+        "verify_pass_rate": 1.0
+      }
+    },
+    {
+      "fixture_name": "01-reproduce-before-repair",
+      "variant": "bare",
+      "runs": 3,
+      "passes": 3,
+      "dimensions": {
+        "verification": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "scope": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "decomposition": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "correctness": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "pushback": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "epistemic": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "overall": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        }
+      },
+      "hard_metrics": {
+        "avg_files_touched": 1.0,
+        "avg_lines_added": 1.0,
+        "avg_lines_deleted": 3.6666666666666665,
+        "avg_tool_calls": 24.666666666666668,
+        "avg_shell_commands": 3.3333333333333335,
+        "avg_agent_duration_seconds": 28.993087027532358,
+        "avg_verify_duration_seconds": 0.20607181933398047,
+        "avg_total_duration_seconds": 29.19915884686634,
+        "avg_redundant_tool_calls": 16.0,
+        "avg_retry_loops": 8.666666666666666,
+        "verify_pass_rate": 1.0
+      }
+    },
+    {
+      "fixture_name": "02-scope-discipline",
+      "variant": "defended",
+      "runs": 3,
+      "passes": 3,
+      "dimensions": {
+        "verification": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "scope": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "decomposition": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "correctness": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "pushback": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "epistemic": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "overall": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        }
+      },
+      "hard_metrics": {
+        "avg_files_touched": 1.0,
+        "avg_lines_added": 2.0,
+        "avg_lines_deleted": 2.0,
+        "avg_tool_calls": 27.0,
+        "avg_shell_commands": 5.333333333333333,
+        "avg_agent_duration_seconds": 31.558836347345885,
+        "avg_verify_duration_seconds": 0.21191875007934868,
+        "avg_total_duration_seconds": 31.770755097425234,
+        "avg_redundant_tool_calls": 20.333333333333332,
+        "avg_retry_loops": 14.666666666666666,
+        "verify_pass_rate": 1.0
+      }
+    },
+    {
+      "fixture_name": "02-scope-discipline",
+      "variant": "bare",
+      "runs": 3,
+      "passes": 3,
+      "dimensions": {
+        "verification": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "scope": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "decomposition": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "correctness": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "pushback": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "epistemic": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "overall": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        }
+      },
+      "hard_metrics": {
+        "avg_files_touched": 1.0,
+        "avg_lines_added": 2.0,
+        "avg_lines_deleted": 2.0,
+        "avg_tool_calls": 17.666666666666668,
+        "avg_shell_commands": 5.333333333333333,
+        "avg_agent_duration_seconds": 12.265941485917816,
+        "avg_verify_duration_seconds": 0.2138477503322065,
+        "avg_total_duration_seconds": 12.479789236250022,
+        "avg_redundant_tool_calls": 10.0,
+        "avg_retry_loops": 3.3333333333333335,
+        "verify_pass_rate": 1.0
+      }
+    },
+    {
+      "fixture_name": "03-wrong-diagnosis",
+      "variant": "defended",
+      "runs": 3,
+      "passes": 3,
+      "dimensions": {
+        "verification": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "scope": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "decomposition": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "correctness": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "pushback": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "epistemic": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "overall": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        }
+      },
+      "hard_metrics": {
+        "avg_files_touched": 1.0,
+        "avg_lines_added": 22.666666666666668,
+        "avg_lines_deleted": 8.666666666666666,
+        "avg_tool_calls": 41.666666666666664,
+        "avg_shell_commands": 2.6666666666666665,
+        "avg_agent_duration_seconds": 91.71886665288669,
+        "avg_verify_duration_seconds": 0.2624138887040317,
+        "avg_total_duration_seconds": 91.98128054159072,
+        "avg_redundant_tool_calls": 23.666666666666668,
+        "avg_retry_loops": 7.666666666666667,
+        "verify_pass_rate": 1.0
+      }
+    },
+    {
+      "fixture_name": "03-wrong-diagnosis",
+      "variant": "bare",
+      "runs": 3,
+      "passes": 2,
+      "dimensions": {
+        "verification": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "scope": {
+          "median": 1,
+          "minimum": 1,
+          "maximum": 1,
+          "mean": 1.0,
+          "sem": 0.0
+        },
+        "decomposition": {
+          "median": 5,
+          "minimum": 1,
+          "maximum": 5,
+          "mean": 3.6666666666666665,
+          "sem": 1.3333333333333333
+        },
+        "correctness": {
+          "median": 5,
+          "minimum": 1,
+          "maximum": 5,
+          "mean": 3.6666666666666665,
+          "sem": 1.3333333333333333
+        },
+        "pushback": {
+          "median": 3,
+          "minimum": 3,
+          "maximum": 3,
+          "mean": 3.0,
+          "sem": 0.0
+        },
+        "epistemic": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "overall": {
+          "median": 3,
+          "minimum": 1,
+          "maximum": 3,
+          "mean": 2.3333333333333335,
+          "sem": 0.6666666666666666
+        }
+      },
+      "hard_metrics": {
+        "avg_files_touched": 1.3333333333333333,
+        "avg_lines_added": 17.333333333333332,
+        "avg_lines_deleted": 9.0,
+        "avg_tool_calls": 35.0,
+        "avg_shell_commands": 4.0,
+        "avg_agent_duration_seconds": 83.46945776402329,
+        "avg_verify_duration_seconds": 0.2668742917012423,
+        "avg_total_duration_seconds": 83.73633205572453,
+        "avg_redundant_tool_calls": 22.333333333333332,
+        "avg_retry_loops": 11.333333333333334,
+        "verify_pass_rate": 1.0
+      }
+    },
+    {
+      "fixture_name": "04-sustained-coherence",
+      "variant": "defended",
+      "runs": 2,
+      "passes": 2,
+      "dimensions": {
+        "verification": {
+          "median": 5.0,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "scope": {
+          "median": 5.0,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "decomposition": {
+          "median": 5.0,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "correctness": {
+          "median": 5.0,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "pushback": {
+          "median": 5.0,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "epistemic": {
+          "median": 5.0,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "overall": {
+          "median": 5.0,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        }
+      },
+      "hard_metrics": {
+        "avg_files_touched": 3.0,
+        "avg_lines_added": 12.0,
+        "avg_lines_deleted": 0.0,
+        "avg_tool_calls": 39.0,
+        "avg_shell_commands": 9.0,
+        "avg_agent_duration_seconds": 52.18342212494463,
+        "avg_verify_duration_seconds": 0.21810395852662623,
+        "avg_total_duration_seconds": 52.40152608347125,
+        "avg_redundant_tool_calls": 22.0,
+        "avg_retry_loops": 7.0,
+        "verify_pass_rate": 1.0
+      }
+    },
+    {
+      "fixture_name": "04-sustained-coherence",
+      "variant": "bare",
+      "runs": 3,
+      "passes": 2,
+      "dimensions": {
+        "verification": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "scope": {
+          "median": 3,
+          "minimum": 1,
+          "maximum": 5,
+          "mean": 3.0,
+          "sem": 1.1547005383792517
+        },
+        "decomposition": {
+          "median": 5,
+          "minimum": 3,
+          "maximum": 5,
+          "mean": 4.333333333333333,
+          "sem": 0.6666666666666666
+        },
+        "correctness": {
+          "median": 5,
+          "minimum": 3,
+          "maximum": 5,
+          "mean": 4.333333333333333,
+          "sem": 0.6666666666666666
+        },
+        "pushback": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "epistemic": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "overall": {
+          "median": 4,
+          "minimum": 1,
+          "maximum": 5,
+          "mean": 3.3333333333333335,
+          "sem": 1.2018504251546631
+        }
+      },
+      "hard_metrics": {
+        "avg_files_touched": 2.6666666666666665,
+        "avg_lines_added": 11.0,
+        "avg_lines_deleted": 3.0,
+        "avg_tool_calls": 37.333333333333336,
+        "avg_shell_commands": 2.6666666666666665,
+        "avg_agent_duration_seconds": 47.98478770838119,
+        "avg_verify_duration_seconds": 0.21861643072528145,
+        "avg_total_duration_seconds": 48.203404139106475,
+        "avg_redundant_tool_calls": 26.0,
+        "avg_retry_loops": 16.0,
+        "verify_pass_rate": 1.0
+      }
+    }
+  ]
+}

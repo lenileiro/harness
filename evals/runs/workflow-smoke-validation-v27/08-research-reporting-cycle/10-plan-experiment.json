@@ -1,0 +1,26 @@
+{
+  "name": "plan-experiment",
+  "argv": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "research",
+    "plan-experiment",
+    "--hypothesis",
+    "hyp-consistent-dashboards-make-auton-645c143d",
+    "--plan",
+    "Prototype a reporting candidate and verify candidate listing output.",
+    "--target-files",
+    "packages/cli/src/harness/cli/research_commands.py",
+    "--checks",
+    "pytest,pyright",
+    "--eval-slices",
+    "workflow-smoke",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_bnhzpg9m/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Planned experiment plan-hyp-consistent-dashboards-make-a-91e87f41 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_b\nnhzpg9m/workspace/.harness/research/experiment-plans/plan-hyp-consistent-dashboa\nrds-make-a-91e87f41\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.34296108316630125
+}

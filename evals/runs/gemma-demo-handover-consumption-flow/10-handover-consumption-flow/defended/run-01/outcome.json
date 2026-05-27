@@ -1,0 +1,501 @@
+{
+  "fixture": {
+    "name": "10-handover-consumption-flow",
+    "path": "/Users/leiro/workspace/harness/evals/fixtures/10-handover-consumption-flow",
+    "task_text": "# Continue from an existing handover and leave the next one ready\n\nThis workspace already contains a handover created by a previous agent.\nContinue from that state instead of recreating it.\n\nUse CLI entrypoints only. Do not hand-edit `.harness/*.json` files directly.\n\nUse these commands:\n\n- `harness vision show`\n- `harness resume show`\n- `harness research search`\n- `harness research show-publication`\n- `harness research create-opportunity`\n- `harness research hypothesize`\n- `harness research refine`\n- `harness resume add-feature`\n- `harness resume set-current`\n\nDo all of the following:\n\n1. Inspect the existing vision and resume contract.\n2. Inspect the existing publication that defines the current handover.\n3. Create one opportunity titled `Handover verification checklist`.\n4. Create one hypothesis for that opportunity.\n5. Refine one promotion candidate titled `Handover verification handoff`.\n6. Add a third resume feature named `handover-verification`.\n7. Switch the resume contract so the current feature becomes\n   `handover-verification`.\n\nUse these exact values where applicable:\n\n- opportunity summary:\n  `The next agent should verify that a handover names the next feature, the source publication, and the continuation path.`\n- hypothesis claim:\n  `A verification checklist will make handovers safer for the next agent to consume.`\n- hypothesis expected win:\n  `handover artifacts become easier for follow-on agents to verify`\n- hypothesis risk level:\n  `low`\n- hypothesis change mode:\n  `improve`\n- candidate summary:\n  `Promote a verification-oriented continuation step after the handover is consumed.`\n- candidate expected metric:\n  `handover artifacts include verification checklist coverage`\n- candidate validation plan:\n  `Run the fixture tests to confirm the continuation artifacts and resume contract are linked.`\n- third feature description:\n  `Verify the handover contract before the next continuation step.`\n- third feature phases:\n  `inspect,verify,continue`\n\nImportant:\n\n- Reuse the existing publication as the source publication for the promotion\n  candidate.\n- Do not recreate the vision, theme, unknown, rabbit hole, or existing\n  publication.\n- Leave the previous features intact and only advance the roadmap to the new\n  `handover-verification` feature.\n\nYou will need the generated publication ID and the newly created opportunity /\nhypothesis IDs between steps. Read the generated JSON files under\n`.harness/research/...` to get those IDs as needed.\n\nRun the tests when done.\n",
+    "eval_md": "primary_dimension: decomposition\n\ntrap: >\n  This task starts from an existing handover. A weak model will recreate the\n  vision or publication instead of consuming the current state, or it will\n  continue the research artifacts but forget to advance the resume contract to\n  the next feature for a future agent.\n\ncorrect_fix: >\n  Inspect the existing vision, publication, and resume contract; create a\n  follow-on opportunity, hypothesis, and promotion candidate linked to the\n  existing handover publication; then add a third feature and point `current`\n  at that next continuation step.\n\ndimensions: decomposition, correctness, verification, scope, overall\n\nscoring_notes: >\n  decomposition: 5 if the agent reuses the seeded publication/resume state and\n  cleanly advances it one step. 1 if it rebuilds the existing handover from\n  scratch or loses the continuation chain.\n  correctness: 5 if the new opportunity, hypothesis, promotion candidate, and\n  next resume feature are all present and linked to the existing handover.\n  verification: 5 if the agent runs the tests. 1 if it does not.\n  scope: 5 if it only mutates the expected `.harness` research/resume artifacts.\n",
+    "verify_command": "pytest tests/ -v --tb=short --no-header",
+    "phases": null,
+    "family": "handover-consumption-flow",
+    "holdout": false,
+    "mutated_from": null,
+    "metadata_path": "/Users/leiro/workspace/harness/evals/fixtures/10-handover-consumption-flow/fixture.yaml",
+    "rules": {
+      "behavior_category": "decomposition",
+      "primary_dimension": "decomposition",
+      "expected_first_step": "inspect workspace",
+      "allowed_paths": [],
+      "disallowed_paths": [],
+      "required_verification": "pytest tests/ -v --tb=short --no-header",
+      "trap": "This task starts from an existing handover. A weak model will recreate the vision or publication instead of consuming the current state, or it will continue the research artifacts but forget to advance the resume contract to the next feature for a future agent.",
+      "correct_fix": "Inspect the existing vision, publication, and resume contract; create a follow-on opportunity, hypothesis, and promotion candidate linked to the existing handover publication; then add a third feature and point `current` at that next continuation step.",
+      "dimensions": [
+        "decomposition",
+        "correctness",
+        "verification",
+        "scope",
+        "overall"
+      ],
+      "scoring_notes": "decomposition: 5 if the agent reuses the seeded publication/resume state and cleanly advances it one step. 1 if it rebuilds the existing handover from scratch or loses the continuation chain. correctness: 5 if the new opportunity, hypothesis, promotion candidate, and next resume feature are all present and linked to the existing handover. verification: 5 if the agent runs the tests. 1 if it does not. scope: 5 if it only mutates the expected `.harness` research/resume artifacts."
+    }
+  },
+  "transcript": "adaptive strategy diagnosis-heavy bugfix -> diagnostic structure + critic\n\n\u2192 shell(command='harness vision show && harness resume \u2026)\n\u2713 shell: exit_code: 0\n\nstdout:\nAutonomous Handover System\nLeave structured continuation state for the next agent.\n cross-session state for this run:\n  current feature: handover-consumption (status=pending)\n  \u2026  \u2026 399 bytes  (0.9s)\n\n\u2192 shell(command='ls -R .harness/research/')\n\u2713 shell: exit_code: 0\n\nstdout:\narchive\nassets\ncitations\nexperiment-plans\nexperiments\nhypotheses\ninspiration\nobservations\nopportunities\npromotions\npublications\nrabbitholes\nsection-maps\nthemes\nunknowns\nvision\n\n\u2026  \u2026 1,334 bytes  (0.0s)\n\n\u2192 read_file(path='.harness/research/publications/pub-han\u2026)\n\u2713 read_file: {\n  \"id\": \"pub-handover-checklist-findings-2f01dafa\",\n  \"rabbit_hole_id\": \"rh-handover-artifact-checklist-20f72070\",\n  \"title\": \"Handover checklist findings\",\n  \"summary\": \"A handover should preserve\u2026  \u2026 889 bytes  (0.0s)\n\n\u2192 shell(command='harness research create-opportunity --\u2026)\n\u2717 shell: exit_code: 2\n\nstderr:\nUsage: harness research create-opportunity [OPTIONS]\nTry 'harness research create-opportunity --help' for help.\n\u256d\u2500 Error \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2026  \u2026 377 bytes \n(0.4s)\n\n\u2192 shell(command='harness research create-opportunity --\u2026)\n\u2713 shell: exit_code: 0\n\nstdout:\nCreated opportunity opp-handover-verification-checklist-e206abe5 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval__swp3bbu/1\n0-handover-consumption-flow\u2026  \u2026 278 bytes  (0.4s)\n\n\u2192 read_file(path='.harness/research/opportunities/opp-ha\u2026)\n\u2717 read_file: path does not exist: \n.harness/research/opportunities/opp-handover-verification-checklist-e206abe5.jso\nn  (0.0s)\n\n\u2192 shell(command='ls .harness/research/opportunities/')\n\u2713 shell: exit_code: 0\n\nstdout:\nopp-handover-verification-checklist-e206abe5\n  (0.0s)\n\n\u2192 read_file(path='.harness/research/opportunities/opp-ha\u2026)\n\u2713 read_file: {\n  \"id\": \"opp-handover-verification-checklist-e206abe5\",\n  \"title\": \"Handover verification checklist\",\n  \"summary\": \"The next agent should verify that a handover names the next \nfeature, the source p\u2026  \u2026 426 bytes  (0.0s)\n\n\u2192 shell(command='harness research hypothesize --opportu\u2026)\n\u2717 shell: exit_code: 2\n\nstderr:\nUsage: harness research hypothesize [OPTIONS]\nTry 'harness research hypothesize --help' for help.\n\u256d\u2500 Error \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2026\n\u2026 363 bytes  (0.6s)\n\n\u2192 shell(command='harness research hypothesize --opportu\u2026)\n\u2713 shell: exit_code: 0\n\nstdout:\nCreated hypothesis hyp-a-verification-checklist-will-ma-047c6557 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval__swp3bbu/1\n0-handover-consumption-flow\u2026  \u2026 276 bytes  (0.4s)\n\n\u2192 read_file(path='.harness/research/hypotheses/hyp-a-ver\u2026)\n\u2713 read_file: {\n  \"id\": \"hyp-a-verification-checklist-will-ma-047c6557\",\n  \"opportunity_id\": \"opp-handover-verification-checklist-e206abe5\",\n  \"claim\": \"A verification checklist will make handovers safer for the n\u2026  \u2026 429\nbytes  (0.0s)\n\n\u2192 shell(command='harness research refine --hypothesis-i\u2026)\n\u2717 shell: exit_code: 2\n\nstderr:\nUsage: harness research refine [OPTIONS]\nTry 'harness research refine --help' for help.\n\u256d\u2500 Error \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256e\n\u2502 No suc\u2026  \u2026 353 bytes  (0.4s)\n\n\u2192 shell(command='harness research refine --source-hypot\u2026)\n\u2717 shell: exit_code: 2\n\nstderr:\nUsage: harness research refine [OPTIONS]\nTry 'harness research refine --help' for help.\n\u256d\u2500 Error \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256e\n\u2502 No suc\u2026  \u2026 353 bytes  (0.4s)\n\n\u2192 shell(command='harness research refine --help')\n\u2713 shell: exit_code: 0\n\nstdout:\n                                                                                \n Usage: harness research refine [OPTIONS]                                       \n               \u2026  \u2026 1,724 bytes  (0.4s)\n\n\u2192 shell(command='harness research refine --title \"Hando\u2026)\n\u2713 shell: exit_code: 0\n\nstdout:\nCreated promotion candidate promo-handover-verification-handoff-d4948cec at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval__swp3bbu/1\n0-handover-consumpt\u2026  \u2026 283 bytes  (0.4s)\n\n\u2192 read_file(path='.harness/research/promotions/promo-han\u2026)\n\u2717 read_file: path does not exist: \n.harness/research/promotions/promo-handover-verification-handoff-d4948cec/promot\nion.json  (0.0s)\n\n\u2192 shell(command='ls -R .harness/research/promotions/')\n\u2713 shell: exit_code: 0\n\nstdout:\npromo-handover-verification-handoff-d4948cec\n\n.harness/research/promotions//promo-handover-verification-handoff-d4948cec:\nPROMOTION.md\npromotion_candidate.json\n  (0.0s)\n\n\u2192 read_file(path='.harness/research/promotions/promo-han\u2026)\n\u2713 read_file: {\n  \"id\": \"promo-handover-verification-handoff-d4948cec\",\n  \"title\": \"Handover verification handoff\",\n  \"summary\": \"Promote a verification-oriented continuation step after the \nhandover is consumed.\",\u2026  \u2026 703 bytes  (0.0s)\n\n\u2192 shell(command='harness resume add-feature --descripti\u2026)\n\u2717 shell: exit_code: 2\n\nstderr:\nUsage: harness resume add-feature [OPTIONS] NAME\nTry 'harness resume add-feature --help' for help.\n\u256d\u2500 Error \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2026 \n\u2026 364 bytes  (0.4s)\n\n\u2192 shell(command='harness resume add-feature --descripti\u2026)\n\u2713 shell: exit_code: 0\n\nstdout:\nAdded 'handover-verification' to \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval__swp3bbu/1\n0-handover-consumption-flow/.harness/resume.json\n  (0.4s)\n\n\u2192 shell(command='harness resume set-current handover-ve\u2026)\n\u2713 shell: exit_code: 0\n\nstdout:\nCurrent feature is now 'handover-verification'\n  (0.4s)\n\n\u2192 shell(command='harness resume show')\n\u2713 shell: exit_code: 0\n\nstdout:\n cross-session state for this run:\n  current feature: handover-verification (status=pending)\n  description: Verify the handover contract before the next continuation step.\n  pha\u2026  \u2026 333 bytes  (0.4s)\n\n\u2192 verify_work(command='pytest tests/')\n\u2713 verify_work: PASSED\n\n============================= test session starts ==============================\nplatform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0\nrootdir: /private/var/folders/8p/1_033mns3v1gvkq\u2026  \u2026 698 bytes  (0.3s)\nThe existing vision and resume contract were inspected, and the current handover\n(publication pub-handover-checklist-findings-2f01dafa) was identified.          \n\nThe following steps were performed:                                             \n\n 1 Created Opportunity: Handover verification checklist                         \n   (opp-handover-verification-checklist-e206abe5) with the specified summary.   \n 2 Created Hypothesis: Linked to the new opportunity, with the specified claim, \n   expected win, risk level, and change mode.                                   \n 3 Refined Promotion Candidate: Handover verification handoff                   \n   (promo-handover-verification-handoff-d4948cec) was created using the existing\n   publication and the new hypothesis, including the specified summary, expected\n   metric, and validation plan.                                                 \n 4 Added Resume Feature: handover-verification with description Verify the      \n   handover contract before the next continuation step. and phases              \n   inspect,verify,continue.                                                     \n 5 Updated Resume Contract: Switched the current feature to                     \n   handover-verification.                                                       \n\nAll tasks were completed using the CLI entrypoints, and the work was verified   \nwith pytest.                                                                    \n\n                                                                                \n graph TD                                                                       \n     subgraph Research Artifacts                                                \n         Pub[Publication: handover-checklist-findings] --> Opp[Opportunity:     \n Handover verification checklist]                                               \n         Opp --> Hyp[Hypothesis: A verification checklist...]                   \n         Hyp --> Promo[Promotion: Handover verification handoff]                \n         Pub -.-> Promo                                                         \n     end                                                                        \n                                                                                \n     subgraph Resume Contract                                                   \n         Roadmap[Roadmap: handover-checklist, handover-consumption] -->         \n Current[Current Feature: handover-verification]                                \n     end                                                                        \n                                                                                \n     Promo -.-> Current                                                         \n                                                                                \n\n\u2713 verify (shell)  ============================= test session starts \n==============================\ncollecting ... collected 2 items\n\ntests/test_handover_consumption_flow.py::test_handover_consumption_flow PASSED [\n50%]\ntests/test_smoke.py::test_smoke PASSED                                   [100%]\n\n============================== 2 passed in 0.01s ===============================\n\ndefense ledger:\n  verifiers: shell=1\u2713/0\u2717\n  tools: shell x16 (err x5), read_file x6 (err x2), verify_work x1\n  lifeharness: L2 tips x3\n",
+  "git_diff": "diff --git a/.harness/resume.json b/.harness/resume.json\nindex 7f49a0d..221b97b 100644\n--- a/.harness/resume.json\n+++ b/.harness/resume.json\n@@ -1,5 +1,5 @@\n {\n-  \"current\": \"handover-consumption\",\n+  \"current\": \"handover-verification\",\n   \"features\": [\n     {\n       \"name\": \"handover-checklist\",\n@@ -20,6 +20,18 @@\n       ],\n       \"notes\": [],\n       \"session_id\": null\n+    },\n+    {\n+      \"name\": \"handover-verification\",\n+      \"description\": \"Verify the handover contract before the next continuation step.\",\n+      \"status\": \"pending\",\n+      \"phases\": [\n+        \"inspect\",\n+        \"verify\",\n+        \"continue\"\n+      ],\n+      \"notes\": [],\n+      \"session_id\": null\n     }\n   ],\n   \"notes\": []\n",
+  "test_output": "============================= test session starts ==============================\ncollecting ... collected 2 items\n\ntests/test_handover_consumption_flow.py::test_handover_consumption_flow PASSED [ 50%]\ntests/test_smoke.py::test_smoke PASSED                                   [100%]\n\n============================== 2 passed in 0.01s ===============================\n",
+  "agent_exit_code": 0,
+  "test_exit_code": 0,
+  "variant": "defended",
+  "hard_metrics": {
+    "verify_passed": true,
+    "run_exit_code": 0,
+    "verify_exit_code": 0,
+    "files_touched": 1,
+    "lines_added": 13,
+    "lines_deleted": 1,
+    "tool_calls": 49,
+    "shell_commands": 34,
+    "did_run_verification": true,
+    "agent_duration_seconds": 37.83965945802629,
+    "verify_duration_seconds": 0.20195054216310382,
+    "total_duration_seconds": 38.041610000189394,
+    "time_to_first_verification_seconds": 37.83965945802629,
+    "edit_before_repro": true,
+    "premature_completion": false,
+    "redundant_tool_calls": 33,
+    "retry_loops": 18,
+    "verification_after_failure": true
+  },
+  "trace_events": [
+    {
+      "kind": "agent_exit",
+      "order": 1,
+      "message": "",
+      "data": {
+        "exit_code": 0
+      }
+    },
+    {
+      "kind": "verify_exit",
+      "order": 2,
+      "message": "",
+      "data": {
+        "exit_code": 0
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 3,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 4,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 5,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 6,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 7,
+      "message": "",
+      "data": {
+        "tool": "read_file"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 8,
+      "message": "",
+      "data": {
+        "tool": "read_file"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 9,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 10,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 11,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 12,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 13,
+      "message": "",
+      "data": {
+        "tool": "read_file"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 14,
+      "message": "",
+      "data": {
+        "tool": "read_file"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 15,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 16,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 17,
+      "message": "",
+      "data": {
+        "tool": "read_file"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 18,
+      "message": "",
+      "data": {
+        "tool": "read_file"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 19,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 20,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 21,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 22,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 23,
+      "message": "",
+      "data": {
+        "tool": "read_file"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 24,
+      "message": "",
+      "data": {
+        "tool": "read_file"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 25,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 26,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 27,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 28,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 29,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 30,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 31,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 32,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 33,
+      "message": "",
+      "data": {
+        "tool": "read_file"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 34,
+      "message": "",
+      "data": {
+        "tool": "read_file"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 35,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 36,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 37,
+      "message": "",
+      "data": {
+        "tool": "read_file"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 38,
+      "message": "",
+      "data": {
+        "tool": "read_file"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 39,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 40,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 41,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 42,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 43,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 44,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 45,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 46,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 47,
+      "message": "",
+      "data": {
+        "tool": "verify_work"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 48,
+      "message": "",
+      "data": {
+        "tool": "verify_work"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 49,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 50,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 51,
+      "message": "",
+      "data": {
+        "tool": "read_file"
+      }
+    },
+    {
+      "kind": "verification_observed",
+      "order": 52,
+      "message": "Detected verification marker for pytest.",
+      "data": {
+        "command": "pytest tests/ -v --tb=short --no-header"
+      }
+    }
+  ],
+  "artifact_dir": "evals/runs/gemma-demo-handover-consumption-flow/10-handover-consumption-flow/defended/run-01",
+  "agent_command": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "run",
+    "# Continue from an existing handover and leave the next one ready\n\nThis workspace already contains a handover created by a previous agent.\nContinue from that state instead of recreating it.\n\nUse CLI entrypoints only. Do not hand-edit `.harness/*.json` files directly.\n\nUse these commands:\n\n- `harness vision show`\n- `harness resume show`\n- `harness research search`\n- `harness research show-publication`\n- `harness research create-opportunity`\n- `harness research hypothesize`\n- `harness research refine`\n- `harness resume add-feature`\n- `harness resume set-current`\n\nDo all of the following:\n\n1. Inspect the existing vision and resume contract.\n2. Inspect the existing publication that defines the current handover.\n3. Create one opportunity titled `Handover verification checklist`.\n4. Create one hypothesis for that opportunity.\n5. Refine one promotion candidate titled `Handover verification handoff`.\n6. Add a third resume feature named `handover-verification`.\n7. Switch the resume contract so the current feature becomes\n   `handover-verification`.\n\nUse these exact values where applicable:\n\n- opportunity summary:\n  `The next agent should verify that a handover names the next feature, the source publication, and the continuation path.`\n- hypothesis claim:\n  `A verification checklist will make handovers safer for the next agent to consume.`\n- hypothesis expected win:\n  `handover artifacts become easier for follow-on agents to verify`\n- hypothesis risk level:\n  `low`\n- hypothesis change mode:\n  `improve`\n- candidate summary:\n  `Promote a verification-oriented continuation step after the handover is consumed.`\n- candidate expected metric:\n  `handover artifacts include verification checklist coverage`\n- candidate validation plan:\n  `Run the fixture tests to confirm the continuation artifacts and resume contract are linked.`\n- third feature description:\n  `Verify the handover contract before the next continuation step.`\n- third feature phases:\n  `inspect,verify,continue`\n\nImportant:\n\n- Reuse the existing publication as the source publication for the promotion\n  candidate.\n- Do not recreate the vision, theme, unknown, rabbit hole, or existing\n  publication.\n- Leave the previous features intact and only advance the roadmap to the new\n  `handover-verification` feature.\n\nYou will need the generated publication ID and the newly created opportunity /\nhypothesis IDs between steps. Read the generated JSON files under\n`.harness/research/...` to get those IDs as needed.\n\nRun the tests when done.",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval__swp3bbu/10-handover-consumption-flow",
+    "--yes",
+    "--in-memory",
+    "--provider",
+    "openrouter",
+    "--model",
+    "google/gemma-4-26b-a4b-it",
+    "--max-repair",
+    "2",
+    "--profile",
+    "adaptive",
+    "--verify",
+    "shell",
+    "--verify-command",
+    "pytest tests/ -v --tb=short --no-header",
+    "--critic",
+    "llm+search"
+  ],
+  "verify_command": "pytest tests/ -v --tb=short --no-header"
+}

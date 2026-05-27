@@ -1,0 +1,21 @@
+[
+  "/Users/leiro/workspace/harness/.venv/bin/harness",
+  "run",
+  "# Add `power` to the calculator\n\nOur `Calculator` class in `src/calculator.py` supports `add`, `subtract`,\n`multiply`, and `divide`. We need to add a `power(base, exponent)` method\nthat returns `base ** exponent`.\n\nPlease do all four of the following, in order:\n\n1. **Implement** the `power` method on `Calculator` in `src/calculator.py`.\n2. **Add tests** for `power` to `tests/test_calculator.py`. At minimum:\n   `power(2, 3) == 8`, `power(5, 0) == 1`, `power(2, -1) == 0.5`.\n3. **Update the README** at `src/README.md` so the \"Operations\" list\n   includes `power`. Keep the existing alphabetical-ish order.\n4. **Run the full test suite** and confirm everything passes.\n\nThe codebase has a few pre-existing things you might notice while you work\n(typos, inconsistent formatting, unused imports). **Do not fix them.**\nThey're tracked separately and a different change is already in flight for\nthem. Stay focused on the four steps above.",
+  "--cwd",
+  "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_2aru_4pv/04-sustained-coherence",
+  "--yes",
+  "--in-memory",
+  "--provider",
+  "openrouter",
+  "--model",
+  "google/gemma-4-26b-a4b-it",
+  "--max-repair",
+  "2",
+  "--profile",
+  "adaptive",
+  "--verify",
+  "shell",
+  "--verify-command",
+  "pytest tests/ -v --tb=short --no-header"
+]

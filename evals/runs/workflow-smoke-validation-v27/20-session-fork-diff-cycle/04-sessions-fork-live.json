@@ -1,0 +1,21 @@
+{
+  "name": "sessions-fork-live",
+  "argv": [
+    "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_s40i2cez/workspace/fake-harness",
+    "sessions",
+    "fork",
+    "sess_parent_eval",
+    "continue from fork",
+    "--session",
+    "sess_branch_live_eval",
+    "--db",
+    "sessions.db",
+    "--yes"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Forked sess_parent_eval \u2192 sess_branch_live_eval\nfork response live                                                              \n\n\u2713 verify (verify_before_done)  No modifying tool calls detected \u2014 verification \nnot required.\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.3470133750233799
+}

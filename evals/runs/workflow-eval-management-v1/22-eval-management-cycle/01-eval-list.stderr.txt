@@ -1,0 +1,30 @@
+╭───────────────────── Traceback (most recent call last) ──────────────────────╮
+│ /Users/leiro/workspace/harness/packages/cli/src/harness/cli/evals.py:73 in   │
+│ eval_list                                                                    │
+│                                                                              │
+│     70 │   │   console.print("[red]No evals/fixtures/ directory found — run  │
+│        from the harness repo.[/red]")                                        │
+│     71 │   │   raise typer.Exit(1)                                           │
+│     72 │                                                                     │
+│ ❱   73 │   runner = _load_eval_module("runner", evals_root)                  │
+│     74 │   fixtures = runner.discover_fixtures(                              │
+│     75 │   │   evals_root,                                                   │
+│     76 │   │   fixtures_subdir=fixture_set,                                  │
+│                                                                              │
+│ /Users/leiro/workspace/harness/packages/cli/src/harness/cli/evals.py:37 in   │
+│ _load_eval_module                                                            │
+│                                                                              │
+│     34 │   if repo_root not in _sys.path:                                    │
+│     35 │   │   _sys.path.insert(0, repo_root)                                │
+│     36 │   _sys.modules[module_name] = mod                                   │
+│ ❱   37 │   spec.loader.exec_module(mod)  # type: ignore[union-attr]          │
+│     38 │   return mod                                                        │
+│     39                                                                       │
+│     40                                                                       │
+│ in exec_module:995                                                           │
+│ in get_code:1132                                                             │
+│ in get_data:1190                                                             │
+╰──────────────────────────────────────────────────────────────────────────────╯
+FileNotFoundError: [Errno 2] No such file or directory: 
+'/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_
+wa9zym91/workspace/evals/runner.py'

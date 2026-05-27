@@ -1,0 +1,28 @@
+{
+  "name": "run-plugin-domain",
+  "argv": [
+    "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_1ug_pvs7/workspace/fake-harness",
+    "run",
+    "review the docs patch",
+    "--domain",
+    "plugin-review",
+    "--provider",
+    "ollama",
+    "--model",
+    "test-model",
+    "--in-memory",
+    "--yes",
+    "--verify",
+    "none",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_1ug_pvs7/workspace"
+  ],
+  "passed": false,
+  "returncode": 0,
+  "stdout": "adaptive strategy default adaptive path -> minimal structure\nplugin runtime ok                                                               \n\n\u2713 verify (verify_before_done)  No modifying tool calls detected \u2014 verification \nnot required.\n\ndefense ledger:\n  verifiers: verify_before_done=1\u2713/0\u2717\n  lifeharness: L2 tips x1\n",
+  "stderr": "",
+  "failures": [
+    "file_contains~.harness/runtime-plugin-capture.json~\"tool_names\": [\n    \"read_file\"\n  ]"
+  ],
+  "duration_seconds": 1.1944807078689337
+}

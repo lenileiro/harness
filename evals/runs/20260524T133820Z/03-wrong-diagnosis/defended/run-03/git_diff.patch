@@ -1,0 +1,40 @@
+diff --git a/src/cache.py b/src/cache.py
+index 3d8a95a..e8739ed 100644
+--- a/src/cache.py
++++ b/src/cache.py
+@@ -28,6 +28,7 @@ class SimpleCache:
+ 
+     def __init__(self) -> None:
+         self._store: dict[str, Any] = {}
++        self._pending: dict[str, asyncio.Future[Any]] = {}
+ 
+     async def get_or_fetch(
+         self,
+@@ -46,12 +47,21 @@ class SimpleCache:
+         if key in self._store:
+             return self._store[key]
+ 
+-        # MISSING: no in-flight deduplication.
+-        # Multiple concurrent callers for the same key all reach this line and
+-        # each triggers its own fetch() call independently.
+-        value = await asyncio.wait_for(fetch(key), timeout=fetch_timeout)
+-        self._store[key] = value
+-        return value
++        if key in self._pending:
++            return await self._pending[key]
++
++        future: asyncio.Future[Any] = asyncio.get_running_loop().create_future()
++        self._pending[key] = future
++        try:
++            value = await asyncio.wait_for(fetch(key), timeout=fetch_timeout)
++            self._store[key] = value
++            future.set_result(value)
++            return value
++        except Exception as exc:
++            future.set_exception(exc)
++            raise
++        finally:
++            self._pending.pop(key, None)
+ 
+     def invalidate(self, key: str) -> None:
+         """Remove a key from the cache."""

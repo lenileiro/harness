@@ -1,0 +1,24 @@
+{
+  "name": "reject-unknown",
+  "argv": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "research",
+    "reject",
+    "--kind",
+    "unknown",
+    "--id",
+    "unknown-how-should-archived-findings-sta-a2b87183",
+    "--reason",
+    "covered by publication pair",
+    "--note",
+    "promoted into durable findings",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_mynb8ut3/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Rejected and archived unknown:unknown-how-should-archived-findings-sta-a2b87183 \nat \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_m\nynb8ut3/workspace/.harness/research/archive/archive-unknown-unknown-how-should-a\nrchi-cb250030\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.33627354190684855
+}

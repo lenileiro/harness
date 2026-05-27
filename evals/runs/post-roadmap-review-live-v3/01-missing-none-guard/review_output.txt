@@ -1,0 +1,22 @@
+{
+  "summary": "The change introduces a high-severity regression by removing 
+safety checks for None values and missing dictionary keys in `display_name`.",
+  "findings": [
+    {
+      "severity": "high",
+      "file": "src/profile.py",
+      "line": 2,
+      "issue": "Potential KeyError and TypeError",
+      "rationale": "The original implementation safely handled `user is None` 
+and the absence of the 'name' key. The new implementation will raise a 
+`TypeError` if `user` is `None` and a `KeyError` if the 'name' key is missing 
+from the dictionary. This contradicts the function's type hint which explicitly 
+allows `None`.",
+      "suggested_fix": "Revert to the original implementation or ensure the 
+dictionary and key are guaranteed to exist via caller validation."
+    }
+  ]
+}
+an error occurred during closing of asynchronous generator <async_generator object AsyncClient.stream at 0x10a734810>
+asyncgen: <async_generator object AsyncClient.stream at 0x10a734810>
+RuntimeError: aclose(): asynchronous generator is already running

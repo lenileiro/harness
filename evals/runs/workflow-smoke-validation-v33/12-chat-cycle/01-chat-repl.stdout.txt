@@ -1,0 +1,21 @@
+╭──────────────────────────────── harness chat ────────────────────────────────╮
+│ Session: sess_chat_eval                                                      │
+│ Provider: ollama                                                             │
+│ Model: test-model                                                            │
+│ Tools: edit_file, fetch_url, glob, list_dir, read_file, request_critique,    │
+│ shell, spawn_agents, verify_work, web_search, write_file                     │
+│ CWD:                                                                         │
+│ /private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_ev │
+│ al_d1b3zn2z/workspace                                                        │
+│                                                                              │
+│ Type /help for commands. /quit to exit.                                      │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+> hello from fake chat                                                            
+
+✓ verify (claim_grounding)  no completed tool events — nothing to ground claims 
+against  (confidence 0.40)
+
+> Session sess_chat_eval, status: done, 2 messages
+
+> bye

@@ -1,0 +1,16 @@
+============================= test session starts ==============================
+collecting ... collected 1 item
+
+tests/test_research_flow.py::test_research_publication_flow FAILED       [100%]
+
+=================================== FAILURES ===================================
+________________________ test_research_publication_flow ________________________
+tests/test_research_flow.py:15: in test_research_publication_flow
+    assert root.exists(), "expected .harness/research to be created by the research CLI"
+E   AssertionError: expected .harness/research to be created by the research CLI
+E   assert False
+E    +  where False = exists()
+E    +    where exists = PosixPath('.harness/research').exists
+=========================== short test summary info ============================
+FAILED tests/test_research_flow.py::test_research_publication_flow - Assertio...
+============================== 1 failed in 0.02s ===============================

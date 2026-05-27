@@ -1,0 +1,18 @@
+verification (section-verification-bcefd329)
+
+Files
+- packages/core/src/harness/core/verification.py
+- packages/core/src/harness/core/verification_behavioral.py
+
+Interfaces
+- Verifier
+- VerificationResult
+
+Constraints
+- must stay deterministic for hard checks
+
+Weaknesses
+- prompt-heavy verifier paths are brittle
+
+Opportunities
+- sharper verifier routing

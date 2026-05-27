@@ -1,0 +1,17 @@
+{
+  "name": "eval-mutate",
+  "argv": [
+    "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_461ctoxf/workspace/fake-harness",
+    "eval",
+    "mutate",
+    "01-demo",
+    "--seed",
+    "1"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Mutated 01-demo \u2192 \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_4\n61ctoxf/workspace/evals/fixtures-mutated/0001-01-demo\nRenames:\n  Calculator \u2192 MathOps\nTouched 1 file(s).\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.37588250008411705
+}

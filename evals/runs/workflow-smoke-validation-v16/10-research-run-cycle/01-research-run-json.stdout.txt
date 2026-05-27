@@ -1,0 +1,22 @@
+{
+  "summary": "Verifier routing and promotion evidence should stay aligned.",
+  "findings": [
+    "Scoped verifier routing lowers noise.",
+    "Promotion artifacts need explicit evidence sections."
+  ],
+  "open_questions": [
+    "How strict should promotion evidence be?"
+  ],
+  "sources": [
+    {
+      "title": "verification routing",
+      "url": "packages/core/src/harness/core/verification.py",
+      "excerpt": "Scoped routing reduces verifier noise."
+    },
+    {
+      "title": "promotion drafting",
+      "url": "packages/core/src/harness/core/pr_generation.py",
+      "excerpt": "Evidence sections clarify promotion candidates."
+    }
+  ]
+}

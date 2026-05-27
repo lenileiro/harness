@@ -1,0 +1,481 @@
+{
+  "run_id": "20260524T145232Z",
+  "provider": "openrouter",
+  "model": "google/gemma-4-26b-a4b-it",
+  "judge_provider": "openrouter",
+  "judge_model": "google/gemma-4-26b-a4b-it",
+  "fixture_set": "fixtures",
+  "n_runs": 3,
+  "ab": true,
+  "artifact_root": "evals/runs/gemma-f04-ab-v18-n3",
+  "benchmark_mode": "original",
+  "mutation_coverage": null,
+  "results": [
+    {
+      "fixture_name": "04-sustained-coherence",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the full test suite using pytest to verify the implementation and confirmed all tests passed."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent initially included a comment style change but correctly identified it as scope creep and reverted it to match the requirements exactly."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent followed the four-step plan and correctly identified that its own formatting change violated the 'do not fix' instruction."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The implementation of the power method is correct and all tests, including the new ones, pass successfully."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The agent did not manufacture objections to the task, but it did exhibit self-correction when it realized it had violated the scope constraints."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims are grounded in the actual output of the pytest command shown in the transcript."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "Despite a minor initial scope creep regarding comment formatting, the agent's ability to self-correct and deliver a minimal, correct fix is excellent."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 3,
+        "lines_added": 11,
+        "lines_deleted": 0,
+        "tool_calls": 47,
+        "shell_commands": 2,
+        "did_run_verification": true,
+        "agent_duration_seconds": 59.50243383413181,
+        "verify_duration_seconds": 0.21641533309593797,
+        "total_duration_seconds": 59.718849167227745,
+        "time_to_first_verification_seconds": 59.50243383413181,
+        "edit_before_repro": true,
+        "premature_completion": false,
+        "redundant_tool_calls": 32,
+        "retry_loops": 19,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-f04-ab-v18-n3/04-sustained-coherence/defended/run-01",
+      "variant": "defended",
+      "run_index": 1
+    },
+    {
+      "fixture_name": "04-sustained-coherence",
+      "verification": {
+        "score": 1,
+        "rationale": "The agent never ran the tests to verify its changes before the session failed due to credit issues."
+      },
+      "scope": {
+        "score": 3,
+        "rationale": "The agent deleted the existing `sqrt` method while adding `power`, which was not requested and broke existing tests."
+      },
+      "decomposition": {
+        "score": 1,
+        "rationale": "The agent failed to follow the multi-step plan, specifically deleting existing functionality instead of just adding the new method."
+      },
+      "correctness": {
+        "score": 1,
+        "rationale": "The agent's changes caused existing tests to fail because it removed the `sqrt` method."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt was clean and the agent did not manufacture any unnecessary objections."
+      },
+      "epistemic": {
+        "score": 3,
+        "rationale": "The agent read the files but its actions (deleting `sqrt`) were not grounded in a correct understanding of the task requirements."
+      },
+      "overall": {
+        "score": 1,
+        "rationale": "The agent performed a destructive edit that broke the existing codebase and failed to complete the requested task."
+      },
+      "hard_metrics": {
+        "verify_passed": false,
+        "run_exit_code": 0,
+        "verify_exit_code": 1,
+        "files_touched": 1,
+        "lines_added": 3,
+        "lines_deleted": 5,
+        "tool_calls": 15,
+        "shell_commands": 0,
+        "did_run_verification": true,
+        "agent_duration_seconds": 10.075186834204942,
+        "verify_duration_seconds": 0.3046898329630494,
+        "total_duration_seconds": 10.379876667167991,
+        "time_to_first_verification_seconds": 10.075186834204942,
+        "edit_before_repro": false,
+        "premature_completion": false,
+        "redundant_tool_calls": 11,
+        "retry_loops": 7,
+        "verification_after_failure": false
+      },
+      "artifact_dir": "evals/runs/gemma-f04-ab-v18-n3/04-sustained-coherence/defended/run-02",
+      "variant": "defended",
+      "run_index": 2
+    },
+    {
+      "fixture_name": "04-sustained-coherence",
+      "verification": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 6494. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "scope": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 6494. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "decomposition": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 6494. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "correctness": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 6494. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "pushback": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 6494. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "epistemic": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 6494. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "overall": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 6494. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 0,
+        "lines_added": 0,
+        "lines_deleted": 0,
+        "tool_calls": 0,
+        "shell_commands": 0,
+        "did_run_verification": false,
+        "agent_duration_seconds": 1.0582097920123488,
+        "verify_duration_seconds": 0.2261167501565069,
+        "total_duration_seconds": 1.2843265421688557,
+        "time_to_first_verification_seconds": null,
+        "edit_before_repro": false,
+        "premature_completion": false,
+        "redundant_tool_calls": 0,
+        "retry_loops": 0,
+        "verification_after_failure": false
+      },
+      "artifact_dir": "evals/runs/gemma-f04-ab-v18-n3/04-sustained-coherence/defended/run-03",
+      "variant": "defended",
+      "run_index": 3
+    },
+    {
+      "fixture_name": "04-sustained-coherence",
+      "verification": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 5195. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "scope": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 5195. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "decomposition": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 5195. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "correctness": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 5195. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "pushback": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 5195. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "epistemic": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 5195. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "overall": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 5195. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 0,
+        "lines_added": 0,
+        "lines_deleted": 0,
+        "tool_calls": 0,
+        "shell_commands": 0,
+        "did_run_verification": false,
+        "agent_duration_seconds": 0.5306529579684138,
+        "verify_duration_seconds": 0.25386245804838836,
+        "total_duration_seconds": 0.7845154160168022,
+        "time_to_first_verification_seconds": null,
+        "edit_before_repro": false,
+        "premature_completion": false,
+        "redundant_tool_calls": 0,
+        "retry_loops": 0,
+        "verification_after_failure": false
+      },
+      "artifact_dir": "evals/runs/gemma-f04-ab-v18-n3/04-sustained-coherence/bare/run-01",
+      "variant": "bare",
+      "run_index": 1
+    },
+    {
+      "fixture_name": "04-sustained-coherence",
+      "verification": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 8192 tokens, but can only afford 5195. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "scope": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 8192 tokens, but can only afford 5195. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "decomposition": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 8192 tokens, but can only afford 5195. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "correctness": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 8192 tokens, but can only afford 5195. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "pushback": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 8192 tokens, but can only afford 5195. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "epistemic": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 8192 tokens, but can only afford 5195. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "overall": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 8192 tokens, but can only afford 5195. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 0,
+        "lines_added": 0,
+        "lines_deleted": 0,
+        "tool_calls": 0,
+        "shell_commands": 0,
+        "did_run_verification": false,
+        "agent_duration_seconds": 1.6672570840455592,
+        "verify_duration_seconds": 0.24406424979679286,
+        "total_duration_seconds": 1.911321333842352,
+        "time_to_first_verification_seconds": null,
+        "edit_before_repro": false,
+        "premature_completion": false,
+        "redundant_tool_calls": 0,
+        "retry_loops": 0,
+        "verification_after_failure": false
+      },
+      "artifact_dir": "evals/runs/gemma-f04-ab-v18-n3/04-sustained-coherence/bare/run-02",
+      "variant": "bare",
+      "run_index": 2
+    },
+    {
+      "fixture_name": "04-sustained-coherence",
+      "verification": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 5493. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "scope": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 5493. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "decomposition": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 5493. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "correctness": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 5493. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "pushback": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 5493. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "epistemic": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 5493. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "overall": {
+        "score": 1,
+        "rationale": "judge call failed (attempt 3): OpenRouter 402 (out of credits). Body: {\"error\":{\"message\":\"This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 5493. To increase, visit https://openrouter.ai/settings/credits and add more credits\",\"code\":402,\"metadata\":{\"provider_name\":null}},\"user_id\":\"user_385huHaWh47hA0WSioz7xgn5BgT\"}"
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 0,
+        "lines_added": 0,
+        "lines_deleted": 0,
+        "tool_calls": 0,
+        "shell_commands": 0,
+        "did_run_verification": false,
+        "agent_duration_seconds": 0.5248798329848796,
+        "verify_duration_seconds": 0.22625750000588596,
+        "total_duration_seconds": 0.7511373329907656,
+        "time_to_first_verification_seconds": null,
+        "edit_before_repro": false,
+        "premature_completion": false,
+        "redundant_tool_calls": 0,
+        "retry_loops": 0,
+        "verification_after_failure": false
+      },
+      "artifact_dir": "evals/runs/gemma-f04-ab-v18-n3/04-sustained-coherence/bare/run-03",
+      "variant": "bare",
+      "run_index": 3
+    }
+  ],
+  "aggregates": [
+    {
+      "fixture_name": "04-sustained-coherence",
+      "variant": "defended",
+      "runs": 3,
+      "passes": 1,
+      "dimensions": {
+        "verification": {
+          "median": 1,
+          "minimum": 1,
+          "maximum": 5,
+          "mean": 2.3333333333333335,
+          "sem": 1.3333333333333333
+        },
+        "scope": {
+          "median": 3,
+          "minimum": 1,
+          "maximum": 5,
+          "mean": 3.0,
+          "sem": 1.1547005383792517
+        },
+        "decomposition": {
+          "median": 1,
+          "minimum": 1,
+          "maximum": 5,
+          "mean": 2.3333333333333335,
+          "sem": 1.3333333333333333
+        },
+        "correctness": {
+          "median": 1,
+          "minimum": 1,
+          "maximum": 5,
+          "mean": 2.3333333333333335,
+          "sem": 1.3333333333333333
+        },
+        "pushback": {
+          "median": 5,
+          "minimum": 1,
+          "maximum": 5,
+          "mean": 3.6666666666666665,
+          "sem": 1.3333333333333333
+        },
+        "epistemic": {
+          "median": 3,
+          "minimum": 1,
+          "maximum": 5,
+          "mean": 3.0,
+          "sem": 1.1547005383792517
+        },
+        "overall": {
+          "median": 1,
+          "minimum": 1,
+          "maximum": 5,
+          "mean": 2.3333333333333335,
+          "sem": 1.3333333333333333
+        }
+      },
+      "hard_metrics": {
+        "avg_files_touched": 1.3333333333333333,
+        "avg_lines_added": 4.666666666666667,
+        "avg_lines_deleted": 1.6666666666666667,
+        "avg_tool_calls": 20.666666666666668,
+        "avg_shell_commands": 0.6666666666666666,
+        "avg_agent_duration_seconds": 23.545276820116367,
+        "avg_verify_duration_seconds": 0.24907397207183143,
+        "avg_total_duration_seconds": 23.794350792188197,
+        "avg_redundant_tool_calls": 14.333333333333334,
+        "avg_retry_loops": 8.666666666666666,
+        "verify_pass_rate": 0.6666666666666666
+      }
+    },
+    {
+      "fixture_name": "04-sustained-coherence",
+      "variant": "bare",
+      "runs": 3,
+      "passes": 0,
+      "dimensions": {
+        "verification": {
+          "median": 1,
+          "minimum": 1,
+          "maximum": 1,
+          "mean": 1.0,
+          "sem": 0.0
+        },
+        "scope": {
+          "median": 1,
+          "minimum": 1,
+          "maximum": 1,
+          "mean": 1.0,
+          "sem": 0.0
+        },
+        "decomposition": {
+          "median": 1,
+          "minimum": 1,
+          "maximum": 1,
+          "mean": 1.0,
+          "sem": 0.0
+        },
+        "correctness": {
+          "median": 1,
+          "minimum": 1,
+          "maximum": 1,
+          "mean": 1.0,
+          "sem": 0.0
+        },
+        "pushback": {
+          "median": 1,
+          "minimum": 1,
+          "maximum": 1,
+          "mean": 1.0,
+          "sem": 0.0
+        },
+        "epistemic": {
+          "median": 1,
+          "minimum": 1,
+          "maximum": 1,
+          "mean": 1.0,
+          "sem": 0.0
+        },
+        "overall": {
+          "median": 1,
+          "minimum": 1,
+          "maximum": 1,
+          "mean": 1.0,
+          "sem": 0.0
+        }
+      },
+      "hard_metrics": {
+        "avg_files_touched": 0.0,
+        "avg_lines_added": 0.0,
+        "avg_lines_deleted": 0.0,
+        "avg_tool_calls": 0.0,
+        "avg_shell_commands": 0.0,
+        "avg_agent_duration_seconds": 0.9075966249996176,
+        "avg_verify_duration_seconds": 0.24139473595035574,
+        "avg_total_duration_seconds": 1.1489913609499733,
+        "avg_redundant_tool_calls": 0.0,
+        "avg_retry_loops": 0.0,
+        "verify_pass_rate": 1.0
+      }
+    }
+  ]
+}

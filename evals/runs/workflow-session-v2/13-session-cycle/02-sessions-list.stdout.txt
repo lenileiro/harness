@@ -1,0 +1,29 @@
+┏━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━┓
+┃ ID                 ┃ Status  ┃ Provider ┃ Model         ┃ Updated ┃ Turns ┃
+┡━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━┩
+│ sess_workflow_eval │ done    │ ollama   │ test-model    │ 0s ago  │     4 │
+│ test-sess-1        │ pending │ x        │ x             │ 1d ago  │     0 │
+│ sess_da772aeb431a  │ done    │ ollama   │ gemma4        │ 2d ago  │    18 │
+│ sess_67dd1718b9db  │ running │ ollama   │ gemma4        │ 2d ago  │     1 │
+│ sess_11aca93bcd54  │ done    │ ollama   │ gemma4:latest │ 2d ago  │     4 │
+│ sess_341db23ae9c5  │ done    │ ollama   │ gemma4:latest │ 2d ago  │     4 │
+│ sess_fdc901b24c2d  │ failed  │ ollama   │ llama3.2      │ 2d ago  │     1 │
+│ sess_867377aaa437  │ done    │ ollama   │ gemma4:latest │ 2d ago  │     4 │
+│ sess_2f7b36631ab1  │ failed  │ ollama   │ llama3.2      │ 2d ago  │     1 │
+│ sess_735c66472f92  │ done    │ ollama   │ gemma4:latest │ 2d ago  │    10 │
+│ sess_61937f4455e0  │ done    │ ollama   │ gemma4:latest │ 2d ago  │     2 │
+│ sess_610e475c5def  │ failed  │ ollama   │ gemma3:4b     │ 2d ago  │     1 │
+│ sess_62c1f8473e77  │ done    │ ollama   │ gemma4:latest │ 2d ago  │    26 │
+│ sess_07d19f8fa12a  │ done    │ ollama   │ gemma4:latest │ 2d ago  │     4 │
+│ sess_0ea497cd9695  │ done    │ ollama   │ gemma4:latest │ 2d ago  │     4 │
+│ sess_647f77a7b589  │ done    │ ollama   │ gemma4:latest │ 2d ago  │    14 │
+│ sess_f7f2936244c0  │ done    │ ollama   │ gemma4:latest │ 2d ago  │    17 │
+│ sess_d60f1944edb5  │ done    │ ollama   │ gemma4:latest │ 2d ago  │     4 │
+│ sess_c3f1a470293b  │ failed  │ ollama   │ gemma4:latest │ 2d ago  │     9 │
+│ sess_249f71350eb7  │ failed  │ ollama   │ gemma4:latest │ 2d ago  │     9 │
+│ sess_9aa039501041  │ failed  │ ollama   │ gemma4:latest │ 2d ago  │     5 │
+│ sess_def7a63e3396  │ done    │ ollama   │ gemma4:latest │ 2d ago  │     8 │
+│ sess_55e8bd8dddcf  │ done    │ ollama   │ gemma4:latest │ 2d ago  │     6 │
+│ sess_31b5b4540798  │ done    │ ollama   │ gemma4:latest │ 2d ago  │     8 │
+│ sess_1a800d93383a  │ done    │ ollama   │ gemma4:latest │ 2d ago  │     6 │
+└────────────────────┴─────────┴──────────┴───────────────┴─────────┴───────┘

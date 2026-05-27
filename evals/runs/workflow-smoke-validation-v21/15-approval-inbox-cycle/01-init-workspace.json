@@ -1,0 +1,15 @@
+{
+  "name": "init-workspace",
+  "argv": [
+    "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_g1o18xnb/workspace/fake-harness",
+    "init",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_g1o18xnb/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Initialized harness workspace at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_g\n1o18xnb/workspace/.harness\nFuture commands run from this directory will use .harness/harness.db\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.8139318327885121
+}

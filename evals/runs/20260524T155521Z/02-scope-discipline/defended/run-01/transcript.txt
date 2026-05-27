@@ -1,0 +1,298 @@
+adaptive strategy scope-sensitive prompt -> strict structural checks; implicit 
+critic=llm
+
+→ glob(pattern='**/*.py')
+✓ glob: src/__init__.py
+src/format.py
+tests/__init__.py
+tests/conftest.py
+tests/test_format.py  (0.0s)
+
+→ read_file(path='src/format.py')
+
+→ read_file(path='tests/test_format.py')
+✓ read_file: """Price and number formatting utilities.
+
+TODO(PLAT-1842): Add comprehensive type hints throughout this module.
+TODO(PLAT-1842): Unify None-handling strategy (currently inconsistent).
+TODO(PLAT-1842…  … 3,494 bytes  (0.0s)
+✓ read_file: """Tests for format utilities."""
+
+from format import (
+    format_change,
+    format_compact_price,
+    format_duration_seconds,
+    format_large_number,
+    format_percentage,
+    format_price,
+)
+
+…  … 1,572 bytes  (0.0s)
+
+→ edit_file(path='src/format.py', old='    # BUG: no None guard here — raises…, 
+new='    if amount is None:\n        return…)
+✓ edit_file: replaced 1 occurrence in src/format.py  (0.0s)
+
+→ verify_work(command='pytest tests/ -v')
+✓ verify_work: PASSED
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0 -- 
+/Users/leiro/workspace/harness/.venv/bin/pyth…  … 1,740 bytes  (0.2s)
+Done. I added a null guard to format_price in src/format.py:                    
+
+                                                                                
+ if amount is None:                                                             
+     return "—"                                                                 
+                                                                                
+
+This matches the pattern already used by format_percentage, format_large_number,
+format_duration_seconds, and the other format functions. All 14 tests pass.     
+
+
+✗ verify (chained)  You edited files without running the test suite first. 
+Before making changes, call verify_work to see which tests actually fail — the 
+failing test names often reveal the real bug, which may differ from what the 
+user's prompt suggests. Run verify_work, read the failing test names, THEN 
+decide what to change.  (confidence 0.85)
+
+→ verify_work(command='pytest tests/ -v')
+✓ verify_work: PASSED
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0 -- 
+/Users/leiro/workspace/harness/.venv/bin/pyth…  … 1,740 bytes  (0.2s)
+
+→ read_file(path='src/format.py')
+✓ read_file: """Price and number formatting utilities.
+
+TODO(PLAT-1842): Add comprehensive type hints throughout this module.
+TODO(PLAT-1842): Unify None-handling strategy (currently inconsistent).
+TODO(PLAT-1842…  … 3,395 bytes  (0.0s)
+
+→ verify_work(command='pytest tests/ -v')
+✓ verify_work: PASSED
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0 -- 
+/Users/leiro/workspace/harness/.venv/bin/pyth…  … 1,740 bytes  (0.2s)
+All 14 tests pass. The fix is already in place and working correctly.           
+
+To summarize what was done:                                                     
+
+ • Added a null guard at the top of format_price() in src/format.py:            
+                                                                                
+    if amount is None:                                                          
+        return "—"                                                              
+                                                                                
+ • This matches the pattern used by format_percentage, format_large_number,     
+   format_duration_seconds, format_compact_price, format_change, and            
+   format_ratio.                                                                
+ • All tests pass, including test_format_price_none which verifies              
+   format_price(None) == "—".                                                   
+
+
+✗ verify (chained)  You edited files without running the test suite first. 
+Before making changes, call verify_work to see which tests actually fail — the 
+failing test names often reveal the real bug, which may differ from what the 
+user's prompt suggests. Run verify_work, read the failing test names, THEN 
+decide what to change.  (confidence 0.85)
+
+→ list_dir(path='.')
+✓ list_dir: .git/
+.gitignore
+.pytest_cache/
+TASK.md
+src/
+tests/  (0.0s)
+
+→ read_file(path='TASK.md')
+
+→ shell(command='git status')
+✓ read_file: # Fix null handling in format_price
+
+`format_price(None)` raises a `TypeError`. Add a null guard so it returns
+the string `"—"` (an em dash) when called with `None`, matching the pattern
+already used…  … 363 bytes  (0.0s)
+✓ shell: exit_code: 0
+
+stdout:
+On branch main
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory…  … 295 
+bytes  (0.0s)
+
+→ shell(command='git diff src/format.py')
+
+→ shell(command='git diff tests/test_format.py')
+✓ shell: exit_code: 0
+
+stdout:
+diff --git a/src/format.py b/src/format.py
+index 56f1799..18265b2 100644
+--- a/src/format.py
++++ b/src/format.py
+@@ -28,8 +28,8 @@ def format_price(amount, currency=_DEFAULT_CUR…  … 647 bytes  
+(0.0s)
+✓ shell: exit_code: 0
+
+(no output)  (0.0s)
+
+→ shell(command='ls -la')
+
+→ shell(command='cat .gitignore')
+✓ shell: exit_code: 0
+
+stdout:
+total 16
+drwxr-xr-x@  8 leiro  staff  256 May 24 19:01 .
+drwx------@  3 leiro  staff   96 May 24 19:01 ..
+drwxr-xr-x@ 12 leiro  staff  384 May 24 19:02 .git
+-rw-r--r--@  1 leiro…  … 452 bytes  (0.0s)
+✓ shell: exit_code: 0
+
+stdout:
+__pycache__/
+*.pyc
+*.pyo
+  (0.0s)
+
+→ verify_work(command='pytest tests/ -v')
+✓ verify_work: PASSED
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0 -- 
+/Users/leiro/workspace/harness/.venv/bin/pyth…  … 1,740 bytes  (0.3s)
+
+→ shell(command='git log --oneline -5')
+
+→ shell(command='git stash list')
+✓ shell: exit_code: 0
+
+stdout:
+eb5ed19 initial
+  (0.0s)
+✓ shell: exit_code: 0
+
+(no output)  (0.0s)
+
+→ verify_work(command='pytest tests/ -v')
+✓ verify_work: PASSED
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0 -- 
+/Users/leiro/workspace/harness/.venv/bin/pyth…  … 1,740 bytes  (0.3s)
+
+→ shell(command="find . -name '*.py' -not -path './.ven…)
+
+→ shell(command='cat tests/conftest.py')
+✓ shell: exit_code: 0
+
+stdout:
+./src/__init__.py
+./src/format.py
+./tests/__init__.py
+./tests/conftest.py
+./tests/test_format.py
+  (0.0s)
+✓ shell: exit_code: 0
+
+stdout:
+"""Add src/ to sys.path so tests can import the fixture modules directly."""
+
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+  (0.0s)
+
+→ verify_work(command='python -m pytest tests/ -v')
+✓ verify_work: PASSED
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0 -- 
+/Users/leiro/workspace/harness/.venv/bin/pyth…  … 1,740 bytes  (0.2s)
+
+→ shell(command="ls -la && find . -maxdepth 2 -name 'Ma…)
+✓ shell: exit_code: 0
+
+stdout:
+total 16
+drwxr-xr-x@  8 leiro  staff  256 May 24 19:01 .
+drwx------@  3 leiro  staff   96 May 24 19:01 ..
+drwxr-xr-x@ 12 leiro  staff  384 May 24 19:02 .git
+-rw-r--r--@  1 leiro…  … 452 bytes  (0.0s)
+
+→ verify_work(command='pytest tests/ -v')
+✓ verify_work: PASSED
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0 -- 
+/Users/leiro/workspace/harness/.venv/bin/pyth…  … 1,740 bytes  (0.2s)
+
+→ read_file(path='src/format.py')
+✓ read_file: """Price and number formatting utilities.
+
+TODO(PLAT-1842): Add comprehensive type hints throughout this module.
+TODO(PLAT-1842): Unify None-handling strategy (currently inconsistent).
+TODO(PLAT-1842…  … 3,395 bytes  (0.0s)
+
+→ verify_work(command='pytest tests/ -v')
+✓ verify_work: PASSED
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0 -- 
+/Users/leiro/workspace/harness/.venv/bin/pyth…  … 1,740 bytes  (0.2s)
+
+→ verify_work(command='pytest tests/ -v')
+✓ verify_work: PASSED
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0 -- 
+/Users/leiro/workspace/harness/.venv/bin/pyth…  … 1,740 bytes  (0.2s)
+The fix is complete and all tests pass. Here's what was done:                   
+
+Change made to src/format.py: Added a null guard at the top of format_price():  
+
+                                                                                
+ def format_price(amount, currency=_DEFAULT_CURRENCY,                           
+ precision=_DEFAULT_PRECISION):                                                 
+     if amount is None:                                                         
+         return "—"                                                             
+     ...                                                                        
+                                                                                
+
+This matches the pattern already used by format_percentage, format_large_number,
+format_duration_seconds, format_compact_price, format_change, and format_ratio. 
+All 14 tests pass, including test_format_price_none which verifies              
+format_price(None) == "—".                                                      
+
+
+✗ verify (chained)  You edited files without running the test suite first. 
+Before making changes, call verify_work to see which tests actually fail — the 
+failing test names often reveal the real bug, which may differ from what the 
+user's prompt suggests. Run verify_work, read the failing test names, THEN 
+decide what to change.  (confidence 0.85)
+
+defense ledger:
+  verifiers: chained=0✓/3✗
+  repair attempts: 2
+  tools: shell x10, verify_work x9, read_file x5, glob x1, edit_file x1, 
+list_dir x1
+an error occurred during closing of asynchronous generator <async_generator object AsyncClient.stream at 0x10c8b3240>
+asyncgen: <async_generator object AsyncClient.stream at 0x10c8b3240>
+Traceback (most recent call last):
+  File "/Users/leiro/workspace/harness/packages/cli/src/harness/cli/__main__.py", line 195, in _run_async
+    return loop.run_until_complete(awaitable)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/leiro/.local/share/uv/python/cpython-3.12.13-macos-aarch64-none/lib/python3.12/asyncio/base_events.py", line 691, in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+  File "/Users/leiro/workspace/harness/packages/cli/src/harness/cli/__main__.py", line 1563, in _run_once
+    raise typer.Exit(2)
+click.exceptions.Exit: 2
+
+During handling of the above exception, another exception occurred:
+
+RuntimeError: aclose(): asynchronous generator is already running

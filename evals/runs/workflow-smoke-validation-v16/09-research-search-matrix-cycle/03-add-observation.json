@@ -1,0 +1,28 @@
+{
+  "name": "add-observation",
+  "argv": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "research",
+    "add-observation",
+    "--title",
+    "Verifier coordination debt",
+    "--summary",
+    "Related verifier and promotion work is hard to discover quickly.",
+    "--source-type",
+    "repo",
+    "--source-ref",
+    "packages/core/src/harness/core/pr_generation.py",
+    "--related-sections",
+    "verification,promotion",
+    "--theme",
+    "verification",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_rxi0etgr/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Recorded observation obs-verifier-coordination-debt-01cd0463 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_r\nxi0etgr/workspace/.harness/research/observations/obs-verifier-coordination-debt-\n01cd0463\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.4095830409787595
+}

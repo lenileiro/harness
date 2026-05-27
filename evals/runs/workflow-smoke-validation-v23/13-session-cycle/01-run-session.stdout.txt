@@ -1,0 +1,8 @@
+adaptive strategy default adaptive path -> minimal structure
+workflow session ok                                                             
+
+✓ verify (verify_before_done)  No modifying tool calls detected — verification 
+not required.
+
+defense ledger:
+  verifiers: verify_before_done=8✓/0✗

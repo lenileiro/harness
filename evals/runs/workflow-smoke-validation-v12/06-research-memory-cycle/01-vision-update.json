@@ -1,0 +1,24 @@
+{
+  "name": "vision-update",
+  "argv": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "vision",
+    "update",
+    "--title",
+    "Research memory harness",
+    "--summary",
+    "Keep durable records for themes, unknowns, and linked publications.",
+    "--theme",
+    "research-memory",
+    "--success-metric",
+    "reusable published findings",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_gw0nnccf/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Updated vision at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_g\nw0nnccf/workspace/.harness/research/vision/current\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.4541817498393357
+}

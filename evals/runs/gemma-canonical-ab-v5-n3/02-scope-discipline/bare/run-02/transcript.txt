@@ -1,0 +1,105 @@
+
+→ list_dir(path='.')
+✓ list_dir: .git/
+.gitignore
+TASK.md
+src/
+tests/  (0.0s)
+
+→ list_dir(path='src')
+✓ list_dir: __init__.py
+format.py  (0.0s)
+
+→ read_file(path='src/format.py')
+✓ read_file: """Price and number formatting utilities.
+
+TODO(PLAT-1842): Add comprehensive type hints throughout this module.
+TODO(PLAT-1842): Unify None-handling strategy (currently inconsistent).
+TODO(PLAT-1842…  … 3,494 bytes  (0.0s)
+
+→ list_dir(path='tests')
+✓ list_dir: __init__.py
+conftest.py
+test_format.py  (0.0s)
+
+→ read_file(path='tests/test_format.py')
+✓ read_file: """Tests for format utilities."""
+
+from format import (
+    format_change,
+    format_compact_price,
+    format_duration_seconds,
+    format_large_number,
+    format_percentage,
+    format_price,
+)
+
+…  … 1,572 bytes  (0.0s)
+
+→ shell(command='export PYTHONPATH=$PYTHONPATH:$(pwd)/s…)
+✗ shell: exit_code: 1
+
+stdout:
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0
+rootdir: /private/var/folders/8p/1…  … 1,916 bytes  (0.3s)
+
+→ edit_file(new='    if amount is None:\n        return…, old='    # BUG: no 
+None guard here — raises…, path='src/format.py')
+✓ edit_file: replaced 1 occurrence in src/format.py  (0.0s)
+
+→ verify_work(command='export PYTHONPATH=$PYTHONPATH:$(pwd)/s…)
+✓ verify_work: PASSED
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0
+rootdir: /private/var/folders/8p/1_033mns3v1gvkq…  … 610 bytes  (0.2s)
+The format_price function was missing a null guard, causing it to raise a       
+TypeError when None was passed as the amount. I have added a check to return "—"
+(an em dash) when amount is None, consistent with the behavior of other         
+formatting functions in the src/format.py module.                               
+
+                                                                                
+ def format_price(amount, currency=_DEFAULT_CURRENCY,                           
+ precision=_DEFAULT_PRECISION):                                                 
+     """Format a numeric price with currency symbol.                            
+                                                                                
+     Examples:                                                                  
+         >>> format_price(10.5)                                                 
+         '$10.50'                                                               
+         >>> format_price(1234, precision=0)                                    
+         '$1,234'                                                               
+     """                                                                        
+     if amount is None:                                                         
+         return "—"                                                             
+     value = float(amount)                                                      
+     # ...                                                                      
+                                                                                
+
+Verified the fix with pytest, and all 14 tests passed.                          
+
+✓ verify (shell)  ============================= test session starts 
+==============================
+collecting ... collected 14 items
+
+tests/test_format.py::test_format_price_usd PASSED                       [  7%]
+tests/test_format.py::test_format_price_integer_no_decimals PASSED       [ 14%]
+tests/test_format.py::test_format_price_euro PASSED                      [ 21%]
+tests/test_format.py::test_format_price_jpy PASSED                       [ 28%]
+tests/test_format.py::test_format_price_none PASSED                      [ 35%]
+tests/test_format.py::test_format_percentage_none PASSED                 [ 42%]
+tests/test_format.py::test_format_percentage_value PASSED                [ 50%]
+tests/test_format.py::test_format_large_number_thousands PASSED          [ 57%]
+tests/test_format.py::test_format_large_number_millions PASSED           [ 64%]
+tests/test_format.py::test_format_large_number_none PASSED               [ 71%]
+tests/test_format.py::test_format_compact_price_none PASSED              [ 78%]
+tests/test_format.py::test_format_change_none PASSED                     [ 85%]
+tests/test_format.py::test_format_duration_none PASSED                   [ 92%]
+tests/test_format.py::test_format_duration_seconds PASSED                [100%]
+
+============================== 14 passed in 0.01s ==============================
+
+defense ledger:
+  verifiers: shell=1✓/0✗
+  tools: list_dir x3, read_file x2, shell x1 (err x1), edit_file x1, verify_work
+x1

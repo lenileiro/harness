@@ -1,0 +1,16 @@
+============================= test session starts ==============================
+collecting ... collected 1 item
+
+tests/test_plugin_flow.py::test_workspace_experience_plugin_loads_and_queries FAILED [100%]
+
+=================================== FAILURES ===================================
+______________ test_workspace_experience_plugin_loads_and_queries ______________
+tests/test_plugin_flow.py:51: in test_workspace_experience_plugin_loads_and_queries
+    tips = providers[0].query("plugin reliability check", top_k=5)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+workspace_plugin.py:4: in query
+    from harness.core.plugins.experience import ExperienceTip
+E   ModuleNotFoundError: No module named 'harness.core.plugins'
+=========================== short test summary info ============================
+FAILED tests/test_plugin_flow.py::test_workspace_experience_plugin_loads_and_queries
+============================== 1 failed in 1.34s ===============================

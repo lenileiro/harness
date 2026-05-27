@@ -1,0 +1,17 @@
+{
+  "name": "phase-declare",
+  "argv": [
+    "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_c7v5kp0e/workspace/fake-harness",
+    "phase",
+    "declare",
+    "implement",
+    "--db",
+    "phase.db"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "declared phase 'implement'  (session sess_d158c7519949)\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.38011962501332164
+}

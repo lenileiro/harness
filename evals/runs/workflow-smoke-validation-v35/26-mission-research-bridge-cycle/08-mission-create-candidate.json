@@ -1,0 +1,24 @@
+{
+  "name": "mission-create-candidate",
+  "argv": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "mission",
+    "create-candidate",
+    "--mission",
+    "mission-bridge-mission-c8c9b3f2",
+    "--feature",
+    "feature-implement-bridge-feature-01a102e0",
+    "--title",
+    "Mission bridge candidate",
+    "--summary",
+    "Promote the validated bridge feature into the research lane.",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_86t9ok52/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Created linked promotion candidate promo-mission-bridge-candidate-ce89e798 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_8\n6t9ok52/workspace/.harness/research/promotions/promo-mission-bridge-candidate-ce\n89e798\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.39996541710570455
+}

@@ -1,0 +1,26 @@
+{
+  "name": "hypothesize",
+  "argv": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "research",
+    "hypothesize",
+    "--opportunity",
+    "opp-improve-research-dashboards-8b946c76",
+    "--claim",
+    "Consistent dashboards make autonomous coordination easier.",
+    "--expected-win",
+    "Lower time to orient on active work.",
+    "--risk-level",
+    "low",
+    "--change-mode",
+    "improve",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_ljyu600l/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Created hypothesis hyp-consistent-dashboards-make-auton-f2e03196 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_l\njyu600l/workspace/.harness/research/hypotheses/hyp-consistent-dashboards-make-au\nton-f2e03196\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.5219022498931736
+}

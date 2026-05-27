@@ -1,0 +1,20 @@
+{
+  "name": "resume-init",
+  "argv": [
+    "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_p1mq6a4h/workspace/fake-harness",
+    "resume",
+    "init",
+    "--feature",
+    "alpha",
+    "--description",
+    "Ship alpha",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_p1mq6a4h/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Wrote \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_p\n1mq6a4h/workspace/.harness/resume.json\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.3631725839804858
+}

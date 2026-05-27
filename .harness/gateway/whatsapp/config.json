@@ -1,0 +1,11 @@
+{
+  "enabled": true,
+  "provider": "openrouter",
+  "model": "google/gemma-4-31b-it",
+  "mode": "self-chat",
+  "allowed_users": [
+    "+37253617904"
+  ],
+  "bridge_port": 8741,
+  "reply_prefix": "Harness Agent\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n"
+}

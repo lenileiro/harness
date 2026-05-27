@@ -1,0 +1,18 @@
+{
+  "name": "mission-approve",
+  "argv": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "mission",
+    "approve",
+    "--mission",
+    "mission-bridge-mission-c368fe25",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_6gbpa7qq/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Approved mission mission-bridge-mission-c368fe25\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.40342616685666144
+}

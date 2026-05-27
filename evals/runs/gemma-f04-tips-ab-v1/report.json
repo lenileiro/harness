@@ -1,0 +1,117 @@
+{
+  "run_id": "20260524T161634Z",
+  "provider": "openrouter",
+  "model": "google/gemma-4-26b-a4b-it",
+  "judge_provider": null,
+  "judge_model": null,
+  "fixture_set": "fixtures",
+  "n_runs": 1,
+  "ab": true,
+  "artifact_root": "evals/runs/gemma-f04-tips-ab-v1",
+  "benchmark_mode": "original",
+  "mutation_coverage": null,
+  "no_judge": true,
+  "results": [],
+  "hard_results": [
+    {
+      "fixture_name": "04-sustained-coherence",
+      "variant": "defended",
+      "run_index": 1,
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 3,
+        "lines_added": 11,
+        "lines_deleted": 0,
+        "tool_calls": 40,
+        "shell_commands": 2,
+        "did_run_verification": true,
+        "agent_duration_seconds": 46.10001716692932,
+        "verify_duration_seconds": 0.20720658311620355,
+        "total_duration_seconds": 46.30722375004552,
+        "time_to_first_verification_seconds": 46.10001716692932,
+        "edit_before_repro": true,
+        "premature_completion": false,
+        "redundant_tool_calls": 26,
+        "retry_loops": 13,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-f04-tips-ab-v1/04-sustained-coherence/defended/run-01",
+      "agent_exit_code": 0,
+      "verify_exit_code": 0
+    },
+    {
+      "fixture_name": "04-sustained-coherence",
+      "variant": "bare",
+      "run_index": 1,
+      "hard_metrics": {
+        "verify_passed": false,
+        "run_exit_code": 0,
+        "verify_exit_code": 1,
+        "files_touched": 3,
+        "lines_added": 9,
+        "lines_deleted": 14,
+        "tool_calls": 37,
+        "shell_commands": 6,
+        "did_run_verification": true,
+        "agent_duration_seconds": 26.590679083950818,
+        "verify_duration_seconds": 0.2129181670024991,
+        "total_duration_seconds": 26.803597250953317,
+        "time_to_first_verification_seconds": 26.590679083950818,
+        "edit_before_repro": true,
+        "premature_completion": true,
+        "redundant_tool_calls": 25,
+        "retry_loops": 14,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-f04-tips-ab-v1/04-sustained-coherence/bare/run-01",
+      "agent_exit_code": 0,
+      "verify_exit_code": 1
+    }
+  ],
+  "aggregates": [
+    {
+      "fixture_name": "04-sustained-coherence",
+      "variant": "defended",
+      "runs": 1,
+      "passes": 1,
+      "dimensions": {},
+      "hard_metrics": {
+        "avg_files_touched": 3.0,
+        "avg_lines_added": 11.0,
+        "avg_lines_deleted": 0.0,
+        "avg_tool_calls": 40.0,
+        "avg_shell_commands": 2.0,
+        "avg_agent_duration_seconds": 46.10001716692932,
+        "avg_verify_duration_seconds": 0.20720658311620355,
+        "avg_total_duration_seconds": 46.30722375004552,
+        "avg_redundant_tool_calls": 26.0,
+        "avg_retry_loops": 13.0,
+        "verify_pass_rate": 1.0
+      },
+      "pass_rate": 1.0
+    },
+    {
+      "fixture_name": "04-sustained-coherence",
+      "variant": "bare",
+      "runs": 1,
+      "passes": 0,
+      "dimensions": {},
+      "hard_metrics": {
+        "avg_files_touched": 3.0,
+        "avg_lines_added": 9.0,
+        "avg_lines_deleted": 14.0,
+        "avg_tool_calls": 37.0,
+        "avg_shell_commands": 6.0,
+        "avg_agent_duration_seconds": 26.590679083950818,
+        "avg_verify_duration_seconds": 0.2129181670024991,
+        "avg_total_duration_seconds": 26.803597250953317,
+        "avg_redundant_tool_calls": 25.0,
+        "avg_retry_loops": 14.0,
+        "verify_pass_rate": 0.0
+      },
+      "pass_rate": 0.0
+    }
+  ]
+}

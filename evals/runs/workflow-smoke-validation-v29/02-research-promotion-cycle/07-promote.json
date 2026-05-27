@@ -1,0 +1,19 @@
+{
+  "name": "promote",
+  "argv": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "research",
+    "promote",
+    "--candidate",
+    "promo-promotion-draft-evidence-section-593b85ac",
+    "--no-create-branch",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_9mumh67u/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Prepared promotion draft for promo-promotion-draft-evidence-section-593b85ac\nbranch=research/promo-promotion-draft-evidence-section-593b85ac\ncommit_message=research: promote Promotion draft evidence section\ndraft_json=/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_work\nflow_eval_9mumh67u/workspace/.harness/research/promotions/promo-promotion-draft-\nevidence-section-593b85ac/promotion_draft.json\npr_body=/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflo\nw_eval_9mumh67u/workspace/.harness/research/promotions/promo-promotion-draft-evi\ndence-section-593b85ac/PR_BODY.md\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.35200208402238786
+}

@@ -1,0 +1,25 @@
+{
+  "name": "procedures-add",
+  "argv": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "experience",
+    "procedures",
+    "add",
+    "--name",
+    "Scope discipline",
+    "--body",
+    "Keep the patch in the named formatter only.",
+    "--triggers",
+    "format_price,minimal fix",
+    "--scope",
+    "repo",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_13ivezfs/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Added procedure proc_4f6c80e26d at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_1\n3ivezfs/workspace/.harness/procedures/scope-discipline\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.3394127918872982
+}

@@ -1,0 +1,17 @@
+{
+  "name": "mission-show",
+  "argv": [
+    "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_c088rl07/workspace/fake-harness",
+    "mission",
+    "show",
+    "mission-drafted-mission-daa22ba4",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_c088rl07/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Drafted Mission\nid=mission-drafted-mission-daa22ba4\nstatus=approved\ncreated_by=human\ncurrent_milestone_id=milestone-mission-schema-19fea24b\n\nGoal\nGenerate a mission plan from a high-level goal.\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.41794408299028873
+}

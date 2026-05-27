@@ -1,0 +1,25 @@
+[
+  {
+    "id": "adj_654dc28c3a",
+    "kind": "general",
+    "text": "Use the smallest evidence-backed patch that satisfies the failing verification path before expanding scope.",
+    "triggers": [
+      "research",
+      "seed",
+      "publication",
+      "built",
+      "harness",
+      "commands",
+      "workspace",
+      "create"
+    ],
+    "weight": 1.0,
+    "source_fixture_name": "06-research-publication-flow",
+    "source_variant": "defended",
+    "source_artifact_dir": "evals/runs/gemma-deep-eval-f06/06-research-publication-flow/defended/run-01",
+    "rationale": "Fallback adjustment when no narrower failure pattern was detected.",
+    "evidence": {
+      "verify_passed": false
+    }
+  }
+]

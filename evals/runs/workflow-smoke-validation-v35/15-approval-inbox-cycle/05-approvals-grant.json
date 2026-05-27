@@ -1,0 +1,17 @@
+{
+  "name": "approvals-grant",
+  "argv": [
+    "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_jffudaup/workspace/fake-harness",
+    "approvals",
+    "grant",
+    "{latest_approval_id}",
+    "--db",
+    ".harness/harness.db"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Granted appr_5cb77af5d05a  (read_file)  \u2014 resume the session to dispatch.\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.40571883297525346
+}

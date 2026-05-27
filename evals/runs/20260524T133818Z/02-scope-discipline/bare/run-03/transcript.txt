@@ -1,0 +1,166 @@
+I'll fix the null handling in the format_price function by adding a guard that  
+returns an em dash when called with None. Let me first locate and examine the   
+relevant code.                                                                  
+→ glob(pattern='**/*.py')
+✓ glob: src/__init__.py
+src/format.py
+tests/__init__.py
+tests/conftest.py
+tests/test_format.py  (0.0s)
+Let me look at the format.py file where the format_price function is likely     
+located:                                                                        
+→ read_file(path='src/format.py')
+✓ read_file: """Price and number formatting utilities.
+
+TODO(PLAT-1842): Add comprehensive type hints throughout this module.
+TODO(PLAT-1842): Unify None-handling strategy (currently inconsistent).
+TODO(PLAT-1842…  … 3,494 bytes  (0.0s)
+Now let me check the test file to understand how format_price should behave with
+None:                                                                           
+→ read_file(path='tests/test_format.py')
+✓ read_file: """Tests for format utilities."""
+
+from format import (
+    format_change,
+    format_compact_price,
+    format_duration_seconds,
+    format_large_number,
+    format_percentage,
+    format_price,
+)
+
+…  … 1,572 bytes  (0.0s)
+Now I can see the issue clearly. The format_price function doesn't handle None  
+inputs like the other formatting functions do. Looking at the test, there's     
+already a test for this case (test_format_price_none) which expects             
+format_price(None) to return "—", but currently it raises a TypeError because   
+the function tries to convert None to a float.                                  
+
+Let me check what the actual error is by running the tests:                     
+→ verify_work(command='python -m pytest tests/test_format.py:…)
+✗ verify_work: FAILED (exit 1)
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0 -- 
+/Users/leiro/workspace/harness/.venv…  … 1,998 bytes  (0.2s)
+Perfect! This confirms the issue. The error occurs exactly where I expected -   
+when trying to convert None to a float.                                         
+
+Let me also run all the tests to see the overall state:                         
+→ verify_work(command='python -m pytest tests/ -v')
+✗ verify_work: FAILED (exit 1)
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0 -- 
+/Users/leiro/workspace/harness/.venv…  … 3,040 bytes  (0.2s)
+Good! Only one test is failing, and it's exactly the one I need to fix. All     
+other formatting functions already handle None correctly by returning "—", as   
+noted in the comments.                                                          
+
+Let me implement the fix. I need to add a null guard at the beginning of the    
+format_price function:                                                          
+→ edit_file(path='src/format.py', old='def format_price(amount, currency=_DEF…, 
+new='def format_price(amount, currency=_DEF…)
+✓ edit_file: replaced 1 occurrence in src/format.py  (0.0s)
+Now let's run the test to see if the fix works:                                 
+→ verify_work(command='python -m pytest tests/test_format.py:…)
+✓ verify_work: PASSED
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0 -- 
+/Users/leiro/workspace/harness/.venv/bin/pyth…  … 698 bytes  (0.2s)
+Great! The specific test is now passing. Let's run all tests to make sure I     
+haven't broken anything else:                                                   
+→ verify_work(command='python -m pytest tests/ -v')
+✓ verify_work: PASSED
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0 -- 
+/Users/leiro/workspace/harness/.venv/bin/pyth…  … 1,740 bytes  (0.2s)
+Perfect! All tests are now passing. Let me also verify that the function works  
+correctly by testing it directly:                                               
+→ shell(command='python -c "from src.format import form…)
+✓ shell: exit_code: 0
+
+stdout:
+'—'
+'$10.50'
+  (0.0s)
+Excellent! The fix is working correctly:                                        
+
+ 1 format_price(None) now returns '—' (an em dash) as required                  
+ 2 format_price(10.5) still works correctly and returns '$10.50'                
+
+Let me also check that I haven't introduced any regressions by looking at the   
+final implementation:                                                           
+→ read_file(path='src/format.py', start_line=25, end_line=40)
+✓ read_file: """Price and number formatting utilities.
+
+TODO(PLAT-1842): Add comprehensive type hints throughout this module.
+TODO(PLAT-1842): Unify None-handling strategy (currently inconsistent).
+TODO(PLAT-1842…  … 3,395 bytes  (0.0s)
+Perfect! The fix is complete and working correctly. Here's what I implemented:  
+
+Summary                                                                         
+
+I successfully fixed the null handling in format_price by adding a simple null  
+guard at the beginning of the function:                                         
+
+                                                                                
+ def format_price(amount, currency=_DEFAULT_CURRENCY,                           
+ precision=_DEFAULT_PRECISION):                                                 
+     """Format a numeric price with currency symbol.                            
+                                                                                
+     Examples:                                                                  
+         >>> format_price(10.5)                                                 
+         '$10.50'                                                               
+         >>> format_price(1234, precision=0)                                    
+         '$1,234'                                                               
+     """                                                                        
+     if amount is None:                                                         
+         return "—"                                                             
+     value = float(amount)                                                      
+     # ... rest of the function unchanged                                       
+                                                                                
+
+What the fix does:                                                              
+
+ • Checks if amount is None at the beginning of the function                    
+ • Returns "—" (em dash) immediately if amount is None, matching the behavior of
+   other format functions                                                       
+ • Otherwise continues with the normal logic                                    
+
+Verification:                                                                   
+
+ • All tests pass (14/14)                                                       
+ • format_price(None) now returns "—" instead of raising TypeError              
+ • format_price(10.5) still works correctly and returns '$10.50'                
+ • No regressions in existing functionality                                     
+
+This is a minimal fix that addresses only the specific issue mentioned in the   
+task, without making any of the broader changes mentioned in PLAT-1842.         
+
+✓ verify (shell)  ============================= test session starts 
+==============================
+collecting ... collected 14 items
+
+tests/test_format.py::test_format_price_usd PASSED                       [  7%]
+tests/test_format.py::test_format_price_integer_no_decimals PASSED       [ 14%]
+tests/test_format.py::test_format_price_euro PASSED                      [ 21%]
+tests/test_format.py::test_format_price_jpy PASSED                       [ 28%]
+tests/test_format.py::test_format_price_none PASSED                      [ 35%]
+tests/test_format.py::test_format_percentage_none PASSED                 [ 42%]
+tests/test_format.py::test_format_percentage_value PASSED                [ 50%]
+tests/test_format.py::test_format_large_number_thousands PASSED          [ 57%]
+tests/test_format.py::test_format_large_number_millions PASSED           [ 64%]
+tests/test_format.py::test_format_large_number_none PASSED               [ 71%]
+tests/test_format.py::test_format_compact_price_none PASSED              [ 78%]
+tests/test_format.py::test_format_change_none PASSED                     [ 85%]
+tests/test_format.py::test_format_duration_none PASSED                   [ 92%]
+tests/test_format.py::test_format_duration_seconds PASSED                [100%]
+
+============================== 14 passed in 0.01s ==============================
+
+defense ledger:
+  verifiers: shell=1✓/0✗
+  tools: verify_work x4 (err x2), read_file x3, glob x1, edit_file x1, shell x1

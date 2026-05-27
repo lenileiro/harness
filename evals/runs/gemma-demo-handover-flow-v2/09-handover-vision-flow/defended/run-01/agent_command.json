@@ -1,0 +1,23 @@
+[
+  "/Users/leiro/workspace/harness/.venv/bin/harness",
+  "run",
+  "# Create a structured handover for the next agent\n\nUse the built-in Harness CLI in this workspace to create a small research\nhandover that another agent could continue without reading the original\ntranscript.\n\nUse CLI entrypoints only. Do not hand-edit `.harness/*.json` files directly.\n\nUse these commands:\n\n- `harness vision update`\n- `harness research add-theme`\n- `harness research create-unknown`\n- `harness research open`\n- `harness research publish`\n- `harness resume init`\n- `harness resume add-feature`\n- `harness resume set-current`\n\nFor the resume contract, use the commands in this shape:\n\n- `harness resume init --feature handover-checklist --description \"...\"`\n- `harness resume add-feature handover-consumption --description \"...\" --phases review,continue,verify`\n- `harness resume set-current handover-consumption`\n\nImportant: `harness resume init` creates a default `first-feature` when you do\nnot pass `--feature`. Do not rely on that default for this task.\n\nDo all of the following:\n\n1. Set the current vision title to `Autonomous Handover System` and the summary\n   to `Leave structured continuation state for the next agent.`\n2. Add a theme titled `Agent continuity`.\n3. Create an unknown under that theme asking:\n   `What context must a handover always preserve?`\n4. Open one rabbit hole titled `Handover artifact checklist`.\n5. Publish one publication titled `Handover checklist findings`.\n6. Create a resume contract with current feature `handover-checklist`.\n7. Add a second feature named `handover-consumption`.\n8. Switch the resume contract so the current feature becomes\n   `handover-consumption`.\n\nUse these exact values where applicable:\n\n- theme description:\n  `Ensure one agent can leave durable next-step context for another.`\n- unknown why-it-matters:\n  `Future agents need enough structure to continue work without replaying history.`\n- rabbit hole question:\n  `What information should every agent handover preserve for the next agent?`\n- rabbit hole scope:\n  `Review resume, research, and continuation artifacts for minimum useful state.`\n- publication summary:\n  `A handover should preserve the next mission, the open question, and the continuation path.`\n- publication claim:\n  `Every handover should name the next feature, the active question, and where to continue the work.`\n- publication recommendation:\n  `Use the resume contract to point the next agent at a single current feature.`\n- publication open question:\n  `Should handover artifacts also include a verification checklist for the next agent?`\n- resume init description:\n  `Capture the checklist for what a durable handover must contain.`\n- second feature description:\n  `Consume the handover and continue the next step without replaying prior context.`\n- second feature phases:\n  `review,continue,verify`\n\nYou will need the generated theme ID and rabbit-hole ID between steps. Read the\ngenerated JSON files under `.harness/...` to get those IDs as needed.\n\nRun the tests when done.",
+  "--cwd",
+  "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_iuxcqwoo/09-handover-vision-flow",
+  "--yes",
+  "--in-memory",
+  "--provider",
+  "openrouter",
+  "--model",
+  "google/gemma-4-26b-a4b-it",
+  "--max-repair",
+  "2",
+  "--profile",
+  "adaptive",
+  "--verify",
+  "shell",
+  "--verify-command",
+  "pytest tests/ -v --tb=short --no-header",
+  "--critic",
+  "llm+search"
+]

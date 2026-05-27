@@ -1,0 +1,3 @@
+harness lab resume task_root_eval  — 2 workers
+provider=ollama  worker-model=llama3.2
+

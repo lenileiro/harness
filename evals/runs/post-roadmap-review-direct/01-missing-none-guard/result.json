@@ -1,0 +1,24 @@
+{
+  "fixture_name": "01-missing-none-guard",
+  "passed": true,
+  "findings_count": 1,
+  "matched_expectations": 1,
+  "missing_expectations": [],
+  "summary": "review found a real issue",
+  "artifact_dir": "evals/runs/post-roadmap-review-direct/01-missing-none-guard",
+  "raw_output": "{\"summary\": \"review found a real issue\", \"findings\": [{\"severity\": \"high\", \"file\": \"src/profile.py\", \"line\": 2, \"issue\": \"None input will crash here\", \"rationale\": \"The code dereferences user without checking for None.\"}]}\n",
+  "report": {
+    "summary": "review found a real issue",
+    "findings": [
+      {
+        "severity": "high",
+        "file": "src/profile.py",
+        "line": 2,
+        "issue": "None input will crash here",
+        "rationale": "The code dereferences user without checking for None.",
+        "suggested_fix": null
+      }
+    ]
+  },
+  "duration_seconds": 0.8353261668235064
+}

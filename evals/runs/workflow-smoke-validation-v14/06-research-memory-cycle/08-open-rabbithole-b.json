@@ -1,0 +1,26 @@
+{
+  "name": "open-rabbithole-b",
+  "argv": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "research",
+    "open",
+    "--title",
+    "Citation graph",
+    "--question",
+    "How should later work build on archival findings?",
+    "--scope",
+    "Inspect citations and reuse paths.",
+    "--theme",
+    "research-memory",
+    "--related-sections",
+    "citations,publications",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_zkktkgbx/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Opened rabbit hole rh-citation-graph-3e68b6dc at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_z\nkktkgbx/workspace/.harness/research/rabbitholes/rh-citation-graph-3e68b6dc\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.41348470910452306
+}

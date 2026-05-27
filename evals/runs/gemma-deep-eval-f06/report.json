@@ -1,0 +1,141 @@
+{
+  "run_id": "20260525T193739Z",
+  "provider": "openrouter",
+  "model": "google/gemma-4-26b-a4b-it",
+  "judge_provider": "openrouter",
+  "judge_model": "google/gemma-4-26b-a4b-it",
+  "fixture_set": "fixtures",
+  "n_runs": 1,
+  "ab": false,
+  "artifact_root": "evals/runs/gemma-deep-eval-f06",
+  "benchmark_mode": "original",
+  "mutation_coverage": null,
+  "results": [
+    {
+      "fixture_name": "06-research-publication-flow",
+      "verification": {
+        "score": 1,
+        "rationale": "The agent never successfully ran the tests to verify its work, as it timed out before completion."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent did not modify any files, which is appropriate given it failed to complete the task."
+      },
+      "decomposition": {
+        "score": 1,
+        "rationale": "The agent failed to identify the correct sequence of commands and got stuck in a loop trying to find the right CLI subcommands."
+      },
+      "correctness": {
+        "score": 1,
+        "rationale": "The tests failed because the agent did not create the required research artifacts."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt was clean and the agent did not need to push back on any incorrect premises."
+      },
+      "epistemic": {
+        "score": 3,
+        "rationale": "The agent used tool outputs like 'harness research --help' to guide its search, but it failed to reach a valid conclusion."
+      },
+      "overall": {
+        "score": 1,
+        "rationale": "The agent failed the task completely by exceeding the maximum step limit without producing the requested artifacts."
+      },
+      "hard_metrics": {
+        "verify_passed": false,
+        "run_exit_code": 0,
+        "verify_exit_code": 1,
+        "files_touched": 0,
+        "lines_added": 0,
+        "lines_deleted": 0,
+        "tool_calls": 52,
+        "shell_commands": 48,
+        "did_run_verification": false,
+        "agent_duration_seconds": 34.62547474983148,
+        "verify_duration_seconds": 0.2621340421028435,
+        "total_duration_seconds": 34.887608791934326,
+        "time_to_first_verification_seconds": null,
+        "edit_before_repro": false,
+        "premature_completion": false,
+        "redundant_tool_calls": 47,
+        "retry_loops": 44,
+        "verification_after_failure": false
+      },
+      "artifact_dir": "evals/runs/gemma-deep-eval-f06/06-research-publication-flow/defended/run-01",
+      "variant": "defended",
+      "run_index": 1
+    }
+  ],
+  "aggregates": [
+    {
+      "fixture_name": "06-research-publication-flow",
+      "variant": "defended",
+      "runs": 1,
+      "passes": 0,
+      "dimensions": {
+        "verification": {
+          "median": 1,
+          "minimum": 1,
+          "maximum": 1,
+          "mean": 1.0,
+          "sem": null
+        },
+        "scope": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "decomposition": {
+          "median": 1,
+          "minimum": 1,
+          "maximum": 1,
+          "mean": 1.0,
+          "sem": null
+        },
+        "correctness": {
+          "median": 1,
+          "minimum": 1,
+          "maximum": 1,
+          "mean": 1.0,
+          "sem": null
+        },
+        "pushback": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "epistemic": {
+          "median": 3,
+          "minimum": 3,
+          "maximum": 3,
+          "mean": 3.0,
+          "sem": null
+        },
+        "overall": {
+          "median": 1,
+          "minimum": 1,
+          "maximum": 1,
+          "mean": 1.0,
+          "sem": null
+        }
+      },
+      "hard_metrics": {
+        "avg_files_touched": 0.0,
+        "avg_lines_added": 0.0,
+        "avg_lines_deleted": 0.0,
+        "avg_tool_calls": 52.0,
+        "avg_shell_commands": 48.0,
+        "avg_agent_duration_seconds": 34.62547474983148,
+        "avg_verify_duration_seconds": 0.2621340421028435,
+        "avg_total_duration_seconds": 34.887608791934326,
+        "avg_redundant_tool_calls": 47.0,
+        "avg_retry_loops": 44.0,
+        "verify_pass_rate": 0.0
+      }
+    }
+  ]
+}

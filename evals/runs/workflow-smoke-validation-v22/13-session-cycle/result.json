@@ -1,0 +1,80 @@
+{
+  "fixture_name": "13-session-cycle",
+  "passed": true,
+  "steps_total": 4,
+  "steps_passed": 4,
+  "step_results": [
+    {
+      "name": "run-session",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_s3uj5mq3/workspace/fake-harness",
+        "run",
+        "say hello",
+        "--session",
+        "sess_workflow_eval",
+        "--provider",
+        "ollama",
+        "--model",
+        "test-model",
+        "--yes",
+        "--verify",
+        "none",
+        "--cwd",
+        "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_s3uj5mq3/workspace"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "adaptive strategy default adaptive path -> minimal structure\nworkflow session ok                                                             \n\n\u2713 verify (verify_before_done)  No modifying tool calls detected \u2014 verification \nnot required.\n\ndefense ledger:\n  verifiers: verify_before_done=7\u2713/0\u2717\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.7554139159619808
+    },
+    {
+      "name": "sessions-list",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_s3uj5mq3/workspace/fake-harness",
+        "sessions",
+        "list"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2513\n\u2503 ID                 \u2503 Status  \u2503 Provider \u2503 Model         \u2503 Updated \u2503 Turns \u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2529\n\u2502 sess_workflow_eval \u2502 done    \u2502 ollama   \u2502 test-model    \u2502 0s ago  \u2502     2 \u2502\n\u2502 test-sess-1        \u2502 pending \u2502 x        \u2502 x             \u2502 1d ago  \u2502     0 \u2502\n\u2502 sess_da772aeb431a  \u2502 done    \u2502 ollama   \u2502 gemma4        \u2502 2d ago  \u2502    18 \u2502\n\u2502 sess_67dd1718b9db  \u2502 running \u2502 ollama   \u2502 gemma4        \u2502 2d ago  \u2502     1 \u2502\n\u2502 sess_11aca93bcd54  \u2502 done    \u2502 ollama   \u2502 gemma4:latest \u2502 2d ago  \u2502     4 \u2502\n\u2502 sess_341db23ae9c5  \u2502 done    \u2502 ollama   \u2502 gemma4:latest \u2502 2d ago  \u2502     4 \u2502\n\u2502 sess_fdc901b24c2d  \u2502 failed  \u2502 ollama   \u2502 llama3.2      \u2502 2d ago  \u2502     1 \u2502\n\u2502 sess_867377aaa437  \u2502 done    \u2502 ollama   \u2502 gemma4:latest \u2502 2d ago  \u2502     4 \u2502\n\u2502 sess_2f7b36631ab1  \u2502 failed  \u2502 ollama   \u2502 llama3.2      \u2502 2d ago  \u2502     1 \u2502\n\u2502 sess_735c66472f92  \u2502 done    \u2502 ollama   \u2502 gemma4:latest \u2502 2d ago  \u2502    10 \u2502\n\u2502 sess_61937f4455e0  \u2502 done    \u2502 ollama   \u2502 gemma4:latest \u2502 2d ago  \u2502     2 \u2502\n\u2502 sess_610e475c5def  \u2502 failed  \u2502 ollama   \u2502 gemma3:4b     \u2502 2d ago  \u2502     1 \u2502\n\u2502 sess_62c1f8473e77  \u2502 done    \u2502 ollama   \u2502 gemma4:latest \u2502 2d ago  \u2502    26 \u2502\n\u2502 sess_07d19f8fa12a  \u2502 done    \u2502 ollama   \u2502 gemma4:latest \u2502 2d ago  \u2502     4 \u2502\n\u2502 sess_0ea497cd9695  \u2502 done    \u2502 ollama   \u2502 gemma4:latest \u2502 2d ago  \u2502     4 \u2502\n\u2502 sess_647f77a7b589  \u2502 done    \u2502 ollama   \u2502 gemma4:latest \u2502 2d ago  \u2502    14 \u2502\n\u2502 sess_f7f2936244c0  \u2502 done    \u2502 ollama   \u2502 gemma4:latest \u2502 2d ago  \u2502    17 \u2502\n\u2502 sess_d60f1944edb5  \u2502 done    \u2502 ollama   \u2502 gemma4:latest \u2502 2d ago  \u2502     4 \u2502\n\u2502 sess_c3f1a470293b  \u2502 failed  \u2502 ollama   \u2502 gemma4:latest \u2502 2d ago  \u2502     9 \u2502\n\u2502 sess_249f71350eb7  \u2502 failed  \u2502 ollama   \u2502 gemma4:latest \u2502 2d ago  \u2502     9 \u2502\n\u2502 sess_9aa039501041  \u2502 failed  \u2502 ollama   \u2502 gemma4:latest \u2502 2d ago  \u2502     5 \u2502\n\u2502 sess_def7a63e3396  \u2502 done    \u2502 ollama   \u2502 gemma4:latest \u2502 2d ago  \u2502     8 \u2502\n\u2502 sess_55e8bd8dddcf  \u2502 done    \u2502 ollama   \u2502 gemma4:latest \u2502 2d ago  \u2502     6 \u2502\n\u2502 sess_31b5b4540798  \u2502 done    \u2502 ollama   \u2502 gemma4:latest \u2502 2d ago  \u2502     8 \u2502\n\u2502 sess_1a800d93383a  \u2502 done    \u2502 ollama   \u2502 gemma4:latest \u2502 2d ago  \u2502     6 \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.42915495904162526
+    },
+    {
+      "name": "sessions-show",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_s3uj5mq3/workspace/fake-harness",
+        "sessions",
+        "show",
+        "sess_workflow_eval"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "\u256d\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 session \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256e\n\u2502 sess_workflow_eval  done  ollama/test-model                                  \u2502\n\u2502 created 0s ago, updated 0s ago                                               \u2502\n\u2502 cwd:                                                                         \u2502\n\u2502 /private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_ev \u2502\n\u2502 al_s3uj5mq3/workspace                                                        \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\n\u256d\u2500\u2500 user \u2500\u2500\u2500\u256e\n\u2502 say hello \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\n\u256d\u2500\u2500\u2500\u2500\u2500 assistant \u2500\u2500\u2500\u2500\u2500\u256e\n\u2502 workflow session ok \u2502\n\u2570\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u256f\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.41191337490454316
+    },
+    {
+      "name": "sessions-rm",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_s3uj5mq3/workspace/fake-harness",
+        "sessions",
+        "rm",
+        "sess_workflow_eval",
+        "--yes"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "Deleted sess_workflow_eval\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.4076075830962509
+    }
+  ],
+  "artifact_dir": "evals/runs/workflow-smoke-validation-v22/13-session-cycle",
+  "duration_seconds": 2.008454541908577
+}

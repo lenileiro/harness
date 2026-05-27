@@ -1,0 +1,49 @@
+diff --git a/src/cache.py b/src/cache.py
+index 3d8a95a..a534c29 100644
+--- a/src/cache.py
++++ b/src/cache.py
+@@ -28,6 +28,7 @@ class SimpleCache:
+ 
+     def __init__(self) -> None:
+         self._store: dict[str, Any] = {}
++        self._inflight: dict[str, asyncio.Task[Any]] = {}
+ 
+     async def get_or_fetch(
+         self,
+@@ -46,20 +47,30 @@ class SimpleCache:
+         if key in self._store:
+             return self._store[key]
+ 
+-        # MISSING: no in-flight deduplication.
+-        # Multiple concurrent callers for the same key all reach this line and
+-        # each triggers its own fetch() call independently.
+-        value = await asyncio.wait_for(fetch(key), timeout=fetch_timeout)
+-        self._store[key] = value
+-        return value
++        if key in self._inflight:
++            return await self._inflight[key]
++
++        async def _fetch_and_cache():
++            try:
++                value = await asyncio.wait_for(fetch(key), timeout=fetch_timeout)
++                self._store[key] = value
++                return value
++            finally:
++                self._inflight.pop(key, None)
++
++        task = asyncio.create_task(_fetch_and_cache())
++        self._inflight[key] = task
++        return await task
+ 
+     def invalidate(self, key: str) -> None:
+         """Remove a key from the cache."""
+         self._store.pop(key, None)
++        self._inflight.pop(key, None)
+ 
+     def clear(self) -> None:
+         """Remove all cached entries."""
+         self._store.clear()
++        self._inflight.clear()
+ 
+     def __len__(self) -> int:
+         return len(self._store)

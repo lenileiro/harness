@@ -1,0 +1,24 @@
+{
+  "run_id": "20260524T220956Z-research",
+  "provider": "ollama",
+  "model": "fake",
+  "artifact_root": "evals/runs/post-roadmap-research-fake",
+  "results": [
+    {
+      "fixture_name": "01-persistence-tradeoffs",
+      "passed": false,
+      "findings_count": 0,
+      "source_count": 0,
+      "matched_findings": 0,
+      "matched_sources": 0,
+      "missing_expectations": [
+        "research output was not valid JSON"
+      ],
+      "summary": "",
+      "artifact_dir": "evals/runs/post-roadmap-research-fake/01-persistence-tradeoffs",
+      "raw_output": "2026-05-24T22:09:57.020943Z [warning  ] agent.step.error               attempt=0 error='Ollama returned 404 \u2014 model likely not pulled. Body: {\"error\":{\"message\":\"model \\'fake\\' not found\",\"type\":\"not_found_error\",\"param\":null,\"code\":null}}\\n' kind=model_unavailable provider=ollama\n2026-05-24T22:09:57.021037Z [error    ] agent.run.failed               error='Ollama returned 404 \u2014 model likely not pulled. Body: {\"error\":{\"message\":\"model \\'fake\\' not found\",\"type\":\"not_found_error\",\"param\":null,\"code\":null}}\\n' kind=model_unavailable\n\nError (model_unavailable): Ollama returned 404 \u2014 model likely not pulled. Body: \n{\"error\":{\"message\":\"model 'fake' not \nfound\",\"type\":\"not_found_error\",\"param\":null,\"code\":null}}",
+      "memo": null,
+      "duration_seconds": 0.46455445792526007
+    }
+  ]
+}

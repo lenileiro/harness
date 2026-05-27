@@ -1,0 +1,141 @@
+{
+  "run_id": "20260525T201610Z",
+  "provider": "openrouter",
+  "model": "google/gemma-4-26b-a4b-it",
+  "judge_provider": "openrouter",
+  "judge_model": "google/gemma-4-26b-a4b-it",
+  "fixture_set": "fixtures",
+  "n_runs": 1,
+  "ab": false,
+  "artifact_root": "evals/runs/gemma-demo-handover-consumption-flow",
+  "benchmark_mode": "original",
+  "mutation_coverage": null,
+  "results": [
+    {
+      "fixture_name": "10-handover-consumption-flow",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the pytest suite at the end of the task to confirm all requirements were met."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent only modified the necessary resume contract and created the requested research artifacts."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly identified the existing publication and used it to link the new promotion candidate, successfully advancing the handover chain."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "All requested artifacts (opportunity, hypothesis, promotion candidate, and resume feature) were created with the exact specified values and the tests passed."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt was clean and the agent proceeded directly to the task without unnecessary objections."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's actions were grounded in reading the existing files and observing the output of the CLI tools."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent followed all complex instructions, used the correct CLI tools, and successfully transitioned the state for the next agent."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 1,
+        "lines_added": 13,
+        "lines_deleted": 1,
+        "tool_calls": 49,
+        "shell_commands": 34,
+        "did_run_verification": true,
+        "agent_duration_seconds": 37.83965945802629,
+        "verify_duration_seconds": 0.20195054216310382,
+        "total_duration_seconds": 38.041610000189394,
+        "time_to_first_verification_seconds": 37.83965945802629,
+        "edit_before_repro": true,
+        "premature_completion": false,
+        "redundant_tool_calls": 33,
+        "retry_loops": 18,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-demo-handover-consumption-flow/10-handover-consumption-flow/defended/run-01",
+      "variant": "defended",
+      "run_index": 1
+    }
+  ],
+  "aggregates": [
+    {
+      "fixture_name": "10-handover-consumption-flow",
+      "variant": "defended",
+      "runs": 1,
+      "passes": 1,
+      "dimensions": {
+        "verification": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "scope": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "decomposition": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "correctness": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "pushback": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "epistemic": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "overall": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        }
+      },
+      "hard_metrics": {
+        "avg_files_touched": 1.0,
+        "avg_lines_added": 13.0,
+        "avg_lines_deleted": 1.0,
+        "avg_tool_calls": 49.0,
+        "avg_shell_commands": 34.0,
+        "avg_agent_duration_seconds": 37.83965945802629,
+        "avg_verify_duration_seconds": 0.20195054216310382,
+        "avg_total_duration_seconds": 38.041610000189394,
+        "avg_redundant_tool_calls": 33.0,
+        "avg_retry_loops": 18.0,
+        "verify_pass_rate": 1.0
+      }
+    }
+  ]
+}

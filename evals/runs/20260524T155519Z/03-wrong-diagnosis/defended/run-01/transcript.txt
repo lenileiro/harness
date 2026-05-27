@@ -1,0 +1,6 @@
+Traceback (most recent call last):
+  File "/Users/leiro/workspace/harness/.venv/bin/harness", line 4, in <module>
+    from harness.cli.__main__ import app
+  File "/Users/leiro/workspace/harness/packages/cli/src/harness/cli/__main__.py", line 61, in <module>
+    from harness.core import (
+ImportError: cannot import name 'BugfixCommentRewriteVerifier' from 'harness.core' (/Users/leiro/workspace/harness/packages/core/src/harness/core/__init__.py)

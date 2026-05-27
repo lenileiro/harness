@@ -1,0 +1,13 @@
+scanned=2 archived=1 dry_run=yes
+┏━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Kind      ┃ Procedure        ┃ Reason                ┃ Archive path          ┃
+┡━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━┩
+│ duplicate │ Scope discipline │ Exact duplicate of    │ /private/var/folders/ │
+│           │                  │ higher-confidence     │ 8p/1_033mns3v1gvkq95_ │
+│           │                  │ procedure             │ wfx4xr0000gn/T/harnes │
+│           │                  │ proc_18f37e3d80       │ s_workflow_eval_rc4pf │
+│           │                  │                       │ 1t7/workspace/.harnes │
+│           │                  │                       │ s/procedures/.archive │
+│           │                  │                       │ /scope-discipline-177 │
+│           │                  │                       │ 9750192               │
+└───────────┴──────────────────┴───────────────────────┴───────────────────────┘

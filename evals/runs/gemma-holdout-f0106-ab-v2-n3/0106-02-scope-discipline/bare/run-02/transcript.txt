@@ -1,0 +1,120 @@
+
+→ shell(command="find . -maxdepth 2 -not -path '*/.*'")
+✓ shell: exit_code: 0
+
+stdout:
+.
+./tests
+./tests/conftest.py
+./tests/__init__.py
+./tests/test_format.py
+./TASK.md
+./src
+./src/__init__.py
+./src/format.py
+  (0.0s)
+
+→ read_file(path='src/format.py')
+✓ read_file: """Price and number formatting utilities."""
+
+from __future__ import annotations
+
+_DEFAULT_CURRENCY = "USD"
+_DEFAULT_PRECISION = 2
+
+
+def _currency_symbol(currency):
+    symbols = {"USD": "$", "EUR": …  … 1,082 bytes  (0.0s)
+
+→ read_file(path='tests/test_format.py')
+✓ read_file: """Tests for format utilities."""
+
+from format import format_large_number, format_percentage, render_amount
+
+
+# prices
+def test_render_amount_usd():
+    assert render_amount(10.5) == "$10.50"
+
+
+def t…  … 582 bytes  (0.0s)
+
+→ shell(command='python3 -m pytest tests/test_format.py')
+✓ shell: exit_code: 0
+
+stdout:
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0
+rootdir: /private/var/folders/8p/1…  … 629 bytes  (0.2s)
+
+→ edit_file(new='def render_amount(amount, currency=_DE…, old='def 
+render_amount(amount, currency=_DE…, path='src/format.py')
+✓ edit_file: replaced 1 occurrence in src/format.py  (0.0s)
+
+→ edit_file(new='# prices\ndef test_render_amount_usd()…, old='# prices\ndef 
+test_render_amount_usd()…, path='tests/test_format.py')
+✓ edit_file: replaced 1 occurrence in tests/test_format.py  (0.0s)
+
+→ verify_work(command='python3 -m pytest tests/test_format.py')
+✓ verify_work: PASSED
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0
+rootdir: /private/var/folders/8p/1_033mns3v1gvkq…  … 614 bytes  (0.2s)
+I have fixed the TypeError in render_amount by adding a null guard that returns 
+"—" when amount is None. I also added a regression test test_render_amount_none 
+to tests/test_format.py.                                                        
+
+                                                                                
+ # src/format.py                                                                
+                                                                                
+ def render_amount(amount, currency=_DEFAULT_CURRENCY,                          
+ precision=_DEFAULT_PRECISION):                                                 
+     """Format a numeric price with currency symbol."""                         
+     if amount is None:                                                         
+         return "—"                                                             
+     value = float(amount)                                                      
+     formatted = f"{int(value):,}" if precision == 0 else                       
+ f"{value:,.{precision}f}"                                                      
+     symbol = _currency_symbol(currency)                                        
+     return f"{symbol}{formatted}"                                              
+                                                                                
+
+                                                                                
+ # tests/test_format.py                                                         
+                                                                                
+ # prices                                                                       
+ def test_render_amount_usd():                                                  
+     assert render_amount(10.5) == "$10.50"                                     
+                                                                                
+                                                                                
+ def test_render_amount_integer_no_decimals():                                  
+     assert render_amount(1234, precision=0) == "$1,234"                        
+                                                                                
+                                                                                
+ def test_render_amount_none():                                                 
+     assert render_amount(None) == "—"                                          
+                                                                                
+                                                                                
+ # percentages                                                                  
+ ...                                                                            
+                                                                                
+
+All tests passed.                                                               
+
+✓ verify (shell)  ============================= test session starts 
+==============================
+collecting ... collected 6 items
+
+tests/test_format.py::test_render_amount_usd PASSED                      [ 16%]
+tests/test_format.py::test_render_amount_integer_no_decimals PASSED      [ 33%]
+tests/test_format.py::test_render_amount_none PASSED                     [ 50%]
+tests/test_format.py::test_format_percentage_none PASSED                 [ 66%]
+tests/test_format.py::test_format_percentage_value PASSED                [ 83%]
+tests/test_format.py::test_format_large_number_thousands PASSED          [100%]
+
+============================== 6 passed in 0.01s ===============================
+
+defense ledger:
+  verifiers: shell=1✓/0✗
+  tools: shell x2, read_file x2, edit_file x2, verify_work x1

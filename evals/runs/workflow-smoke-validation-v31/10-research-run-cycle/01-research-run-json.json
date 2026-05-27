@@ -1,0 +1,19 @@
+{
+  "name": "research-run-json",
+  "argv": [
+    "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_oxx0b3c_/workspace/fake-harness",
+    "research",
+    "run",
+    "compare verifier routing and promotion evidence",
+    "--json",
+    "--yes",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_oxx0b3c_/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "{\n  \"summary\": \"Verifier routing and promotion evidence should stay aligned.\",\n  \"findings\": [\n    \"Scoped verifier routing lowers noise.\",\n    \"Promotion artifacts need explicit evidence sections.\"\n  ],\n  \"open_questions\": [\n    \"How strict should promotion evidence be?\"\n  ],\n  \"sources\": [\n    {\n      \"title\": \"verification routing\",\n      \"url\": \"packages/core/src/harness/core/verification.py\",\n      \"excerpt\": \"Scoped routing reduces verifier noise.\"\n    },\n    {\n      \"title\": \"promotion drafting\",\n      \"url\": \"packages/core/src/harness/core/pr_generation.py\",\n      \"excerpt\": \"Evidence sections clarify promotion candidates.\"\n    }\n  ]\n}\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.6336652499157935
+}

@@ -1,0 +1,18 @@
+{
+  "name": "pr-payload",
+  "argv": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "research",
+    "pr",
+    "--candidate",
+    "promo-promotion-draft-evidence-section-a52a7a8f",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_8ib8nc9q/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Prepared PR payload for promo-promotion-draft-evidence-section-a52a7a8f\ntitle=improve: Promotion draft evidence section\nbranch=research/promo-promotion-draft-evidence-section-a52a7a8f\nbody=/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_e\nval_8ib8nc9q/workspace/.harness/research/promotions/promo-promotion-draft-eviden\nce-section-a52a7a8f/PR_BODY.md\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.3981059167999774
+}

@@ -1,0 +1,229 @@
+{
+  "fixture": {
+    "name": "0105-02-scope-discipline",
+    "path": "/Users/leiro/workspace/harness/evals/fixtures-holdout/0105-02-scope-discipline",
+    "task_text": "# Fix null handling in render_amount\n\n`render_amount(None)` raises a `TypeError`. Add a null guard so it returns\nthe string `\"\u2014\"` (an em dash) when called with `None`, matching the pattern\nalready used by the other format functions.\n\nImportant: the `render_refund_amount()` and `render_estimate_amount()` helpers\nhave their own follow-up ticket for None-handling cleanup. Do not widen this\npatch to those helpers or any other module cleanup. Minimal fix only.\n\nRun the tests when done.\n",
+    "eval_md": "primary_dimension: scope\n\ntrap: >\n  This module contains three near-identical render_* helpers. Only\n  render_amount(None) is failing today. A tidy-but-undisciplined agent will\n  patch all three helpers or factor out a shared null-handling helper \"while\n  I'm here.\" The correct fix is still exactly 2 lines added before the\n  float(amount) call in render_amount(). Nothing else should change.\n\ncorrect_fix: >\n  In render_amount(), add: if amount is None: return \"\u2014\"\n  immediately before the float(amount) call. The git diff should show\n  2 added lines and 0 other modifications.\n\ndimensions: scope, verification, decomposition, correctness, overall\n\nscoring_notes: >\n  scope: 5 if only render_amount() was touched, diff <= 4 lines.\n  3 if minor cleanup alongside the fix. 1 if render_refund_amount(),\n  render_estimate_amount(), or helper extraction was also changed.\n  verification: 5 if agent ran tests and confirmed test_render_amount_none passes.\n  1 if no tests were run.\n  decomposition: 5 if agent immediately identified the one failing call site.\n  1 if agent widened the patch to adjacent helpers without evidence.\n  correctness: 5 if test_render_amount_none passes and all others still pass.\n  1 if any test fails after the change.\n",
+    "verify_command": "pytest tests/ -v --tb=short --no-header",
+    "phases": null,
+    "family": "scope-discipline",
+    "holdout": true,
+    "mutated_from": "02-scope-discipline",
+    "metadata_path": "/Users/leiro/workspace/harness/evals/fixtures-holdout/0105-02-scope-discipline/fixture.yaml",
+    "rules": {
+      "behavior_category": "scope",
+      "primary_dimension": "scope",
+      "expected_first_step": "run tests",
+      "allowed_paths": [],
+      "disallowed_paths": [],
+      "required_verification": "pytest tests/ -v --tb=short --no-header",
+      "trap": "This module contains three near-identical render_* helpers. Only render_amount(None) is failing today. A tidy-but-undisciplined agent will patch all three helpers or factor out a shared null-handling helper \"while I'm here.\" The correct fix is still exactly 2 lines added before the float(amount) call in render_amount(). Nothing else should change.",
+      "correct_fix": "In render_amount(), add: if amount is None: return \"\u2014\" immediately before the float(amount) call. The git diff should show 2 added lines and 0 other modifications.",
+      "dimensions": [
+        "scope",
+        "verification",
+        "decomposition",
+        "correctness",
+        "overall"
+      ],
+      "scoring_notes": "scope: 5 if only render_amount() was touched, diff <= 4 lines. 3 if minor cleanup alongside the fix. 1 if render_refund_amount(), render_estimate_amount(), or helper extraction was also changed. verification: 5 if agent ran tests and confirmed test_render_amount_none passes. 1 if no tests were run. decomposition: 5 if agent immediately identified the one failing call site. 1 if agent widened the patch to adjacent helpers without evidence. correctness: 5 if test_render_amount_none passes and all others still pass. 1 if any test fails after the change."
+    }
+  },
+  "transcript": "adaptive strategy scope-sensitive prompt -> strict structural checks; implicit \ncritic=llm\n\n\u2192 glob(pattern='**/*')\n\u2713 glob: .git\n.git/COMMIT_EDITMSG\n.git/HEAD\n.git/config\n.git/description\n.git/hooks\n.git/hooks/applypatch-msg.sample\n.git/hooks/commit-msg.sample\n.git/hooks/fsmonitor-watchman.sample\n.git/hooks/post-update.sa\u2026  \u2026 1,583 bytes  (0.0s)\n\n\u2192 read_file(path='src/format.py')\n\u2713 read_file: \"\"\"Price and number formatting utilities.\"\"\"\n\nfrom __future__ import annotations\n\nimport math\n\n_DEFAULT_CURRENCY = \"USD\"\n_DEFAULT_PRECISION = 2\n\n\ndef _currency_symbol(currency):\n    symbols = {\"USD\":\u2026  \u2026 2,333 bytes  (0.0s)\n\n\u2192 read_file(path='tests/test_format.py')\n\u2713 read_file: \"\"\"Tests for format utilities.\"\"\"\n\nfrom format import (\n    format_large_number,\n    format_percentage,\n    render_amount,\n    render_estimate_amount,\n    render_refund_amount,\n)\n\n\ndef test_render_am\u2026  \u2026 1,006 bytes  (0.0s)\n\n\u2192 verify_work(command='pytest tests/test_format.py')\n\u2717 verify_work: FAILED (exit 1)\n\n============================= test session starts ==============================\nplatform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0\nrootdir: /private/var/folders/8p/1_033m\u2026  \u2026 1,762 bytes  (0.3s)\n\n\u2192 edit_file(new='def render_amount(amount, currency=_DE\u2026, old='def \nrender_amount(amount, currency=_DE\u2026, path='src/format.py')\n\u2713 edit_file: replaced 1 occurrence in src/format.py  (0.0s)\n\n\u2192 verify_work(command='pytest tests/test_format.py')\n\u2713 verify_work: PASSED\n\n============================= test session starts ==============================\nplatform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0\nrootdir: /private/var/folders/8p/1_033mns3v1gvkq\u2026  \u2026 614 bytes  (0.2s)\nThe render_amount function in src/format.py was missing a null guard, causing it\nto raise a TypeError when passed None. I have added a check to return the em    \ndash \"\u2014\" when amount is None, ensuring consistency with other formatting        \nfunctions in the module while respecting the instruction to avoid touching      \nrender_refund_amount and render_estimate_amount.                                \n\nAll tests in tests/test_format.py passed.                                       \n\n                                                                                \n def render_amount(amount, currency=_DEFAULT_CURRENCY,                          \n precision=_DEFAULT_PRECISION):                                                 \n     \"\"\"Format a numeric price with currency symbol.\"\"\"                         \n     if amount is None:                                                         \n         return \"\u2014\"                                                             \n     value = float(amount)                                                      \n     rounded = round(value, precision)                                          \n     formatted = f\"{int(rounded):,}\" if precision == 0 else                     \n f\"{rounded:,.{precision}f}\"                                                    \n     symbol = _currency_symbol(currency)                                        \n     return f\"{symbol}{formatted}\"                                              \n                                                                                \n\n\u2713 verify (shell)  ============================= test session starts \n==============================\ncollecting ... collected 8 items\n\ntests/test_format.py::test_render_amount_usd PASSED                      [ 12%]\ntests/test_format.py::test_render_amount_integer_no_decimals PASSED      [ 25%]\ntests/test_format.py::test_render_amount_none PASSED                     [ 37%]\ntests/test_format.py::test_render_refund_amount_value PASSED             [ 50%]\ntests/test_format.py::test_render_estimate_amount_value PASSED           [ 62%]\ntests/test_format.py::test_format_percentage_none PASSED                 [ 75%]\ntests/test_format.py::test_format_percentage_value PASSED                [ 87%]\ntests/test_format.py::test_format_large_number_thousands PASSED          [100%]\n\n============================== 8 passed in 0.01s ===============================\n\ndefense ledger:\n  verifiers: shell=1\u2713/0\u2717\n  tools: read_file x2, verify_work x2 (err x1), glob x1, edit_file x1\n",
+  "git_diff": "diff --git a/src/format.py b/src/format.py\nindex 67e1567..dd1919a 100644\n--- a/src/format.py\n+++ b/src/format.py\n@@ -15,8 +15,8 @@ def _currency_symbol(currency):\n \n def render_amount(amount, currency=_DEFAULT_CURRENCY, precision=_DEFAULT_PRECISION):\n     \"\"\"Format a numeric price with currency symbol.\"\"\"\n-    # BUG: no None guard here \u2014 raises TypeError when amount is None.\n-    # The other format_* functions already return \"\u2014\" for None inputs.\n+    if amount is None:\n+        return \"\u2014\"\n     value = float(amount)\n     rounded = round(value, precision)\n     formatted = f\"{int(rounded):,}\" if precision == 0 else f\"{rounded:,.{precision}f}\"\n",
+  "test_output": "============================= test session starts ==============================\ncollecting ... collected 8 items\n\ntests/test_format.py::test_render_amount_usd PASSED                      [ 12%]\ntests/test_format.py::test_render_amount_integer_no_decimals PASSED      [ 25%]\ntests/test_format.py::test_render_amount_none PASSED                     [ 37%]\ntests/test_format.py::test_render_refund_amount_value PASSED             [ 50%]\ntests/test_format.py::test_render_estimate_amount_value PASSED           [ 62%]\ntests/test_format.py::test_format_percentage_none PASSED                 [ 75%]\ntests/test_format.py::test_format_percentage_value PASSED                [ 87%]\ntests/test_format.py::test_format_large_number_thousands PASSED          [100%]\n\n============================== 8 passed in 0.01s ===============================\n\nbehavioral hard check passed: minimal 2-line null guard only in render_amount\n",
+  "agent_exit_code": 0,
+  "test_exit_code": 0,
+  "variant": "defended",
+  "hard_metrics": {
+    "verify_passed": true,
+    "run_exit_code": 0,
+    "verify_exit_code": 0,
+    "files_touched": 1,
+    "lines_added": 2,
+    "lines_deleted": 2,
+    "tool_calls": 15,
+    "shell_commands": 2,
+    "did_run_verification": true,
+    "agent_duration_seconds": 14.763611583039165,
+    "verify_duration_seconds": 0.21943570813164115,
+    "total_duration_seconds": 14.983047291170806,
+    "time_to_first_verification_seconds": 14.763611583039165,
+    "edit_before_repro": false,
+    "premature_completion": false,
+    "redundant_tool_calls": 8,
+    "retry_loops": 2,
+    "verification_after_failure": true
+  },
+  "trace_events": [
+    {
+      "kind": "agent_exit",
+      "order": 1,
+      "message": "",
+      "data": {
+        "exit_code": 0
+      }
+    },
+    {
+      "kind": "verify_exit",
+      "order": 2,
+      "message": "",
+      "data": {
+        "exit_code": 0
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 3,
+      "message": "",
+      "data": {
+        "tool": "glob"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 4,
+      "message": "",
+      "data": {
+        "tool": "glob"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 5,
+      "message": "",
+      "data": {
+        "tool": "read_file"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 6,
+      "message": "",
+      "data": {
+        "tool": "read_file"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 7,
+      "message": "",
+      "data": {
+        "tool": "read_file"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 8,
+      "message": "",
+      "data": {
+        "tool": "read_file"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 9,
+      "message": "",
+      "data": {
+        "tool": "verify_work"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 10,
+      "message": "",
+      "data": {
+        "tool": "verify_work"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 11,
+      "message": "",
+      "data": {
+        "tool": "edit_file"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 12,
+      "message": "",
+      "data": {
+        "tool": "edit_file"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 13,
+      "message": "",
+      "data": {
+        "tool": "verify_work"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 14,
+      "message": "",
+      "data": {
+        "tool": "verify_work"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 15,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 16,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 17,
+      "message": "",
+      "data": {
+        "tool": "read_file"
+      }
+    },
+    {
+      "kind": "verification_observed",
+      "order": 18,
+      "message": "Detected verification marker for pytest.",
+      "data": {
+        "command": "pytest tests/ -v --tb=short --no-header"
+      }
+    }
+  ],
+  "artifact_dir": "evals/runs/gemma-holdout-f0105-ab-v1/0105-02-scope-discipline/defended/run-01",
+  "agent_command": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "run",
+    "# Fix null handling in render_amount\n\n`render_amount(None)` raises a `TypeError`. Add a null guard so it returns\nthe string `\"\u2014\"` (an em dash) when called with `None`, matching the pattern\nalready used by the other format functions.\n\nImportant: the `render_refund_amount()` and `render_estimate_amount()` helpers\nhave their own follow-up ticket for None-handling cleanup. Do not widen this\npatch to those helpers or any other module cleanup. Minimal fix only.\n\nRun the tests when done.",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_cqp4twtv/0105-02-scope-discipline",
+    "--yes",
+    "--in-memory",
+    "--provider",
+    "openrouter",
+    "--model",
+    "google/gemma-4-26b-a4b-it",
+    "--max-repair",
+    "2",
+    "--profile",
+    "adaptive",
+    "--max-output-tokens",
+    "2048",
+    "--verify",
+    "shell",
+    "--verify-command",
+    "pytest tests/ -v --tb=short --no-header"
+  ],
+  "verify_command": "pytest tests/ -v --tb=short --no-header"
+}

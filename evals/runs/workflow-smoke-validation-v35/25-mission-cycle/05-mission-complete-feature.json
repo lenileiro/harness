@@ -1,0 +1,24 @@
+{
+  "name": "mission-complete-feature",
+  "argv": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "mission",
+    "complete-feature",
+    "--mission",
+    "mission-workflow-mission-4a151e96",
+    "--feature",
+    "feature-implement-workflow-slice-45946549",
+    "--completed-work",
+    "Implemented the workflow mission slice.",
+    "--next-recommendation",
+    "Run milestone validation next.",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_rdb98u8n/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "recorded Recorded completion for feature 'Implement workflow slice'.\nfeature_id=feature-implement-workflow-slice-45946549\nmilestone_id=milestone-milestone-1-a1b9ac73\nrun_id=run-implement-workflow-slice-64ac39ab\nhandoff_id=handoff-implement-workflow-slice-579a3818\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.4529319158755243
+}

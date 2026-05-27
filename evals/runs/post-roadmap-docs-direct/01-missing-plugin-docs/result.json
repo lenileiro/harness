@@ -1,0 +1,27 @@
+{
+  "fixture_name": "01-missing-plugin-docs",
+  "passed": true,
+  "findings_count": 1,
+  "matched_expectations": 1,
+  "matched_topics": 1,
+  "missing_expectations": [],
+  "summary": "Plugin docs are incomplete.",
+  "artifact_dir": "evals/runs/post-roadmap-docs-direct/01-missing-plugin-docs",
+  "raw_output": "{\"summary\": \"Plugin docs are incomplete.\", \"findings\": [{\"severity\": \"medium\", \"path\": \"README.md\", \"issue\": \"Plugin setup is missing.\", \"rationale\": \"Users cannot discover the extension flow.\"}], \"missing_topics\": [\"plugin setup\"]}",
+  "report": {
+    "summary": "Plugin docs are incomplete.",
+    "findings": [
+      {
+        "severity": "medium",
+        "path": "README.md",
+        "issue": "Plugin setup is missing.",
+        "rationale": "Users cannot discover the extension flow.",
+        "suggested_update": null
+      }
+    ],
+    "missing_topics": [
+      "plugin setup"
+    ]
+  },
+  "duration_seconds": 0.028630790999159217
+}

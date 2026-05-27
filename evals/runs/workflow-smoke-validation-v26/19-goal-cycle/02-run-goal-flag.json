@@ -1,0 +1,23 @@
+{
+  "name": "run-goal-flag",
+  "argv": [
+    "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_rnpsyr15/workspace/fake-harness",
+    "run",
+    "--goal",
+    "accomplish something",
+    "--in-memory",
+    "--cwd",
+    ".",
+    "--yes",
+    "--provider",
+    "ollama",
+    "--model",
+    "test-model"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "adaptive strategy default adaptive path -> minimal structure\ndone                                                                            \n\n\u2713 verify (claim_grounding)  no completed tool events \u2014 nothing to ground claims \nagainst  (confidence 0.40)\n\ndefense ledger:\n  verifiers: claim_grounding=1\u2713/0\u2717\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.353138541104272
+}

@@ -1,0 +1,28 @@
+{
+  "name": "ingest-paper",
+  "argv": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "research",
+    "ingest-paper",
+    "--title",
+    "Reflexion",
+    "--citation",
+    "Shinn et al. 2023",
+    "--summary",
+    "Agents benefit from explicit reflective loops.",
+    "--excerpt",
+    "Reflection can improve decision quality.",
+    "--themes",
+    "verifier-reliability,autonomous-improvement",
+    "--related-sections",
+    "verification,research",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_4p1ffmrd/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Recorded inspiration insp-reflexion-2dafb9cb at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_4\np1ffmrd/workspace/.harness/research/inspiration/insp-reflexion-2dafb9cb\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.4121818752028048
+}

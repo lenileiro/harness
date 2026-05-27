@@ -1,0 +1,18 @@
+{
+  "name": "mission-validate",
+  "argv": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "mission",
+    "validate-milestone",
+    "--mission",
+    "mission-workflow-mission-a321d7e5",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_ho2eu_my/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "completed Mission validation passed and milestone assertions are satisfied.\nmilestone_id=milestone-milestone-1-07a3d4ea\nrun_id=run-validate-milestone-1-6d3fb0d1\nfindings_count=0\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.38069395790807903
+}

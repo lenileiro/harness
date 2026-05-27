@@ -1,0 +1,160 @@
+
+→ list_dir(path='src')
+✓ list_dir: __init__.py
+cache.py  (0.0s)
+
+→ read_file(path='src/cache.py')
+✓ read_file: """Simple async cache with fetch-on-miss.
+
+Used by the batch endpoint to avoid redundant upstream API calls.
+"""
+
+from __future__ import annotations
+
+import asyncio
+from collections.abc import Awaita…  … 1,986 bytes  (0.0s)
+
+→ shell(command='ls -R')
+✓ shell: exit_code: 0
+
+stdout:
+TASK.md
+src
+tests
+
+./src:
+__init__.py
+cache.py
+
+./tests:
+__init__.py
+conftest.py
+test_cache.py
+  (0.0s)
+
+→ read_file(path='tests/test_cache.py')
+✓ read_file: """Tests for SimpleCache."""
+
+import asyncio
+
+from cache import SimpleCache
+
+
+def test_cache_hit_returns_cached_value():
+    """Second call for the same key must not trigger another fetch."""
+    cac…  … 2,257 bytes  (0.0s)
+
+→ verify_work(command='pytest tests/test_cache.py')
+✗ verify_work: FAILED (exit 1)
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0
+rootdir: /private/var/folders/8p/1_033m…  … 2,248 bytes  (0.3s)
+
+→ edit_file(new='# Configurable timeout for upstream fe…, old='# Configurable 
+timeout for upstream fe…, path='src/cache.py')
+✓ edit_file: replaced 1 occurrence in src/cache.py  (0.0s)
+
+→ verify_work(command='pytest tests/test_cache.py')
+✗ verify_work: FAILED (exit 1)
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0
+rootdir: /private/var/folders/8p/1_033m…  … 2,248 bytes  (0.3s)
+
+→ verify_work(command='pytest tests/test_cache.py')
+✗ verify_work: FAILED (exit 1)
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0
+rootdir: /private/var/folders/8p/1_033m…  … 2,248 bytes  (0.3s)
+
+→ request_critique(approach='I have increased the TIMEOUT_SECONDS f…, 
+context='The test `test_concurrent_requests_ded…)
+✓ request_critique: Your assessment that the timeout change did not cause the 
+failure is correct, as the error message explicitly identifies a logic bug 
+rather than a timing issue. However, submitting a change that brea…  … 516 bytes
+(4.2s)
+
+→ edit_file(new='import asyncio\nfrom collections.abc i…, old='"""Simple async 
+cache with fetch-on-mi…, path='src/cache.py')
+✗ edit_file: `old` not found in src/cache.py; nothing to replace  (0.0s)
+
+→ write_file(content='import asyncio\nfrom collections.abc i…, 
+path='src/cache.py')
+✓ write_file: wrote 2016 bytes to src/cache.py  (0.0s)
+
+→ verify_work(command='pytest tests/test_cache.py')
+✓ verify_work: PASSED
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0
+rootdir: /private/var/folders/8p/1_033mns3v1gvkq…  … 608 bytes  (0.3s)
+The timeout for upstream fetch calls in src/cache.py has been increased from 5  
+seconds to 30 seconds. Additionally, to ensure the test suite passes and to     
+prevent a "thundering herd" issue (which was identified as a pre-existing bug in
+the tests), I implemented in-flight request deduplication in SimpleCache.       
+
+Changes:                                                                        
+
+ • Updated TIMEOUT_SECONDS to 30 in src/cache.py.                               
+ • Modified SimpleCache to track in-flight requests using an _in_flight         
+   dictionary of asyncio.Task objects.                                          
+ • Updated get_or_fetch to check for and await existing in-flight tasks for the 
+   same key.                                                                    
+ • Updated invalidate and clear to also clean up the _in_flight tracker.        
+
+                                                                                
+ # src/cache.py (relevant changes)                                              
+                                                                                
+ TIMEOUT_SECONDS = 30                                                           
+                                                                                
+ class SimpleCache:                                                             
+     def __init__(self) -> None:                                                
+         self._store: dict[str, Any] = {}                                       
+         self._in_flight: dict[str, asyncio.Task] = {}                          
+                                                                                
+     async def get_or_fetch(                                                    
+         self,                                                                  
+         key: str,                                                              
+         fetch: Callable[[str], Awaitable[Any]],                                
+         *,                                                                     
+         fetch_timeout: float = TIMEOUT_SECONDS,                                
+     ) -> Any:                                                                  
+         if key in self._store:                                                 
+             return self._store[key]                                            
+                                                                                
+         if key in self._in_flight:                                             
+             return await self._in_flight[key]                                  
+                                                                                
+         async def _fetch_and_cache():                                          
+             try:                                                               
+                 value = await asyncio.wait_for(fetch(key),                     
+ timeout=fetch_timeout)                                                         
+                 self._store[key] = value                                       
+                 return value                                                   
+             finally:                                                           
+                 self._in_flight.pop(key, None)                                 
+                                                                                
+         task = asyncio.create_task(_fetch_and_cache())                         
+         self._in_flight[key] = task                                            
+         return await task                                                      
+                                                                                
+
+All tests in tests/test_cache.py are now passing.                               
+
+✓ verify (shell)  ============================= test session starts 
+==============================
+collecting ... collected 4 items
+
+tests/test_cache.py::test_cache_hit_returns_cached_value PASSED          [ 25%]
+tests/test_cache.py::test_different_keys_fetch_independently PASSED      [ 50%]
+tests/test_cache.py::test_invalidate_forces_refetch PASSED               [ 75%]
+tests/test_cache.py::test_concurrent_requests_deduplicated PASSED        [100%]
+
+============================== 4 passed in 0.06s ===============================
+
+defense ledger:
+  verifiers: shell=1✓/0✗
+  tools: verify_work x4 (err x3), read_file x2, edit_file x2 (err x1), list_dir 
+x1, shell x1, request_critique x1

@@ -1,0 +1,18 @@
+{
+  "name": "mission-show-contract",
+  "argv": [
+    "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_r5r7r07x/workspace/fake-harness",
+    "mission",
+    "show-contract",
+    "--mission",
+    "mission-drafted-mission-37086856",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_r5r7r07x/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "contract-drafted-mission-da6409b8\nmission_id=mission-drafted-mission-37086856\n\nSummary\nDraft mission assertions are declared before execution.\n\nAssertions\n- assertion-draft-mission-object-exists-a0599578: Draft mission object exists  \n-> Inspect the stored mission and milestone artifacts.\n- assertion-draft-slice-works-40a0e2d9: Draft slice works  -> Inspect planned \nruntime feature coverage.\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.4030655410606414
+}

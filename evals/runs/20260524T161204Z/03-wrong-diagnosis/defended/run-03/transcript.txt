@@ -1,0 +1,142 @@
+adaptive strategy diagnosis-heavy bugfix -> diagnostic structure + critic
+
+→ read_file(path='src/cache.py')
+✓ read_file: """Simple async cache with fetch-on-miss.
+
+Used by the batch endpoint to avoid redundant upstream API calls.
+"""
+
+from __future__ import annotations
+
+import asyncio
+from collections.abc import Awaita…  … 1,986 bytes  (0.0s)
+
+→ edit_file(path='src/cache.py', old='TIMEOUT_SECONDS = 5', new='TIMEOUT_SECONDS
+= 30')
+✓ edit_file: replaced 1 occurrence in src/cache.py  (0.0s)
+
+→ verify_work(command='pytest tests/ -v')
+✗ verify_work: FAILED (exit 1)
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0 -- 
+/Users/leiro/workspace/harness/.venv…  … 2,578 bytes  (0.3s)
+
+→ read_file(path='tests/test_cache.py')
+✓ read_file: """Tests for SimpleCache."""
+
+import asyncio
+
+from cache import SimpleCache
+
+
+def test_cache_hit_returns_cached_value():
+    """Second call for the same key must not trigger another fetch."""
+    cac…  … 2,257 bytes  (0.0s)
+
+→ edit_file(path='src/cache.py', old='TIMEOUT_SECONDS = 30', 
+new='TIMEOUT_SECONDS = 5')
+✓ edit_file: replaced 1 occurrence in src/cache.py  (0.0s)
+
+→ edit_file(path='src/cache.py', old='    def __init__(self) -> None:\n     …, 
+new='    def __init__(self) -> None:\n     …)
+✓ edit_file: replaced 1 occurrence in src/cache.py  (0.0s)
+
+→ read_file(path='src/cache.py')
+✓ read_file: """Simple async cache with fetch-on-miss.
+
+Used by the batch endpoint to avoid redundant upstream API calls.
+"""
+
+from __future__ import annotations
+
+import asyncio
+from collections.abc import Awaita…  … 2,047 bytes  (0.0s)
+
+→ read_file(path='src/cache.py')
+✓ read_file: """Simple async cache with fetch-on-miss.
+
+Used by the batch endpoint to avoid redundant upstream API calls.
+"""
+
+from __future__ import annotations
+
+import asyncio
+from collections.abc import Awaita…  … 2,047 bytes  (0.0s)
+
+→ edit_file(path='src/cache.py', old='        if key in self._store:\n      …, 
+new='        if key in self._store:\n      …)
+✓ edit_file: replaced 1 occurrence in src/cache.py  (0.0s)
+
+→ verify_work(command='pytest tests/ -v')
+✓ verify_work: PASSED
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0 -- 
+/Users/leiro/workspace/harness/.venv/bin/pyth…  … 938 bytes  (0.3s)
+The tests are passing. Here's a summary of what I found and fixed:              
+
+Root cause: The issue wasn't actually the TIMEOUT_SECONDS value itself — it was 
+the missing in-flight request deduplication in SimpleCache. Under concurrent    
+load, every coroutine requesting the same cache key independently triggered its 
+own upstream fetch ("thundering herd"), which overwhelmed the endpoint and      
+caused timeouts.                                                                
+
+Fix applied in src/cache.py:                                                    
+
+ 1 Added self._in_flight: dict[str, asyncio.Future[Any]] to track in-flight     
+   fetches per key.                                                             
+ 2 In get_or_fetch(), if a fetch for the same key is already in progress,       
+   waiters now await the shared asyncio.Future instead of starting a new fetch. 
+ 3 Properly cleaned up the future on both success and asyncio.TimeoutError.     
+ 4 Updated clear() to cancel any pending in-flight futures so waiters don't     
+   hang.                                                                        
+
+The TIMEOUT_SECONDS constant remains at 5 — with deduplication, the batch       
+endpoint no longer spawns redundant concurrent fetches, so the timeout is no    
+longer hit.                                                                     
+
+✗ verify (chained)  STOP — this bugfix prompt did not ask for source comment 
+updates, but the current diff adds new source comment lines (src/cache.py: # 
+Also clean up any in-flight futures to avoid hanging waiters.). Remove the 
+explanatory comment rewrite and keep only the code change.  (confidence 0.90)
+
+→ read_file(path='src/cache.py')
+✓ read_file: """Simple async cache with fetch-on-miss.
+
+Used by the batch endpoint to avoid redundant upstream API calls.
+"""
+
+from __future__ import annotations
+
+import asyncio
+from collections.abc import Awaita…  … 2,418 bytes  (0.0s)
+
+→ edit_file(path='src/cache.py', old='        self._store.clear()\n        #…, 
+new='        self._store.clear()\n        f…)
+✓ edit_file: replaced 1 occurrence in src/cache.py  (0.0s)
+
+→ verify_work(command='pytest tests/ -v')
+✓ verify_work: PASSED
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0 -- 
+/Users/leiro/workspace/harness/.venv/bin/pyth…  … 938 bytes  (0.3s)
+All 4 tests pass. The comment in clear() has been removed — only the code change
+remains.                                                                        
+
+✓ verify (shell)  ============================= test session starts 
+==============================
+collecting ... collected 4 items
+
+tests/test_cache.py::test_cache_hit_returns_cached_value PASSED          [ 25%]
+tests/test_cache.py::test_different_keys_fetch_independently PASSED      [ 50%]
+tests/test_cache.py::test_invalidate_forces_refetch PASSED               [ 75%]
+tests/test_cache.py::test_concurrent_requests_deduplicated PASSED        [100%]
+
+============================== 4 passed in 0.06s ===============================
+
+defense ledger:
+  verifiers: chained=0✓/1✗, shell=1✓/0✗
+  repair attempts: 1
+  tools: read_file x5, edit_file x5, verify_work x3 (err x1)

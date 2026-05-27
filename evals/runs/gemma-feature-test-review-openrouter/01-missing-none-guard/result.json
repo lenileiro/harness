@@ -1,0 +1,14 @@
+{
+  "fixture_name": "01-missing-none-guard",
+  "passed": false,
+  "findings_count": 0,
+  "matched_expectations": 0,
+  "missing_expectations": [
+    "review output was not valid JSON"
+  ],
+  "summary": "",
+  "artifact_dir": "evals/runs/gemma-feature-test-review-openrouter/01-missing-none-guard",
+  "raw_output": "```json\n{\n  \"summary\": \"The change introduces a critical regression in the `display_name` \nfunction by removing safety checks for both `None` inputs and missing 'name' \nkeys.\",\n  \"findings\": [\n    {\n      \"severity\": \"high\",\n      \"file\": \"src/profile.py\",\n      \"line\": 1,\n      \"issue\": \"Potential TypeError when `user` is None\",\n      \"rationale\": \"The type hint allows `user` to be `None`, but the \nimplementation now attempts to subscript it (`user[\\\"name\\\"]`), which will raise\na `TypeError: 'NoneType' object is not subscriptable` if a null user is \npassed.\",\n      \"suggested_fix\": \"Revert the change or ensure `user` is not None before \nsubscripting.\"\n    },\n    {\n      \"severity\": \"high\",\n      \"file\": \"src/profile.py\",\n      \"line\": 1,\n      \"issue\": \"Potential KeyError when 'name' key is missing\",\n      \"rationale\": \"The original implementation used `.get(\"name\", \"anonymous\")`\nto safely handle dictionaries missing the 'name' key. The new implementation \nuses direct access `user[\\\"name\\\"]`, which will raise a `KeyError` if the key is\nabsent.\",\n      \"suggested_fix\": \"Use `user.get(\\\"name\\\", \\\"anonymous\\\")` if the \ndictionary is guaranteed to be non-None.\"\n    }\n  ]\n}\n```\nan error occurred during closing of asynchronous generator <async_generator object AsyncClient.stream at 0x10c698810>\nasyncgen: <async_generator object AsyncClient.stream at 0x10c698810>\nRuntimeError: aclose(): asynchronous generator is already running\n",
+  "report": null,
+  "duration_seconds": 4.493271791143343
+}

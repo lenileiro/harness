@@ -1,0 +1,36 @@
+{
+  "fixture_name": "11-plugin-runtime-cycle",
+  "passed": true,
+  "steps_total": 1,
+  "steps_passed": 1,
+  "step_results": [
+    {
+      "name": "run-plugin-domain",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_2mcin1un/workspace/fake-harness",
+        "run",
+        "review the docs patch",
+        "--domain",
+        "plugin-review",
+        "--provider",
+        "ollama",
+        "--model",
+        "test-model",
+        "--in-memory",
+        "--yes",
+        "--verify",
+        "none",
+        "--cwd",
+        "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_2mcin1un/workspace"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "adaptive strategy default adaptive path -> minimal structure\nplugin runtime ok                                                               \n\n\u2713 verify (verify_before_done)  No modifying tool calls detected \u2014 verification \nnot required.\n\ndefense ledger:\n  verifiers: verify_before_done=1\u2713/0\u2717\n  lifeharness: L2 tips x1\n",
+      "stderr": "RUNTIME_CAPTURE::{\"message_contents\": [\"PLUGIN REVIEW SYSTEM PROMPT\", \"[harness:L2 procedural tips] lessons from prior runs:\\n  \\u2022 plugin guidance from experience provider\", \"review the docs patch\"], \"message_roles\": [\"system\", \"system\", \"user\"], \"model\": \"test-model\", \"tool_count\": 6, \"tool_names\": [\"read_file\", \"verify_work\", \"request_critique\", \"spawn_agents\", \"notes\", \"prune_ledger\"]}\n",
+      "failures": [],
+      "duration_seconds": 0.761090415995568
+    }
+  ],
+  "artifact_dir": "evals/runs/workflow-smoke-validation-v22/11-plugin-runtime-cycle",
+  "duration_seconds": 0.7623805000912398
+}

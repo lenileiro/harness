@@ -1,0 +1,5 @@
+Usage: fake-harness tips add [OPTIONS] TEXT
+Try 'fake-harness tips add --help' for help.
+╭─ Error ──────────────────────────────────────────────────────────────────────╮
+│ No such option '--cwd'.                                                      │
+╰──────────────────────────────────────────────────────────────────────────────╯

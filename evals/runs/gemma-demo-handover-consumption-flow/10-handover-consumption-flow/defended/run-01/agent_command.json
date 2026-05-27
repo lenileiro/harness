@@ -1,0 +1,23 @@
+[
+  "/Users/leiro/workspace/harness/.venv/bin/harness",
+  "run",
+  "# Continue from an existing handover and leave the next one ready\n\nThis workspace already contains a handover created by a previous agent.\nContinue from that state instead of recreating it.\n\nUse CLI entrypoints only. Do not hand-edit `.harness/*.json` files directly.\n\nUse these commands:\n\n- `harness vision show`\n- `harness resume show`\n- `harness research search`\n- `harness research show-publication`\n- `harness research create-opportunity`\n- `harness research hypothesize`\n- `harness research refine`\n- `harness resume add-feature`\n- `harness resume set-current`\n\nDo all of the following:\n\n1. Inspect the existing vision and resume contract.\n2. Inspect the existing publication that defines the current handover.\n3. Create one opportunity titled `Handover verification checklist`.\n4. Create one hypothesis for that opportunity.\n5. Refine one promotion candidate titled `Handover verification handoff`.\n6. Add a third resume feature named `handover-verification`.\n7. Switch the resume contract so the current feature becomes\n   `handover-verification`.\n\nUse these exact values where applicable:\n\n- opportunity summary:\n  `The next agent should verify that a handover names the next feature, the source publication, and the continuation path.`\n- hypothesis claim:\n  `A verification checklist will make handovers safer for the next agent to consume.`\n- hypothesis expected win:\n  `handover artifacts become easier for follow-on agents to verify`\n- hypothesis risk level:\n  `low`\n- hypothesis change mode:\n  `improve`\n- candidate summary:\n  `Promote a verification-oriented continuation step after the handover is consumed.`\n- candidate expected metric:\n  `handover artifacts include verification checklist coverage`\n- candidate validation plan:\n  `Run the fixture tests to confirm the continuation artifacts and resume contract are linked.`\n- third feature description:\n  `Verify the handover contract before the next continuation step.`\n- third feature phases:\n  `inspect,verify,continue`\n\nImportant:\n\n- Reuse the existing publication as the source publication for the promotion\n  candidate.\n- Do not recreate the vision, theme, unknown, rabbit hole, or existing\n  publication.\n- Leave the previous features intact and only advance the roadmap to the new\n  `handover-verification` feature.\n\nYou will need the generated publication ID and the newly created opportunity /\nhypothesis IDs between steps. Read the generated JSON files under\n`.harness/research/...` to get those IDs as needed.\n\nRun the tests when done.",
+  "--cwd",
+  "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval__swp3bbu/10-handover-consumption-flow",
+  "--yes",
+  "--in-memory",
+  "--provider",
+  "openrouter",
+  "--model",
+  "google/gemma-4-26b-a4b-it",
+  "--max-repair",
+  "2",
+  "--profile",
+  "adaptive",
+  "--verify",
+  "shell",
+  "--verify-command",
+  "pytest tests/ -v --tb=short --no-header",
+  "--critic",
+  "llm+search"
+]

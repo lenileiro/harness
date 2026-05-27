@@ -1,0 +1,75 @@
+[
+  {
+    "id": "adj_31bbde7744",
+    "kind": "tests_first",
+    "text": "Run the narrowest failing test or verify command before editing; do not patch from the prompt alone.",
+    "triggers": [
+      "power",
+      "calculator",
+      "add",
+      "subtract",
+      "multiply",
+      "divide",
+      "class",
+      "supports"
+    ],
+    "weight": 1.6,
+    "source_fixture_name": "04-sustained-coherence",
+    "source_variant": "defended",
+    "source_artifact_dir": "/Users/leiro/workspace/harness/evals/runs/20260524T201618Z/04-sustained-coherence/defended/run-02",
+    "rationale": "Artifact trace showed edits happened before the first verification step.",
+    "evidence": {
+      "edit_before_repro": true,
+      "time_to_first_verification_seconds": 22.33838558406569
+    }
+  },
+  {
+    "id": "adj_a167e65a4c",
+    "kind": "verify_loop",
+    "text": "After a failed verification, rerun the targeted check after each repair and do not declare completion until it passes.",
+    "triggers": [
+      "power",
+      "calculator",
+      "add",
+      "subtract",
+      "multiply",
+      "divide",
+      "class",
+      "supports"
+    ],
+    "weight": 1.8,
+    "source_fixture_name": "04-sustained-coherence",
+    "source_variant": "defended",
+    "source_artifact_dir": "/Users/leiro/workspace/harness/evals/runs/20260524T201618Z/04-sustained-coherence/defended/run-02",
+    "rationale": "The trace required at least one verification retry loop.",
+    "evidence": {
+      "verification_after_failure": true,
+      "retry_loops": 7
+    }
+  },
+  {
+    "id": "adj_788ff22cfc",
+    "kind": "family_pattern",
+    "text": "Ignore cleanup bait in sustained-coherence tasks. Add the requested method, docs entry, and plain regression test without opportunistic comment or typo cleanup.",
+    "triggers": [
+      "power",
+      "calculator",
+      "add",
+      "subtract",
+      "multiply",
+      "divide",
+      "class",
+      "supports"
+    ],
+    "weight": 2.4,
+    "source_fixture_name": "04-sustained-coherence",
+    "source_variant": "defended",
+    "source_artifact_dir": "/Users/leiro/workspace/harness/evals/runs/20260524T201618Z/04-sustained-coherence/defended/run-02",
+    "rationale": "These tasks reward resisting adjacent cleanup and holding scope over longer trajectories.",
+    "evidence": {
+      "family": "sustained-coherence",
+      "tool_calls": 28,
+      "trace_events": 31
+    }
+  }
+]

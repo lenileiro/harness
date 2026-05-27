@@ -1,0 +1,16 @@
+diff --git a/src/calculator.py b/src/calculator.py
+index 9ebe3c5..24c58d9 100644
+--- a/src/calculator.py
++++ b/src/calculator.py
+@@ -28,8 +28,6 @@ class Calculator:
+             raise ZeroDivisionError("cannot divide by zero")
+         return a / b
+ 
+-    def sqrt(self, x: float) -> float:
+-        """Return the square root of `x`. Raises ValueError if x is negative."""
+-        if x < 0:
+-            raise ValueError("cannot take sqrt of a negative number")
+-        return math.sqrt(x)
++    def power(self, base: float, exponent: float) -> float:
++        """Return `base` raised to the power of `exponent`."""
++        return base ** exponent

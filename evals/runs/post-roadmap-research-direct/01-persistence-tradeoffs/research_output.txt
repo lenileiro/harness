@@ -1,0 +1,1 @@
+{"summary": "SQLite is the default persistence layer.", "findings": ["SQLite gives zero-setup local storage.", "SQLite has limits on concurrent writes."], "open_questions": ["When should the system switch to Postgres?"], "sources": [{"title": "Persistence", "url": "docs/persistence.md", "excerpt": "zero-setup local storage with concurrent write tradeoffs"}]}

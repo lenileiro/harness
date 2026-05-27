@@ -1,0 +1,24 @@
+{
+  "name": "tune-propose-dry-run",
+  "argv": [
+    "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_tue4h200/workspace/fake-harness",
+    "tune",
+    "propose",
+    "minimal_fix_verifier",
+    "--current",
+    "current.txt",
+    "--pairs",
+    "pairs.json",
+    "--provider",
+    "ollama",
+    "--model",
+    "test-model",
+    "--dry-run"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Proposed delta for 'minimal_fix_verifier'\n\nRationale: tighten scope discipline\n\nPrefer the minimum diff that fixes the issue.\n\n--dry-run: not saving.\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.37705345801077783
+}

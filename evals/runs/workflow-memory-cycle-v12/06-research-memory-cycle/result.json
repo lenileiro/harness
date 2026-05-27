@@ -1,0 +1,120 @@
+{
+  "fixture_name": "06-research-memory-cycle",
+  "passed": false,
+  "steps_total": 15,
+  "steps_passed": 4,
+  "step_results": [
+    {
+      "name": "vision-update",
+      "argv": [
+        "/Users/leiro/workspace/harness/.venv/bin/harness",
+        "vision",
+        "update",
+        "--title",
+        "Research memory harness",
+        "--summary",
+        "Keep durable records for themes, unknowns, and linked publications.",
+        "--theme",
+        "research-memory",
+        "--success-metric",
+        "reusable published findings",
+        "--cwd",
+        "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_bxjbvwvy/workspace"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "Updated vision at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_b\nxjbvwvy/workspace/.harness/research/vision/current\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.45578870782628655
+    },
+    {
+      "name": "add-theme",
+      "argv": [
+        "/Users/leiro/workspace/harness/.venv/bin/harness",
+        "research",
+        "add-theme",
+        "--title",
+        "Memory graph",
+        "--description",
+        "Model citations and archive decisions.",
+        "--priority",
+        "high",
+        "--cwd",
+        "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_bxjbvwvy/workspace"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "Added theme theme-memory-graph-9bc5c8ad at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_b\nxjbvwvy/workspace/.harness/research/themes/theme-memory-graph-9bc5c8ad\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.4367297920398414
+    },
+    {
+      "name": "list-themes",
+      "argv": [
+        "/Users/leiro/workspace/harness/.venv/bin/harness",
+        "research",
+        "list-themes",
+        "--cwd",
+        "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_bxjbvwvy/workspace"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2513\n\u2503 ID                          \u2503 Title        \u2503 Priority \u2503 Status \u2503 Vision  \u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2529\n\u2502 theme-memory-graph-9bc5c8ad \u2502 Memory graph \u2502 high     \u2502 active \u2502 current \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.4177799590397626
+    },
+    {
+      "name": "create-unknown",
+      "argv": [
+        "/Users/leiro/workspace/harness/.venv/bin/harness",
+        "research",
+        "create-unknown",
+        "--theme-id",
+        "theme-memory-graph-9bc5c8ad",
+        "--question",
+        "How should archived findings stay discoverable?",
+        "--why-it-matters",
+        "Research should compound instead of being lost.",
+        "--confidence",
+        "0.4",
+        "--related-sections",
+        "research,archive",
+        "--cwd",
+        "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_bxjbvwvy/workspace"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "Created unknown unknown-how-should-archived-findings-sta-481f6aa7 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_b\nxjbvwvy/workspace/.harness/research/unknowns/unknown-how-should-archived-finding\ns-sta-481f6aa7\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.4167810420040041
+    },
+    {
+      "name": "list-unknowns",
+      "argv": [
+        "/Users/leiro/workspace/harness/.venv/bin/harness",
+        "research",
+        "list-unknowns",
+        "--theme-id",
+        "theme-memory-graph-9bc5c8ad",
+        "--cwd",
+        "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_bxjbvwvy/workspace"
+      ],
+      "passed": false,
+      "returncode": 0,
+      "stdout": "\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2533\u2513\n\u2503 ID                                          \u2503 Theme                \u2503  \u2503 Co\u2026 \u2503\u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2547\u2529\n\u2502 unknown-how-should-archived-findings-sta-4\u2026 \u2502 theme-memory-graph-\u2026 \u2502  \u2502 0.\u2026 \u2502\u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2534\u2518\n",
+      "stderr": "",
+      "failures": [
+        "stdout~How should archived findings stay discoverable?",
+        "stdout~0.40",
+        "stdout~open"
+      ],
+      "duration_seconds": 0.41789129097014666
+    }
+  ],
+  "artifact_dir": "evals/runs/workflow-memory-cycle-v12/06-research-memory-cycle",
+  "duration_seconds": 2.155848041875288
+}

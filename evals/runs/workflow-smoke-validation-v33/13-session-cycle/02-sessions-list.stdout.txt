@@ -1,0 +1,29 @@
+┏━━━━━━━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━┳━━━━━━━━━┳━━━━━━━┓
+┃ ID               ┃ Status  ┃ Provider   ┃ Model            ┃ Updated ┃ Turns ┃
+┡━━━━━━━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━╇━━━━━━━━━╇━━━━━━━┩
+│ sess_workflow_e… │ done    │ ollama     │ test-model       │ 0s ago  │     2 │
+│ sess_5bb2dbbf7d… │ done    │ openrouter │ google/gemma-4-… │ 46m ago │    58 │
+│ sess_e474f5d33e… │ running │ openrouter │ google/gemma-4-… │ 51m ago │     1 │
+│ sess_271195296d… │ done    │ openrouter │ google/gemma-4-… │ 53m ago │    48 │
+│ sess_a81a50f0bd… │ done    │ openrouter │ google/gemma-4-… │ 57m ago │    66 │
+│ sess_8bf43438b8… │ failed  │ openrouter │ google/gemma-4-… │ 1h ago  │    81 │
+│ sess_4fe7608f9c… │ done    │ openrouter │ google/gemma-4-… │ 1h ago  │    68 │
+│ sess_6d79ff6fad… │ done    │ openrouter │ google/gemma-4-… │ 1h ago  │    50 │
+│ sess_e0e971a9e8… │ done    │ openrouter │ google/gemma-4-… │ 1h ago  │    42 │
+│ sess_769b89ebd4… │ failed  │ openrouter │ google/gemma-4-… │ 1h ago  │    81 │
+│ sess_4648a39d87… │ done    │ openrouter │ google/gemma-4-… │ 1h ago  │    46 │
+│ sess_6d95a1f5ef… │ failed  │ openrouter │ google/gemma-4-… │ 1h ago  │    82 │
+│ test-sess-1      │ pending │ x          │ x                │ 2d ago  │     0 │
+│ sess_da772aeb43… │ done    │ ollama     │ gemma4           │ 3d ago  │    18 │
+│ sess_67dd1718b9… │ running │ ollama     │ gemma4           │ 3d ago  │     1 │
+│ sess_11aca93bcd… │ done    │ ollama     │ gemma4:latest    │ 3d ago  │     4 │
+│ sess_341db23ae9… │ done    │ ollama     │ gemma4:latest    │ 3d ago  │     4 │
+│ sess_fdc901b24c… │ failed  │ ollama     │ llama3.2         │ 3d ago  │     1 │
+│ sess_867377aaa4… │ done    │ ollama     │ gemma4:latest    │ 3d ago  │     4 │
+│ sess_2f7b36631a… │ failed  │ ollama     │ llama3.2         │ 3d ago  │     1 │
+│ sess_735c66472f… │ done    │ ollama     │ gemma4:latest    │ 3d ago  │    10 │
+│ sess_61937f4455… │ done    │ ollama     │ gemma4:latest    │ 3d ago  │     2 │
+│ sess_610e475c5d… │ failed  │ ollama     │ gemma3:4b        │ 3d ago  │     1 │
+│ sess_62c1f8473e… │ done    │ ollama     │ gemma4:latest    │ 3d ago  │    26 │
+│ sess_07d19f8fa1… │ done    │ ollama     │ gemma4:latest    │ 3d ago  │     4 │
+└──────────────────┴─────────┴────────────┴──────────────────┴─────────┴───────┘

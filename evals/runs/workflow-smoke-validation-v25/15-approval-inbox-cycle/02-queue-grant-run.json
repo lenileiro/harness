@@ -1,0 +1,29 @@
+{
+  "name": "queue-grant-run",
+  "argv": [
+    "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_abnz122e/workspace/fake-harness",
+    "run",
+    "read the file",
+    "--provider",
+    "ollama",
+    "--model",
+    "test-model",
+    "--db",
+    ".harness/harness.db",
+    "--config",
+    "config.toml",
+    "--session",
+    "sess_inbox",
+    "--inbox",
+    "--verify",
+    "none",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_abnz122e/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "adaptive strategy default adaptive path -> minimal structure\n\n\u2192 read_file(path='note.txt')\n\u2717 read_file: queued for approval \u2014 review with `harness approvals list`  (0.0s)\nqueued; will resume later                                                       \n\n\u2713 verify (verify_before_done)  No modifying tool calls detected \u2014 verification \nnot required.\n\ndefense ledger:\n  verifiers: verify_before_done=1\u2713/0\u2717\n  tools: read_file x1 (err x1)\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.4451936250552535
+}

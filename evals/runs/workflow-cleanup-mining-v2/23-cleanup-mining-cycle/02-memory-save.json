@@ -1,0 +1,19 @@
+{
+  "name": "memory-save",
+  "argv": [
+    "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_ndsoqmne/workspace/fake-harness",
+    "memory",
+    "save",
+    "Temporary cleanup note",
+    "--kind",
+    "project_fact",
+    "--db",
+    ".harness/harness.db"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Saved mem_2fbc4a199e2d  (project_fact)  Temporary cleanup note\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.4226902921218425
+}

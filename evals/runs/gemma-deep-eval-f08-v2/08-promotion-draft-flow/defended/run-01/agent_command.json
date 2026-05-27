@@ -1,0 +1,23 @@
+[
+  "/Users/leiro/workspace/harness/.venv/bin/harness",
+  "run",
+  "# Build a promotion candidate and PR draft with the research CLI\n\nUse the built-in Harness research commands in this workspace to create a small\npromotion pipeline artifact set for a documentation-oriented improvement.\n\nUse these CLI entrypoints, not direct file edits:\n\n- `harness vision update`\n- `harness research add-theme`\n- `harness research open`\n- `harness research publish`\n- `harness research create-opportunity`\n- `harness research hypothesize`\n- `harness research refine`\n- `harness research promote`\n- `harness research pr`\n\nDo all of the following:\n\n1. Set the current vision title to `Promotion Workflow Hardening` and the\n   summary to `Turn research findings into bounded promotion artifacts.`\n2. Add a theme titled `Promotion reliability`.\n3. Open one rabbit hole titled `Promotion evidence checklist`.\n4. Publish one publication titled `Promotion evidence findings`.\n5. Create one opportunity titled `Tighten promotion drafts`.\n6. Create one hypothesis for that opportunity.\n7. Refine one promotion candidate titled `Promotion draft evidence section`.\n8. Generate its promotion draft with:\n   - `harness research promote --candidate <id> --no-create-branch`\n9. Generate its PR payload with:\n   - `harness research pr --candidate <id> --no-push --no-open`\n\nUse these exact content values:\n\n- rabbit hole question:\n  `What evidence should every promotion draft include?`\n- publication claim:\n  `Promotion drafts should include explicit evidence and validation sections.`\n- opportunity summary:\n  `Promotion candidates should consistently capture evidence, validation, and file scope.`\n- hypothesis claim:\n  `Explicit evidence sections will make promotion drafts easier to review.`\n- candidate expected metric:\n  `promotion drafts include evidence checklist coverage`\n\nYou will need generated IDs between steps. Read the JSON files under\n`.harness/research/...` to get those IDs as needed.\n\nDo not hand-write `.harness/research/*.json` files directly. Use the CLI.\n\nRun the tests when done.",
+  "--cwd",
+  "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_1cgcmk4v/08-promotion-draft-flow",
+  "--yes",
+  "--in-memory",
+  "--provider",
+  "openrouter",
+  "--model",
+  "google/gemma-4-26b-a4b-it",
+  "--max-repair",
+  "2",
+  "--profile",
+  "adaptive",
+  "--verify",
+  "shell",
+  "--verify-command",
+  "pytest tests/ -v --tb=short --no-header",
+  "--critic",
+  "llm+search"
+]

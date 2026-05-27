@@ -1,0 +1,24 @@
+{
+  "run_id": "20260524T223025Z-research",
+  "provider": "openrouter",
+  "model": "google/gemma-4-26b-a4b-it",
+  "artifact_root": "evals/runs/post-roadmap-research-live-v3",
+  "results": [
+    {
+      "fixture_name": "01-persistence-tradeoffs",
+      "passed": false,
+      "findings_count": 0,
+      "source_count": 0,
+      "matched_findings": 0,
+      "matched_sources": 0,
+      "missing_expectations": [
+        "research output was not valid JSON"
+      ],
+      "summary": "",
+      "artifact_dir": "evals/runs/post-roadmap-research-live-v3/01-persistence-tradeoffs",
+      "raw_output": "2026-05-24T22:30:40.607474Z [warning  ] agent.step.error               attempt=0 error='exceeded max_steps=20 without final answer' kind=internal provider=openrouter\n2026-05-24T22:30:40.607847Z [error    ] agent.run.failed               error='exceeded max_steps=20 without final answer' kind=internal",
+      "memo": null,
+      "duration_seconds": 14.733900333056226
+    }
+  ]
+}

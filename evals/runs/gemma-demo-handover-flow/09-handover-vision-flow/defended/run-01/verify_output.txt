@@ -1,0 +1,22 @@
+============================= test session starts ==============================
+collecting ... collected 1 item
+
+tests/test_handover_flow.py::test_handover_vision_flow FAILED            [100%]
+
+=================================== FAILURES ===================================
+__________________________ test_handover_vision_flow ___________________________
+tests/test_handover_flow.py:56: in test_handover_vision_flow
+    assert set(features) == {"handover-checklist", "handover-consumption"}
+E   AssertionError: assert {'first-featu...-consumption'} == {'handover-ch...-consumption'}
+E     
+E     Extra items in the left set:
+E     'first-feature'
+E     
+E     Full diff:
+E       {
+E     +     'first-feature',...
+E     
+E     ...Full output truncated (3 lines hidden), use '-vv' to show
+=========================== short test summary info ============================
+FAILED tests/test_handover_flow.py::test_handover_vision_flow - AssertionErro...
+============================== 1 failed in 0.02s ===============================

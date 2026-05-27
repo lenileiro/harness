@@ -1,0 +1,27 @@
+{
+  "name": "run-bootstrap-session",
+  "argv": [
+    "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_pyoi0kcu/workspace/fake-harness",
+    "run",
+    "Investigate why cleanup and mining flows matter",
+    "--provider",
+    "ollama",
+    "--model",
+    "test-model",
+    "--db",
+    ".harness/harness.db",
+    "--session",
+    "sess_tips_mine",
+    "--yes",
+    "--verify",
+    "none",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_pyoi0kcu/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "adaptive strategy default adaptive path -> minimal structure\ncleanup mining bootstrap ok                                                     \n\n\u2713 verify (verify_before_done)  No modifying tool calls detected \u2014 verification \nnot required.\n\ndefense ledger:\n  verifiers: verify_before_done=1\u2713/0\u2717\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.4040002920664847
+}

@@ -1,0 +1,3 @@
+harness lab run — 2 workers  max-steps=20
+provider=ollama  model=llama3.2
+

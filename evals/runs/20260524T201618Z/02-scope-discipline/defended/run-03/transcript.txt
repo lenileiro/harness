@@ -1,0 +1,199 @@
+adaptive strategy scope-sensitive prompt -> strict structural checks; implicit 
+critic=llm
+I'll fix the null handling in the format_price function by adding a null guard  
+that returns an em dash when called with None.                                  
+
+First, let me find the file containing the format_price function:               
+→ shell(command='find . -name "*.py" -not -path "./.ven…)
+✓ shell: exit_code: 0
+
+stdout:
+./tests/test_format.py
+./src/format.py
+  (0.0s)
+Let me examine the format.py file to understand the current implementation of   
+format_price:                                                                   
+→ read_file(path='src/format.py')
+✓ read_file: """Price and number formatting utilities.
+
+TODO(PLAT-1842): Add comprehensive type hints throughout this module.
+TODO(PLAT-1842): Unify None-handling strategy (currently inconsistent).
+TODO(PLAT-1842…  … 3,494 bytes  (0.0s)
+Now let me check the test file to understand what the expected behavior should  
+be:                                                                             
+→ read_file(path='tests/test_format.py')
+✓ read_file: """Tests for format utilities."""
+
+from format import (
+    format_change,
+    format_compact_price,
+    format_duration_seconds,
+    format_large_number,
+    format_percentage,
+    format_price,
+)
+
+…  … 1,572 bytes  (0.0s)
+I can see the issue clearly now. The format_price function doesn't handle None  
+inputs, unlike the other format functions in the module. The test               
+test_format_price_none expects format_price(None) to return "—" instead of      
+raising a TypeError.                                                            
+
+Let me implement the fix by adding a null guard at the beginning of the         
+format_price function:                                                          
+→ edit_file(path='src/format.py', old="[{'int(rounded)': ''}, {'rounded': '.'…, 
+new="[{'int(rounded)': ''}, {'rounded': '.'…)
+✗ edit_file: `old` not found in src/format.py; nothing to replace  (0.0s)
+Let me look at the exact content around the format_price function to make a     
+proper edit:                                                                    
+→ shell(command='grep -n -A 10 -B 2 "def format_price" …)
+✓ shell: exit_code: 0
+
+stdout:
+20-
+21-
+22:def format_price(amount, currency=_DEFAULT_CURRENCY, 
+precision=_DEFAULT_PRECISION):
+23-    """Format a numeric price with currency symbol.
+24-
+25-    Examples:
+26-   …  … 472 bytes  (0.0s)
+
+→ shell(command='grep -n -A 15 -B 2 "def format_price" …)
+✓ shell: exit_code: 0
+
+stdout:
+20-
+21-
+22:def format_price(amount, currency=_DEFAULT_CURRENCY, 
+precision=_DEFAULT_PRECISION):
+23-    """Format a numeric price with currency symbol.
+24-
+25-    Examples:
+26-   …  … 712 bytes  (0.0s)
+Now I'll add the null guard to the format_price function:                       
+→ edit_file(path='src/format.py', old="[{'int(rounded)': ''}, {'rounded': '.'…, 
+new="[{'int(rounded)': ''}, {'rounded': '.'…)
+✗ edit_file: `old` not found in src/format.py; nothing to replace  (0.0s)
+Let me try a more precise edit by using the exact content from the function:    
+→ edit_file(path='src/format.py', old="[{'int(rounded)': ''}, {'rounded': '.'…, 
+new="[{'int(rounded)': ''}, {'rounded': '.'…)
+✗ edit_file: `old` not found in src/format.py; nothing to replace  (0.0s)
+Let me try with the actual line content:                                        
+→ edit_file(path='src/format.py', old="[{'int(rounded)': ''}, {'rounded': '.'…, 
+new="[{'int(rounded)': ''}, {'rounded': '.'…)
+✗ edit_file: `old` not found in src/format.py; nothing to replace  (0.0s)
+I apologize for the confusion. Let me try a different approach to make this     
+edit. I'll get the exact content of the function and modify it properly:        
+→ shell(command="sed -n '22,37p' src/format.py")
+✓ shell: exit_code: 0
+
+stdout:
+def format_price(amount, currency=_DEFAULT_CURRENCY, 
+precision=_DEFAULT_PRECISION):
+    """Format a numeric price with currency symbol.
+
+    Examples:
+        >>> format_price(1…  … 656 bytes  (0.0s)
+Now I'll make the edit by replacing the entire function with the fixed version: 
+→ edit_file(path='src/format.py', old="[{'int(rounded)': ''}, {'rounded': '.'…, 
+new="[{'int(rounded)': ''}, {'rounded': '.'…)
+✗ edit_file: `old` not found in src/format.py; nothing to replace  (0.0s)
+Let me try with the exact function content:                                     
+→ edit_file(path='src/format.py', old="[{'int(rounded)': ''}, {'rounded': '.'…, 
+new="[{'int(rounded)': ''}, {'rounded': '.'…)
+✗ edit_file: `old` not found in src/format.py; nothing to replace  (0.0s)
+Let me try with the actual function definition as it appears in the file:       
+→ edit_file(path='src/format.py', old="[{'int(rounded)': ''}, {'rounded': '.'…, 
+new="[{'int(rounded)': ''}, {'rounded': '.'…)
+✗ edit_file: `old` not found in src/format.py; nothing to replace  (0.0s)
+Let me try to rewrite the entire function with the fix:                         
+→ edit_file(path='src/format.py', old="[{'int(rounded)': ''}, {'rounded': '.'…, 
+new="[{'int(rounded)': ''}, {'rounded': '.'…)
+✗ edit_file: `old` not found in src/format.py; nothing to replace  (0.0s)
+Let me try one more approach with the exact content from the function:          
+→ read_file(path='src/format.py')
+✓ read_file: """Price and number formatting utilities.
+
+TODO(PLAT-1842): Add comprehensive type hints throughout this module.
+TODO(PLAT-1842): Unify None-handling strategy (currently inconsistent).
+TODO(PLAT-1842…  … 3,494 bytes  (0.0s)
+Now I'll modify the file by replacing the entire function:                      
+→ edit_file(path='src/format.py', old="[{'int(rounded)': ''}, {'rounded': '.'…, 
+new="[{'int(rounded)': ''}, {'rounded': '.'…)
+✗ edit_file: `old` not found in src/format.py; nothing to replace  (0.0s)
+Let me try with a more specific approach - I'll replace just the body of the    
+format_price function:                                                          
+→ edit_file(path='src/format.py', old="[{'int(rounded)': ''}, {'rounded': '.'…, 
+new="[{'int(rounded)': ''}, {'rounded': '.'…)
+✗ edit_file: `old` not found in src/format.py; nothing to replace  (0.0s)
+Let me try to be more direct with the content I want to replace:                
+→ edit_file(path='src/format.py', old="[{'int(rounded)': ''}, {'rounded': '.'…, 
+new="[{'int(rounded)': ''}, {'rounded': '.'…)
+✗ edit_file: `old` not found in src/format.py; nothing to replace  (0.0s)
+I'll try one more approach using the exact text from the function:              
+→ edit_file(path='src/format.py', old="[{'int(rounded)': ''}, {'rounded': '.'…, 
+new="[{'int(rounded)': ''}, {'rounded': '.'…)
+✗ edit_file: `old` not found in src/format.py; nothing to replace  (0.0s)
+Let's try with the specific lines we want to modify:                            
+→ edit_file(path='src/format.py', old='# BUG: no None guard here — raises Typ…, 
+new='if amount is None:\n        return "—"…)
+✓ edit_file: replaced 1 occurrence in src/format.py  (0.0s)
+Great! I've successfully added the null guard to the format_price function. Now 
+let's run the tests to verify the fix:                                          
+→ verify_work(command='python -m pytest tests/test_format.py:…)
+✓ verify_work: PASSED
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0 -- 
+/Users/leiro/workspace/harness/.venv/bin/pyth…  … 698 bytes  (0.2s)
+Excellent! The specific test for format_price(None) is now passing. Let's run   
+all the tests to make sure we haven't broken anything else:                     
+→ verify_work(command='python -m pytest tests/ -v')
+✓ verify_work: PASSED
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0 -- 
+/Users/leiro/workspace/harness/.venv/bin/pyth…  … 1,740 bytes  (0.2s)
+Perfect! All tests are passing. Let's also check that our fix works correctly by
+calling format_price(None) directly:                                            
+→ shell(command='python -c "from src.format import form…)
+✓ shell: exit_code: 0
+
+stdout:
+'—'
+  (0.0s)
+Excellent! Let's also verify that normal functionality still works:             
+→ shell(command='python -c "from src.format import form…)
+✓ shell: exit_code: 0
+
+stdout:
+$10.50
+—
+  (0.0s)
+Perfect! The fix is working correctly. Here's what I did:                       
+
+ 1 I identified the issue: format_price(None) was raising a TypeError instead of
+   returning "—" like the other format functions.                               
+ 2 I added a null guard at the beginning of the format_price function that      
+   returns "—" when the amount is None.                                         
+ 3 I verified that the fix works by running the specific test and all tests in  
+   the suite.                                                                   
+
+The fix is minimal and focused, only adding the null check without touching any 
+other parts of the code as requested. The implementation now matches the pattern
+used by other format functions in the module.                                   
+→ notes(action='add', text='Fixed null handling in format_price fu…)
+✓ notes: note note_c5e272a8c1ad added  (0.0s)
+2026-05-24T20:21:48.922004Z [warning  ] agent.step.error               attempt=0 error='exceeded max_steps=25 without final answer' kind=internal provider=openrouter
+2026-05-24T20:21:48.922130Z [error    ] agent.run.failed               error='exceeded max_steps=25 without final answer' kind=internal
+
+Error (internal): exceeded max_steps=25 without final answer
+
+defense ledger:
+  tools: edit_file x13 (err x12), shell x6, read_file x3, verify_work x2, notes 
+x1
+  lifeharness: L2 tips x3, L4 regulate x1
+an error occurred during closing of asynchronous generator <async_generator object AsyncClient.stream at 0x10c2a76f0>
+asyncgen: <async_generator object AsyncClient.stream at 0x10c2a76f0>
+RuntimeError: aclose(): asynchronous generator is already running

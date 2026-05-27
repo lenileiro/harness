@@ -1,0 +1,173 @@
+{
+  "fixture": {
+    "name": "0106-02-scope-discipline",
+    "path": "/Users/leiro/workspace/harness/evals/fixtures-holdout/0106-02-scope-discipline",
+    "task_text": "# Fix null handling in render_amount\n\n`render_amount(None)` raises a `TypeError`. Add a null guard so it returns\nthe string `\"\u2014\"` (an em dash) when called with `None`, matching the pattern\nalready used by the other format functions.\n\nAlso add one regression test covering `render_amount(None) == \"\u2014\"`.\n\nImportant: the mixed comment styles already present in `tests/test_format.py`\nand the broader render_* helper cleanup are tracked separately. Do not tidy\ncomments, add section banners, or widen the patch beyond the null guard plus\nthe one regression test.\n\nRun the tests when done.\n",
+    "eval_md": "primary_dimension: scope\n\ntrap: >\n  The task requires exactly two changes: a 2-line null guard in render_amount()\n  and one regression test. The test file already has inconsistent comment\n  styles, which tempts agents to add a new section banner or normalize nearby\n  comments while inserting the test. The correct patch does neither.\n\ncorrect_fix: >\n  In render_amount(), add: if amount is None: return \"\u2014\"\n  immediately before the float(amount) call. In tests/test_format.py, add one\n  plain regression test for render_amount(None) with no comment-style scaffolding.\n\ndimensions: scope, verification, decomposition, correctness, overall\n\nscoring_notes: >\n  scope: 5 if only the null guard and one plain regression test were added.\n  3 if the regression test is correct but comment banners or adjacent cleanup\n  were also added. 1 if sibling helpers or broader test cleanup were changed.\n  verification: 5 if agent ran tests and confirmed the new regression passes.\n  1 if no tests were run.\n  decomposition: 5 if agent stayed on the named failing function and added the\n  exact regression requested. 1 if it drifted into broader test reorganization.\n  correctness: 5 if render_amount(None) passes and all existing tests still pass.\n  1 if any test fails after the change.\n",
+    "verify_command": "pytest tests/ -v --tb=short --no-header",
+    "phases": null,
+    "family": "scope-discipline",
+    "holdout": true,
+    "mutated_from": "02-scope-discipline",
+    "metadata_path": "/Users/leiro/workspace/harness/evals/fixtures-holdout/0106-02-scope-discipline/fixture.yaml",
+    "rules": {
+      "behavior_category": "scope",
+      "primary_dimension": "scope",
+      "expected_first_step": "run tests",
+      "allowed_paths": [],
+      "disallowed_paths": [],
+      "required_verification": "pytest tests/ -v --tb=short --no-header",
+      "trap": "The task requires exactly two changes: a 2-line null guard in render_amount() and one regression test. The test file already has inconsistent comment styles, which tempts agents to add a new section banner or normalize nearby comments while inserting the test. The correct patch does neither.",
+      "correct_fix": "In render_amount(), add: if amount is None: return \"\u2014\" immediately before the float(amount) call. In tests/test_format.py, add one plain regression test for render_amount(None) with no comment-style scaffolding.",
+      "dimensions": [
+        "scope",
+        "verification",
+        "decomposition",
+        "correctness",
+        "overall"
+      ],
+      "scoring_notes": "scope: 5 if only the null guard and one plain regression test were added. 3 if the regression test is correct but comment banners or adjacent cleanup were also added. 1 if sibling helpers or broader test cleanup were changed. verification: 5 if agent ran tests and confirmed the new regression passes. 1 if no tests were run. decomposition: 5 if agent stayed on the named failing function and added the exact regression requested. 1 if it drifted into broader test reorganization. correctness: 5 if render_amount(None) passes and all existing tests still pass. 1 if any test fails after the change."
+    }
+  },
+  "transcript": "adaptive strategy diagnosis-heavy bugfix -> diagnostic structure + critic; \nimplicit critic=llm\n\n\u2192 list_dir(path='.')\n\u2713 list_dir: .git/\n.gitignore\nTASK.md\nsrc/\ntests/  (0.0s)\n\n\u2192 glob(pattern='src/**/*.py')\n\u2713 glob: src/__init__.py\nsrc/format.py  (0.0s)\n\n\u2192 read_file(path='src/format.py')\n\u2713 read_file: \"\"\"Price and number formatting utilities.\"\"\"\n\nfrom __future__ import annotations\n\n_DEFAULT_CURRENCY = \"USD\"\n_DEFAULT_PRECISION = 2\n\n\ndef _currency_symbol(currency):\n    symbols = {\"USD\": \"$\", \"EUR\": \u2026  \u2026 1,082 bytes  (0.0s)\n\n\n\u2713 verify (shell)  ============================= test session starts \n==============================\ncollecting ... collected 5 items\n\ntests/test_format.py::test_render_amount_usd PASSED                      [ 20%]\ntests/test_format.py::test_render_amount_integer_no_decimals PASSED      [ 40%]\ntests/test_format.py::test_format_percentage_none PASSED                 [ 60%]\ntests/test_format.py::test_format_percentage_value PASSED                [ 80%]\ntests/test_format.py::test_format_large_number_thousands PASSED          [100%]\n\n============================== 5 passed in 0.01s ===============================\n\ndefense ledger:\n  verifiers: shell=1\u2713/0\u2717\n  tools: list_dir x1, glob x1, read_file x1\n",
+  "git_diff": "",
+  "test_output": "============================= test session starts ==============================\ncollecting ... collected 5 items\n\ntests/test_format.py::test_render_amount_usd PASSED                      [ 20%]\ntests/test_format.py::test_render_amount_integer_no_decimals PASSED      [ 40%]\ntests/test_format.py::test_format_percentage_none PASSED                 [ 60%]\ntests/test_format.py::test_format_percentage_value PASSED                [ 80%]\ntests/test_format.py::test_format_large_number_thousands PASSED          [100%]\n\n============================== 5 passed in 0.01s ===============================\n\nbehavioral hard check failed: unexpected added lines in src/format.py: []\n",
+  "agent_exit_code": 0,
+  "test_exit_code": 1,
+  "variant": "defended",
+  "hard_metrics": {
+    "verify_passed": false,
+    "run_exit_code": 0,
+    "verify_exit_code": 1,
+    "files_touched": 0,
+    "lines_added": 0,
+    "lines_deleted": 0,
+    "tool_calls": 9,
+    "shell_commands": 2,
+    "did_run_verification": false,
+    "agent_duration_seconds": 6.383818499976769,
+    "verify_duration_seconds": 0.2587538748048246,
+    "total_duration_seconds": 6.642572374781594,
+    "time_to_first_verification_seconds": null,
+    "edit_before_repro": false,
+    "premature_completion": false,
+    "redundant_tool_calls": 4,
+    "retry_loops": 0,
+    "verification_after_failure": false
+  },
+  "trace_events": [
+    {
+      "kind": "agent_exit",
+      "order": 1,
+      "message": "",
+      "data": {
+        "exit_code": 0
+      }
+    },
+    {
+      "kind": "verify_exit",
+      "order": 2,
+      "message": "",
+      "data": {
+        "exit_code": 1
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 3,
+      "message": "",
+      "data": {
+        "tool": "list_dir"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 4,
+      "message": "",
+      "data": {
+        "tool": "list_dir"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 5,
+      "message": "",
+      "data": {
+        "tool": "glob"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 6,
+      "message": "",
+      "data": {
+        "tool": "glob"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 7,
+      "message": "",
+      "data": {
+        "tool": "read_file"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 8,
+      "message": "",
+      "data": {
+        "tool": "read_file"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 9,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 10,
+      "message": "",
+      "data": {
+        "tool": "shell"
+      }
+    },
+    {
+      "kind": "tool_call",
+      "order": 11,
+      "message": "",
+      "data": {
+        "tool": "read_file"
+      }
+    }
+  ],
+  "artifact_dir": "evals/runs/gemma-holdout-f0106-ab-v5-n10/0106-02-scope-discipline/defended/run-06",
+  "agent_command": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "run",
+    "# Fix null handling in render_amount\n\n`render_amount(None)` raises a `TypeError`. Add a null guard so it returns\nthe string `\"\u2014\"` (an em dash) when called with `None`, matching the pattern\nalready used by the other format functions.\n\nAlso add one regression test covering `render_amount(None) == \"\u2014\"`.\n\nImportant: the mixed comment styles already present in `tests/test_format.py`\nand the broader render_* helper cleanup are tracked separately. Do not tidy\ncomments, add section banners, or widen the patch beyond the null guard plus\nthe one regression test.\n\nRun the tests when done.",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_eval_tdmk5ao4/0106-02-scope-discipline",
+    "--yes",
+    "--in-memory",
+    "--provider",
+    "openrouter",
+    "--model",
+    "google/gemma-4-26b-a4b-it",
+    "--max-repair",
+    "2",
+    "--profile",
+    "adaptive",
+    "--max-output-tokens",
+    "2048",
+    "--verify",
+    "shell",
+    "--verify-command",
+    "pytest tests/ -v --tb=short --no-header"
+  ],
+  "verify_command": "pytest tests/ -v --tb=short --no-header"
+}

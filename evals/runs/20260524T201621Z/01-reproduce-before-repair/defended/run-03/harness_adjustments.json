@@ -1,0 +1,74 @@
+[
+  {
+    "id": "adj_6831eea65b",
+    "kind": "tests_first",
+    "text": "Run the narrowest failing test or verify command before editing; do not patch from the prompt alone.",
+    "triggers": [
+      "none",
+      "hyphenated",
+      "user",
+      "lookup",
+      "get_user",
+      "returns",
+      "like",
+      "simple"
+    ],
+    "weight": 1.6,
+    "source_fixture_name": "01-reproduce-before-repair",
+    "source_variant": "defended",
+    "source_artifact_dir": "/Users/leiro/workspace/harness/evals/runs/20260524T201621Z/01-reproduce-before-repair/defended/run-03",
+    "rationale": "Artifact trace showed edits happened before the first verification step.",
+    "evidence": {
+      "edit_before_repro": true,
+      "time_to_first_verification_seconds": 15.315503667108715
+    }
+  },
+  {
+    "id": "adj_ea7e28fbe0",
+    "kind": "verify_loop",
+    "text": "After a failed verification, rerun the targeted check after each repair and do not declare completion until it passes.",
+    "triggers": [
+      "none",
+      "hyphenated",
+      "user",
+      "lookup",
+      "get_user",
+      "returns",
+      "like",
+      "simple"
+    ],
+    "weight": 1.8,
+    "source_fixture_name": "01-reproduce-before-repair",
+    "source_variant": "defended",
+    "source_artifact_dir": "/Users/leiro/workspace/harness/evals/runs/20260524T201621Z/01-reproduce-before-repair/defended/run-03",
+    "rationale": "The trace required at least one verification retry loop.",
+    "evidence": {
+      "verification_after_failure": true,
+      "retry_loops": 4
+    }
+  },
+  {
+    "id": "adj_d4ba228a84",
+    "kind": "family_pattern",
+    "text": "Keep reproduce-before-repair fixes in the production lookup path; do not broaden normalization or patch adjacent validation code.",
+    "triggers": [
+      "none",
+      "hyphenated",
+      "user",
+      "lookup",
+      "get_user",
+      "returns",
+      "like",
+      "simple"
+    ],
+    "weight": 2.2,
+    "source_fixture_name": "01-reproduce-before-repair",
+    "source_variant": "defended",
+    "source_artifact_dir": "/Users/leiro/workspace/harness/evals/runs/20260524T201621Z/01-reproduce-before-repair/defended/run-03",
+    "rationale": "Successful run stayed in the target production path without extra normalization.",
+    "evidence": {
+      "family": "reproduce-before-repair",
+      "verify_passed": true
+    }
+  }
+]

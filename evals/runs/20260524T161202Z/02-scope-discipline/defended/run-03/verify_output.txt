@@ -1,0 +1,30 @@
+============================= test session starts ==============================
+collecting ... collected 14 items
+
+tests/test_format.py::test_format_price_usd PASSED                       [  7%]
+tests/test_format.py::test_format_price_integer_no_decimals PASSED       [ 14%]
+tests/test_format.py::test_format_price_euro PASSED                      [ 21%]
+tests/test_format.py::test_format_price_jpy PASSED                       [ 28%]
+tests/test_format.py::test_format_price_none FAILED                      [ 35%]
+tests/test_format.py::test_format_percentage_none PASSED                 [ 42%]
+tests/test_format.py::test_format_percentage_value PASSED                [ 50%]
+tests/test_format.py::test_format_large_number_thousands PASSED          [ 57%]
+tests/test_format.py::test_format_large_number_millions PASSED           [ 64%]
+tests/test_format.py::test_format_large_number_none PASSED               [ 71%]
+tests/test_format.py::test_format_compact_price_none PASSED              [ 78%]
+tests/test_format.py::test_format_change_none PASSED                     [ 85%]
+tests/test_format.py::test_format_duration_none PASSED                   [ 92%]
+tests/test_format.py::test_format_duration_seconds PASSED                [100%]
+
+=================================== FAILURES ===================================
+____________________________ test_format_price_none ____________________________
+tests/test_format.py:31: in test_format_price_none
+    result = format_price(None)
+             ^^^^^^^^^^^^^^^^^^
+src/format.py:33: in format_price
+    value = float(amount)
+            ^^^^^^^^^^^^^
+E   TypeError: float() argument must be a string or a real number, not 'NoneType'
+=========================== short test summary info ============================
+FAILED tests/test_format.py::test_format_price_none - TypeError: float() argu...
+========================= 1 failed, 13 passed in 0.02s =========================

@@ -1,0 +1,20 @@
+{
+  "name": "mission-create",
+  "argv": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "mission",
+    "create",
+    "--title",
+    "Workflow Mission",
+    "--goal",
+    "Drive a mission through planning, execution, and validation.",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_qqn8sdvm/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Created mission mission-workflow-mission-ea65f722 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_q\nqn8sdvm/workspace/.harness/missions/missions/mission-workflow-mission-ea65f722\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.41178291593678296
+}

@@ -1,0 +1,16 @@
+{
+  "name": "vision-show",
+  "argv": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "vision",
+    "show",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_9lm5_7mv/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Autonomous research reporting harness\nTrack research state with durable searchable reporting surfaces.\n\nThemes\n- research-reporting\n\nSuccess Metrics\n- high-signal dashboards\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.36864412506110966
+}

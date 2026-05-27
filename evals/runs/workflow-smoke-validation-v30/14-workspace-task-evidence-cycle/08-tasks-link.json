@@ -1,0 +1,20 @@
+{
+  "name": "tasks-link",
+  "argv": [
+    "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_sixu5lfd/workspace/fake-harness",
+    "tasks",
+    "link",
+    "T-001",
+    "T-002",
+    "--db",
+    ".harness/harness.db",
+    "--relation",
+    "depends_on"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Linked T-001 --depends_on--> T-002\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.44168458320200443
+}

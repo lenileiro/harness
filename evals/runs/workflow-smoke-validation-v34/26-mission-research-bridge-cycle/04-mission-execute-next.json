@@ -1,0 +1,18 @@
+{
+  "name": "mission-execute-next",
+  "argv": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "mission",
+    "execute-next",
+    "--mission",
+    "mission-bridge-mission-7dd40f83",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_j3fwxtn0/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "dispatched Dispatched feature 'Implement bridge feature'.\nmilestone_id=milestone-milestone-1-9e652576\nfeature_id=feature-implement-bridge-feature-0780e3d1\nrun_id=run-implement-bridge-feature-ac0720b4\nhandoff_id=handoff-implement-bridge-feature-a1a399a7\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.3931788329500705
+}

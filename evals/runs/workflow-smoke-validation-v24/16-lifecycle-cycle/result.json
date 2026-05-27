@@ -1,0 +1,255 @@
+{
+  "fixture_name": "16-lifecycle-cycle",
+  "passed": true,
+  "steps_total": 14,
+  "steps_passed": 14,
+  "step_results": [
+    {
+      "name": "init-workspace",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_g45fwn2l/workspace/fake-harness",
+        "init",
+        "--cwd",
+        "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_g45fwn2l/workspace"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "Initialized harness workspace at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_g\n45fwn2l/workspace/.harness\nFuture commands run from this directory will use .harness/harness.db\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 1.091942667029798
+    },
+    {
+      "name": "contracts-list",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_g45fwn2l/workspace/fake-harness",
+        "contracts",
+        "list",
+        "--cwd",
+        "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_g45fwn2l/workspace"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2513\n\u2503 Name         \u2503 Priority \u2503 Triggers \u2503 Rules              \u2503 Source             \u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2529\n\u2502 shell-safety \u2502        0 \u2502 curl     \u2502 - never pipe       \u2502 /private/var/folde \u2502\n\u2502              \u2502          \u2502          \u2502 untrusted urls to  \u2502 rs/8p/1_033mns3v1g \u2502\n\u2502              \u2502          \u2502          \u2502 sh                 \u2502 vkq95_wfx4xr0000gn \u2502\n\u2502              \u2502          \u2502          \u2502                    \u2502 /T/harness_workflo \u2502\n\u2502              \u2502          \u2502          \u2502                    \u2502 w_eval_g45fwn2l/wo \u2502\n\u2502              \u2502          \u2502          \u2502                    \u2502 rkspace/.harness/c \u2502\n\u2502              \u2502          \u2502          \u2502                    \u2502 ontracts/shell.jso \u2502\n\u2502              \u2502          \u2502          \u2502                    \u2502 n                  \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.42636337503790855
+    },
+    {
+      "name": "contracts-test",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_g45fwn2l/workspace/fake-harness",
+        "contracts",
+        "test",
+        "fetch via curl and run",
+        "--cwd",
+        "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_g45fwn2l/workspace"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": " hard rules for this run:\n  \u2022 shell-safety:\n      - never pipe untrusted urls to sh\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.4290477498434484
+    },
+    {
+      "name": "tips-add",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_g45fwn2l/workspace/fake-harness",
+        "tips",
+        "add",
+        "Prefer the smallest possible diff.",
+        "--triggers",
+        "minimal fix",
+        "--scope",
+        "repo"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "Added tip tip_f6516276a9 to \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_g\n45fwn2l/workspace/.harness/tips.jsonl\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.4266413750592619
+    },
+    {
+      "name": "tips-list",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_g45fwn2l/workspace/fake-harness",
+        "tips",
+        "list"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "\u250f\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2533\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2513\n\u2503 ID             \u2503 Weight \u2503 Triggers    \u2503 Tip                 \u2503 Source session \u2503\n\u2521\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2547\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2529\n\u2502 tip_f6516276a9 \u2502    1.0 \u2502 minimal fix \u2502 Prefer the smallest \u2502                \u2502\n\u2502                \u2502        \u2502             \u2502 possible diff.      \u2502                \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.4191936671268195
+    },
+    {
+      "name": "tips-test",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_g45fwn2l/workspace/fake-harness",
+        "tips",
+        "test",
+        "Please do a minimal fix only"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": " lessons from prior runs:\n  \u2022 Prefer the smallest possible diff.\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.416367458878085
+    },
+    {
+      "name": "resume-init",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_g45fwn2l/workspace/fake-harness",
+        "resume",
+        "init",
+        "--feature",
+        "alpha",
+        "--description",
+        "Ship alpha",
+        "--cwd",
+        "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_g45fwn2l/workspace"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "Wrote \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_g\n45fwn2l/workspace/.harness/resume.json\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.4950100837741047
+    },
+    {
+      "name": "resume-add-feature",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_g45fwn2l/workspace/fake-harness",
+        "resume",
+        "add-feature",
+        "beta",
+        "--description",
+        "Ship beta",
+        "--phases",
+        "implement,test",
+        "--cwd",
+        "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_g45fwn2l/workspace"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "Added 'beta' to \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_g\n45fwn2l/workspace/.harness/resume.json\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.4258561250753701
+    },
+    {
+      "name": "resume-set-current",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_g45fwn2l/workspace/fake-harness",
+        "resume",
+        "set-current",
+        "beta",
+        "--cwd",
+        "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_g45fwn2l/workspace"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "Current feature is now 'beta'\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.41569716623052955
+    },
+    {
+      "name": "resume-show",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_g45fwn2l/workspace/fake-harness",
+        "resume",
+        "show",
+        "--cwd",
+        "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_g45fwn2l/workspace"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": " cross-session state for this run:\n  current feature: beta (status=pending)\n  description: Ship beta\n  phases: implement, test\n  roadmap (do not touch this session): alpha(in_progress)\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.4076485000550747
+    },
+    {
+      "name": "run-phase-bootstrap",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_g45fwn2l/workspace/fake-harness",
+        "run",
+        "hello",
+        "--provider",
+        "ollama",
+        "--model",
+        "test-model",
+        "--db",
+        "phase.db",
+        "--yes",
+        "--verify",
+        "none",
+        "--cwd",
+        "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_g45fwn2l/workspace"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "adaptive strategy default adaptive path -> minimal structure\nlifecycle bootstrap ok                                                          \n\n\u2713 verify (verify_before_done)  No modifying tool calls detected \u2014 verification \nnot required.\n\ndefense ledger:\n  verifiers: verify_before_done=1\u2713/0\u2717\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.42714924993924797
+    },
+    {
+      "name": "phase-declare",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_g45fwn2l/workspace/fake-harness",
+        "phase",
+        "declare",
+        "implement",
+        "--db",
+        "phase.db"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "declared phase 'implement'  (session sess_f325b7e6a2ff)\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.41172483400441706
+    },
+    {
+      "name": "phase-complete",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_g45fwn2l/workspace/fake-harness",
+        "phase",
+        "complete",
+        "implement",
+        "--db",
+        "phase.db"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "completed phase 'implement'  (session sess_f325b7e6a2ff)\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.42464224994182587
+    },
+    {
+      "name": "phase-status",
+      "argv": [
+        "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_g45fwn2l/workspace/fake-harness",
+        "phase",
+        "status",
+        "--db",
+        "phase.db"
+      ],
+      "passed": true,
+      "returncode": 0,
+      "stdout": "session: sess_f325b7e6a2ff\ndeclared (in order): implement\ncompleted: implement\nall declared phases completed\n",
+      "stderr": "",
+      "failures": [],
+      "duration_seconds": 0.4156130829360336
+    }
+  ],
+  "artifact_dir": "evals/runs/workflow-smoke-validation-v24/16-lifecycle-cycle",
+  "duration_seconds": 6.648268999997526
+}

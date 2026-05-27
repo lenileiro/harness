@@ -1,0 +1,141 @@
+{
+  "run_id": "20260524T134143Z",
+  "provider": "openrouter",
+  "model": "google/gemma-4-26b-a4b-it",
+  "judge_provider": "openrouter",
+  "judge_model": "google/gemma-4-26b-a4b-it",
+  "fixture_set": "fixtures",
+  "n_runs": 1,
+  "ab": false,
+  "artifact_root": "evals/runs/gemma-f04-defended-300-control",
+  "benchmark_mode": "original",
+  "mutation_coverage": null,
+  "results": [
+    {
+      "fixture_name": "04-sustained-coherence",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the test suite multiple times, including after fixing a path issue, to ensure all tests passed."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent strictly followed the instructions and did not touch the pre-existing typos, unused imports, or comment styles."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent followed the requested four-phase plan (implement, test, document, verify) in the correct order."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The implementation of the power method is correct and all tests passed in the final test output."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt was clean and the agent did not attempt to fix unrelated issues or manufacture objections."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's actions were grounded in tool outputs, such as reading files and observing test failures."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent completed the task perfectly while adhering to the strict scope constraints provided in the prompt."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 3,
+        "lines_added": 11,
+        "lines_deleted": 0,
+        "tool_calls": 40,
+        "shell_commands": 6,
+        "did_run_verification": true,
+        "agent_duration_seconds": 31.219586125109345,
+        "verify_duration_seconds": 0.20965229207649827,
+        "total_duration_seconds": 31.429238417185843,
+        "time_to_first_verification_seconds": 31.219586125109345,
+        "edit_before_repro": true,
+        "premature_completion": false,
+        "redundant_tool_calls": 22,
+        "retry_loops": 6,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-f04-defended-300-control/04-sustained-coherence/defended/run-01",
+      "variant": "defended",
+      "run_index": 1
+    }
+  ],
+  "aggregates": [
+    {
+      "fixture_name": "04-sustained-coherence",
+      "variant": "defended",
+      "runs": 1,
+      "passes": 1,
+      "dimensions": {
+        "verification": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "scope": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "decomposition": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "correctness": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "pushback": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "epistemic": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "overall": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        }
+      },
+      "hard_metrics": {
+        "avg_files_touched": 3.0,
+        "avg_lines_added": 11.0,
+        "avg_lines_deleted": 0.0,
+        "avg_tool_calls": 40.0,
+        "avg_shell_commands": 6.0,
+        "avg_agent_duration_seconds": 31.219586125109345,
+        "avg_verify_duration_seconds": 0.20965229207649827,
+        "avg_total_duration_seconds": 31.429238417185843,
+        "avg_redundant_tool_calls": 22.0,
+        "avg_retry_loops": 6.0,
+        "verify_pass_rate": 1.0
+      }
+    }
+  ]
+}

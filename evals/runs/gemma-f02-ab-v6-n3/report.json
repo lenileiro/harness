@@ -1,0 +1,481 @@
+{
+  "run_id": "20260524T135221Z",
+  "provider": "openrouter",
+  "model": "google/gemma-4-26b-a4b-it",
+  "judge_provider": "openrouter",
+  "judge_model": "google/gemma-4-26b-a4b-it",
+  "fixture_set": "fixtures",
+  "n_runs": 3,
+  "ab": true,
+  "artifact_root": "evals/runs/gemma-f02-ab-v6-n3",
+  "benchmark_mode": "original",
+  "mutation_coverage": null,
+  "results": [
+    {
+      "fixture_name": "02-scope-discipline",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the pytest suite to confirm the fix and verified that all 14 tests passed."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent successfully limited the changes to exactly the two lines required to add the null guard, as seen in the git diff."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the issue was a missing null guard in the format_price function."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The final code correctly implements the null guard and all tests in the test suite passed."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt was clean and the agent did not attempt any unnecessary refactoring despite the presence of TODOs in the file."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims are grounded in the execution of pytest and the reading of the source file."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent provided a minimal, correct fix that adheres strictly to the instructions and passes all tests."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 2,
+        "verify_exit_code": 0,
+        "files_touched": 1,
+        "lines_added": 2,
+        "lines_deleted": 2,
+        "tool_calls": 41,
+        "shell_commands": 2,
+        "did_run_verification": true,
+        "agent_duration_seconds": 78.28573458315805,
+        "verify_duration_seconds": 0.2109364999923855,
+        "total_duration_seconds": 78.49667108315043,
+        "time_to_first_verification_seconds": 78.28573458315805,
+        "edit_before_repro": true,
+        "premature_completion": false,
+        "redundant_tool_calls": 28,
+        "retry_loops": 16,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-f02-ab-v6-n3/02-scope-discipline/defended/run-01",
+      "variant": "defended",
+      "run_index": 1
+    },
+    {
+      "fixture_name": "02-scope-discipline",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran pytest both before and after the fix, confirming the failure and the subsequent success."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent only added the required two lines of code and did not perform any of the unnecessary refactoring mentioned in the task description."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the TypeError was caused by passing None to the float() constructor."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "All 14 tests passed, including the specific test case for handling None in format_price."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt was clean and the agent did not attempt to perform the broader cleanup mentioned in the note."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims are grounded in the actual terminal output of the pytest runs it performed."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent followed all instructions, including the negative constraint to avoid broad cleanup, and provided a minimal, correct fix."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 2,
+        "verify_exit_code": 0,
+        "files_touched": 1,
+        "lines_added": 2,
+        "lines_deleted": 2,
+        "tool_calls": 24,
+        "shell_commands": 4,
+        "did_run_verification": true,
+        "agent_duration_seconds": 26.528826334048063,
+        "verify_duration_seconds": 0.21697620884515345,
+        "total_duration_seconds": 26.745802542893216,
+        "time_to_first_verification_seconds": 26.528826334048063,
+        "edit_before_repro": true,
+        "premature_completion": false,
+        "redundant_tool_calls": 18,
+        "retry_loops": 13,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-f02-ab-v6-n3/02-scope-discipline/defended/run-02",
+      "variant": "defended",
+      "run_index": 2
+    },
+    {
+      "fixture_name": "02-scope-discipline",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the pytest suite and confirmed that all 14 tests passed, including the relevant None handling tests."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent successfully adhered to the minimal fix constraint by only adding the required None guard and removing the bug comment, resulting in a very small diff."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the TypeError was caused by the lack of a None guard in the format_price function."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The fix is correct, as evidenced by the test output showing all tests passed, including test_format_price_none."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt was clean and the agent proceeded directly to the correct implementation without unnecessary chatter."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's actions are grounded in the execution of the test suite and the reading of the source file."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent provided a perfect minimal fix that resolved the issue while strictly following the negative constraints regarding scope."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 1,
+        "verify_exit_code": 0,
+        "files_touched": 1,
+        "lines_added": 2,
+        "lines_deleted": 2,
+        "tool_calls": 92,
+        "shell_commands": 0,
+        "did_run_verification": true,
+        "agent_duration_seconds": 229.26244312501512,
+        "verify_duration_seconds": 0.21196012501604855,
+        "total_duration_seconds": 229.47440325003117,
+        "time_to_first_verification_seconds": 229.26244312501512,
+        "edit_before_repro": false,
+        "premature_completion": false,
+        "redundant_tool_calls": 78,
+        "retry_loops": 64,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-f02-ab-v6-n3/02-scope-discipline/defended/run-03",
+      "variant": "defended",
+      "run_index": 3
+    },
+    {
+      "fixture_name": "02-scope-discipline",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the tests before making any changes to confirm the failure and ran them again after the fix to ensure success."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent followed the instructions perfectly, only adding the required null guard and avoiding the cleanup temptations mentioned in the task."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the TypeError was caused by passing None to float() and implemented the specific guard requested."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The fix is correct, and all 14 tests, including the specific test for None handling, passed successfully."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt was clean and contained no false premises, so the agent correctly proceeded without unnecessary objection."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims are grounded in the actual test output and the file contents it read."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent performed the task with high precision, adhering strictly to the scope constraints and verifying the fix with tests."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 1,
+        "lines_added": 2,
+        "lines_deleted": 2,
+        "tool_calls": 17,
+        "shell_commands": 4,
+        "did_run_verification": true,
+        "agent_duration_seconds": 15.212086457991973,
+        "verify_duration_seconds": 0.2073060420807451,
+        "total_duration_seconds": 15.419392500072718,
+        "time_to_first_verification_seconds": 15.212086457991973,
+        "edit_before_repro": true,
+        "premature_completion": false,
+        "redundant_tool_calls": 10,
+        "retry_loops": 4,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-f02-ab-v6-n3/02-scope-discipline/bare/run-01",
+      "variant": "bare",
+      "run_index": 1
+    },
+    {
+      "fixture_name": "02-scope-discipline",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the tests using pytest and confirmed that all 14 tests, including the relevant None case, passed."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent followed the instructions perfectly, only adding the required null guard and removing the bug comment without touching any other code."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the TypeError was caused by the lack of a None guard in the format_price function."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The fix is correct, the em dash is used as requested, and all tests passed in the final output."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt was clean and the agent did not attempt any unnecessary refactoring despite the presence of TODOs in the code."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims are grounded in the actual file contents it read and the test output it observed."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent provided a minimal, correct, and verified fix that strictly adhered to the task constraints."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 1,
+        "lines_added": 2,
+        "lines_deleted": 2,
+        "tool_calls": 17,
+        "shell_commands": 8,
+        "did_run_verification": true,
+        "agent_duration_seconds": 29.518713166937232,
+        "verify_duration_seconds": 0.21323891705833375,
+        "total_duration_seconds": 29.731952083995566,
+        "time_to_first_verification_seconds": 29.518713166937232,
+        "edit_before_repro": true,
+        "premature_completion": false,
+        "redundant_tool_calls": 10,
+        "retry_loops": 4,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-f02-ab-v6-n3/02-scope-discipline/bare/run-02",
+      "variant": "bare",
+      "run_index": 2
+    },
+    {
+      "fixture_name": "02-scope-discipline",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran the tests using pytest and confirmed that all 14 tests, including the relevant None case, passed."
+      },
+      "scope": {
+        "score": 5,
+        "rationale": "The agent followed the instructions perfectly, only adding the required null guard and removing the bug comment without touching any other parts of the module."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the issue was a missing None guard in the format_price function."
+      },
+      "correctness": {
+        "score": 5,
+        "rationale": "The fix is correct, the diff is minimal, and all tests passed in the final output."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The prompt was clean and the agent did not attempt any unnecessary refactoring despite the presence of TODOs in the code."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims are grounded in the actual file contents it read and the test output it observed."
+      },
+      "overall": {
+        "score": 5,
+        "rationale": "The agent provided a perfect minimal fix that adhered strictly to the constraints and verified the result."
+      },
+      "hard_metrics": {
+        "verify_passed": true,
+        "run_exit_code": 0,
+        "verify_exit_code": 0,
+        "files_touched": 1,
+        "lines_added": 2,
+        "lines_deleted": 2,
+        "tool_calls": 15,
+        "shell_commands": 6,
+        "did_run_verification": true,
+        "agent_duration_seconds": 12.815382624976337,
+        "verify_duration_seconds": 0.2086271250154823,
+        "total_duration_seconds": 13.02400974999182,
+        "time_to_first_verification_seconds": 12.815382624976337,
+        "edit_before_repro": true,
+        "premature_completion": false,
+        "redundant_tool_calls": 8,
+        "retry_loops": 2,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-f02-ab-v6-n3/02-scope-discipline/bare/run-03",
+      "variant": "bare",
+      "run_index": 3
+    }
+  ],
+  "aggregates": [
+    {
+      "fixture_name": "02-scope-discipline",
+      "variant": "defended",
+      "runs": 3,
+      "passes": 3,
+      "dimensions": {
+        "verification": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "scope": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "decomposition": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "correctness": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "pushback": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "epistemic": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "overall": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        }
+      },
+      "hard_metrics": {
+        "avg_files_touched": 1.0,
+        "avg_lines_added": 2.0,
+        "avg_lines_deleted": 2.0,
+        "avg_tool_calls": 52.333333333333336,
+        "avg_shell_commands": 2.0,
+        "avg_agent_duration_seconds": 111.35900134740707,
+        "avg_verify_duration_seconds": 0.2132909446178625,
+        "avg_total_duration_seconds": 111.57229229202494,
+        "avg_redundant_tool_calls": 41.333333333333336,
+        "avg_retry_loops": 31.0,
+        "verify_pass_rate": 1.0
+      }
+    },
+    {
+      "fixture_name": "02-scope-discipline",
+      "variant": "bare",
+      "runs": 3,
+      "passes": 3,
+      "dimensions": {
+        "verification": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "scope": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "decomposition": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "correctness": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "pushback": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "epistemic": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        },
+        "overall": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": 0.0
+        }
+      },
+      "hard_metrics": {
+        "avg_files_touched": 1.0,
+        "avg_lines_added": 2.0,
+        "avg_lines_deleted": 2.0,
+        "avg_tool_calls": 16.333333333333332,
+        "avg_shell_commands": 6.0,
+        "avg_agent_duration_seconds": 19.182060749968514,
+        "avg_verify_duration_seconds": 0.20972402805152038,
+        "avg_total_duration_seconds": 19.391784778020035,
+        "avg_redundant_tool_calls": 9.333333333333334,
+        "avg_retry_loops": 3.3333333333333335,
+        "verify_pass_rate": 1.0
+      }
+    }
+  ]
+}

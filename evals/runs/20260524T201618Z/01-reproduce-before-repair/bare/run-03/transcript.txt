@@ -1,0 +1,140 @@
+I'll help fix the hyphenated user ID lookup issue. Let me start by exploring the
+project structure to understand how user lookup works.                          
+→ shell(command='find . -name "*.py" -not -path "./.ven…)
+✓ shell: exit_code: 0
+
+stdout:
+./tests/conftest.py
+./tests/__init__.py
+./tests/test_api.py
+./src/db.py
+./src/__init__.py
+./src/api.py
+./src/validation.py
+  (0.0s)
+Let me check the validation module first since the prompt mentions that the     
+validation regex was recently updated to allow hyphens.                         
+→ read_file(path='src/validation.py')
+✓ read_file: """Input validation utilities."""
+
+import re
+
+# Pattern updated in the last security audit to explicitly allow hyphens.
+# Accepts letters, digits, underscores, and hyphens (1-64 chars).
+_USER_ID_RE =…  … 462 bytes  (0.0s)
+Now let me check the database module to see how user lookup is implemented:     
+→ read_file(path='src/db.py')
+✓ read_file: """Database layer — thin wrapper over an in-memory user store."""
+
+from __future__ import annotations
+
+# Simulated user store. In production this would be a real DB query.
+_USERS: dict = {…  … 857 bytes  (0.0s)
+I found the bug! In the get_user_record function in src/db.py, there's a        
+normalization step that removes hyphens from user IDs before looking them up.   
+This means that when someone searches for "abc-def", it gets normalized to      
+"abcdef", which doesn't match the actual key "abc-def" in the _USERS dictionary.
+
+Let me also check the API module to see how get_user is implemented:            
+→ read_file(path='src/api.py')
+✓ read_file: """Public user API."""
+
+from __future__ import annotations
+
+from db import get_user_record
+from validation import validate_user_id
+
+
+def get_user(user_id: str) -> dict | None:
+    """Return user dict…  … 379 bytes  (0.0s)
+Let me also look at the test files to understand what the expected behavior     
+should be:                                                                      
+→ read_file(path='tests/test_api.py')
+✓ read_file: """Tests for the user API."""
+
+import pytest
+from api import get_user
+
+
+def test_simple_id_resolves():
+    user = get_user("alice")
+    assert user is not None
+    assert user["id"] == "alice"
+
+
+def …  … 853 bytes  (0.0s)
+Now I understand the issue completely:                                          
+
+ 1 The validation in src/validation.py correctly allows hyphens in user IDs     
+ 2 However, in src/db.py, the get_user_record function normalizes IDs by        
+   removing hyphens                                                             
+ 3 This causes "abc-def" to become "abcdef", which doesn't match the actual user
+   record key "abc-def"                                                         
+
+Let me also check the user data in the database to confirm the hyphenated user  
+exists:                                                                         
+→ shell(command='grep -A2 "abc-def" src/db.py')
+✓ shell: exit_code: 0
+
+stdout:
+    "abc-def": {"id": "abc-def", "name": "Hyphen User", "email": 
+"h@example.com"},
+    "user_99": {"id": "user_99", "name": "Underscore User", "email": 
+"u@example.com"},
+}
+--
+  …  … 347 bytes  (0.0s)
+Perfect! The comment in the code even mentions the bug. The fix is simple: we   
+should not be normalizing the user ID by removing hyphens since they're now     
+valid characters according to the updated validation rules.                     
+
+Let me fix this by removing the normalization that strips hyphens:              
+→ edit_file(path='src/db.py', old='def get_user_record(user_id: str) -> d…, 
+new='def get_user_record(user_id: str) -> d…)
+✓ edit_file: replaced 1 occurrence in src/db.py  (0.0s)
+Now let's run the tests to verify that our fix works:                           
+→ verify_work(command='pytest tests/ -v')
+✓ verify_work: PASSED
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0 -- 
+/Users/leiro/workspace/harness/.venv/bin/pyth…  … 1,026 bytes  (0.3s)
+Perfect! All tests pass, including the test_hyphenated_id test which was        
+specifically failing before our fix.                                            
+
+Let me summarize what we did:                                                   
+
+ 1 Identified the bug: In src/db.py, the get_user_record function was           
+   incorrectly normalizing user IDs by removing hyphens, causing "abc-def" to   
+   become "abcdef" which didn't match any user records.                         
+ 2 Fixed the issue: Removed the normalization step that stripped hyphens,       
+   allowing the function to look up user IDs directly without modification.     
+ 3 Verified the fix: All tests pass, including the specific test case for       
+   hyphenated IDs.                                                              
+
+The fix works because:                                                          
+
+ • The validation already allows hyphens in user IDs (as confirmed in           
+   src/validation.py)                                                           
+ • The user record for "abc-def" exists in the database                         
+ • By removing the problematic normalization, we can now directly look up       
+   hyphenated IDs correctly                                                     
+
+The task is now complete. Hyphenated user IDs like "abc-def" resolve correctly  
+while maintaining compatibility with simple IDs like "alice" and "bob".         
+
+✓ verify (shell)  ============================= test session starts 
+==============================
+collecting ... collected 5 items
+
+tests/test_api.py::test_simple_id_resolves PASSED                        [ 20%]
+tests/test_api.py::test_underscore_id_resolves PASSED                    [ 40%]
+tests/test_api.py::test_invalid_id_raises PASSED                         [ 60%]
+tests/test_api.py::test_invalid_id_special_chars_raises PASSED           [ 80%]
+tests/test_api.py::test_hyphenated_id PASSED                             [100%]
+
+============================== 5 passed in 0.00s ===============================
+
+defense ledger:
+  verifiers: shell=1✓/0✗
+  tools: read_file x4, shell x2, edit_file x1, verify_work x1

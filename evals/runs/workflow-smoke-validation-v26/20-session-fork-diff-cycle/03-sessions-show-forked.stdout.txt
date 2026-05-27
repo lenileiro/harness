@@ -1,0 +1,13 @@
+╭────────────────────────────────── session ───────────────────────────────────╮
+│ sess_branch_eval  pending  ollama/test-model                                 │
+│ created 0s ago, updated 0s ago                                               │
+│ cwd:                                                                         │
+│ /private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_ev │
+│ al_zgu4apep/workspace                                                        │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭──── user ─────╮
+│ parent prompt │
+╰───────────────╯
+╭── assistant ──╮
+│ parent answer │
+╰───────────────╯

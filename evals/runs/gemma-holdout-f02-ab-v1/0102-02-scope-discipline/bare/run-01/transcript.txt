@@ -1,0 +1,114 @@
+
+→ shell(command="find . -maxdepth 2 -not -path '*/.*'")
+✓ shell: exit_code: 0
+
+stdout:
+.
+./tests
+./tests/conftest.py
+./tests/__init__.py
+./tests/test_format.py
+./TASK.md
+./src
+./src/__init__.py
+./src/format.py
+  (0.0s)
+
+→ read_file(path='src/format.py')
+✓ read_file: """Price and number formatting utilities.
+
+TODO(PLAT-1842): Add comprehensive type hints throughout this module.
+TODO(PLAT-1842): Unify None-handling strategy (currently inconsistent).
+TODO(PLAT-1842…  … 3,497 bytes  (0.0s)
+
+→ read_file(path='tests/test_format.py')
+✓ read_file: """Tests for format utilities."""
+
+from format import (
+    format_change,
+    format_compact_price,
+    format_duration_seconds,
+    format_large_number,
+    format_percentage,
+    render_amount,
+)
+…  … 1,579 bytes  (0.0s)
+
+→ shell(command='pytest tests/test_format.py')
+✗ shell: exit_code: 1
+
+stdout:
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0
+rootdir: /private/var/folders/8p/1…  … 1,927 bytes  (0.3s)
+
+→ edit_file(new<|"|>    if amount is None='return "—"\n    value = 
+float(amount)\…, precision)
+    formatted = f"{int(rounded)='', }" if precision == 0 else f"{rounded='', 
+.{precision}f}"
+    symbol = _currency_symbol(currency)
+    return f"{symbol}{formatted}"<|"|>,old='    # BUG: no None guard here — 
+raises…, path='src/format.py')
+✗ edit_file: missing or empty `old` argument  (0.0s)
+
+→ edit_file(new='    if amount is None:\n        return…, old='    # BUG: no 
+None guard here — raises…, path='src/format.py')
+✓ edit_file: replaced 1 occurrence in src/format.py  (0.0s)
+
+→ verify_work(command='pytest tests/test_format.py')
+✓ verify_work: PASSED
+
+============================= test session starts ==============================
+platform darwin -- Python 3.12.13, pytest-9.0.3, pluggy-1.6.0
+rootdir: /private/var/folders/8p/1_033mns3v1gvkq…  … 615 bytes  (0.3s)
+I have fixed the TypeError in render_amount by adding a null guard that returns 
+an em dash ("—") when amount is None, consistent with the other formatting      
+functions in the module.                                                        
+
+                                                                                
+ def render_amount(amount, currency=_DEFAULT_CURRENCY,                          
+ precision=_DEFAULT_PRECISION):                                                 
+     """Format a numeric price with currency symbol.                            
+                                                                                
+     Examples:                                                                  
+         >>> render_amount(10.5)                                                
+         '$10.50'                                                               
+         >>> render_amount(1234, precision=0)                                   
+         '$1,234'                                                               
+     """                                                                        
+     if amount is None:                                                         
+         return "—"                                                             
+     value = float(amount)                                                      
+     rounded = round(value, precision)                                          
+     formatted = f"{int(rounded):,}" if precision == 0 else                     
+ f"{rounded:,.{precision}f}"                                                    
+     symbol = _currency_symbol(currency)                                        
+     return f"{symbol}{formatted}"                                              
+                                                                                
+
+Verified with pytest tests/test_format.py, all 14 tests passed.                 
+
+✓ verify (shell)  ============================= test session starts 
+==============================
+collecting ... collected 14 items
+
+tests/test_format.py::test_format_price_usd PASSED                       [  7%]
+tests/test_format.py::test_format_price_integer_no_decimals PASSED       [ 14%]
+tests/test_format.py::test_format_price_euro PASSED                      [ 21%]
+tests/test_format.py::test_format_price_jpy PASSED                       [ 28%]
+tests/test_format.py::test_format_price_none PASSED                      [ 35%]
+tests/test_format.py::test_format_percentage_none PASSED                 [ 42%]
+tests/test_format.py::test_format_percentage_value PASSED                [ 50%]
+tests/test_format.py::test_format_large_number_thousands PASSED          [ 57%]
+tests/test_format.py::test_format_large_number_millions PASSED           [ 64%]
+tests/test_format.py::test_format_large_number_none PASSED               [ 71%]
+tests/test_format.py::test_format_compact_price_none PASSED              [ 78%]
+tests/test_format.py::test_format_change_none PASSED                     [ 85%]
+tests/test_format.py::test_format_duration_none PASSED                   [ 92%]
+tests/test_format.py::test_format_duration_seconds PASSED                [100%]
+
+============================== 14 passed in 0.01s ==============================
+
+defense ledger:
+  verifiers: shell=1✓/0✗
+  tools: shell x2 (err x1), read_file x2, edit_file x2 (err x1), verify_work x1

@@ -1,0 +1,16 @@
+{
+  "name": "memory-list-empty",
+  "argv": [
+    "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_edwohg3q/workspace/fake-harness",
+    "memory",
+    "list",
+    "--db",
+    ".harness/harness.db"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "No memories stored.\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.33445479185320437
+}

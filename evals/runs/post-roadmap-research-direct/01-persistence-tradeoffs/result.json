@@ -1,0 +1,30 @@
+{
+  "fixture_name": "01-persistence-tradeoffs",
+  "passed": true,
+  "findings_count": 2,
+  "source_count": 1,
+  "matched_findings": 2,
+  "matched_sources": 1,
+  "missing_expectations": [],
+  "summary": "SQLite is the default persistence layer.",
+  "artifact_dir": "evals/runs/post-roadmap-research-direct/01-persistence-tradeoffs",
+  "raw_output": "{\"summary\": \"SQLite is the default persistence layer.\", \"findings\": [\"SQLite gives zero-setup local storage.\", \"SQLite has limits on concurrent writes.\"], \"open_questions\": [\"When should the system switch to Postgres?\"], \"sources\": [{\"title\": \"Persistence\", \"url\": \"docs/persistence.md\", \"excerpt\": \"zero-setup local storage with concurrent write tradeoffs\"}]}",
+  "memo": {
+    "summary": "SQLite is the default persistence layer.",
+    "findings": [
+      "SQLite gives zero-setup local storage.",
+      "SQLite has limits on concurrent writes."
+    ],
+    "open_questions": [
+      "When should the system switch to Postgres?"
+    ],
+    "sources": [
+      {
+        "title": "Persistence",
+        "url": "docs/persistence.md",
+        "excerpt": "zero-setup local storage with concurrent write tradeoffs"
+      }
+    ]
+  },
+  "duration_seconds": 0.026768875075504184
+}

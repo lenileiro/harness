@@ -1,0 +1,17 @@
+{
+  "name": "lab-status",
+  "argv": [
+    "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_jwudi4nu/workspace/fake-harness",
+    "lab",
+    "status",
+    "task_root_eval",
+    "--db",
+    "lab.db"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Job task_root_eval \u2014 1 work items\n\n  done         T-002  Child task  finished work\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.3615696250926703
+}

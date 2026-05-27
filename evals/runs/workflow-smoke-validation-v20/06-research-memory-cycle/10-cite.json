@@ -1,0 +1,24 @@
+{
+  "name": "cite",
+  "argv": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "research",
+    "cite",
+    "--source-publication",
+    "pub-citation-graph-findings-799258e0",
+    "--target-publication",
+    "pub-archive-indexing-findings-1a1ce128",
+    "--relationship",
+    "builds_on",
+    "--note",
+    "Newer citation work builds on archive indexing.",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_7t3nql21/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Recorded citation cite-pub-citation-graph-findings-7992-9e6b1ad8 at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_7\nt3nql21/workspace/.harness/research/citations/cite-pub-citation-graph-findings-7\n992-9e6b1ad8\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.4055915840435773
+}

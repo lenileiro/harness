@@ -1,0 +1,19 @@
+{
+  "name": "memory-save",
+  "argv": [
+    "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_li3xc2_a/workspace/fake-harness",
+    "memory",
+    "save",
+    "Remember plugin loaders stay repo local",
+    "--kind",
+    "project_fact",
+    "--db",
+    ".harness/harness.db"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Saved mem_6437dcb04857  (project_fact)  Remember plugin loaders stay repo local\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.4247245828155428
+}

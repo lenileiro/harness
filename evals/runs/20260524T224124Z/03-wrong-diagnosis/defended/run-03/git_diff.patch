@@ -1,0 +1,72 @@
+diff --git a/src/cache.py b/src/cache.py
+index 3d8a95a..bea80eb 100644
+--- a/src/cache.py
++++ b/src/cache.py
+@@ -1,65 +1 @@
+-"""Simple async cache with fetch-on-miss.
+-
+-Used by the batch endpoint to avoid redundant upstream API calls.
+-"""
+-
+-from __future__ import annotations
+-
+-import asyncio
+-from collections.abc import Awaitable, Callable
+-from typing import Any
+-
+-# Configurable timeout for upstream fetch calls.
+-# The batch endpoint passes this when calling get_or_fetch().
+-TIMEOUT_SECONDS = 5
+-
+-
+-class SimpleCache:
+-    """In-memory async cache.
+-
+-    On a cache miss, calls the provided fetch coroutine to populate the value.
+-    The result is stored and returned to the caller.
+-
+-    Note: concurrent requests for the same key each trigger their own
+-    independent fetch — in-flight deduplication is not implemented.
+-
+-    TODO: Add deduplication to avoid thundering herd on cache misses.
+-    """
+-
+-    def __init__(self) -> None:
+-        self._store: dict[str, Any] = {}
+-
+-    async def get_or_fetch(
+-        self,
+-        key: str,
+-        fetch: Callable[[str], Awaitable[Any]],
+-        *,
+-        fetch_timeout: float = TIMEOUT_SECONDS,
+-    ) -> Any:
+-        """Return cached value for key, or call fetch(key) and cache the result.
+-
+-        Args:
+-            key: Cache key.
+-            fetch: Async callable that receives the key and returns a value.
+-            fetch_timeout: Seconds to wait before raising asyncio.TimeoutError.
+-        """
+-        if key in self._store:
+-            return self._store[key]
+-
+-        # MISSING: no in-flight deduplication.
+-        # Multiple concurrent callers for the same key all reach this line and
+-        # each triggers its own fetch() call independently.
+-        value = await asyncio.wait_for(fetch(key), timeout=fetch_timeout)
+-        self._store[key] = value
+-        return value
+-
+-    def invalidate(self, key: str) -> None:
+-        """Remove a key from the cache."""
+-        self._store.pop(key, None)
+-
+-    def clear(self) -> None:
+-        """Remove all cached entries."""
+-        self._store.clear()
+-
+-    def __len__(self) -> int:
+-        return len(self._store)
++['str, Any] = {}\n        self._in_flight: dict[str, asyncio.Future[Any]] = {}\n\n    async def get_or_fetch(\n        self,\n        key: str,\n        fetch: Callable[[str], Awaitable[Any]],\n        *,\n        fetch_timeout: float = TIMEOUT_SECONDS,\n    ) -> Any:\n        "', 'Return cached value for key, or call fetch(key) and cache the result.\n\n        Args:\n            key: Cache key.\n            fetch: Async callable that receives the key and returns a value.\n            fetch_timeout: Seconds to wait before raising asyncio.TimeoutError.\n        "', '\n        # Check if value is already cached\n        if key in self._store:\n            return self._store[key]\n\n        # Check if there\'s already an in-flight request for this key\n        if key in self._in_flight:\n            # Return the result of the in-flight request\n            return await self._in_flight[key]\n\n        # No cached value and no in-flight request, create a new fetch operation\n        future = asyncio.Future()\n        self._in_flight[key] = future\n\n        try:\n            value = await asyncio.wait_for(fetch(key), timeout=fetch_timeout)\n            self._store[key] = value\n            future.set_result(value)\n            return value\n        except Exception as e:\n            # Set exception on future so all waiters get the same error\n            future.set_exception(e)\n            raise\n        finally:\n            # Clean up the in-flight tracking\n            self._in_flight.pop(key, None)\n\n    def invalidate(self, key: str) -> None:\n        "', 'Remove a key from the cache."', '\n        self._store.pop(key, None)\n\n    def clear(self) -> None:\n        "', 'Remove all cached entries."', '\n        self._store.clear()\n\n    def __len__(self) -> int:\n        return len(self._store)']
+\ No newline at end of file

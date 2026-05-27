@@ -1,0 +1,28 @@
+{
+  "name": "create-opportunity",
+  "argv": [
+    "/Users/leiro/workspace/harness/.venv/bin/harness",
+    "research",
+    "create-opportunity",
+    "--title",
+    "Tighten research promotion",
+    "--summary",
+    "Turn research findings into smaller bounded promotion candidates.",
+    "--related-sections",
+    "research,promotion",
+    "--change-modes",
+    "improve,extend",
+    "--theme",
+    "autonomous-improvement",
+    "--priority",
+    "high",
+    "--cwd",
+    "/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_bzw4tvrr/workspace"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Created opportunity opp-tighten-research-promotion-2a6e024a at \n/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_b\nzw4tvrr/workspace/.harness/research/opportunities/opp-tighten-research-promotion\n-2a6e024a\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.4157997078727931
+}

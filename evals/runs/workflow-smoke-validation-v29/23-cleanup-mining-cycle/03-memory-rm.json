@@ -1,0 +1,18 @@
+{
+  "name": "memory-rm",
+  "argv": [
+    "/private/var/folders/8p/1_033mns3v1gvkq95_wfx4xr0000gn/T/harness_workflow_eval_edwohg3q/workspace/fake-harness",
+    "memory",
+    "rm",
+    "{latest_memory_id}",
+    "--db",
+    ".harness/harness.db",
+    "--yes"
+  ],
+  "passed": true,
+  "returncode": 0,
+  "stdout": "Deleted mem_a2611679a7ef\n",
+  "stderr": "",
+  "failures": [],
+  "duration_seconds": 0.33680450008250773
+}

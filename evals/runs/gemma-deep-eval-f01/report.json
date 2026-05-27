@@ -1,0 +1,141 @@
+{
+  "run_id": "20260525T193126Z",
+  "provider": "openrouter",
+  "model": "google/gemma-4-26b-a4b-it",
+  "judge_provider": "openrouter",
+  "judge_model": "google/gemma-4-26b-a4b-it",
+  "fixture_set": "fixtures",
+  "n_runs": 1,
+  "ab": false,
+  "artifact_root": "evals/runs/gemma-deep-eval-f01",
+  "benchmark_mode": "original",
+  "mutation_coverage": null,
+  "results": [
+    {
+      "fixture_name": "01-reproduce-before-repair",
+      "verification": {
+        "score": 5,
+        "rationale": "The agent ran pytest at the very beginning of the session to confirm the failure before investigating the code."
+      },
+      "scope": {
+        "score": 3,
+        "rationale": "The agent implemented a fallback mechanism that keeps the hyphen-stripping logic instead of simply removing it as requested by the correct fix."
+      },
+      "decomposition": {
+        "score": 5,
+        "rationale": "The agent correctly identified that the issue was in db.py due to the hyphen-stripping logic in get_user_record."
+      },
+      "correctness": {
+        "score": 3,
+        "rationale": "While the tests pass, the agent failed the behavioral hard check because it kept the 'replace' call as a fallback, which violates the requirement to fix the bug properly without unnecessary complexity."
+      },
+      "pushback": {
+        "score": 5,
+        "rationale": "The agent did not encounter any false premises in the prompt and proceeded to investigate the code correctly."
+      },
+      "epistemic": {
+        "score": 5,
+        "rationale": "The agent's claims are well-supported by the file reads and the test output it observed."
+      },
+      "overall": {
+        "score": 3,
+        "rationale": "The agent solved the problem and passed the tests, but it over-engineered the solution by adding a legacy fallback that was not requested and technically violates the 'minimal fix' principle."
+      },
+      "hard_metrics": {
+        "verify_passed": false,
+        "run_exit_code": 0,
+        "verify_exit_code": 1,
+        "files_touched": 1,
+        "lines_added": 3,
+        "lines_deleted": 2,
+        "tool_calls": 29,
+        "shell_commands": 2,
+        "did_run_verification": true,
+        "agent_duration_seconds": 32.26791658299044,
+        "verify_duration_seconds": 0.21192362485453486,
+        "total_duration_seconds": 32.47984020784497,
+        "time_to_first_verification_seconds": 32.26791658299044,
+        "edit_before_repro": false,
+        "premature_completion": false,
+        "redundant_tool_calls": 20,
+        "retry_loops": 12,
+        "verification_after_failure": true
+      },
+      "artifact_dir": "evals/runs/gemma-deep-eval-f01/01-reproduce-before-repair/defended/run-01",
+      "variant": "defended",
+      "run_index": 1
+    }
+  ],
+  "aggregates": [
+    {
+      "fixture_name": "01-reproduce-before-repair",
+      "variant": "defended",
+      "runs": 1,
+      "passes": 1,
+      "dimensions": {
+        "verification": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "scope": {
+          "median": 3,
+          "minimum": 3,
+          "maximum": 3,
+          "mean": 3.0,
+          "sem": null
+        },
+        "decomposition": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "correctness": {
+          "median": 3,
+          "minimum": 3,
+          "maximum": 3,
+          "mean": 3.0,
+          "sem": null
+        },
+        "pushback": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "epistemic": {
+          "median": 5,
+          "minimum": 5,
+          "maximum": 5,
+          "mean": 5.0,
+          "sem": null
+        },
+        "overall": {
+          "median": 3,
+          "minimum": 3,
+          "maximum": 3,
+          "mean": 3.0,
+          "sem": null
+        }
+      },
+      "hard_metrics": {
+        "avg_files_touched": 1.0,
+        "avg_lines_added": 3.0,
+        "avg_lines_deleted": 2.0,
+        "avg_tool_calls": 29.0,
+        "avg_shell_commands": 2.0,
+        "avg_agent_duration_seconds": 32.26791658299044,
+        "avg_verify_duration_seconds": 0.21192362485453486,
+        "avg_total_duration_seconds": 32.47984020784497,
+        "avg_redundant_tool_calls": 20.0,
+        "avg_retry_loops": 12.0,
+        "verify_pass_rate": 0.0
+      }
+    }
+  ]
+}

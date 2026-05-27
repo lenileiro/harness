@@ -1,0 +1,7 @@
+executed anyway                                                                 
+
+✓ verify (verify_before_done)  No modifying tool calls detected — verification 
+not required.
+
+defense ledger:
+  verifiers: verify_before_done=1✓/0✗
