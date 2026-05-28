@@ -46,6 +46,29 @@ def tool_call_turn(*, call_id: str, name: str, arguments: dict[str, Any]) -> lis
     ]
 
 
+def tool_round_trip(
+    *,
+    call_id: str,
+    name: str,
+    arguments: dict[str, Any],
+    content: str,
+    is_error: bool = False,
+) -> list[Event]:
+    call = ToolCall(id=call_id, name=name, arguments=arguments)
+    return [
+        ToolCallEvent(call=call),
+        ToolResultEvent(
+            result=ToolResult(
+                tool_call_id=call_id,
+                name=name,
+                content=content,
+                is_error=is_error,
+            )
+        ),
+        Done(final_message=Message(role="assistant", content=None)),
+    ]
+
+
 class FakeAdapter:
     name = "ollama"
     next_script: ClassVar[list[list[Event]]] = []
@@ -130,6 +153,15 @@ class TestSlashCommands:
             prompt="Where does SQLite session storage live? Keep it brief.",
         )
         assert result == chat_commands._RESEARCH_TURN_POLICY
+
+    @pytest.mark.asyncio
+    async def test_classifier_routes_general_to_general_policy(self) -> None:
+        result = await chat_commands._classify_chat_turn_policy(
+            adapter=ClassifierAdapter("general"),
+            model="m",
+            prompt="Fix this bug.",
+        )
+        assert result == chat_commands._GENERAL_TURN_POLICY
 
     def test_quit_exits_cleanly(self, patch_adapter, tmp_path: Path) -> None:
         result = _run(["chat", "--cwd", str(tmp_path), "--in-memory", "--yes"], stdin="/quit\n")
@@ -488,6 +520,144 @@ class TestRegularTurns:
         assert result.exit_code == 0, result.stdout
         assert "first" in result.stdout
         assert "second" in result.stdout
+
+    def test_general_turn_auto_continues_into_verification_after_edit(
+        self, patch_adapter, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        patch_adapter(
+            [
+                tool_round_trip(
+                    call_id="e1",
+                    name="edit_file",
+                    arguments={"path": "src/runtime.py", "old": "x", "new": "y"},
+                    content="edited src/runtime.py",
+                ),
+                [
+                    ToolCallEvent(
+                        call=ToolCall(
+                            id="v1",
+                            name="verify_work",
+                            arguments={"command": "pytest packages/core/tests/test_guardrails.py"},
+                        )
+                    ),
+                    ToolResultEvent(
+                        result=ToolResult(
+                            tool_call_id="v1",
+                            name="verify_work",
+                            content="PASSED\n9 passed",
+                        )
+                    ),
+                    Done(final_message=Message(role="assistant", content="fixed and verified")),
+                ],
+            ]
+        )
+        monkeypatch.setattr(
+            chat_commands,
+            "_classify_chat_turn_policy",
+            lambda **_: asyncio.sleep(0, result=chat_commands._GENERAL_TURN_POLICY),
+        )
+        result = _run(
+            ["chat", "--cwd", str(tmp_path), "--in-memory", "--yes", "--verify", "none"],
+            stdin="Fix the guardrail cancellation leak in the runtime.\n/quit\n",
+        )
+        assert result.exit_code == 0, result.stdout
+        assert "continuing" in result.stdout
+        assert "verify_work" in result.stdout
+        assert "PASSED" in result.stdout
+
+    def test_general_turn_auto_retries_after_failed_verification(
+        self, patch_adapter, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        patch_adapter(
+            [
+                tool_round_trip(
+                    call_id="e1",
+                    name="edit_file",
+                    arguments={"path": "src/runtime.py", "old": "x", "new": "y"},
+                    content="edited src/runtime.py",
+                ),
+                [
+                    ToolCallEvent(
+                        call=ToolCall(
+                            id="v1",
+                            name="verify_work",
+                            arguments={"command": "pytest packages/core/tests/test_guardrails.py"},
+                        )
+                    ),
+                    ToolResultEvent(
+                        result=ToolResult(
+                            tool_call_id="v1",
+                            name="verify_work",
+                            content="FAILED\n1 failed",
+                            is_error=True,
+                        )
+                    ),
+                    Done(final_message=Message(role="assistant", content=None)),
+                ],
+                [
+                    ToolCallEvent(
+                        call=ToolCall(
+                            id="v2",
+                            name="verify_work",
+                            arguments={"command": "pytest packages/core/tests/test_guardrails.py"},
+                        )
+                    ),
+                    ToolResultEvent(
+                        result=ToolResult(
+                            tool_call_id="v2",
+                            name="verify_work",
+                            content="PASSED\n9 passed",
+                        )
+                    ),
+                    Done(final_message=Message(role="assistant", content="now verified")),
+                ],
+            ]
+        )
+        monkeypatch.setattr(
+            chat_commands,
+            "_classify_chat_turn_policy",
+            lambda **_: asyncio.sleep(0, result=chat_commands._GENERAL_TURN_POLICY),
+        )
+        result = _run(
+            ["chat", "--cwd", str(tmp_path), "--in-memory", "--yes", "--verify", "none"],
+            stdin="Fix the guardrail cancellation leak in the runtime.\n/quit\n",
+        )
+        assert result.exit_code == 0, result.stdout
+        assert result.stdout.count("continuing") >= 2
+        assert result.stdout.count("verify_work") >= 2
+        assert "FAILED" in result.stdout
+        assert "PASSED" in result.stdout
+
+    def test_active_work_directive_includes_hypothesis_and_recent_outcomes(self) -> None:
+        execution = chat_commands._ExecutionState(
+            edited_files={"packages/core/src/harness/core/runtime.py"},
+            pending_verification=True,
+            verification_attempted=True,
+            verification_passed=False,
+            last_verify_command="pytest packages/core/tests/test_guardrails.py",
+            last_verify_error="FAILED: 1 failed",
+            active_hypothesis="FAILED: 1 failed",
+            active_goal="Fix the guardrail cancellation leak in the runtime.",
+            recent_tool_outcomes=[
+                "edit_file:ok:edited runtime.py",
+                "verify_work:error:FAILED",
+            ],
+        )
+        directive = chat_commands._inject_active_work_directive(
+            "Also inspect the tests.", execution
+        )
+        assert "Active hypothesis" in directive
+        assert "Recent tool outcomes" in directive
+        assert "verify_work:error:FAILED" in directive
+        assert "pytest packages/core/tests/test_guardrails.py" in directive
+
+    def test_general_task_scope_directive_prefers_existing_targets_and_options(self) -> None:
+        directive = chat_commands._inject_general_task_scope_directive(
+            "Improve the chat steering tests."
+        )
+        assert "smallest relevant existing tracked files" in directive
+        assert "Do not create new fixtures" in directive
+        assert "ask the user a short options question" in directive
 
 
 class TestSession:

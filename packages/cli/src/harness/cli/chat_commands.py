@@ -4,7 +4,7 @@ import asyncio
 import json
 import os
 from collections.abc import Awaitable, Callable, Coroutine
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, cast
 
@@ -150,6 +150,20 @@ class _ConversationState:
     render_adapter: _ChatRenderAdapter
     first_turn: bool
     runner: asyncio.Task[None] | None = None
+    execution: _ExecutionState = field(default_factory=lambda: _ExecutionState())
+
+
+@dataclass(slots=True)
+class _ExecutionState:
+    edited_files: set[str] = field(default_factory=set)
+    pending_verification: bool = False
+    verification_attempted: bool = False
+    verification_passed: bool = False
+    last_verify_command: str | None = None
+    last_verify_error: str | None = None
+    active_hypothesis: str | None = None
+    active_goal: str | None = None
+    recent_tool_outcomes: list[str] = field(default_factory=list)
 
 
 _GENERAL_TURN_POLICY = _ChatTurnPolicy(name="general")
@@ -232,6 +246,118 @@ def _retry_prompt_for_policy(prompt: str, policy: _ChatTurnPolicy) -> str:
             "The previous attempt produced no visible output. Complete the user's request directly."
         )
     return f"{prefix}\n\nOriginal request:\n{prompt}"
+
+
+def _inject_general_task_scope_directive(prompt: str) -> str:
+    return (
+        "SYSTEM TASK-SCOPING DIRECTIVE (not user-visible): "
+        "For broad coding requests, pick the smallest relevant existing tracked files and focused tests first. "
+        "Prefer editing an existing file over creating a new file when the current repo already has an obvious home for the change. "
+        "Do not create new fixtures, scratch directories, or parallel test trees unless the user explicitly asked for them or the repo has no suitable existing target. "
+        "Avoid drifting into eval fixtures, generated files, or broad repo searches when a narrower existing file is the likely home. "
+        "After one or two discovery steps, if there are still multiple materially different valid targets, ask the user a short options question instead of guessing.\n\n"
+        f"User request:\n{prompt}"
+    )
+
+
+def _track_execution_tool_call(
+    execution: _ExecutionState,
+    event: ToolCallEvent,
+) -> None:
+    tool_name = event.call.name
+    arguments = event.call.arguments
+    if tool_name in {"write_file", "edit_file"}:
+        raw_path = arguments.get("path")
+        if isinstance(raw_path, str) and raw_path.strip():
+            execution.edited_files.add(raw_path.strip())
+        execution.pending_verification = True
+        execution.verification_passed = False
+    if tool_name == "verify_work":
+        execution.verification_attempted = True
+        raw_command = arguments.get("command")
+        if isinstance(raw_command, str) and raw_command.strip():
+            execution.last_verify_command = raw_command.strip()
+
+
+def _track_execution_tool_result(
+    execution: _ExecutionState,
+    event: ToolResultEvent,
+) -> None:
+    result = event.result
+    summary = result.content.strip()
+    preview = summary.splitlines()[0] if summary else ""
+    marker = "error" if result.is_error else "ok"
+    if preview:
+        execution.recent_tool_outcomes.append(f"{result.name}:{marker}:{preview}")
+        execution.recent_tool_outcomes = execution.recent_tool_outcomes[-5:]
+    if result.name in {"write_file", "edit_file"} and not result.is_error:
+        execution.pending_verification = True
+        execution.verification_passed = False
+        return
+    if result.name != "verify_work":
+        return
+    execution.verification_attempted = True
+    if not result.is_error and "PASSED" in result.content.upper():
+        execution.pending_verification = False
+        execution.verification_passed = True
+        execution.last_verify_error = None
+        execution.active_hypothesis = None
+        return
+    execution.pending_verification = bool(execution.edited_files)
+    execution.verification_passed = False
+    execution.last_verify_error = summary.splitlines()[0] if summary else "verification failed"
+    execution.active_hypothesis = execution.last_verify_error
+
+
+def _inject_active_work_directive(prompt: str, execution: _ExecutionState) -> str:
+    if not execution.pending_verification or execution.verification_passed:
+        return prompt
+    edited = ", ".join(f"`{path}`" for path in sorted(execution.edited_files)[:5])
+    goal = execution.active_goal or "the current task"
+    hypothesis = execution.active_hypothesis or execution.last_verify_error
+    recent = "; ".join(execution.recent_tool_outcomes[-3:])
+
+    directive = (
+        "SYSTEM CONTINUITY DIRECTIVE (not user-visible): "
+        f"You already have unfinished active work on {goal}. "
+        f"Files already changed: {edited or 'unknown'}. "
+        f"{f'Active hypothesis: {hypothesis}. ' if hypothesis else ''}"
+        f"{f'Recent tool outcomes: {recent}. ' if recent else ''}"
+        "Do not lose the thread. Continue that work, verify it, and only then address any extra user request.\n\n"
+    )
+
+    if execution.last_verify_command:
+        directive += f"Verification is still required for `{execution.last_verify_command}`. "
+
+    return directive + f"User request:\n{prompt}"
+
+
+def _build_autonomous_followup_prompt(execution: _ExecutionState) -> str | None:
+    if not execution.pending_verification or execution.verification_passed:
+        return None
+    edited = ", ".join(f"`{path}`" for path in sorted(execution.edited_files)[:5])
+    goal = execution.active_goal or "the active task"
+    hypothesis = execution.active_hypothesis or execution.last_verify_error
+    recent = "; ".join(execution.recent_tool_outcomes[-3:])
+    if execution.last_verify_command:
+        failure = execution.last_verify_error or "the last verification attempt did not pass"
+        return (
+            "SYSTEM CONTINUITY DIRECTIVE (not user-visible): "
+            f"You already changed {edited or 'workspace files'} while working on {goal}. "
+            f"Verification is still incomplete because `{execution.last_verify_command}` failed: {failure}. "
+            f"{f'Current hypothesis: {hypothesis}. ' if hypothesis else ''}"
+            f"{f'Recent tool outcomes: {recent}. ' if recent else ''}"
+            "Inspect the failure, fix the relevant files, then call verify_work again. "
+            "Repeat until verify_work returns PASSED or you hit a concrete blocker."
+        )
+    return (
+        "SYSTEM CONTINUITY DIRECTIVE (not user-visible): "
+        f"You already changed {edited or 'workspace files'} while working on {goal}. "
+        f"{f'Recent tool outcomes: {recent}. ' if recent else ''}"
+        "The task is not complete until verification passes. "
+        "Choose the most relevant focused verify_work command now, call verify_work, "
+        "repair any failures, and continue until verify_work returns PASSED or you hit a concrete blocker."
+    )
 
 
 def _format_code_review_output(text: str) -> Markdown | None:
@@ -731,6 +857,7 @@ async def chat_loop(
             background: bool,
         ) -> None:
             try:
+                conversation.execution.active_goal = prompt
                 inferred_policy = await _classify_chat_turn_policy(
                     adapter=classifier_adapter,
                     model=model,
@@ -742,6 +869,10 @@ async def chat_loop(
                     conversation.render_adapter.set_policy(inferred_policy)
                 effective_agent = conversation.agent
                 effective_prompt = prompt
+                if inferred_policy == _GENERAL_TURN_POLICY:
+                    effective_prompt = _inject_active_work_directive(prompt, conversation.execution)
+                    if effective_prompt == prompt:
+                        effective_prompt = _inject_general_task_scope_directive(prompt)
                 route_label = _route_label_for_policy(inferred_policy)
                 print_turn_banner(conversation, background=background)
                 if route_label is not None:
@@ -750,27 +881,40 @@ async def chat_loop(
                 first_attempt = conversation.first_turn
                 route_attempts = 2 if route_label is not None else 1
                 current_prompt = effective_prompt
-                for attempt_index in range(route_attempts):
+                auto_followups = 0
+                while True:
                     saw_text = False
                     saw_tool_result = False
                     saw_error = False
                     saw_done_content = False
-                    if first_attempt:
-                        request_kwargs: dict[str, object] = {
-                            "prompt": current_prompt,
-                            "session_id": conversation.session_id,
-                            "model": model,
-                            "max_steps": max_steps,
-                            "require_tool_use": require_tools,
-                        }
-                        if conversation.task_id:
-                            request_kwargs["task_id"] = conversation.task_id
-                        request = RunRequest(**request_kwargs)  # type: ignore[arg-type]
-                        async for event in effective_agent.run(request):
+                    route_visible_work = False
+                    for attempt_index in range(route_attempts):
+                        if first_attempt:
+                            request_kwargs: dict[str, object] = {
+                                "prompt": current_prompt,
+                                "session_id": conversation.session_id,
+                                "model": model,
+                                "max_steps": max_steps,
+                                "require_tool_use": require_tools,
+                            }
+                            if conversation.task_id:
+                                request_kwargs["task_id"] = conversation.task_id
+                            request = RunRequest(**request_kwargs)  # type: ignore[arg-type]
+                            stream = effective_agent.run(request)
+                        else:
+                            stream = effective_agent.resume(
+                                conversation.session_id,
+                                prompt=current_prompt,
+                                max_steps=max_steps,
+                            )
+                        async for event in stream:
                             if isinstance(event, TextDelta) and event.text.strip():
                                 saw_text = True
+                            if isinstance(event, ToolCallEvent):
+                                _track_execution_tool_call(conversation.execution, event)
                             if isinstance(event, ToolResultEvent):
                                 saw_tool_result = True
+                                _track_execution_tool_result(conversation.execution, event)
                             if isinstance(event, ErrorEvent):
                                 saw_error = True
                             if (
@@ -783,38 +927,34 @@ async def chat_loop(
                             conversation.render_adapter.render(event)
                         first_attempt = False
                         conversation.first_turn = False
-                    else:
-                        async for event in effective_agent.resume(
-                            conversation.session_id,
-                            prompt=current_prompt,
-                            max_steps=max_steps,
+                        route_visible_work = (
+                            saw_error or saw_tool_result or saw_text or saw_done_content
+                        )
+                        if (
+                            route_label is None
+                            or route_visible_work
+                            or attempt_index + 1 >= route_attempts
                         ):
-                            if isinstance(event, TextDelta) and event.text.strip():
-                                saw_text = True
-                            if isinstance(event, ToolResultEvent):
-                                saw_tool_result = True
-                            if isinstance(event, ErrorEvent):
-                                saw_error = True
-                            if (
-                                isinstance(event, Done)
-                                and event.final_message is not None
-                                and isinstance(event.final_message.content, str)
-                                and event.final_message.content.strip()
-                            ):
-                                saw_done_content = True
-                            conversation.render_adapter.render(event)
+                            break
+                        console.print(
+                            f"[yellow]↻ retrying[/yellow] [bold]{route_label}[/bold] "
+                            "[dim](previous attempt produced no visible work)[/dim]"
+                        )
+                        current_prompt = _retry_prompt_for_policy(prompt, inferred_policy)
 
-                    if route_label is None:
+                    if inferred_policy != _GENERAL_TURN_POLICY:
                         break
-                    if saw_error or saw_tool_result or saw_text or saw_done_content:
+                    if saw_error:
                         break
-                    if attempt_index + 1 >= route_attempts:
+                    followup_prompt = _build_autonomous_followup_prompt(conversation.execution)
+                    if followup_prompt is None or auto_followups >= 3:
                         break
+                    auto_followups += 1
                     console.print(
-                        f"[yellow]↻ retrying[/yellow] [bold]{route_label}[/bold] "
-                        "[dim](previous attempt produced no visible work)[/dim]"
+                        "[cyan]↻ continuing[/cyan] [dim]active work is not verified yet; "
+                        "running the next relevant gate automatically[/dim]"
                     )
-                    current_prompt = _retry_prompt_for_policy(prompt, inferred_policy)
+                    current_prompt = followup_prompt
             except (KeyboardInterrupt, asyncio.CancelledError):
                 console.print(f"\n[yellow][{conversation.label}] cancelled[/yellow]")
                 raise
