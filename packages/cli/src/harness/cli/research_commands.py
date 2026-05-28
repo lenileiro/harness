@@ -202,6 +202,22 @@ def build_context_packet_prompt(*, task: str) -> str:
     )
 
 
+def _resolve_run_once() -> Any:
+    from inspect import signature
+
+    from harness.cli import __main__ as cli_main
+    from harness.cli import run_commands
+
+    raw_run_once = run_commands.run_once
+    try:
+        raw_params = signature(raw_run_once).parameters
+    except (TypeError, ValueError):
+        raw_params = {}
+    if "build_storage" not in raw_params:
+        return raw_run_once
+    return cli_main._run_once
+
+
 def _render_research_memo(memo: ResearchMemo, *, console: Console) -> None:
     if memo.summary:
         console.print(memo.summary)
@@ -458,8 +474,6 @@ def research_run_command(
     verbose: bool = typer.Option(False, "--verbose", "-v"),
     config_path: Path | None = typer.Option(None, "--config"),
 ) -> None:
-    from harness.cli.__main__ import _run_once
-
     research_command(
         topic=topic,
         model=model,
@@ -479,7 +493,7 @@ def research_run_command(
         load_cli_config=_load_cli_config,
         resolve_chain=_resolve_chain,
         run_async=_run_async,
-        run_once=_run_once,
+        run_once=_resolve_run_once(),
     )
 
 
@@ -508,8 +522,6 @@ def research_catch_up_command(
     verbose: bool = typer.Option(False, "--verbose", "-v"),
     config_path: Path | None = typer.Option(None, "--config"),
 ) -> None:
-    from harness.cli.__main__ import _run_once
-
     catch_up_command(
         topic=topic,
         mode=mode,
@@ -529,7 +541,7 @@ def research_catch_up_command(
         load_cli_config=_load_cli_config,
         resolve_chain=_resolve_chain,
         run_async=_run_async,
-        run_once=_run_once,
+        run_once=_resolve_run_once(),
     )
 
 
@@ -549,8 +561,6 @@ def research_context_packet_command(
     verbose: bool = typer.Option(False, "--verbose", "-v"),
     config_path: Path | None = typer.Option(None, "--config"),
 ) -> None:
-    from harness.cli.__main__ import _run_once
-
     context_packet_command(
         task=task,
         model=model,
@@ -569,7 +579,7 @@ def research_context_packet_command(
         load_cli_config=_load_cli_config,
         resolve_chain=_resolve_chain,
         run_async=_run_async,
-        run_once=_run_once,
+        run_once=_resolve_run_once(),
     )
 
 

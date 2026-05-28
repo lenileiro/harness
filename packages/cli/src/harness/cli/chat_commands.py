@@ -16,6 +16,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from harness.cli.config import HarnessConfig
+from harness.cli.research_commands import build_context_packet_prompt
 from harness.core import (
     Agent,
     ContextBudget,
@@ -178,6 +179,7 @@ class _ExecutionState:
 
 
 _GENERAL_TURN_POLICY = _ChatTurnPolicy(name="general")
+_GENERAL_CONTEXT_TURN_POLICY = _ChatTurnPolicy(name="general-context")
 _RESEARCH_TURN_POLICY = _ChatTurnPolicy(
     name="research",
     allowed_tools=("read_file", "list_dir", "glob", "shell", "fetch_url", "web_search"),
@@ -202,6 +204,10 @@ _WORKFLOW_TURN_POLICY = _ChatTurnPolicy(
     disable_spawn_agents=True,
     disable_verify=True,
 )
+
+
+def _is_general_execution_policy(policy: _ChatTurnPolicy) -> bool:
+    return policy in {_GENERAL_TURN_POLICY, _GENERAL_CONTEXT_TURN_POLICY}
 
 
 def _handoff_tool_name_for_policy(policy: _ChatTurnPolicy) -> str | None:
@@ -268,6 +274,21 @@ def _inject_general_task_scope_directive(prompt: str) -> str:
         "Avoid drifting into eval fixtures, generated files, or broad repo searches when a narrower existing file is the likely home. "
         "After one or two discovery steps, if there are still multiple materially different valid targets, ask the user a short options question instead of guessing.\n\n"
         f"User request:\n{prompt}"
+    )
+
+
+def _should_prefetch_context_packet(execution: _ExecutionState) -> bool:
+    return not (execution.pending_verification and not execution.verification_passed)
+
+
+def _inject_context_packet_directive(prompt: str, context_packet: str) -> str:
+    return (
+        "SYSTEM CONTEXT PACKET (not user-visible): "
+        "Use this read-only context packet to plan and execute the user request. "
+        "Do not treat it as a substitute for checking fresh evidence when needed, "
+        "but prefer its sources of truth, boundaries, validation guidance, and conflict notes.\n\n"
+        f"{context_packet.strip()}\n\n"
+        f"User request and execution directives:\n{prompt}"
     )
 
 
@@ -622,11 +643,12 @@ async def _classify_chat_turn_policy(
                 "- Return `review` when the user asks to review, audit, inspect, or find issues in code.\n"
                 "- Return `research` when the user asks a read-only question about the repo, such as where something lives, how something works, what a file does, or to research/explain/cite code without editing it.\n"
                 "- Return `research` when the user asks to be caught up, build a mental model, understand architecture/conventions/testing/history, or act as a new contributor before making changes.\n"
-                "- Return `research` when the user asks for a context packet, source-of-truth map, conflict-aware context, or agent onboarding context before work.\n"
+                "- Return `research` when the user only asks for a context packet, source-of-truth map, conflict-aware context, or agent onboarding context before work.\n"
                 "- Return `workflow` when the user asks to set up long-running, durable, resumable, repeated, scheduled, reminder, or mission-style work in Harness.\n"
+                "- Return `general-context` when the user asks for hands-on work and the work is broad, open-ended, unfamiliar, cross-cutting, or explicitly asks to use context before execution.\n"
                 "- Return `general` when the user asks to build, edit, debug, explain, run, hand off, delegate, or otherwise do hands-on task work.\n"
                 "- If the user explicitly asks for a specialist handoff or delegation, return `general` so the main agent can use handoff tools.\n"
-                "Return only one token: general, research, review, or workflow."
+                "Return only one token: general, general-context, research, review, or workflow."
             ),
         ),
         Message(role="user", content=prompt),
@@ -640,6 +662,8 @@ async def _classify_chat_turn_policy(
             content = event.final_message.content
             if isinstance(content, str):
                 final_text = content.strip().lower()
+    if "general-context" in final_text or "general_context" in final_text:
+        return _GENERAL_CONTEXT_TURN_POLICY
     if "workflow" in final_text:
         return _WORKFLOW_TURN_POLICY
     if "research" in final_text:
@@ -824,7 +848,7 @@ async def chat_loop(
             )
             if policy.disable_spawn_agents:
                 cast(Any, built_agent.tools).unregister("spawn_agents")
-            if allow_handoffs and policy == _GENERAL_TURN_POLICY:
+            if allow_handoffs and _is_general_execution_policy(policy):
                 specialist_specs = (
                     (
                         "handoff_to_research_specialist",
@@ -886,6 +910,51 @@ async def chat_loop(
                 f"\n[bold cyan]{escape(conversation.label)}[/bold cyan] [dim]{mode} turn[/dim]"
             )
 
+        async def build_context_packet_for_turn(
+            conversation: _ConversationState,
+            prompt: str,
+        ) -> str | None:
+            console.print(
+                "[cyan]↻ context packet[/cyan] "
+                "[dim]building read-only repo context before execution[/dim]"
+            )
+            research_agent = get_specialist_agent(_RESEARCH_TURN_POLICY)
+            research_render = _ChatRenderAdapter(console=console, default_render=render)
+            research_render.set_policy(_RESEARCH_TURN_POLICY)
+            context_session_id = f"{conversation.session_id}_context_{uuid4().hex[:8]}"
+            context_request = RunRequest(
+                prompt=build_context_packet_prompt(task=prompt),
+                session_id=context_session_id,
+                model=model,
+                max_steps=min(max_steps, 18),
+                require_tool_use=False,
+            )
+            text_deltas: list[str] = []
+            final_text: str | None = None
+            saw_error = False
+            try:
+                async for event in research_agent.run(context_request):
+                    if isinstance(event, TextDelta):
+                        text_deltas.append(event.text)
+                    if (
+                        isinstance(event, Done)
+                        and event.final_message is not None
+                        and isinstance(event.final_message.content, str)
+                    ):
+                        final_text = event.final_message.content
+                    if isinstance(event, ErrorEvent):
+                        saw_error = True
+                    research_render.render(event)
+            except Exception as exc:
+                console.print(
+                    f"[yellow]context packet skipped[/yellow] [dim]({escape(str(exc))})[/dim]"
+                )
+                return None
+            packet = (final_text or "".join(text_deltas)).strip()
+            if saw_error or not packet:
+                return None
+            return packet
+
         async def run_turn(
             conversation: _ConversationState,
             *,
@@ -905,7 +974,7 @@ async def chat_loop(
                     conversation.render_adapter.set_policy(inferred_policy)
                 effective_agent = conversation.agent
                 effective_prompt = prompt
-                if inferred_policy == _GENERAL_TURN_POLICY:
+                if _is_general_execution_policy(inferred_policy):
                     effective_prompt = _inject_active_work_directive(prompt, conversation.execution)
                     if effective_prompt == prompt:
                         effective_prompt = _inject_general_task_scope_directive(prompt)
@@ -913,6 +982,17 @@ async def chat_loop(
                 print_turn_banner(conversation, background=background)
                 if route_label is not None:
                     console.print(f"[magenta]⇢ routed[/magenta] [bold]{route_label}[/bold]")
+
+                if (
+                    inferred_policy == _GENERAL_CONTEXT_TURN_POLICY
+                    and _should_prefetch_context_packet(conversation.execution)
+                ):
+                    context_packet = await build_context_packet_for_turn(conversation, prompt)
+                    if context_packet:
+                        effective_prompt = _inject_context_packet_directive(
+                            effective_prompt,
+                            context_packet,
+                        )
 
                 first_attempt = conversation.first_turn
                 route_attempts = 2 if route_label is not None else 1
@@ -978,7 +1058,7 @@ async def chat_loop(
                         )
                         current_prompt = _retry_prompt_for_policy(prompt, inferred_policy)
 
-                    if inferred_policy != _GENERAL_TURN_POLICY:
+                    if not _is_general_execution_policy(inferred_policy):
                         break
                     if saw_error:
                         break
@@ -994,7 +1074,7 @@ async def chat_loop(
 
                 adjacent_review_prompt = _build_adjacent_review_prompt(conversation.execution)
                 if (
-                    inferred_policy == _GENERAL_TURN_POLICY
+                    _is_general_execution_policy(inferred_policy)
                     and adjacent_review_prompt is not None
                     and not conversation.execution.adjacent_review_done
                 ):

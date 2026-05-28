@@ -72,11 +72,13 @@ def tool_round_trip(
 class FakeAdapter:
     name = "ollama"
     next_script: ClassVar[list[list[Event]]] = []
+    stream_calls: ClassVar[list[dict[str, Any]]] = []
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         pass
 
     def stream(self, **_kwargs: Any) -> AsyncIterator[Event]:
+        FakeAdapter.stream_calls.append(_kwargs)
         return self._stream()
 
     async def _stream(self) -> AsyncIterator[Event]:
@@ -117,9 +119,11 @@ def patch_adapter(monkeypatch: pytest.MonkeyPatch):
 
     def configure(scripts: list[list[Event]]) -> None:
         FakeAdapter.next_script = scripts
+        FakeAdapter.stream_calls = []
 
     yield configure
     FakeAdapter.next_script = []
+    FakeAdapter.stream_calls = []
 
 
 def _run(args: list[str], stdin: str) -> Result:
@@ -159,9 +163,20 @@ class TestSlashCommands:
         result = await chat_commands._classify_chat_turn_policy(
             adapter=ClassifierAdapter("research"),
             model="m",
-            prompt="Build a context packet before the agent implements gateway routing.",
+            prompt="Build a context packet for gateway routing. Do not implement.",
         )
         assert result == chat_commands._RESEARCH_TURN_POLICY
+
+    @pytest.mark.asyncio
+    async def test_classifier_routes_broad_hands_on_work_to_general_context_policy(
+        self,
+    ) -> None:
+        result = await chat_commands._classify_chat_turn_policy(
+            adapter=ClassifierAdapter("general-context"),
+            model="m",
+            prompt="Implement gateway routing across the repo using the new context packet functionality.",
+        )
+        assert result == chat_commands._GENERAL_CONTEXT_TURN_POLICY
 
     def test_research_policy_mentions_catch_up_mental_model(self) -> None:
         prompt = chat_commands._RESEARCH_TURN_POLICY.system_prompt or ""
@@ -522,6 +537,49 @@ class TestRegularTurns:
         assert chat_commands._RESEARCH_TURN_POLICY.allowed_tools is not None
         assert "shell" in chat_commands._RESEARCH_TURN_POLICY.allowed_tools
         assert "read-only" in chat_commands._RESEARCH_SYSTEM_PROMPT.lower()
+
+    def test_context_packet_prefetch_skips_unverified_active_work(self) -> None:
+        execution = chat_commands._ExecutionState()
+        assert chat_commands._should_prefetch_context_packet(execution)
+
+        execution.pending_verification = True
+        execution.verification_passed = False
+        assert not chat_commands._should_prefetch_context_packet(execution)
+
+    def test_context_packet_directive_wraps_packet_for_execution(self) -> None:
+        directive = chat_commands._inject_context_packet_directive(
+            "User request:\nImplement the gateway integration.",
+            "## Context packet\n- Reuse the existing gateway factory.",
+        )
+        assert "SYSTEM CONTEXT PACKET" in directive
+        assert "sources of truth" in directive
+        assert "Reuse the existing gateway factory" in directive
+        assert "Implement the gateway integration" in directive
+
+    def test_general_turn_prefetches_context_packet_for_broad_work(
+        self, patch_adapter, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        patch_adapter(
+            [
+                text_turn("## Context packet\n- Reuse the existing command wiring."),
+                text_turn("implementation done"),
+            ]
+        )
+        monkeypatch.setattr(
+            chat_commands,
+            "_classify_chat_turn_policy",
+            lambda **_: asyncio.sleep(0, result=chat_commands._GENERAL_CONTEXT_TURN_POLICY),
+        )
+        result = _run(
+            ["chat", "--cwd", str(tmp_path), "--in-memory", "--yes", "--verify", "none"],
+            stdin="Implement a first-class Zendesk integration across this repo.\n/quit\n",
+        )
+        assert result.exit_code == 0, result.stdout
+        assert "context packet" in result.stdout
+        assert "implementation done" in result.stdout
+        streamed = "\n".join(str(call.get("messages")) for call in FakeAdapter.stream_calls)
+        assert "SYSTEM CONTEXT PACKET" in streamed
+        assert "Reuse the existing command wiring" in streamed
 
     def test_single_turn_streams_response(self, patch_adapter, tmp_path: Path) -> None:
         patch_adapter([text_turn("hello there")])
