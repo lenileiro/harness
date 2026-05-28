@@ -106,6 +106,19 @@ def providers_list_cmd(
     table.add_row("openrouter", or_status, ", ".join(or_notes_parts) or "—")
 
     console.print(table)
+    console.print(
+        "\n".join(
+            [
+                f"ollama: ready; base_url: {ollama_base}",
+                f"codex: {'ready' if codex_cli_available() and codex_auth is not None else 'missing login'}; "
+                + ", ".join(codex_notes_parts),
+                f"openai: {'ready' if has_oa_env_key or has_oa_codex_key else 'missing OPENAI_API_KEY'}; "
+                + (", ".join(oa_notes_parts) or "—"),
+                f"openrouter: {'ready' if has_or_key else 'missing OPENROUTER_API_KEY'}; "
+                + (", ".join(or_notes_parts) or "—"),
+            ]
+        )
+    )
 
 
 @providers_app.command("capabilities")

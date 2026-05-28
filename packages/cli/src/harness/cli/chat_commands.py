@@ -33,6 +33,7 @@ from harness.core import (
     Storage,
     TextDelta,
     ToolCallEvent,
+    ToolRegistry,
     ToolResultEvent,
 )
 from harness.storage.sqlite import SQLiteStorage
@@ -208,6 +209,18 @@ _WORKFLOW_TURN_POLICY = _ChatTurnPolicy(
 
 def _is_general_execution_policy(policy: _ChatTurnPolicy) -> bool:
     return policy in {_GENERAL_TURN_POLICY, _GENERAL_CONTEXT_TURN_POLICY}
+
+
+def _registry_without_tool(registry: ToolRegistry, name: str) -> ToolRegistry:
+    unregister = getattr(registry, "unregister", None)
+    if callable(unregister):
+        unregister(name)
+        return registry
+    filtered = ToolRegistry()
+    for tool in registry.all():
+        if tool.name != name:
+            filtered.register(tool)
+    return filtered
 
 
 def _handoff_tool_name_for_policy(policy: _ChatTurnPolicy) -> str | None:
@@ -847,7 +860,7 @@ async def chat_loop(
                 profile=policy.profile,
             )
             if policy.disable_spawn_agents:
-                cast(Any, built_agent.tools).unregister("spawn_agents")
+                built_agent.tools = _registry_without_tool(built_agent.tools, "spawn_agents")
             if allow_handoffs and _is_general_execution_policy(policy):
                 specialist_specs = (
                     (

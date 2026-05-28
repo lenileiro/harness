@@ -5,7 +5,7 @@ from collections.abc import Awaitable
 from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TypeVar
+from typing import Any, TypeVar, cast
 
 import typer
 from rich.console import Console
@@ -36,8 +36,13 @@ def _run_async(awaitable: Awaitable[_T]) -> _T:
     main_task: asyncio.Task[_T] | None = None
     try:
         asyncio.set_event_loop(loop)
-        main_task = loop.create_task(_await_any(awaitable))
-        return loop.run_until_complete(main_task)
+        create_task: Any = getattr(loop, "create_task", None)
+        if callable(create_task):
+            task_or_awaitable = cast(Awaitable[_T], create_task(_await_any(awaitable)))
+            if isinstance(task_or_awaitable, asyncio.Task):
+                main_task = cast(asyncio.Task[_T], task_or_awaitable)
+            return loop.run_until_complete(task_or_awaitable)
+        return loop.run_until_complete(awaitable)
     except KeyboardInterrupt:
         if main_task is not None and not main_task.done():
             main_task.cancel()
@@ -46,7 +51,10 @@ def _run_async(awaitable: Awaitable[_T]) -> _T:
         raise
     finally:
         try:
-            pending = [task for task in asyncio.all_tasks(loop) if not task.done()]
+            try:
+                pending = [task for task in asyncio.all_tasks(loop) if not task.done()]
+            except Exception:
+                pending = []
             for task in pending:
                 task.cancel()
             if pending:
@@ -59,7 +67,8 @@ def _run_async(awaitable: Awaitable[_T]) -> _T:
                     raise
         finally:
             try:
-                loop.run_until_complete(loop.shutdown_default_executor())
+                with suppress(RuntimeError):
+                    loop.run_until_complete(loop.shutdown_default_executor())
             finally:
                 asyncio.set_event_loop(None)
                 loop.close()
