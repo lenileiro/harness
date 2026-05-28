@@ -1,0 +1,18 @@
+[project]
+name = "adapter-codex"
+version = "0.0.0"
+description = "Codex CLI adapter for Harness."
+requires-python = ">=3.11"
+dependencies = [
+    "core",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/harness"]
+
+[tool.uv.sources]
+core = { workspace = true }

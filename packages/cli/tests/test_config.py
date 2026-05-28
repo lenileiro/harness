@@ -48,6 +48,9 @@ class TestLoadConfig:
             [provider.ollama]
             base_url = "http://lm:11434"
 
+            [provider.openai]
+            base_url = "https://api.openai.example/v1"
+
             [provider.openrouter]
             http_referer = "https://example.com"
             x_title = "MyApp"
@@ -68,6 +71,7 @@ class TestLoadConfig:
         assert cfg.default_provider == "openrouter"
         assert cfg.default_model == "anthropic/claude-3.5-sonnet"
         assert cfg.provider("ollama") == {"base_url": "http://lm:11434"}
+        assert cfg.provider("openai") == {"base_url": "https://api.openai.example/v1"}
         assert cfg.provider("openrouter")["x_title"] == "MyApp"
         assert cfg.approval == {
             "shell": "prompt",

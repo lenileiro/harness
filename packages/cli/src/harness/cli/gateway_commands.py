@@ -334,6 +334,8 @@ def _make_gateway_progress_renderer(
             return
         if now - last_sent["ts"] < 2.5:
             return
+        if pending:
+            return
         recent_summaries.append(normalized_summary)
         del recent_summaries[:-5]
         last_summary["value"] = normalized_summary
@@ -667,6 +669,11 @@ def gateway_whatsapp_setup_command(
     pair: bool = typer.Option(True, "--pair/--no-pair"),
     force_repair: bool = typer.Option(False, "--force-repair"),
     bridge_port: int | None = typer.Option(None, "--bridge-port"),
+    max_gateway_concurrency: int | None = typer.Option(None, "--max-gateway-concurrency"),
+    max_gateway_queue: int | None = typer.Option(None, "--max-gateway-queue"),
+    gateway_child_timeout_seconds: int | None = typer.Option(
+        None, "--gateway-child-timeout-seconds"
+    ),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
     working_dir = (cwd or Path.cwd()).resolve()
@@ -701,6 +708,13 @@ def gateway_whatsapp_setup_command(
         allowed_users=allowed_users,
         bridge_port=bridge_port or existing.bridge_port,
         reply_prefix=existing.reply_prefix,
+        max_gateway_concurrency=max_gateway_concurrency or existing.max_gateway_concurrency,
+        max_gateway_queue=(
+            existing.max_gateway_queue if max_gateway_queue is None else max(0, max_gateway_queue)
+        ),
+        gateway_child_timeout_seconds=(
+            gateway_child_timeout_seconds or existing.gateway_child_timeout_seconds
+        ),
     )
     save_whatsapp_bridge_config(working_dir, config)
 
@@ -725,6 +739,11 @@ def gateway_whatsapp_setup_command(
     console.print(f"[green]provider[/green]={status.config.provider}")
     console.print(f"[green]model[/green]={status.config.model}")
     console.print(f"[green]allowed_users[/green]={', '.join(status.config.allowed_users) or '-'}")
+    console.print(f"[green]max_gateway_concurrency[/green]={status.config.max_gateway_concurrency}")
+    console.print(f"[green]max_gateway_queue[/green]={status.config.max_gateway_queue}")
+    console.print(
+        f"[green]gateway_child_timeout_seconds[/green]={status.config.gateway_child_timeout_seconds}"
+    )
     console.print(f"[green]paired[/green]={status.paired}")
     console.print(f"[green]enabled[/green]={status.config.enabled}")
 
@@ -749,6 +768,12 @@ def gateway_whatsapp_status_command(
     table.add_row("bridge_running", str(status.bridge_running))
     table.add_row("bridge_connected", str(status.bridge_connected))
     table.add_row("bridge_port", str(status.config.bridge_port))
+    table.add_row("max_gateway_concurrency", str(status.config.max_gateway_concurrency))
+    table.add_row("max_gateway_queue", str(status.config.max_gateway_queue))
+    table.add_row(
+        "gateway_child_timeout_seconds",
+        str(status.config.gateway_child_timeout_seconds),
+    )
     table.add_row("session_dir", str(status.session_dir))
     console.print(table)
 

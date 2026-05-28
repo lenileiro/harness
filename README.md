@@ -28,9 +28,9 @@ That means the project is useful in two modes:
 2. As an experimentation surface for improving the code around the model, not
    just swapping the model itself.
 
-The repo currently includes adapters for OpenRouter, Ollama, and Anthropic, a
-shared runtime core, storage backends, built-in tools, and a CLI that ties the
-system together.
+The repo currently includes adapters for Codex CLI, OpenAI, OpenRouter,
+Ollama, and Anthropic, a shared runtime core, storage backends, built-in
+tools, and a CLI that ties the system together.
 
 ## Workspace Layout
 
@@ -40,6 +40,8 @@ workspace member so `uv sync` installs the whole stack in editable mode.
 ```text
 packages/
 ├── adapter-anthropic/    # Anthropic adapter
+├── adapter-codex/        # Codex CLI adapter
+├── adapter-openai/       # OpenAI adapter
 ├── adapter-ollama/       # Ollama adapter
 ├── adapter-openrouter/   # OpenRouter adapter
 ├── cli/                  # Typer + Rich CLI, installs `harness`
@@ -311,8 +313,19 @@ Use `--json` when you want machine-readable output for CI or downstream tools.
 
 Expected repository configuration:
 
-- `OPENROUTER_API_KEY` or `ANTHROPIC_API_KEY` in repository secrets
+- `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, or `ANTHROPIC_API_KEY` in repository secrets
 - optional `HARNESS_PROVIDER` and `HARNESS_MODEL` in repository variables
+
+If you use Codex locally, Harness supports two different paths:
+
+- `--provider codex` delegates to the installed `codex` CLI and works with a
+  normal ChatGPT/Codex login in `~/.codex/auth.json`
+- `--provider openai` can also reuse `~/.codex/auth.json`, but only when that
+  file contains a real `OPENAI_API_KEY`
+
+A ChatGPT OAuth-only Codex login is not enough for raw OpenAI API calls by
+itself, so the CLI reports that state as usable for `codex` but not for
+`openai`.
 
 The reference workflow intentionally skips forked PRs. Secrets are typically
 not available there, and `code-review` should not silently fall back to an
@@ -556,6 +569,7 @@ uv run harness gateway whatsapp setup --provider openrouter --mode self-chat --a
 uv run harness gateway whatsapp pair
 
 # start the long-lived bridge
+# use either OpenRouter or OpenAI credentials, depending on your configured provider
 export OPENROUTER_API_KEY="..."
 uv run harness gateway whatsapp start
 

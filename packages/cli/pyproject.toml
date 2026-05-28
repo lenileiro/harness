@@ -8,6 +8,8 @@ dependencies = [
     "tasks",
     "storage-memory",
     "storage-sqlite",
+    "adapter-codex",
+    "adapter-openai",
     "adapter-ollama",
     "adapter-openrouter",
     "adapter-anthropic",
@@ -35,6 +37,8 @@ core = { workspace = true }
 tasks = { workspace = true }
 storage-memory = { workspace = true }
 storage-sqlite = { workspace = true }
+adapter-codex = { workspace = true }
+adapter-openai = { workspace = true }
 adapter-ollama = { workspace = true }
 adapter-openrouter = { workspace = true }
 adapter-anthropic = { workspace = true }

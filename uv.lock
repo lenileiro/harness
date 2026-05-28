@@ -5,7 +5,9 @@ requires-python = ">=3.11"
 [manifest]
 members = [
     "adapter-anthropic",
+    "adapter-codex",
     "adapter-ollama",
+    "adapter-openai",
     "adapter-openrouter",
     "cli",
     "core",
@@ -34,9 +36,35 @@ requires-dist = [
 ]
 
 [[package]]
+name = "adapter-codex"
+version = "0.0.0"
+source = { editable = "packages/adapter-codex" }
+dependencies = [
+    { name = "core" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "core", editable = "packages/core" }]
+
+[[package]]
 name = "adapter-ollama"
 version = "0.0.0"
 source = { editable = "packages/adapter-ollama" }
+dependencies = [
+    { name = "core" },
+    { name = "httpx" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "core", editable = "packages/core" },
+    { name = "httpx", specifier = ">=0.27" },
+]
+
+[[package]]
+name = "adapter-openai"
+version = "0.0.0"
+source = { editable = "packages/adapter-openai" }
 dependencies = [
     { name = "core" },
     { name = "httpx" },
@@ -235,7 +263,9 @@ version = "0.0.0"
 source = { editable = "packages/cli" }
 dependencies = [
     { name = "adapter-anthropic" },
+    { name = "adapter-codex" },
     { name = "adapter-ollama" },
+    { name = "adapter-openai" },
     { name = "adapter-openrouter" },
     { name = "core" },
     { name = "python-dotenv" },
@@ -253,7 +283,9 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "adapter-anthropic", editable = "packages/adapter-anthropic" },
+    { name = "adapter-codex", editable = "packages/adapter-codex" },
     { name = "adapter-ollama", editable = "packages/adapter-ollama" },
+    { name = "adapter-openai", editable = "packages/adapter-openai" },
     { name = "adapter-openrouter", editable = "packages/adapter-openrouter" },
     { name = "core", editable = "packages/core" },
     { name = "python-dotenv", specifier = ">=1.0" },
@@ -461,7 +493,9 @@ version = "0.0.0"
 source = { virtual = "." }
 dependencies = [
     { name = "adapter-anthropic" },
+    { name = "adapter-codex" },
     { name = "adapter-ollama" },
+    { name = "adapter-openai" },
     { name = "adapter-openrouter" },
     { name = "cli" },
     { name = "core" },
@@ -486,7 +520,9 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "adapter-anthropic", editable = "packages/adapter-anthropic" },
+    { name = "adapter-codex", editable = "packages/adapter-codex" },
     { name = "adapter-ollama", editable = "packages/adapter-ollama" },
+    { name = "adapter-openai", editable = "packages/adapter-openai" },
     { name = "adapter-openrouter", editable = "packages/adapter-openrouter" },
     { name = "cli", editable = "packages/cli" },
     { name = "core", editable = "packages/core" },

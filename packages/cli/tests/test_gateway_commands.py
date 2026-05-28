@@ -250,6 +250,14 @@ def test_gateway_whatsapp_setup_can_configure_self_chat_noninteractively(tmp_pat
             "self-chat",
             "--allowed-user",
             "15551234567",
+            "--bridge-port",
+            "9918",
+            "--max-gateway-concurrency",
+            "1",
+            "--max-gateway-queue",
+            "2",
+            "--gateway-child-timeout-seconds",
+            "90",
             "--no-install",
             "--no-pair",
             "--json",
@@ -261,6 +269,10 @@ def test_gateway_whatsapp_setup_can_configure_self_chat_noninteractively(tmp_pat
     assert payload["model"] == "gemma4:latest"
     assert payload["mode"] == "self-chat"
     assert payload["allowed_users"] == ["15551234567"]
+    assert payload["bridge_port"] == 9918
+    assert payload["max_gateway_concurrency"] == 1
+    assert payload["max_gateway_queue"] == 2
+    assert payload["gateway_child_timeout_seconds"] == 90
     assert payload["paired"] is False
     assert payload["enabled"] is False
 

@@ -7,6 +7,8 @@ from typing import Annotated
 import typer
 from rich.table import Table
 
+from harness.adapters.codex import codex_cli_available, inspect_codex_cli_auth
+from harness.adapters.openai import inspect_codex_openai_auth, load_codex_openai_api_key
 from harness.cli.common import (
     KNOWN_PROVIDERS,
     _build_adapter,
@@ -49,6 +51,48 @@ def providers_list_cmd(
         f"base_url: {ollama_base}",
     )
 
+    codex_auth = inspect_codex_cli_auth()
+    codex_status = (
+        "[green]ready[/green]"
+        if codex_cli_available() and codex_auth is not None
+        else "[red]missing login[/red]"
+    )
+    codex_notes_parts = []
+    if codex_cli_available():
+        codex_notes_parts.append("cli: installed")
+    else:
+        codex_notes_parts.append("cli: not found on PATH")
+    if codex_auth is not None:
+        auth_mode = str(codex_auth.get("auth_mode", "unknown"))
+        codex_notes_parts.append(f"auth_mode: {auth_mode}")
+        if codex_auth.get("has_openai_api_key"):
+            codex_notes_parts.append("OPENAI_API_KEY set")
+        elif codex_auth.get("has_access_token"):
+            codex_notes_parts.append("ChatGPT/Codex OAuth present")
+    else:
+        codex_notes_parts.append("run `codex login`")
+    table.add_row("codex", codex_status, ", ".join(codex_notes_parts))
+
+    has_oa_env_key = bool(os.environ.get("OPENAI_API_KEY"))
+    has_oa_codex_key = bool(load_codex_openai_api_key())
+    openai_codex_auth = inspect_codex_openai_auth()
+    oa_settings = cfg.provider("openai")
+    oa_status = (
+        "[green]ready[/green]"
+        if (has_oa_env_key or has_oa_codex_key)
+        else "[red]missing OPENAI_API_KEY[/red]"
+    )
+    oa_notes_parts = []
+    if has_oa_env_key:
+        oa_notes_parts.append("env: OPENAI_API_KEY set")
+    elif has_oa_codex_key:
+        oa_notes_parts.append("codex auth: OPENAI_API_KEY set")
+    elif openai_codex_auth and openai_codex_auth.get("auth_mode") == "chatgpt":
+        oa_notes_parts.append("codex auth: ChatGPT OAuth present but not usable for model calls")
+    if "base_url" in oa_settings:
+        oa_notes_parts.append(f"base_url: {oa_settings['base_url']}")
+    table.add_row("openai", oa_status, ", ".join(oa_notes_parts) or "—")
+
     has_or_key = bool(os.environ.get("OPENROUTER_API_KEY"))
     or_settings = cfg.provider("openrouter")
     or_status = "[green]ready[/green]" if has_or_key else "[red]missing OPENROUTER_API_KEY[/red]"
@@ -66,7 +110,9 @@ def providers_list_cmd(
 
 @providers_app.command("capabilities")
 def providers_capabilities_cmd(
-    name: Annotated[str, typer.Argument(help="Provider name (ollama or openrouter).")],
+    name: Annotated[
+        str, typer.Argument(help="Provider name (ollama, codex, openai, or openrouter).")
+    ],
     config_path: Annotated[Path | None, typer.Option("--config")] = None,
 ) -> None:
     """Print a provider's reported Capabilities."""

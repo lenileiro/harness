@@ -24,6 +24,9 @@ class WhatsAppBridgeConfig:
     allowed_users: list[str] = field(default_factory=list)
     bridge_port: int = 8741
     reply_prefix: str = "Harness Agent\n────────────\n"
+    max_gateway_concurrency: int = 1
+    max_gateway_queue: int = 3
+    gateway_child_timeout_seconds: int = 120
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -50,6 +53,9 @@ class WhatsAppBridgeStatus:
             "allowed_users": list(self.config.allowed_users),
             "bridge_port": self.config.bridge_port,
             "reply_prefix": self.config.reply_prefix,
+            "max_gateway_concurrency": self.config.max_gateway_concurrency,
+            "max_gateway_queue": self.config.max_gateway_queue,
+            "gateway_child_timeout_seconds": self.config.gateway_child_timeout_seconds,
             "root": str(self.root),
             "project_dir": str(self.project_dir),
             "session_dir": str(self.session_dir),
@@ -96,6 +102,11 @@ def load_whatsapp_bridge_config(cwd: Path) -> WhatsAppBridgeConfig:
         ],
         bridge_port=int(payload.get("bridge_port", 8741)),
         reply_prefix=str(payload.get("reply_prefix", "Harness Agent\n────────────\n")),
+        max_gateway_concurrency=max(1, int(payload.get("max_gateway_concurrency", 1))),
+        max_gateway_queue=max(0, int(payload.get("max_gateway_queue", 3))),
+        gateway_child_timeout_seconds=max(
+            5, int(payload.get("gateway_child_timeout_seconds", 120))
+        ),
     )
 
 
@@ -152,6 +163,9 @@ def build_whatsapp_bridge_env(cwd: Path) -> dict[str, str]:
         "HARNESS_WHATSAPP_WORKSPACE_CWD": str(cwd.resolve()),
         "HARNESS_WHATSAPP_UV_BIN": shutil.which("uv") or "uv",
         "HARNESS_WHATSAPP_ENV_FILE": str(dotenv_path.resolve()) if dotenv_path.is_file() else "",
+        "HARNESS_WHATSAPP_MAX_CONCURRENCY": str(config.max_gateway_concurrency),
+        "HARNESS_WHATSAPP_MAX_QUEUE": str(config.max_gateway_queue),
+        "HARNESS_WHATSAPP_CHILD_TIMEOUT_MS": str(config.gateway_child_timeout_seconds * 1000),
     }
 
 
@@ -222,9 +236,18 @@ def probe_whatsapp_bridge(
     req = request.Request(url=url, method="GET")
     try:
         with request.urlopen(req, timeout=timeout) as response:
-            return json.loads(response.read().decode("utf-8"))
+            payload = json.loads(response.read().decode("utf-8"))
     except (OSError, error.URLError, json.JSONDecodeError):
         return None
+    if not isinstance(payload, dict):
+        return None
+    expected_cwd = str(cwd.resolve())
+    reported_cwd = str(payload.get("workspace_cwd", "")).strip()
+    if reported_cwd and reported_cwd != expected_cwd:
+        return None
+    if not reported_cwd:
+        return None
+    return payload
 
 
 def read_whatsapp_bridge_status(cwd: Path) -> WhatsAppBridgeStatus:
@@ -256,6 +279,8 @@ def send_whatsapp_text_message(
 ) -> dict[str, Any]:
     working_dir = (cwd or Path.cwd()).resolve()
     config = load_whatsapp_bridge_config(working_dir)
+    if probe_whatsapp_bridge(working_dir, timeout=min(2.0, timeout)) is None:
+        raise ConnectionError("whatsapp bridge is not running for this workspace")
     url = f"http://127.0.0.1:{config.bridge_port}/send"
     body: dict[str, Any] = {
         "chatId": to,

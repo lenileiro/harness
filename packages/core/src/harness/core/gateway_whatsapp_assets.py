@@ -46,6 +46,10 @@ const REPLY_PREFIX = process.env.HARNESS_WHATSAPP_REPLY_PREFIX || '';
 const WORKSPACE_CWD = process.env.HARNESS_WHATSAPP_WORKSPACE_CWD || process.cwd();
 const UV_BIN = process.env.HARNESS_WHATSAPP_UV_BIN || 'uv';
 const ENV_FILE = process.env.HARNESS_WHATSAPP_ENV_FILE || '';
+const MAX_GATEWAY_CONCURRENCY = Math.max(1, Number.parseInt(process.env.HARNESS_WHATSAPP_MAX_CONCURRENCY || '1', 10) || 1);
+const MAX_GATEWAY_QUEUE = Math.max(0, Number.parseInt(process.env.HARNESS_WHATSAPP_MAX_QUEUE || '3', 10) || 0);
+const GATEWAY_CHILD_TIMEOUT_MS = Math.max(5000, Number.parseInt(process.env.HARNESS_WHATSAPP_CHILD_TIMEOUT_MS || '120000', 10) || 120000);
+const GATEWAY_OUTPUT_LIMIT_BYTES = Math.max(65536, Number.parseInt(process.env.HARNESS_WHATSAPP_OUTPUT_LIMIT_BYTES || '262144', 10) || 262144);
 const BRIDGE_STARTED_AT_MS = Date.now();
 const ALLOWED_USERS = (process.env.HARNESS_WHATSAPP_ALLOWED_USERS || '')
   .split(',')
@@ -61,6 +65,8 @@ app.use(express.json({ limit: '2mb' }));
 let sock = null;
 let connectionState = 'disconnected';
 const processedMessageIds = new Set();
+let activeGatewayTasks = 0;
+const pendingGatewayTasks = [];
 
 function normalizeChatId(value) {
   const raw = String(value || '').trim();
@@ -244,6 +250,43 @@ function dotenvKeysToPrefer() {
   return preferred;
 }
 
+function appendLimited(current, chunk) {
+  const combined = current + chunk.toString();
+  if (combined.length <= GATEWAY_OUTPUT_LIMIT_BYTES) {
+    return combined;
+  }
+  return combined.slice(combined.length - GATEWAY_OUTPUT_LIMIT_BYTES);
+}
+
+function drainGatewayQueue() {
+  while (activeGatewayTasks < MAX_GATEWAY_CONCURRENCY && pendingGatewayTasks.length > 0) {
+    const item = pendingGatewayTasks.shift();
+    activeGatewayTasks += 1;
+    item
+      .run()
+      .then(item.resolve)
+      .catch((error) => item.resolve({ ok: false, error: String(error) }))
+      .finally(() => {
+        activeGatewayTasks -= 1;
+        drainGatewayQueue();
+      });
+  }
+}
+
+function enqueueGatewayTask(run) {
+  if (activeGatewayTasks + pendingGatewayTasks.length >= MAX_GATEWAY_CONCURRENCY + MAX_GATEWAY_QUEUE) {
+    return Promise.resolve({
+      ok: false,
+      busy: true,
+      replyText: 'Harness is still working through earlier WhatsApp messages. Try again shortly.',
+    });
+  }
+  return new Promise((resolve) => {
+    pendingGatewayTasks.push({ run, resolve });
+    drainGatewayQueue();
+  });
+}
+
 async function dispatchInboundCommand({ chatId, userId, text, messageId }) {
   const dispatchArgs = [
     'run',
@@ -293,17 +336,33 @@ async function dispatchInboundCommand({ chatId, userId, text, messageId }) {
       });
       let stdout = '';
       let stderr = '';
+      let settled = false;
+      const timeout = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        console.error('❌ Gateway command timed out');
+        child.kill('SIGTERM');
+        setTimeout(() => child.kill('SIGKILL'), 5000).unref();
+        resolve({ ok: false, error: `gateway command timed out after ${GATEWAY_CHILD_TIMEOUT_MS}ms` });
+      }, GATEWAY_CHILD_TIMEOUT_MS);
+      timeout.unref();
       child.stdout.on('data', (chunk) => {
-        stdout += chunk.toString();
+        stdout = appendLimited(stdout, chunk);
       });
       child.stderr.on('data', (chunk) => {
-        stderr += chunk.toString();
+        stderr = appendLimited(stderr, chunk);
       });
       child.on('error', (error) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
         console.error('❌ Failed to run gateway command:', error);
         resolve({ ok: false, error: String(error) });
       });
       child.on('close', (code) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
         console.log(
           '🧾 gateway child exit',
           JSON.stringify({
@@ -443,13 +502,19 @@ async function startSocket() {
       }
       const userId = inboundUserId(chatId, node?.key);
       console.log('ENTER dispatch', JSON.stringify({ chatId, userId, text: String(text || '').trim() }));
-      const stopTyping = startTypingTicker(chatId);
       try {
-        const result = await dispatchInboundCommand({
-          chatId,
-          userId,
-          text: String(text || '').trim(),
-          messageId: node?.key?.id || '',
+        const result = await enqueueGatewayTask(async () => {
+          const stopTyping = startTypingTicker(chatId);
+          try {
+            return await dispatchInboundCommand({
+              chatId,
+              userId,
+              text: String(text || '').trim(),
+              messageId: node?.key?.id || '',
+            });
+          } finally {
+            stopTyping();
+          }
         });
         if (!result?.ok || !result.replyText) {
           continue;
@@ -457,8 +522,6 @@ async function startSocket() {
         await sock.sendMessage(chatId, { text: formatMessage(result.replyText) });
       } catch (error) {
         console.error('❌ Failed to send gateway reply:', error);
-      } finally {
-        stopTyping();
       }
     }
   });
@@ -470,6 +533,13 @@ app.get('/health', (_req, res) => {
     mode: MODE,
     paired: connectionState === 'connected',
     user: sock?.user || null,
+    workspace_cwd: WORKSPACE_CWD,
+    session_dir: SESSION_DIR,
+    active_gateway_tasks: activeGatewayTasks,
+    pending_gateway_tasks: pendingGatewayTasks.length,
+    max_gateway_concurrency: MAX_GATEWAY_CONCURRENCY,
+    max_gateway_queue: MAX_GATEWAY_QUEUE,
+    gateway_child_timeout_ms: GATEWAY_CHILD_TIMEOUT_MS,
   });
 });
 

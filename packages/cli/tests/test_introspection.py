@@ -18,12 +18,71 @@ def _run(cli_args: list[str]) -> Result:
 
 class TestProvidersList:
     def test_lists_known_providers(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+        monkeypatch.setattr("harness.cli.introspection.codex_cli_available", lambda: False)
+        monkeypatch.setattr("harness.cli.introspection.inspect_codex_cli_auth", lambda: None)
         result = _run(["providers", "list"])
         assert result.exit_code == 0
         assert "ollama" in result.stdout
+        assert "codex" in result.stdout
+        assert "openai" in result.stdout
         assert "openrouter" in result.stdout
+        assert "missing OPENAI_API_KEY" in result.stdout
         assert "missing OPENROUTER_API_KEY" in result.stdout
+
+    def test_codex_ready_when_cli_and_auth_present(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr("harness.cli.introspection.codex_cli_available", lambda: True)
+        monkeypatch.setattr(
+            "harness.cli.introspection.inspect_codex_cli_auth",
+            lambda: {
+                "auth_mode": "chatgpt",
+                "has_openai_api_key": False,
+                "has_access_token": True,
+            },
+        )
+        result = _run(["providers", "list"])
+        assert result.exit_code == 0
+        assert "codex" in result.stdout
+        assert "ChatGPT/Codex OAuth present" in result.stdout
+
+    def test_openai_ready_when_key_present(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+        monkeypatch.setattr("harness.cli.introspection.codex_cli_available", lambda: False)
+        monkeypatch.setattr("harness.cli.introspection.inspect_codex_cli_auth", lambda: None)
+        result = _run(["providers", "list"])
+        assert result.exit_code == 0
+        assert "ready" in result.stdout
+
+    def test_openai_ready_when_codex_auth_has_api_key(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        monkeypatch.setattr(
+            "harness.cli.introspection.load_codex_openai_api_key",
+            lambda: "codex-key",
+        )
+        result = _run(["providers", "list"])
+        assert result.exit_code == 0
+        assert "openai" in result.stdout
+        assert "codex auth: OPENAI_API_KEY set" in result.stdout
+
+    def test_openai_lists_chatgpt_codex_auth_as_insufficient(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        monkeypatch.setattr(
+            "harness.cli.introspection.inspect_codex_openai_auth",
+            lambda: {"auth_mode": "chatgpt", "has_openai_api_key": False},
+        )
+        monkeypatch.setattr(
+            "harness.cli.introspection.load_codex_openai_api_key",
+            lambda: None,
+        )
+        result = _run(["providers", "list"])
+        assert result.exit_code == 0
+        assert "ChatGPT OAuth present" in result.stdout
+        assert "not usable for model calls" in result.stdout
 
     def test_openrouter_ready_when_key_present(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
@@ -33,6 +92,11 @@ class TestProvidersList:
 
 
 class TestProvidersCapabilities:
+    def test_openai_without_key_exits_2(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        result = _run(["providers", "capabilities", "openai"])
+        assert result.exit_code == 2
+
     def test_ollama_capabilities(self) -> None:
         result = _run(["providers", "capabilities", "ollama"])
         assert result.exit_code == 0

@@ -8,7 +8,7 @@ Phase 4 surface:
 - `harness sessions rm <id>`     — delete a session
 - `harness version`              — print the installed CLI version
 
-Providers: ollama, openrouter.
+Providers: ollama, codex, openai, openrouter.
 Tools: read_file, write_file, edit_file, list_dir, glob, shell, fetch_url.
 
 Config: `$XDG_CONFIG_HOME/harness/config.toml` (or ~/.config/harness/config.toml)
@@ -35,7 +35,9 @@ from typing import Annotated, Any
 import typer
 
 from harness.adapters.anthropic import AnthropicAdapter
+from harness.adapters.codex import CodexAdapter
 from harness.adapters.ollama import OllamaAdapter
+from harness.adapters.openai import OpenAIAdapter
 from harness.adapters.openrouter import OpenRouterAdapter
 from harness.cli.approvals_evidence_commands import (
     approvals_deny_command as _approvals_deny_command,
@@ -233,7 +235,7 @@ _workspace_db = workspace_db
 
 app = typer.Typer(
     name="harness",
-    help="Harness — Python agent runtime over OpenRouter and Ollama.",
+    help="Harness — Python agent runtime over OpenAI-compatible providers and Ollama.",
     no_args_is_help=True,
     add_completion=False,
 )
@@ -386,7 +388,9 @@ _DEFAULT_SYSTEM_PROMPT = (
     "   - Revise your implementation.\n"
     "   - Call verify_work again.\n"
     "7. Repeat steps 4-6 until verify_work returns PASSED.\n"
-    "8. Only then declare the task complete.\n\n"
+    "8. After verification passes, do one bounded adjacent review of nearby code for missing tests, inconsistencies, or follow-on risks. "
+    "Report the best 0-3 nearby findings separately without silently expanding the task.\n"
+    "9. Only then declare the task complete.\n\n"
     "Do NOT declare done after a single attempt on coding tasks. "
     "Do NOT assume your first fix is correct without running verify_work. "
     "Iteration is expected — most fixes take 2-4 attempts.\n\n"
@@ -466,6 +470,14 @@ def _build_adapter(provider: str, *, base_url: str | None, config: HarnessConfig
             http_referer=settings.get("http_referer"),
             x_title=settings.get("x_title"),
         )
+    if provider == "codex":
+        timeout = float(settings.get("timeout", 600.0))
+        idle_timeout = float(settings.get("idle_timeout", 120.0))
+        cwd = settings.get("cwd")
+        return CodexAdapter(cwd=cwd, timeout=timeout, idle_timeout=idle_timeout)
+    if provider == "openai":
+        timeout = float(settings.get("timeout", 120.0))
+        return OpenAIAdapter(base_url=effective_base_url, timeout=timeout)
     if provider == "anthropic":
         return AnthropicAdapter(base_url=effective_base_url)
     raise typer.BadParameter(f"unknown provider: {provider!r}")
@@ -591,7 +603,9 @@ def run(
     provider: Annotated[
         str | None,
         typer.Option(
-            "--provider", "-p", help="Provider: 'ollama' or 'openrouter' (overrides config)."
+            "--provider",
+            "-p",
+            help="Provider: 'ollama', 'codex', 'openai', or 'openrouter' (overrides config).",
         ),
     ] = None,
     base_url: Annotated[
@@ -627,7 +641,7 @@ def run(
         str | None,
         typer.Option(
             "--failover",
-            help="Comma-separated provider chain (e.g. 'ollama,openrouter'). Overrides --provider.",
+            help="Comma-separated provider chain (e.g. 'ollama,openai,openrouter'). Overrides --provider.",
         ),
     ] = None,
     session_id: Annotated[
@@ -1697,7 +1711,9 @@ def lab_run(
     prompt: Annotated[str, typer.Argument(help="Top-level task prompt for the planner.")],
     provider: Annotated[
         str | None,
-        typer.Option("--provider", "-p", help="LLM provider (ollama, openrouter, …)."),
+        typer.Option(
+            "--provider", "-p", help="LLM provider (ollama, codex, openai, openrouter, …)."
+        ),
     ] = None,
     model: Annotated[
         str | None,
