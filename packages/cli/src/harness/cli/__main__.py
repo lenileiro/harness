@@ -357,6 +357,19 @@ _DEFAULT_SYSTEM_PROMPT = (
     "read-only questions, explanations, or orchestration tasks.\n\n"
     "If specialist handoff tools are available and the user explicitly asks for delegation or the task is an obvious "
     "fit for a specialist, use the handoff tool instead of pretending to do specialist work directly.\n\n"
+    "## Comprehension-first policy\n\n"
+    "In large or unfamiliar codebases, the first high-value outcome is often understanding, not code generation. "
+    "When the user asks to be caught up, understand how something works, review architecture/conventions/testing/history, "
+    "or align their mental model before implementation, stay read-only and build that mental model first. "
+    "Show the evidence you inspected, the file/component map, and the flow through the system before proposing changes.\n\n"
+    "## Context-engine policy\n\n"
+    "Do not confuse access with understanding. Raw MCP/tool access, naive document search, or a huge context window "
+    "is not enough for broad or unfamiliar work. Before planning, implementation, or review on open-ended tasks, "
+    "build or request a compact context packet when the needed context is not already clear.\n\n"
+    "A good context packet includes current sources of truth, local patterns to reuse, conflicts between code/docs/history, "
+    "visible permission or data-governance boundaries, local expert signals from repo evidence when available, "
+    "and the validation or review risks the execution agent should use. Search beyond the first plausible hit, "
+    "do not dump raw logs, and do not rely on stale cached answers without checking current evidence.\n\n"
     "## Execution-first policy (required)\n\n"
     "If the user asks for something executable or directly observable, do not stop at creation. "
     "Carry the task through the obvious next step before closing.\n\n"
@@ -760,8 +773,8 @@ def run(
         typer.Option(
             "--domain",
             help=(
-                "Task domain profile. Currently: coding, code-review, research, "
-                "docs-audit, mission-planning."
+                "Task domain profile. Currently: coding, code-review, comprehension, "
+                "research, docs-audit, mission-planning."
             ),
         ),
     ] = "coding",

@@ -155,6 +155,24 @@ class TestSlashCommands:
         assert result == chat_commands._RESEARCH_TURN_POLICY
 
     @pytest.mark.asyncio
+    async def test_classifier_routes_context_packet_to_research_policy(self) -> None:
+        result = await chat_commands._classify_chat_turn_policy(
+            adapter=ClassifierAdapter("research"),
+            model="m",
+            prompt="Build a context packet before the agent implements gateway routing.",
+        )
+        assert result == chat_commands._RESEARCH_TURN_POLICY
+
+    def test_research_policy_mentions_catch_up_mental_model(self) -> None:
+        prompt = chat_commands._RESEARCH_TURN_POLICY.system_prompt or ""
+        assert "caught up" in prompt
+        assert "mental model" in prompt
+        assert "file/component map" in prompt
+        assert "context packet" in prompt
+        assert "sources of" in prompt
+        assert "permission/data boundaries" in prompt
+
+    @pytest.mark.asyncio
     async def test_classifier_routes_general_to_general_policy(self) -> None:
         result = await chat_commands._classify_chat_turn_policy(
             adapter=ClassifierAdapter("general"),
@@ -480,6 +498,10 @@ class TestRegularTurns:
         assert "harness mission show-contract --mission <mission_id>" in prompt
         assert "harness mission summarize --mission <mission_id>" in prompt
         assert "Do not call `resume init` after `mission launch`" in prompt
+        assert "Context-engine policy" in prompt
+        assert "Do not confuse access with understanding" in prompt
+        assert "compact context packet" in prompt
+        assert "permission or data-governance boundaries" in prompt
 
     def test_workflow_turn_policy_prompt_enforces_exact_harness_bootstrap_order(self) -> None:
         prompt = chat_commands._WORKFLOW_BOOTSTRAP_SYSTEM_PROMPT
@@ -628,6 +650,56 @@ class TestRegularTurns:
         assert "FAILED" in result.stdout
         assert "PASSED" in result.stdout
 
+    def test_general_turn_runs_bounded_adjacent_review_after_verified_edit(
+        self, patch_adapter, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        patch_adapter(
+            [
+                tool_round_trip(
+                    call_id="e1",
+                    name="edit_file",
+                    arguments={"path": "src/runtime.py", "old": "x", "new": "y"},
+                    content="edited src/runtime.py",
+                ),
+                [
+                    ToolCallEvent(
+                        call=ToolCall(
+                            id="v1",
+                            name="verify_work",
+                            arguments={"command": "pytest packages/core/tests/test_guardrails.py"},
+                        )
+                    ),
+                    ToolResultEvent(
+                        result=ToolResult(
+                            tool_call_id="v1",
+                            name="verify_work",
+                            content="PASSED\n9 passed",
+                        )
+                    ),
+                    Done(final_message=Message(role="assistant", content="fixed and verified")),
+                ],
+                text_turn(
+                    '{"summary":"One nearby gap remains.","findings":['
+                    '{"severity":"medium","file":"packages/core/tests/test_guardrails.py","line":170,'
+                    '"issue":"missing sibling assertion","rationale":"neighboring guardrail path still lacks direct coverage"}'
+                    "]}"
+                ),
+            ]
+        )
+        monkeypatch.setattr(
+            chat_commands,
+            "_classify_chat_turn_policy",
+            lambda **_: asyncio.sleep(0, result=chat_commands._GENERAL_TURN_POLICY),
+        )
+        result = _run(
+            ["chat", "--cwd", str(tmp_path), "--in-memory", "--yes", "--verify", "none"],
+            stdin="Fix the guardrail cancellation leak in the runtime.\n/quit\n",
+        )
+        assert result.exit_code == 0, result.stdout
+        assert "adjacent review" in result.stdout
+        assert "One nearby gap remains." in result.stdout
+        assert "packages/core/tests/test_guardrails.py:170" in result.stdout
+
     def test_active_work_directive_includes_hypothesis_and_recent_outcomes(self) -> None:
         execution = chat_commands._ExecutionState(
             edited_files={"packages/core/src/harness/core/runtime.py"},
@@ -650,6 +722,19 @@ class TestRegularTurns:
         assert "Recent tool outcomes" in directive
         assert "verify_work:error:FAILED" in directive
         assert "pytest packages/core/tests/test_guardrails.py" in directive
+
+    def test_adjacent_review_prompt_mentions_bounded_nearby_sweep(self) -> None:
+        execution = chat_commands._ExecutionState(
+            edited_files={"packages/core/src/harness/core/runtime.py"},
+            verification_passed=True,
+            active_goal="Fix the guardrail cancellation leak in the runtime.",
+        )
+        prompt = chat_commands._build_adjacent_review_prompt(execution)
+        assert prompt is not None
+        assert "Stay read-only" in prompt
+        assert "nearby code" in prompt
+        assert "top 0-3 high-signal nearby findings" in prompt
+        assert "packages/core/src/harness/core/runtime.py" in prompt
 
     def test_general_task_scope_directive_prefers_existing_targets_and_options(self) -> None:
         directive = chat_commands._inject_general_task_scope_directive(

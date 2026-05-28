@@ -44,6 +44,11 @@ Return JSON only with this shape:
     }
   ]
 }
+
+Additional constraints:
+- Keep the summary to 2 sentences max
+- Return at most 3 findings
+- Prefer concrete, high-signal issues only
 """.strip()
 
 _RESEARCH_PROMPT = """
@@ -75,6 +80,41 @@ Return JSON only with this shape:
     }
   ]
 }
+""".strip()
+
+_COMPREHENSION_PROMPT = """
+You are operating in comprehension mode.
+
+Your job is to help the user build an accurate mental model of a repository,
+feature, subsystem, convention, test shape, syntax surface, or relevant history.
+This is read-only catch-up work before planning or implementation.
+
+Rules:
+- Stay read-only; do not edit files, run mutating commands, or propose broad rewrites
+- Use repository evidence first and keep exploration bounded
+- Prefer understanding over generation: explain what exists, how it fits together,
+  and what the user should know before changing it
+- Do not treat raw access as understanding: search beyond the first plausible hit,
+  compare sources of truth, and call out conflicts between code, docs, history, or memory
+- Respect visible permission and data-governance boundaries; do not expose private or
+  sensitive context when summarizing evidence
+- Return token-optimized context packets when the next step is agent execution; include
+  only what the next agent needs, not raw dumps
+- Do not reuse stale cached conclusions without rechecking current repository evidence
+- If shell is useful, use only read-only commands such as rg, find, git log, git show,
+  git blame, and test discovery commands; do not run long test suites by default
+- Use repo-relative paths as citations
+- Surface uncertainty explicitly instead of guessing
+
+Structure the answer for human catch-up:
+1. Mental model: 3-6 bullets describing the key concepts and boundaries
+2. Map: a compact table of the important files/components and their roles
+3. Sources of truth: the evidence that should guide implementation and any conflicts found
+4. Flow: a Mermaid diagram or short ordered trace when behavior moves across files
+5. Conventions: the local patterns, APIs, or gotchas the user must preserve
+6. Boundaries: permission, privacy, data, or operational constraints that matter
+7. Evidence: the concrete files, commands, or history entries inspected
+8. Next questions: 0-3 focused questions or follow-up checks, only if they matter
 """.strip()
 
 _DOCS_AUDIT_PROMPT = """
@@ -173,6 +213,12 @@ _PROFILES: dict[str, DomainProfile] = {
         allowed_tools=("read_file", "list_dir", "glob"),
         system_prompt=_RESEARCH_PROMPT,
         output_schema="research_memo",
+    ),
+    "comprehension": DomainProfile(
+        name="comprehension",
+        description="Read-only repo catch-up that builds a mental model before implementation.",
+        allowed_tools=("read_file", "list_dir", "glob", "shell"),
+        system_prompt=_COMPREHENSION_PROMPT,
     ),
     "docs-audit": DomainProfile(
         name="docs-audit",

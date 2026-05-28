@@ -9,6 +9,7 @@ def test_domain_profile_names_include_code_review() -> None:
     assert domain_profile_names() == [
         "code-review",
         "coding",
+        "comprehension",
         "docs-audit",
         "mission-planning",
         "research",
@@ -33,6 +34,18 @@ def test_research_profile_is_read_only_and_structured() -> None:
     assert profile.output_schema == "research_memo"
     assert profile.allowed_tools == ("read_file", "list_dir", "glob")
     assert "Return JSON only" in (profile.system_prompt or "")
+
+
+def test_comprehension_profile_builds_mental_model() -> None:
+    profile = get_domain_profile("comprehension")
+    assert profile.output_schema is None
+    assert profile.allowed_tools == ("read_file", "list_dir", "glob", "shell")
+    assert "mental model" in (profile.system_prompt or "")
+    assert "Stay read-only" in (profile.system_prompt or "")
+    assert "Mermaid" in (profile.system_prompt or "")
+    assert "raw access as understanding" in (profile.system_prompt or "")
+    assert "Sources of truth" in (profile.system_prompt or "")
+    assert "Boundaries" in (profile.system_prompt or "")
 
 
 def test_docs_audit_profile_is_read_only_and_structured() -> None:
@@ -75,6 +88,7 @@ def test_provider_profiles_extend_and_override_names() -> None:
     assert domain_profile_names(providers=[DemoProvider()]) == [
         "code-review",
         "coding",
+        "comprehension",
         "docs-audit",
         "docs-review",
         "mission-planning",

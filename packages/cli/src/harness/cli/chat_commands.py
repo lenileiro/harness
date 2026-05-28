@@ -124,6 +124,16 @@ Answer by reading and inspecting the codebase or local workspace. Stay read-only
 
 Use tools to find the answer, but do not edit files or act like this is a bugfix task.
 When useful, cite the relevant file paths briefly. Keep the answer short and factual.
+
+When the user asks to be caught up, understand an unfamiliar area, or align their
+mental model before work, structure the answer around comprehension: mental
+model, file/component map, flow or trace, local conventions, evidence inspected,
+and any important next questions.
+
+When the user asks for a context packet or agent onboarding context, produce
+targeted, conflict-aware context rather than a raw search dump. Check sources of
+truth, local patterns, visible permission/data boundaries, and validation risks,
+then return only the compact packet the next agent needs.
 """.strip()
 
 
@@ -164,6 +174,7 @@ class _ExecutionState:
     active_hypothesis: str | None = None
     active_goal: str | None = None
     recent_tool_outcomes: list[str] = field(default_factory=list)
+    adjacent_review_done: bool = False
 
 
 _GENERAL_TURN_POLICY = _ChatTurnPolicy(name="general")
@@ -357,6 +368,24 @@ def _build_autonomous_followup_prompt(execution: _ExecutionState) -> str | None:
         "The task is not complete until verification passes. "
         "Choose the most relevant focused verify_work command now, call verify_work, "
         "repair any failures, and continue until verify_work returns PASSED or you hit a concrete blocker."
+    )
+
+
+def _build_adjacent_review_prompt(execution: _ExecutionState) -> str | None:
+    if not execution.verification_passed or not execution.edited_files:
+        return None
+    edited = ", ".join(f"`{path}`" for path in sorted(execution.edited_files)[:5])
+    goal = execution.active_goal or "the recent task"
+    return (
+        "Inspect the nearby code around the recent verified change. Stay read-only and keep this bounded.\n"
+        f"Primary task just completed: {goal}\n"
+        f"Edited files: {edited}\n\n"
+        "Look for only adjacent issues or opportunities:\n"
+        "- missing or weak nearby tests\n"
+        "- repeated logic that should probably be centralized\n"
+        "- inconsistencies in nearby files touched by the same concept\n"
+        "- follow-on risks exposed by the change\n\n"
+        "Do not propose a broad rewrite. Return only the top 0-3 high-signal nearby findings."
     )
 
 
@@ -592,6 +621,8 @@ async def _classify_chat_turn_policy(
                 "Choose exactly one behavior label.\n"
                 "- Return `review` when the user asks to review, audit, inspect, or find issues in code.\n"
                 "- Return `research` when the user asks a read-only question about the repo, such as where something lives, how something works, what a file does, or to research/explain/cite code without editing it.\n"
+                "- Return `research` when the user asks to be caught up, build a mental model, understand architecture/conventions/testing/history, or act as a new contributor before making changes.\n"
+                "- Return `research` when the user asks for a context packet, source-of-truth map, conflict-aware context, or agent onboarding context before work.\n"
                 "- Return `workflow` when the user asks to set up long-running, durable, resumable, repeated, scheduled, reminder, or mission-style work in Harness.\n"
                 "- Return `general` when the user asks to build, edit, debug, explain, run, hand off, delegate, or otherwise do hands-on task work.\n"
                 "- If the user explicitly asks for a specialist handoff or delegation, return `general` so the main agent can use handoff tools.\n"
@@ -745,6 +776,14 @@ async def chat_loop(
         classifier_adapter = build_adapter(chain[0], base_url=base_url, config=config)
         specialist_cache: dict[str, Agent] = {}
 
+        def get_specialist_agent(policy: _ChatTurnPolicy) -> Agent:
+            cache_key = f"policy:{policy.name}"
+            specialist = specialist_cache.get(cache_key)
+            if specialist is None:
+                specialist = build_chat_agent(policy, allow_handoffs=False)
+                specialist_cache[cache_key] = specialist
+            return specialist
+
         def build_chat_agent(policy: _ChatTurnPolicy, *, allow_handoffs: bool = True) -> Agent:
             effective_verify = verify
             if policy.disable_verify:
@@ -804,10 +843,7 @@ async def chat_loop(
                     ),
                 )
                 for tool_name, specialist_policy, description in specialist_specs:
-                    specialist = specialist_cache.get(tool_name)
-                    if specialist is None:
-                        specialist = build_chat_agent(specialist_policy, allow_handoffs=False)
-                        specialist_cache[tool_name] = specialist
+                    specialist = get_specialist_agent(specialist_policy)
                     built_agent.tools.register(
                         cast(
                             Any,
@@ -847,7 +883,7 @@ async def chat_loop(
         def print_turn_banner(conversation: _ConversationState, *, background: bool) -> None:
             mode = "background" if background else "active"
             console.print(
-                f"\n[bold cyan]{escape(conversation.label)}[/bold cyan] " f"[dim]{mode} turn[/dim]"
+                f"\n[bold cyan]{escape(conversation.label)}[/bold cyan] [dim]{mode} turn[/dim]"
             )
 
         async def run_turn(
@@ -955,6 +991,30 @@ async def chat_loop(
                         "running the next relevant gate automatically[/dim]"
                     )
                     current_prompt = followup_prompt
+
+                adjacent_review_prompt = _build_adjacent_review_prompt(conversation.execution)
+                if (
+                    inferred_policy == _GENERAL_TURN_POLICY
+                    and adjacent_review_prompt is not None
+                    and not conversation.execution.adjacent_review_done
+                ):
+                    conversation.execution.adjacent_review_done = True
+                    console.print(
+                        "[cyan]↻ adjacent review[/cyan] [dim]checking nearby code for gaps or follow-on opportunities[/dim]"
+                    )
+                    review_agent = get_specialist_agent(_REVIEW_TURN_POLICY)
+                    review_render = _ChatRenderAdapter(console=console, default_render=render)
+                    review_render.set_policy(_REVIEW_TURN_POLICY)
+                    review_session_id = f"{conversation.session_id}_adjacent_review"
+                    review_request = RunRequest(
+                        prompt=adjacent_review_prompt,
+                        session_id=review_session_id,
+                        model=model,
+                        max_steps=max_steps,
+                        require_tool_use=False,
+                    )
+                    async for event in review_agent.run(review_request):
+                        review_render.render(event)
             except (KeyboardInterrupt, asyncio.CancelledError):
                 console.print(f"\n[yellow][{conversation.label}] cancelled[/yellow]")
                 raise

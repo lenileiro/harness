@@ -115,6 +115,34 @@ def vision_update_command(
     console.print(f"[green]Updated vision[/green] at {target}")
 
 
+_CATCH_UP_MODES: dict[str, str] = {
+    "architecture": (
+        "Explain the subsystem boundaries, important components, entry points, "
+        "data flow, and ownership seams."
+    ),
+    "convention": (
+        "Identify local conventions, naming patterns, API expectations, lint/test "
+        "norms, and gotchas the user must preserve."
+    ),
+    "feature-trace": (
+        "Trace one feature, request, command, or user-visible behavior across the "
+        "files that implement it."
+    ),
+    "syntax": (
+        "Explain the relevant configuration, command, type, schema, or API syntax "
+        "with small examples from the repository."
+    ),
+    "testing": (
+        "Explain how this area is tested, which fixtures matter, what commands are "
+        "appropriate, and where coverage gaps may exist."
+    ),
+    "history": (
+        "Use read-only git history to explain why the area looks the way it does "
+        "and which recent changes matter."
+    ),
+}
+
+
 def build_research_prompt(*, topic: str) -> str:
     return (
         "Research the following topic.\n\n"
@@ -124,6 +152,53 @@ def build_research_prompt(*, topic: str) -> str:
         "Once you have enough evidence, stop and return the final memo.\n\n"
         "Focus on the most decision-useful findings, key tradeoffs, and open questions.\n\n"
         "Return JSON only in the requested research memo shape.\n"
+    )
+
+
+def build_catch_up_prompt(*, topic: str, mode: str = "architecture") -> str:
+    normalized_mode = mode.strip().lower()
+    if normalized_mode not in _CATCH_UP_MODES:
+        valid = ", ".join(sorted(_CATCH_UP_MODES))
+        raise typer.BadParameter(f"--mode must be one of: {valid}")
+    return (
+        "Catch me up on the following repository topic before any implementation.\n\n"
+        f"Topic: {topic.strip()}\n"
+        f"Exploration mode: {normalized_mode}\n"
+        f"Mode focus: {_CATCH_UP_MODES[normalized_mode]}\n\n"
+        "Use repository evidence first. Stay read-only. Build the user's mental model; "
+        "do not produce implementation code unless it is a tiny excerpt needed to explain an API.\n\n"
+        "Return a concise Markdown brief with these sections:\n"
+        "1. Mental model\n"
+        "2. Map\n"
+        "3. Flow\n"
+        "4. Conventions\n"
+        "5. Evidence\n"
+        "6. Next questions\n"
+    )
+
+
+def build_context_packet_prompt(*, task: str) -> str:
+    return (
+        "Build a compact context packet for an agent before it plans, implements, or reviews work.\n\n"
+        f"Task: {task.strip()}\n\n"
+        "This is context-engine work, not naive RAG. Do not stop at the first plausible match. "
+        "Use targeted repository retrieval and read-only history when useful. Treat raw tool/MCP access "
+        "as insufficient unless you can explain which evidence matters and why.\n\n"
+        "Look specifically for:\n"
+        "- current sources of truth and the relevant files/components\n"
+        "- local implementation patterns, factories, services, APIs, or conventions to reuse\n"
+        "- conflicts between code, docs, comments, tests, history, or memory, plus which source seems authoritative\n"
+        "- visible permission, privacy, data-governance, or operational boundaries\n"
+        "- local expert/social signals available from repo evidence, such as CODEOWNERS or recent git authors, without exposing private data\n"
+        "- validation commands and code-review risks the execution agent should use\n\n"
+        "Return a token-optimized Markdown packet with these sections:\n"
+        "1. Task frame\n"
+        "2. Context packet\n"
+        "3. Sources of truth\n"
+        "4. Conflict checks\n"
+        "5. Boundaries and permissions\n"
+        "6. Execution and review guidance\n"
+        "7. Evidence\n"
     )
 
 
@@ -205,7 +280,7 @@ def research_command(
             predict=False,
             auto_compact=False,
             max_repair=1,
-            profile="minimal",
+            profile="bare",
             domain="research",
             phases=None,
             loop_detect=True,
@@ -229,6 +304,143 @@ def research_command(
         console.print(final_text or "")
 
 
+def catch_up_command(
+    *,
+    topic: str,
+    mode: str,
+    model: str | None,
+    provider: str | None,
+    failover: str | None,
+    base_url: str | None,
+    cwd: Path | None,
+    max_steps: int,
+    max_output_tokens: int | None,
+    db: Path | None,
+    in_memory: bool,
+    yes: bool,
+    verbose: bool,
+    config_path: Path | None,
+    console: Console,
+    load_cli_config: Any,
+    resolve_chain: Any,
+    run_async: Any,
+    run_once: Any,
+) -> None:
+    del verbose
+    working_dir = (cwd or Path.cwd()).resolve()
+    if not working_dir.exists() or not working_dir.is_dir():
+        console.print(f"[red]--cwd does not exist or is not a directory: {working_dir}[/red]")
+        raise typer.Exit(2)
+
+    cfg: HarnessConfig = load_cli_config(config_path)
+    chain = resolve_chain(failover_flag=failover, provider_flag=provider, config=cfg)
+    effective_model = model or cfg.default_model or "llama3.2"
+    prompt = build_catch_up_prompt(topic=topic, mode=mode)
+
+    run_async(
+        run_once(
+            prompt=prompt,
+            model=effective_model,
+            chain=chain,
+            base_url=base_url,
+            cwd=working_dir,
+            max_steps=max_steps,
+            max_output_tokens=max_output_tokens,
+            session_id=None,
+            task_ref=None,
+            db=db,
+            in_memory=in_memory,
+            yes=yes,
+            inbox=False,
+            verify="none",
+            verify_command=None,
+            critic=None,
+            require_tools=False,
+            goal=False,
+            max_context_tokens=None,
+            predict=False,
+            auto_compact=False,
+            max_repair=1,
+            profile="bare",
+            domain="comprehension",
+            phases=None,
+            loop_detect=True,
+            contracts=False,
+            tips=True,
+            silent=False,
+            config=cfg,
+        )
+    )
+
+
+def context_packet_command(
+    *,
+    task: str,
+    model: str | None,
+    provider: str | None,
+    failover: str | None,
+    base_url: str | None,
+    cwd: Path | None,
+    max_steps: int,
+    max_output_tokens: int | None,
+    db: Path | None,
+    in_memory: bool,
+    yes: bool,
+    verbose: bool,
+    config_path: Path | None,
+    console: Console,
+    load_cli_config: Any,
+    resolve_chain: Any,
+    run_async: Any,
+    run_once: Any,
+) -> None:
+    del verbose
+    working_dir = (cwd or Path.cwd()).resolve()
+    if not working_dir.exists() or not working_dir.is_dir():
+        console.print(f"[red]--cwd does not exist or is not a directory: {working_dir}[/red]")
+        raise typer.Exit(2)
+
+    cfg: HarnessConfig = load_cli_config(config_path)
+    chain = resolve_chain(failover_flag=failover, provider_flag=provider, config=cfg)
+    effective_model = model or cfg.default_model or "llama3.2"
+    prompt = build_context_packet_prompt(task=task)
+
+    run_async(
+        run_once(
+            prompt=prompt,
+            model=effective_model,
+            chain=chain,
+            base_url=base_url,
+            cwd=working_dir,
+            max_steps=max_steps,
+            max_output_tokens=max_output_tokens,
+            session_id=None,
+            task_ref=None,
+            db=db,
+            in_memory=in_memory,
+            yes=yes,
+            inbox=False,
+            verify="none",
+            verify_command=None,
+            critic=None,
+            require_tools=False,
+            goal=False,
+            max_context_tokens=None,
+            predict=False,
+            auto_compact=False,
+            max_repair=1,
+            profile="bare",
+            domain="comprehension",
+            phases=None,
+            loop_detect=True,
+            contracts=False,
+            tips=True,
+            silent=False,
+            config=cfg,
+        )
+    )
+
+
 @research_app.command("run")
 def research_run_command(
     topic: str = typer.Argument(..., help="Research topic or question."),
@@ -246,7 +458,7 @@ def research_run_command(
     verbose: bool = typer.Option(False, "--verbose", "-v"),
     config_path: Path | None = typer.Option(None, "--config"),
 ) -> None:
-    from harness.cli.run_commands import run_once as _run_once
+    from harness.cli.__main__ import _run_once
 
     research_command(
         topic=topic,
@@ -262,6 +474,96 @@ def research_run_command(
         yes=yes,
         verbose=verbose,
         json_output=json_output,
+        config_path=config_path,
+        console=console,
+        load_cli_config=_load_cli_config,
+        resolve_chain=_resolve_chain,
+        run_async=_run_async,
+        run_once=_run_once,
+    )
+
+
+@research_app.command("catch-up")
+def research_catch_up_command(
+    topic: str = typer.Argument(..., help="Repository topic, feature, convention, or question."),
+    mode: str = typer.Option(
+        "architecture",
+        "--mode",
+        "-M",
+        help=(
+            "Exploration mode: architecture, convention, feature-trace, "
+            "syntax, testing, or history."
+        ),
+    ),
+    model: str | None = typer.Option(None, "--model", "-m"),
+    provider: str | None = typer.Option(None, "--provider", "-p"),
+    failover: str | None = typer.Option(None, "--failover"),
+    base_url: str | None = typer.Option(None, "--base-url"),
+    cwd: Path | None = typer.Option(None, "--cwd"),
+    max_steps: int = typer.Option(20, "--max-steps"),
+    max_output_tokens: int | None = typer.Option(None, "--max-output-tokens"),
+    db: Path | None = typer.Option(None, "--db"),
+    in_memory: bool = typer.Option(False, "--in-memory"),
+    yes: bool = typer.Option(False, "--yes", "-y"),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+    config_path: Path | None = typer.Option(None, "--config"),
+) -> None:
+    from harness.cli.__main__ import _run_once
+
+    catch_up_command(
+        topic=topic,
+        mode=mode,
+        model=model,
+        provider=provider,
+        failover=failover,
+        base_url=base_url,
+        cwd=cwd,
+        max_steps=max_steps,
+        max_output_tokens=max_output_tokens,
+        db=db,
+        in_memory=in_memory,
+        yes=yes,
+        verbose=verbose,
+        config_path=config_path,
+        console=console,
+        load_cli_config=_load_cli_config,
+        resolve_chain=_resolve_chain,
+        run_async=_run_async,
+        run_once=_run_once,
+    )
+
+
+@research_app.command("context-packet")
+def research_context_packet_command(
+    task: str = typer.Argument(..., help="Work item that needs a compact context packet."),
+    model: str | None = typer.Option(None, "--model", "-m"),
+    provider: str | None = typer.Option(None, "--provider", "-p"),
+    failover: str | None = typer.Option(None, "--failover"),
+    base_url: str | None = typer.Option(None, "--base-url"),
+    cwd: Path | None = typer.Option(None, "--cwd"),
+    max_steps: int = typer.Option(30, "--max-steps"),
+    max_output_tokens: int | None = typer.Option(None, "--max-output-tokens"),
+    db: Path | None = typer.Option(None, "--db"),
+    in_memory: bool = typer.Option(False, "--in-memory"),
+    yes: bool = typer.Option(False, "--yes", "-y"),
+    verbose: bool = typer.Option(False, "--verbose", "-v"),
+    config_path: Path | None = typer.Option(None, "--config"),
+) -> None:
+    from harness.cli.__main__ import _run_once
+
+    context_packet_command(
+        task=task,
+        model=model,
+        provider=provider,
+        failover=failover,
+        base_url=base_url,
+        cwd=cwd,
+        max_steps=max_steps,
+        max_output_tokens=max_output_tokens,
+        db=db,
+        in_memory=in_memory,
+        yes=yes,
+        verbose=verbose,
         config_path=config_path,
         console=console,
         load_cli_config=_load_cli_config,
