@@ -126,7 +126,14 @@ class Renderer:
         elif isinstance(event, ToolResultEvent):
             elapsed = time.monotonic() - self._pending_start if self._pending_start else 0.0
             self._stop_spinner()
-            marker = "[red]✗[/red]" if event.result.is_error else "[green]✓[/green]"
+            partial = bool(event.result.metadata and event.result.metadata.get("partial"))
+            marker = (
+                "[cyan]…[/cyan]"
+                if partial
+                else "[red]✗[/red]"
+                if event.result.is_error
+                else "[green]✓[/green]"
+            )
             full_len = len(event.result.content)
             preview = _truncate(event.result.content, 200)
             suffix = f"  [dim]… {full_len:,} bytes[/dim]" if full_len > 200 else ""

@@ -49,6 +49,25 @@ class _HangingStdout:
         return b""
 
 
+class _IgnoredEventStdout:
+    async def readline(self) -> bytes:
+        await asyncio.sleep(0.002)
+        return (
+            json.dumps(
+                {
+                    "type": "item.updated",
+                    "item": {
+                        "id": "cmd1",
+                        "type": "command_execution",
+                        "aggregated_output": "",
+                        "status": "running",
+                    },
+                }
+            ).encode()
+            + b"\n"
+        )
+
+
 class _FakeStderr:
     def __init__(self, payload: bytes = b"") -> None:
         self._payload = payload
@@ -75,6 +94,12 @@ class _HangingProcess(_FakeProcess):
     def __init__(self) -> None:
         super().__init__(lines=[])
         self.stdout = _HangingStdout()
+
+
+class _IgnoredEventProcess(_FakeProcess):
+    def __init__(self) -> None:
+        super().__init__(lines=[])
+        self.stdout = _IgnoredEventStdout()
 
 
 async def _collect(it) -> list:
@@ -218,6 +243,75 @@ class TestStream:
         assert done.usage.prompt_tokens == 10
         assert done.usage.cache_read_input_tokens == 4
 
+    async def test_stream_surfaces_partial_command_updates(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        codex_dir = tmp_path / ".codex"
+        codex_dir.mkdir()
+        (codex_dir / "auth.json").write_text(
+            json.dumps({"auth_mode": "chatgpt", "tokens": {"access_token": "oauth-token"}}),
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        monkeypatch.setattr("shutil.which", lambda _name: "/usr/bin/codex")
+
+        lines = [
+            json.dumps(
+                {
+                    "type": "item.started",
+                    "item": {
+                        "id": "cmd1",
+                        "type": "command_execution",
+                        "command": "pytest -q",
+                    },
+                }
+            ).encode()
+            + b"\n",
+            json.dumps(
+                {
+                    "type": "item.updated",
+                    "item": {
+                        "id": "cmd1",
+                        "type": "command_execution",
+                        "command": "pytest -q",
+                        "aggregated_output": "collecting tests...\n",
+                        "status": "running",
+                    },
+                }
+            ).encode()
+            + b"\n",
+            json.dumps(
+                {
+                    "type": "item.completed",
+                    "item": {
+                        "id": "cmd1",
+                        "type": "command_execution",
+                        "command": "pytest -q",
+                        "aggregated_output": "collecting tests...\n1 passed\n",
+                        "exit_code": 0,
+                    },
+                }
+            ).encode()
+            + b"\n",
+        ]
+
+        async def fake_exec(*_args, **_kwargs):
+            return _FakeProcess(lines=lines)
+
+        monkeypatch.setattr("asyncio.create_subprocess_exec", fake_exec)
+
+        adapter = CodexAdapter(cwd=tmp_path)
+        events = await _collect(
+            adapter.stream(model="gpt-5.5", messages=[Message(role="user", content="test")])
+        )
+
+        tool_results = [event for event in events if isinstance(event, ToolResultEvent)]
+        assert len(tool_results) == 2
+        assert tool_results[0].result.content == "collecting tests...\n"
+        assert tool_results[0].result.metadata is not None
+        assert tool_results[0].result.metadata["partial"] is True
+        assert tool_results[1].result.content == "collecting tests...\n1 passed\n"
+
     async def test_nonzero_exit_maps_auth_failures_to_configuration_error(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
@@ -260,7 +354,33 @@ class TestStream:
         monkeypatch.setattr("asyncio.create_subprocess_exec", fake_exec)
         adapter = CodexAdapter(cwd=tmp_path, timeout=60.0, idle_timeout=0.01)
 
-        with pytest.raises(HarnessTimeoutError, match="produced no output"):
+        with pytest.raises(HarnessTimeoutError, match="produced no visible output"):
+            await _collect(
+                adapter.stream(model="gpt-5.5", messages=[Message(role="user", content="hi")])
+            )
+        assert process.terminated is True
+
+    async def test_ignored_codex_events_do_not_mask_visible_idle_timeout(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        codex_dir = tmp_path / ".codex"
+        codex_dir.mkdir()
+        (codex_dir / "auth.json").write_text(
+            json.dumps({"auth_mode": "chatgpt", "tokens": {"access_token": "oauth-token"}}),
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        monkeypatch.setattr("shutil.which", lambda _name: "/usr/bin/codex")
+
+        process = _IgnoredEventProcess()
+
+        async def fake_exec(*_args, **_kwargs):
+            return process
+
+        monkeypatch.setattr("asyncio.create_subprocess_exec", fake_exec)
+        adapter = CodexAdapter(cwd=tmp_path, timeout=60.0, idle_timeout=0.01)
+
+        with pytest.raises(HarnessTimeoutError, match="produced no visible output"):
             await _collect(
                 adapter.stream(model="gpt-5.5", messages=[Message(role="user", content="hi")])
             )

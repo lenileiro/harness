@@ -35,6 +35,9 @@ from harness.core.errors import TimeoutError as HarnessTimeoutError
 
 __version__ = "0.0.0"
 
+_PARTIAL_TOOL_OUTPUT_LIMIT = 4_096
+_PARTIAL_TOOL_PROGRESS_INTERVAL = 10.0
+
 
 def _auth_path() -> Path:
     return Path.home() / ".codex" / "auth.json"
@@ -174,24 +177,41 @@ class CodexAdapter:
         stderr_task = asyncio.create_task(proc.stderr.read() if proc.stderr else _empty_bytes())
         assistant_text: str | None = None
         usage: Usage | None = None
+        return_code: int | None = None
+        stderr_bytes = b""
         tool_calls: dict[str, ToolCall] = {}
+        tool_output_lengths: dict[str, int] = {}
+        next_tool_progress_at: dict[str, float] = {}
         ignored_lines: list[str] = []
 
         try:
             assert proc.stdout is not None
-            deadline = asyncio.get_running_loop().time() + self.timeout
+            loop = asyncio.get_running_loop()
+            deadline = loop.time() + self.timeout
+            visible_deadline = loop.time() + self.idle_timeout
             while True:
-                remaining = deadline - asyncio.get_running_loop().time()
+                now = loop.time()
+                remaining = deadline - now
                 if remaining <= 0:
                     raise HarnessTimeoutError(
                         f"Codex CLI request timed out after {self.timeout:.0f}s"
                     )
-                line_timeout = min(remaining, self.idle_timeout)
+                visible_remaining = visible_deadline - now
+                if visible_remaining <= 0:
+                    raise HarnessTimeoutError(
+                        "Codex CLI produced no visible output for "
+                        f"{self.idle_timeout:.0f}s; terminating stalled provider run"
+                    )
+                line_timeout = min(remaining, visible_remaining)
                 try:
                     raw_line = await asyncio.wait_for(proc.stdout.readline(), timeout=line_timeout)
                 except TimeoutError as exc:
+                    if deadline - loop.time() <= 0:
+                        raise HarnessTimeoutError(
+                            f"Codex CLI request timed out after {self.timeout:.0f}s"
+                        ) from exc
                     raise HarnessTimeoutError(
-                        "Codex CLI produced no output for "
+                        "Codex CLI produced no visible output for "
                         f"{self.idle_timeout:.0f}s; terminating stalled provider run"
                     ) from exc
                 if not raw_line:
@@ -214,7 +234,53 @@ class CodexAdapter:
                             arguments={"command": str(item.get("command", ""))},
                         )
                         tool_calls[call.id] = call
+                        visible_deadline = loop.time() + self.idle_timeout
                         yield ToolCallEvent(call=call)
+                        visible_deadline = loop.time() + self.idle_timeout
+                elif event_type == "item.updated":
+                    item = event.get("item") or {}
+                    if item.get("type") == "command_execution":
+                        tool_id = str(item.get("id", "codex-command"))
+                        command = str(item.get("command", ""))
+                        call = tool_calls.get(tool_id)
+                        if call is None:
+                            call = ToolCall(
+                                id=tool_id,
+                                name="shell",
+                                arguments={"command": command},
+                            )
+                            tool_calls[call.id] = call
+                            visible_deadline = loop.time() + self.idle_timeout
+                            yield ToolCallEvent(call=call)
+                            visible_deadline = loop.time() + self.idle_timeout
+                        output = str(item.get("aggregated_output", ""))
+                        previous_len = tool_output_lengths.get(tool_id, 0)
+                        tool_output_lengths[tool_id] = max(previous_len, len(output))
+                        if len(output) > previous_len:
+                            now = loop.time()
+                            if now >= next_tool_progress_at.get(tool_id, 0.0):
+                                result = ToolResult(
+                                    tool_call_id=call.id,
+                                    name=call.name,
+                                    content=_tail(
+                                        output[previous_len:] or output,
+                                        _PARTIAL_TOOL_OUTPUT_LIMIT,
+                                    ),
+                                    is_error=False,
+                                    metadata={
+                                        "command": call.arguments.get("command", ""),
+                                        "backend": "codex",
+                                        "partial": True,
+                                        "status": item.get("status"),
+                                        "bytes_seen": len(output),
+                                    },
+                                )
+                                next_tool_progress_at[tool_id] = (
+                                    now + _PARTIAL_TOOL_PROGRESS_INTERVAL
+                                )
+                                visible_deadline = loop.time() + self.idle_timeout
+                                yield ToolResultEvent(result=result)
+                                visible_deadline = loop.time() + self.idle_timeout
                 elif event_type == "item.completed":
                     item = event.get("item") or {}
                     item_type = item.get("type")
@@ -222,7 +288,9 @@ class CodexAdapter:
                         text = str(item.get("text", ""))
                         if text:
                             assistant_text = text
+                            visible_deadline = loop.time() + self.idle_timeout
                             yield TextDelta(text=text)
+                            visible_deadline = loop.time() + self.idle_timeout
                     elif item_type == "command_execution":
                         tool_id = str(item.get("id", "codex-command"))
                         call = tool_calls.get(tool_id) or ToolCall(
@@ -232,6 +300,7 @@ class CodexAdapter:
                         )
                         tool_calls[tool_id] = call
                         output = str(item.get("aggregated_output", ""))
+                        tool_output_lengths[tool_id] = len(output)
                         exit_code = item.get("exit_code")
                         result = ToolResult(
                             tool_call_id=call.id,
@@ -244,7 +313,9 @@ class CodexAdapter:
                                 "backend": "codex",
                             },
                         )
+                        visible_deadline = loop.time() + self.idle_timeout
                         yield ToolResultEvent(result=result)
+                        visible_deadline = loop.time() + self.idle_timeout
                 elif event_type == "turn.completed":
                     raw_usage = event.get("usage") or {}
                     usage = Usage(
@@ -258,14 +329,27 @@ class CodexAdapter:
         except HarnessTimeoutError:
             await _terminate_process(proc)
             raise
+        except asyncio.CancelledError:
+            await _terminate_process(proc)
+            raise
         except TimeoutError as exc:
             await _terminate_process(proc)
             raise HarnessTimeoutError(
                 f"Codex CLI request timed out after {self.timeout:.0f}s"
             ) from exc
+        except Exception:
+            await _terminate_process(proc)
+            raise
         finally:
-            stderr_bytes = await stderr_task
+            if stderr_task.done() or return_code is not None:
+                stderr_bytes = await stderr_task
+            else:
+                stderr_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await stderr_task
 
+        if return_code is None:
+            raise InternalError("Codex CLI exited without a status")
         stderr_text = stderr_bytes.decode("utf-8", errors="replace").strip()
         if return_code != 0:
             error_text = stderr_text or "\n".join(ignored_lines) or "unknown Codex CLI failure"
@@ -280,6 +364,12 @@ class CodexAdapter:
 
 async def _empty_bytes() -> bytes:
     return b""
+
+
+def _tail(text: str, limit: int) -> str:
+    if len(text) <= limit:
+        return text
+    return text[-limit:]
 
 
 async def _terminate_process(proc: Any) -> None:

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
 import subprocess
+import time
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -149,6 +151,29 @@ def _parse_reminder_intent(text: str) -> tuple[str, str, str, str] | None:
 
 
 def _launch_scheduler_watcher(*, cwd: Path, wait_seconds: int, recurring: bool = False) -> None:
+    watcher_root = cwd / ".harness" / "gateway"
+    watcher_root.mkdir(parents=True, exist_ok=True)
+    watcher_pid_path = watcher_root / "scheduler-watcher.pid"
+    if watcher_pid_path.is_file():
+        try:
+            raw_record = watcher_pid_path.read_text(encoding="utf-8").strip()
+            try:
+                record = json.loads(raw_record)
+            except json.JSONDecodeError:
+                record = {"pid": int(raw_record)}
+            existing_pid = int(record["pid"])
+            os.kill(existing_pid, 0)
+            existing_recurring = bool(record.get("recurring", False))
+            existing_expires_at = record.get("expires_at")
+            existing_covers_request = existing_recurring or (
+                not recurring
+                and isinstance(existing_expires_at, int | float)
+                and float(existing_expires_at) >= time.time() + wait_seconds
+            )
+            if existing_covers_request:
+                return
+        except (OSError, TypeError, ValueError, KeyError):
+            watcher_pid_path.unlink(missing_ok=True)
     uv_bin = shutil.which("uv") or "uv"
     poll_interval = 5.0 if wait_seconds >= 30 else 1.0
     command = [
@@ -162,10 +187,11 @@ def _launch_scheduler_watcher(*, cwd: Path, wait_seconds: int, recurring: bool =
         "--poll-interval",
         str(poll_interval),
     ]
+    max_ticks: int | None = None
     if not recurring:
         max_ticks = max(6, int(wait_seconds / poll_interval) + 12)
         command.extend(["--max-ticks", str(max_ticks)])
-    subprocess.Popen(
+    process = subprocess.Popen(
         command,
         cwd=str(cwd),
         stdout=subprocess.DEVNULL,
@@ -174,6 +200,15 @@ def _launch_scheduler_watcher(*, cwd: Path, wait_seconds: int, recurring: bool =
         start_new_session=True,
         env=os.environ.copy(),
     )
+    pid = getattr(process, "pid", None)
+    if isinstance(pid, int) and pid > 0:
+        expires_at = (
+            None if recurring or max_ticks is None else time.time() + max_ticks * poll_interval
+        )
+        watcher_pid_path.write_text(
+            json.dumps({"pid": pid, "recurring": recurring, "expires_at": expires_at}),
+            encoding="utf-8",
+        )
 
 
 def _dispatch_reminder_create(

@@ -158,6 +158,79 @@ def test_gateway_router_can_schedule_daily_reminder(tmp_path: Path, monkeypatch)
     assert "--max-ticks" not in cast(list[str], launched["args"])
 
 
+def test_gateway_router_reuses_existing_scheduler_watcher(tmp_path: Path, monkeypatch) -> None:
+    session_store = GatewaySessionStore(root=tmp_path / ".harness" / "gateway")
+    scheduler_store = SchedulerStore(root=tmp_path / ".harness" / "scheduler")
+    launches: list[list[str]] = []
+
+    class PopenStub:
+        def __init__(self, args, **kwargs) -> None:
+            self.pid = 4242
+            launches.append(list(args))
+
+    monkeypatch.setattr("harness.core.gateway_router.subprocess.Popen", PopenStub)
+    monkeypatch.setattr("harness.core.gateway_router.os.kill", lambda pid, sig: None)
+
+    async def _run(text: str) -> None:
+        reply, _ = await dispatch_gateway_message(
+            cwd=tmp_path,
+            session_store=session_store,
+            scheduler_store=scheduler_store,
+            message=GatewayMessage(
+                id=f"msg-{text}",
+                transport="whatsapp",
+                user_id="15551234567",
+                thread_id="15551234567@s.whatsapp.net",
+                text=text,
+            ),
+        )
+        assert reply.command == "reminder.create"
+        assert reply.status == "ok"
+
+    asyncio.run(_run("remind me in 2 minutes to check the deploy"))
+    asyncio.run(_run("remind me in 1 minute to check the build"))
+
+    assert len(launches) == 1
+
+
+def test_gateway_router_launches_watcher_when_existing_one_expires_too_soon(
+    tmp_path: Path, monkeypatch
+) -> None:
+    session_store = GatewaySessionStore(root=tmp_path / ".harness" / "gateway")
+    scheduler_store = SchedulerStore(root=tmp_path / ".harness" / "scheduler")
+    launches: list[list[str]] = []
+
+    class PopenStub:
+        def __init__(self, args, **kwargs) -> None:
+            self.pid = 4242 + len(launches)
+            launches.append(list(args))
+
+    monkeypatch.setattr("harness.core.gateway_router.subprocess.Popen", PopenStub)
+    monkeypatch.setattr("harness.core.gateway_router.os.kill", lambda pid, sig: None)
+    monkeypatch.setattr("harness.core.gateway_router.time.time", lambda: 1000.0)
+
+    async def _run(text: str) -> None:
+        reply, _ = await dispatch_gateway_message(
+            cwd=tmp_path,
+            session_store=session_store,
+            scheduler_store=scheduler_store,
+            message=GatewayMessage(
+                id=f"msg-{text}",
+                transport="whatsapp",
+                user_id="15551234567",
+                thread_id="15551234567@s.whatsapp.net",
+                text=text,
+            ),
+        )
+        assert reply.command == "reminder.create"
+        assert reply.status == "ok"
+
+    asyncio.run(_run("remind me in 1 minute to check the build"))
+    asyncio.run(_run("remind me in 2 hours to check the deploy"))
+
+    assert len(launches) == 2
+
+
 def test_gateway_router_can_schedule_weekday_reminder(tmp_path: Path, monkeypatch) -> None:
     session_store = GatewaySessionStore(root=tmp_path / ".harness" / "gateway")
     scheduler_store = SchedulerStore(root=tmp_path / ".harness" / "scheduler")
