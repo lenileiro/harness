@@ -10,6 +10,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+import typer
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
@@ -53,6 +54,7 @@ from harness.core import (
     ToolCall,
     ToolCallEvent,
     ToolResult,
+    Verification,
 )
 from harness.core.activity import ActivityEvent
 from harness.core.events import ErrorEvent
@@ -5262,6 +5264,87 @@ async def test_external_environment_runner_preserves_verification_snapshot_after
     assert context.metadata["latest_verification_command"] == ("python -m pytest tests/test_app.py")
     assert context.metadata["verification_passed_after_source_change"] is True
     assert context.metadata["verification_error"] is None
+
+
+@pytest.mark.asyncio
+async def test_external_environment_runner_preserves_completion_verifier_rejection(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    adapter = CoverageReviewAdapter(
+        {
+            "can_finish": False,
+            "reason": "changed tests do not exercise the requested syntax",
+            "confidence": 0.91,
+        }
+    )
+    monkeypatch.setenv("HARNESS_EXTERNAL_WORKSPACE_COVERAGE_REVIEW", "1")
+    monkeypatch.setattr("harness.cli.external_workspace._build_adapter", lambda *_a, **_kw: adapter)
+
+    async def fake_run_once(**kwargs: object) -> str:
+        render = kwargs["render"]
+        build_verifier = kwargs["build_verifier"]
+        assert callable(render)
+        assert callable(build_verifier)
+        (tmp_path / "src").mkdir()
+        (tmp_path / "tests").mkdir()
+        (tmp_path / "src" / "app.py").write_text("VALUE = 'fixed'\n", encoding="utf-8")
+        (tmp_path / "tests" / "test_app.py").write_text(
+            "def test_app():\n    assert True\n",
+            encoding="utf-8",
+        )
+        verifier = build_verifier()
+        result = await verifier.verify(
+            session=SimpleNamespace(
+                messages=[Message(role="assistant", content="implemented the syntax")]
+            ),
+            activity=[
+                _completed("write_file", metadata={"path": "src/app.py"}),
+                _completed("write_file", metadata={"path": "tests/test_app.py"}),
+                _completed(
+                    "verify_work",
+                    metadata={
+                        "command": "python -m pytest tests/test_app.py",
+                        "exit_code": 0,
+                    },
+                    content_preview="PASSED\n\nstdout:\n1 passed\n",
+                ),
+            ],
+        )
+        assert result.can_finish is False
+        render(Verification(result=result))
+        raise typer.Exit(2)
+
+    monkeypatch.setattr("harness.cli.external_workspace._harness_run_once", fake_run_once)
+    await LocalEnvironment(tmp_path).exec("git init")
+    context = SimpleNamespace(n_agent_steps=0, metadata={})
+
+    with pytest.raises(RuntimeError, match="Regression coverage is too weak"):
+        await run_harness_on_external_environment(
+            instruction="add support for default argument syntax",
+            environment=LocalEnvironment(tmp_path),
+            context=context,
+            logs_dir=str(tmp_path / "logs"),
+            source_change_retries=0,
+            verification_retries=0,
+            pass_timeout_seconds=20,
+        )
+
+    assert context.metadata["source_change_paths"] == ["src/app.py"]
+    assert context.metadata["test_change_paths"] == ["tests/test_app.py"]
+    assert context.metadata["latest_verification_command"] == ("python -m pytest tests/test_app.py")
+    assert context.metadata["verification_passed_after_source_change"] is True
+    assert context.metadata["verification_error"] is None
+    assert context.metadata["run_error"] == "harness run exited with 2"
+    assert context.metadata["completion_verification_can_finish"] is False
+    assert context.metadata["completion_verifier_name"] == "chained"
+    assert "Regression coverage is too weak" in str(
+        context.metadata["completion_verification_reason"]
+    )
+    assert (
+        context.metadata["completion_verification_error"]
+        == context.metadata["completion_verification_reason"]
+    )
 
 
 @pytest.mark.asyncio

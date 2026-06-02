@@ -43,6 +43,7 @@ from harness.core import (
     ToolRegistry,
     ToolResult,
     ToolResultEvent,
+    Verification,
 )
 from harness.core.activity import ActivityEvent
 from harness.core.schemas import VerificationResult
@@ -5064,6 +5065,26 @@ def _snapshot_has_external_workspace_state(
     )
 
 
+def _completion_verification_metadata(
+    result: VerificationResult | None,
+) -> dict[str, Any]:
+    if result is None:
+        return {
+            "completion_verification_can_finish": None,
+            "completion_verification_reason": None,
+            "completion_verification_confidence": None,
+            "completion_verifier_name": None,
+            "completion_verification_error": None,
+        }
+    return {
+        "completion_verification_can_finish": result.can_finish,
+        "completion_verification_reason": result.reason,
+        "completion_verification_confidence": result.confidence,
+        "completion_verifier_name": result.verifier_name,
+        "completion_verification_error": None if result.can_finish else result.reason,
+    }
+
+
 async def run_harness_on_external_environment(
     *,
     instruction: str,
@@ -5113,6 +5134,7 @@ async def run_harness_on_external_environment(
     latest_runtime_error_kind: str | None = None
     latest_runtime_error: str | None = None
     latest_runtime_error_recoverable = False
+    latest_completion_verification: VerificationResult | None = None
     effective_model: str | None = None
     model_selection: dict[str, Any] | None = None
     snapshot = ExternalWorkspaceVerificationSnapshot()
@@ -5232,6 +5254,7 @@ async def run_harness_on_external_environment(
             latest_runtime_error_kind = None
             latest_runtime_error = None
             latest_runtime_error_recoverable = False
+            latest_completion_verification = None
             effective_model = None
             model_selection = None
             session_id = f"sess_harness_external_{uuid4().hex[:12]}"
@@ -5243,6 +5266,7 @@ async def run_harness_on_external_environment(
                 nonlocal latest_runtime_error_kind
                 nonlocal latest_runtime_error
                 nonlocal latest_runtime_error_recoverable
+                nonlocal latest_completion_verification
                 nonlocal effective_model
                 nonlocal model_selection
                 event_count += 1
@@ -5265,6 +5289,8 @@ async def run_harness_on_external_environment(
                     latest_runtime_error_recoverable = event.recoverable
                     run_error = f"{event.kind}: {event.error}"
                     log.write(f"\nError ({event.kind}): {event.error}\n")
+                elif isinstance(event, Verification):
+                    latest_completion_verification = event.result
                 elif isinstance(event, ModelSelectedEvent):
                     effective_model = event.model
                     model_selection = {
@@ -5393,6 +5419,7 @@ async def run_harness_on_external_environment(
                     "verification_passed_after_source_change": (
                         snapshot.verification_passed_after_source_change
                     ),
+                    **_completion_verification_metadata(latest_completion_verification),
                 }
             )
             if _should_retry_external_workspace_with_fallback(
@@ -5429,6 +5456,7 @@ async def run_harness_on_external_environment(
         "latest_runtime_error": latest_runtime_error,
         "latest_runtime_error_recoverable": latest_runtime_error_recoverable,
         **snapshot.to_metadata(),
+        **_completion_verification_metadata(latest_completion_verification),
         "source_change_retries_used": None,
         "verification_retries_used": None,
         "repair_attempt_budget": repair_attempts,
@@ -5446,6 +5474,11 @@ async def run_harness_on_external_environment(
         raise RuntimeError(source_change_error)
     if verification_error is not None:
         raise RuntimeError(verification_error)
+    completion_error = _completion_verification_metadata(latest_completion_verification)[
+        "completion_verification_error"
+    ]
+    if completion_error is not None:
+        raise RuntimeError(str(completion_error))
     if run_error is not None:
         raise RuntimeError(run_error)
 

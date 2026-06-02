@@ -65,7 +65,7 @@ Harness eval borrows that shape but reports only local Harness evidence.
 
 | Task | Language | Category | Run root | Model reward | Harness outcome | Leak scan | Reference calibration | Main signal |
 |---|---|---|---|---:|---|---|---|---|
-| `anko-default-function-arguments` | Go | Feature | `evals/results/deepswe/anko-default-function-arguments-53c504a4` | 0 | Failed | Clean | Not rerun | Harness forced Docker and `--network none` verification, then rejected weak coverage; the agent never repaired the generated parser and deleted `parser.go.y`. |
+| `anko-default-function-arguments` | Go | Feature | `evals/results/deepswe/anko-default-function-arguments-1f08cee2` | 0 | Failed | Clean | Not rerun | Latest run reached passing public no-network verification, then removed behavior-specific tests; Harness semantic coverage rejected completion and now exports that verifier reason in run metadata. |
 | `mashumaro-flattened-dataclass-fields` | Python | Feature | `evals/results/deepswe/mashumaro-flattened-dataclass-fields-a7fbbf03` | 0 | Failed | Clean | Not rerun | Latest `verify_work` after source changes still failed. |
 | `aiomonitor-task-snapshots-diff` | Python | Feature | `evals/results/deepswe/aiomonitor-task-snapshots-diff-d19773de` | 0 | Failed | Clean | Not rerun | Agent stopped around host dependency/setup failure instead of fully preparing the environment. |
 | `arktype-json-schema-refs-dependencies` | TypeScript | Feature | `evals/results/deepswe/arktype-json-schema-refs-dependencies-0804cefd` | 0 | Failed | Clean | Not rerun | Source changes were not followed by passing in-repository verification. |
@@ -98,6 +98,9 @@ Issues exposed and fixed during this DeepSWE phase:
 - `56eb2e54` - rejected git inspection as verify work.
 - `998edddf` - required public offline DeepSWE verification before hidden
   grading.
+- Current change - exported final completion-verifier rejection metadata so
+  semantic coverage failures are visible in `outcome.json` instead of appearing
+  only as generic exit-code failures.
 
 ## Failure patterns
 
