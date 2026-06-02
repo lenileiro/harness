@@ -9,6 +9,9 @@ blind to which arm produced the output.
 The point: produce executed evidence about whether the harness's defenses
 help, hurt, or wash on capable hosted models.
 
+For external long-horizon repository tasks, see the DeepSWE-style snapshot in
+[evals/DEEPSWE_RESULTS.md](DEEPSWE_RESULTS.md).
+
 ## Bottom line
 
 After tool-surface hardening (commit `77c80ff`) and the F04 fixture

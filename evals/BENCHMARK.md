@@ -60,6 +60,9 @@ That gives 32 runnable fixtures across public, mutated, and holdout sets.
 - Keep DeepSWE out of normal CI. Run it manually or in a dedicated nightly job
   with explicit provider credentials and Docker capacity.
 
+Current DeepSWE-style external run results live in
+[evals/DEEPSWE_RESULTS.md](DEEPSWE_RESULTS.md).
+
 ## External DeepSWE goal test
 
 Use a DeepSWE checkout as the external benchmark source and a clean target clone

@@ -687,6 +687,8 @@ Those adjustments are written into `harness_adjustments.json` beside the other
 run artifacts and can be inspected or exported with the eval CLI.
 
 For benchmark rules and asset layout, see [evals/BENCHMARK.md](evals/BENCHMARK.md).
+For the current external DeepSWE-style results snapshot, see
+[evals/DEEPSWE_RESULTS.md](evals/DEEPSWE_RESULTS.md).
 
 ## Development Workflow
 
