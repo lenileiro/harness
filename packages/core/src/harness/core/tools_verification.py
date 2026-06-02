@@ -104,6 +104,15 @@ _VERIFY_BASE_DESCRIPTION = (
 )
 
 
+_GIT_INSPECTION_SUBCOMMANDS = {
+    "branch",
+    "diff",
+    "log",
+    "ls-files",
+    "rev-parse",
+    "show",
+    "status",
+}
 _NONZERO_EXIT_RE = re.compile(r"\b(?:exit|return)\s+[1-9]\d*\b")
 _GIT_STATUS_COMMAND = ("git", "status", "--porcelain", "--untracked-files=all")
 _GENERATED_STATUS_PARTS = {
@@ -369,6 +378,8 @@ def _segment_is_noop_verification(segment: str) -> bool:
                 return _verification_command_is_noop(tokens[index + 1])
     if executable in {"docker", "podman", "nerdctl"}:
         return _container_command_is_noop_verification(tokens)
+    if executable == "git" and len(tokens) > 1:
+        return tokens[1].lower() in _GIT_INSPECTION_SUBCOMMANDS
     return False
 
 

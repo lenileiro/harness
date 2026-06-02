@@ -2574,6 +2574,8 @@ async def test_remote_verify_work_tool_rejects_noop_commands(tmp_path: Path) -> 
 
     direct = await verify(_call("verify_work", command="true"))
     chained = await verify(_call("verify_work", command="cd . && true"))
+    git_diff = await verify(_call("verify_work", command="git diff --name-only"))
+    git_status = await verify(_call("verify_work", command="cd . && git status --porcelain"))
     container_wrapped = await verify(
         _call(
             "verify_work",
@@ -2586,8 +2588,11 @@ async def test_remote_verify_work_tool_rejects_noop_commands(tmp_path: Path) -> 
     assert container_wrapped.is_error is True
     assert direct.metadata["reason"] == "noop_verification_command"
     assert chained.metadata["reason"] == "noop_verification_command"
+    assert git_diff.metadata["reason"] == "noop_verification_command"
+    assert git_status.metadata["reason"] == "noop_verification_command"
     assert container_wrapped.metadata["reason"] == "noop_verification_command"
     assert "meaningful check" in direct.content
+    assert "meaningful check" in git_diff.content
 
 
 @pytest.mark.asyncio
