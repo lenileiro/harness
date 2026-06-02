@@ -4588,10 +4588,13 @@ class ExternalWorkspaceVerifier:
                     "Passing verify_work did not reproduce the public check inside the "
                     "declared no-network task image. Public task metadata declares "
                     f"`{self.policy.required_no_network_verify_image}` with network "
-                    "disabled for isolated grading; run the relevant project check in "
-                    "that Docker image with `--network none`, using the current target "
-                    "checkout, then call verify_work again. Do not use hidden tests or "
-                    "reference solutions."
+                    "disabled for isolated grading; the final passing verification "
+                    "attempt must run the relevant project check inside that Docker "
+                    "image with `--network none`, using the current target checkout. "
+                    "Call verify_work with the Docker command itself instead of "
+                    "running Docker separately and then following it with a local-only "
+                    "verify_work command. Do not use hidden tests or reference "
+                    "solutions."
                 )
                 snapshot.verification_error = snapshot.latest_verification_error
                 return VerificationResult(

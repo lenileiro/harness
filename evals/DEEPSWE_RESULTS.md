@@ -66,7 +66,7 @@ Harness eval borrows that shape but reports only local Harness evidence.
 | Task | Language | Category | Run root | Model reward | Harness outcome | Leak scan | Reference calibration | Main signal |
 |---|---|---|---|---:|---|---|---|---|
 | `anko-default-function-arguments` | Go | Feature | `evals/results/deepswe/anko-default-function-arguments-1f08cee2` | 0 | Failed | Clean | Not rerun | Latest run reached passing public no-network verification, then removed behavior-specific tests; Harness semantic coverage rejected completion and now exports that verifier reason in run metadata. |
-| `mashumaro-flattened-dataclass-fields` | Python | Feature | `evals/results/deepswe/mashumaro-flattened-dataclass-fields-a7fbbf03` | 0 | Failed | Clean | Not rerun | Latest `verify_work` after source changes still failed. |
+| `mashumaro-flattened-dataclass-fields` | Python | Feature | `evals/results/deepswe/mashumaro-flattened-dataclass-fields-461c6ca7` | 0 | Failed | Clean | Not rerun | Latest run produced only helper signature changes plus failing flatten tests; Harness rejected failed/stale verification and the final setup/permission handoff. |
 | `aiomonitor-task-snapshots-diff` | Python | Feature | `evals/results/deepswe/aiomonitor-task-snapshots-diff-d19773de` | 0 | Failed | Clean | Not rerun | Agent stopped around host dependency/setup failure instead of fully preparing the environment. |
 | `arktype-json-schema-refs-dependencies` | TypeScript | Feature | `evals/results/deepswe/arktype-json-schema-refs-dependencies-0804cefd` | 0 | Failed | Clean | Not rerun | Source changes were not followed by passing in-repository verification. |
 | `happy-dom-abort-pending-body-reads` | TypeScript | Bugfix | `evals/results/deepswe/happy-dom-abort-pending-body-reads-62a432f7` | 0 | Failed | Clean | Not rerun | Agent asked to continue rather than autonomously finishing from available tools. |
@@ -98,9 +98,12 @@ Issues exposed and fixed during this DeepSWE phase:
 - `56eb2e54` - rejected git inspection as verify work.
 - `998edddf` - required public offline DeepSWE verification before hidden
   grading.
-- Current change - exported final completion-verifier rejection metadata so
+- `b0286b4b` - exported final completion-verifier rejection metadata so
   semantic coverage failures are visible in `outcome.json` instead of appearing
   only as generic exit-code failures.
+- Current change - clarified no-network verifier repair guidance so the final
+  `verify_work` command itself runs the declared Docker image instead of a
+  misleading shell-Docker-plus-local-verify sequence.
 
 ## Failure patterns
 
@@ -119,6 +122,10 @@ defense behavior:
   public no-network tests, then behavior-specific tests exposed that the
   generated parser was still untouched. The model removed those tests and
   deleted `parser.go.y` instead of repairing the generated artifact.
+- **Container verification wording matters.** The latest Mashumaro run showed
+  that ambiguous no-network repair text can push the model into running Docker
+  with `shell` and then following it with local-only `verify_work`, which the
+  Harness correctly rejects but should guide more directly.
 - **Tracked source deletion is now a completion blocker by default.** External
   workspace verification records `deleted_source_paths` and refuses completion
   when tracked implementation files disappear without an explicit policy opt-out.

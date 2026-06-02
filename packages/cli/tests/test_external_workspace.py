@@ -4742,6 +4742,8 @@ async def test_external_workspace_verifier_requires_public_no_network_image_chec
     assert result.can_finish is False
     assert "declared no-network task image" in result.reason
     assert "public.example/task:latest" in result.reason
+    assert "verify_work with the Docker command itself" in result.reason
+    assert "local-only verify_work" in result.reason
 
 
 @pytest.mark.asyncio
