@@ -65,7 +65,7 @@ Harness eval borrows that shape but reports only local Harness evidence.
 
 | Task | Language | Category | Run root | Model reward | Harness outcome | Leak scan | Reference calibration | Main signal |
 |---|---|---|---|---:|---|---|---|---|
-| `anko-default-function-arguments` | Go | Feature | `evals/results/deepswe/anko-default-function-arguments-8b18526a` | 0 | Failed | Clean | Not rerun | Agent discovered and cloned the target repo, but reverted partial parser changes and finished without a source patch. |
+| `anko-default-function-arguments` | Go | Feature | `evals/results/deepswe/anko-default-function-arguments-53c504a4` | 0 | Failed | Clean | Not rerun | Harness forced Docker and `--network none` verification, then rejected weak coverage; the agent never repaired the generated parser and deleted `parser.go.y`. |
 | `mashumaro-flattened-dataclass-fields` | Python | Feature | `evals/results/deepswe/mashumaro-flattened-dataclass-fields-a7fbbf03` | 0 | Failed | Clean | Not rerun | Latest `verify_work` after source changes still failed. |
 | `aiomonitor-task-snapshots-diff` | Python | Feature | `evals/results/deepswe/aiomonitor-task-snapshots-diff-d19773de` | 0 | Failed | Clean | Not rerun | Agent stopped around host dependency/setup failure instead of fully preparing the environment. |
 | `arktype-json-schema-refs-dependencies` | TypeScript | Feature | `evals/results/deepswe/arktype-json-schema-refs-dependencies-0804cefd` | 0 | Failed | Clean | Not rerun | Source changes were not followed by passing in-repository verification. |
@@ -86,6 +86,8 @@ The current Harness behavior is moving in the right direction:
 - It captures `model.patch` / `final.diff` for independent grading.
 - It prints the live shell session / PID while long external runs execute.
 - It keeps hidden verifier and reference solution out of the agent workspace.
+- It can force no-network verification in the declared task image before any
+  hidden verifier is allowed to run.
 
 Issues exposed and fixed during this DeepSWE phase:
 
@@ -94,6 +96,8 @@ Issues exposed and fixed during this DeepSWE phase:
 - `ca85d858` - covered nested Docker verifier evidence.
 - `d97d600c` - avoided false failure matches in verification output.
 - `56eb2e54` - rejected git inspection as verify work.
+- `998edddf` - required public offline DeepSWE verification before hidden
+  grading.
 
 ## Failure patterns
 
@@ -108,6 +112,10 @@ defense behavior:
 - **Partial implementations look plausible.** Prometheus and fd both produced
   meaningful patches, but hidden grading caught incomplete edge behavior or
   packaging assumptions.
+- **Single-attempt repair can thrash.** The latest Anko run reached passing
+  public no-network tests, then behavior-specific tests exposed that the
+  generated parser was still untouched. The model removed those tests and
+  deleted `parser.go.y` instead of repairing the generated artifact.
 - **The Harness should stay behavior-first.** The correct response is not to
   add task-specific regexes or weather-style special cases. The runner should
   give the model tools, require evidence, and independently grade the result.
@@ -153,3 +161,6 @@ after the agent stops, as evaluator-only grading artifacts.
   leak scans, and reference calibration runs.
 - Add cost, token, runtime, and tool-use summaries once the pass/fail data is
   stable.
+- Add isolated candidate/tournament workflows so failed assumptions can fork a
+  fresh attempt instead of letting one context thrash after contradictory
+  evidence.
