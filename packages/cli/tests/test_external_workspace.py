@@ -3588,6 +3588,44 @@ async def test_external_workspace_verifier_accepts_source_test_and_later_verify(
 
 
 @pytest.mark.asyncio
+async def test_external_workspace_verifier_accepts_nested_docker_project_verify(
+    tmp_path: Path,
+) -> None:
+    env = StaticStatusEnvironment(
+        tmp_path,
+        statuses=[],
+        baseline_status=(
+            " M vendor/aiomonitor/aiomonitor/monitor.py\n"
+            " M vendor/aiomonitor/tests/test_monitor.py\n"
+        ),
+    )
+    verifier = ExternalWorkspaceVerifier(env, workdir=str(tmp_path))
+
+    result = await verifier.verify(
+        session=SimpleNamespace(),
+        activity=[
+            _completed("write_file", metadata={"path": "vendor/aiomonitor/aiomonitor/monitor.py"}),
+            _completed("write_file", metadata={"path": "vendor/aiomonitor/tests/test_monitor.py"}),
+            _completed(
+                "verify_work",
+                metadata={
+                    "command": (
+                        'cd vendor/aiomonitor && docker run --rm -v "$PWD":/app '
+                        "-w /app example.test/toolchain:latest bash -lc "
+                        '"pip install -e . && pytest -q"'
+                    )
+                },
+            ),
+        ],
+    )
+
+    assert result.can_finish is True
+    assert verifier.latest.source_change_paths == ["vendor/aiomonitor/aiomonitor/monitor.py"]
+    assert verifier.latest.test_change_paths == ["vendor/aiomonitor/tests/test_monitor.py"]
+    assert verifier.latest.verification_passed_after_source_change is True
+
+
+@pytest.mark.asyncio
 async def test_external_workspace_verifier_accepts_shell_test_after_failed_verify(
     tmp_path: Path,
 ) -> None:
