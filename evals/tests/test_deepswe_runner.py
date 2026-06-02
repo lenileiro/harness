@@ -10,20 +10,26 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from evals.deepswe_runner import (
+    CommandResult,
     DeepSWETask,
     HostWorkspaceEnvironment,
     _capture_target_patch,
     _enforce_hidden_verifier_reward,
+    _enforce_public_offline_verification,
     _failure_metadata,
     _git_diff_with_untracked_command,
     _hidden_verifier_command,
     _hidden_verifier_reward,
+    _offline_verification_command,
     _policy_for_task,
     _prepare_agent_workspace,
+    _public_offline_verification_command,
     _repository_forbidden_fragments,
     _run_diagnostics,
+    _run_public_offline_verification,
     _run_timeout_seconds,
     _should_run_hidden_verifier,
+    _should_run_public_offline_verification,
     build_parser,
     load_task,
     normalize_paths,
@@ -125,6 +131,7 @@ def test_policy_blocks_deepswe_private_artifacts_but_not_repo_tests(tmp_path: Pa
         "Add partial structuring with error recovery to cattrs - DeepSWE"
     )
     assert policy.references_forbidden_web_material("DataCurve benchmark task page")
+    assert policy.required_no_network_verify_image == task.image
     assert not policy.references_forbidden_material("import github.com/example/project/pkg")
     assert policy.rejects_relative_path("solution/solution.patch")
     assert policy.rejects_relative_path("test.patch")
@@ -523,6 +530,135 @@ def test_hidden_verifier_reward_allows_deepswe_pass_when_reward_is_one(tmp_path:
     assert error == ""
     assert updated["hidden_verifier_reward"] == "1"
     assert "run_error" not in updated
+
+
+def test_public_offline_verification_strips_wrapper_repo_cd(tmp_path: Path) -> None:
+    run_root = tmp_path / "run"
+    target_repo = run_root / "agent-workspace" / "repo"
+    target_repo.parent.mkdir(parents=True)
+    (run_root / "target_repo.txt").write_text(str(target_repo) + "\n", encoding="utf-8")
+
+    original, replay = _offline_verification_command(run_root, "cd repo && cargo test")
+
+    assert original == "cd repo && cargo test"
+    assert replay == "cargo test"
+    assert _offline_verification_command(run_root, "cd other && cargo test")[1] == (
+        "cd other && cargo test"
+    )
+
+
+def test_public_offline_verification_command_fails_on_patch_apply_error() -> None:
+    command = _public_offline_verification_command("cargo test")
+
+    assert "git apply --whitespace=nowarn /model.patch || exit $?" in command
+    assert "bash -lc" in command
+
+
+async def test_public_offline_verification_replays_without_hidden_test_mount(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    import evals.deepswe_runner as runner
+
+    task = load_task(_write_task(tmp_path))
+    run_root = tmp_path / "run"
+    run_root.mkdir()
+    (run_root / "model.patch").write_text("", encoding="utf-8")
+    target_repo = run_root / "agent-workspace" / "repo"
+    target_repo.parent.mkdir(parents=True)
+    (run_root / "target_repo.txt").write_text(str(target_repo) + "\n", encoding="utf-8")
+    calls: list[tuple[list[str], int | float | None]] = []
+
+    async def fake_run_exec(
+        argv: list[str],
+        *,
+        input_text: str | None = None,
+        timeout_sec: int | float | None = None,
+    ) -> CommandResult:
+        del input_text
+        calls.append((argv, timeout_sec))
+        return CommandResult(stdout="ok\n", stderr="", return_code=0)
+
+    monkeypatch.setattr(runner, "_run_exec", fake_run_exec)
+
+    result = await _run_public_offline_verification(
+        task=task,
+        run_root=run_root,
+        command="cd repo && cargo test",
+        timeout_sec=12,
+    )
+
+    assert result.return_code == 0
+    assert calls
+    argv, timeout = calls[0]
+    assert timeout == 12
+    assert argv[:4] == ["docker", "run", "--rm", "--network"]
+    assert argv[4] == "none"
+    assert task.image in argv
+    assert not any("/tests" in part for part in argv)
+    assert "cargo test" in argv[-1]
+    assert "cd repo" not in argv[-1]
+    command_json = json.loads(
+        (run_root / "public-offline-verification" / "command.json").read_text(encoding="utf-8")
+    )
+    assert command_json["original_command"] == "cd repo && cargo test"
+    assert command_json["replay_command"] == "cargo test"
+
+
+def test_public_offline_verification_runs_only_for_no_network_passes(tmp_path: Path) -> None:
+    task = load_task(_write_task(tmp_path))
+    metadata: dict[str, object] = {"latest_verification_command": "cargo test"}
+
+    assert _should_run_public_offline_verification(
+        task=task,
+        status="passed",
+        model_patch_captured=True,
+        metadata=metadata,
+    )
+    assert not _should_run_public_offline_verification(
+        task=task,
+        status="failed",
+        model_patch_captured=True,
+        metadata=metadata,
+    )
+    network_task = DeepSWETask(
+        task_id=task.task_id,
+        task_dir=task.task_dir,
+        instruction=task.instruction,
+        image=task.image,
+        repository_url=task.repository_url,
+        base_commit=task.base_commit,
+        allow_internet=True,
+        verifier_timeout_sec=task.verifier_timeout_sec,
+        agent_timeout_sec=task.agent_timeout_sec,
+    )
+    assert not _should_run_public_offline_verification(
+        task=network_task,
+        status="passed",
+        model_patch_captured=True,
+        metadata=metadata,
+    )
+
+
+def test_public_offline_verification_failure_blocks_deepswe_pass() -> None:
+    result = CommandResult(
+        stdout="",
+        stderr="failed to download dependency: Could not resolve host",
+        return_code=101,
+    )
+
+    status, error, updated = _enforce_public_offline_verification(
+        status="passed",
+        error="",
+        metadata={"latest_verification_command": "cargo test"},
+        result=result,
+    )
+
+    assert status == "failed"
+    assert "network disabled" in error
+    assert "Could not resolve host" in error
+    assert updated["public_offline_verification_exit_code"] == 101
+    assert updated["run_error"] == error
 
 
 def test_failure_metadata_preserves_harness_runtime_cause() -> None:

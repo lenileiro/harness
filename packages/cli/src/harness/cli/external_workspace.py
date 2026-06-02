@@ -562,6 +562,7 @@ class ExternalWorkspacePolicy:
     forbidden_web_fragments: tuple[str, ...] = ()
     allowed_git_clone_fragments: tuple[str, ...] = ()
     required_git_base_commit: str = ""
+    required_no_network_verify_image: str = ""
     allow_web_access: bool = True
     block_root_filesystem_probe: bool = True
     refusal_message: str = (
@@ -605,6 +606,11 @@ class ExternalWorkspacePolicy:
             _normalized_tuple(self.allowed_git_clone_fragments),
         )
         object.__setattr__(self, "required_git_base_commit", self.required_git_base_commit.strip())
+        object.__setattr__(
+            self,
+            "required_no_network_verify_image",
+            self.required_no_network_verify_image.strip(),
+        )
 
     def rejects_relative_path(self, path: str) -> bool:
         parts = [part.lower() for part in PurePosixPath(path.strip("/")).parts if part]
@@ -1077,6 +1083,41 @@ def _docker_run_inner_command(words: list[str]) -> str:
     return " ".join(shlex.quote(word) for word in inner_words)
 
 
+def _shell_command_uses_no_network_container(command: str, *, image: str) -> bool:
+    required_image = image.strip()
+    if not required_image:
+        return False
+    words = _shell_words(command)
+    if not words:
+        return False
+    for index, word in enumerate(words):
+        if PurePosixPath(word).name.lower() != "docker":
+            continue
+        if index + 1 >= len(words) or words[index + 1] != "run":
+            continue
+        segment = words[index:]
+        saw_no_network = False
+        saw_image = False
+        waiting_for_network_value = False
+        for part in segment[2:]:
+            if waiting_for_network_value:
+                if part == "none":
+                    saw_no_network = True
+                waiting_for_network_value = False
+                continue
+            if part in {"--network", "--net"}:
+                waiting_for_network_value = True
+                continue
+            if part in {"--network=none", "--net=none"}:
+                saw_no_network = True
+                continue
+            if part == required_image:
+                saw_image = True
+        if saw_no_network and saw_image:
+            return True
+    return False
+
+
 def _safe_git_setup_rm_segment(
     segment: list[str],
     policy: ExternalWorkspacePolicy,
@@ -1198,6 +1239,7 @@ def _policy_with_forbidden_logs(
         forbidden_web_fragments=base.forbidden_web_fragments,
         allowed_git_clone_fragments=base.allowed_git_clone_fragments,
         required_git_base_commit=base.required_git_base_commit,
+        required_no_network_verify_image=base.required_no_network_verify_image,
         allow_web_access=base.allow_web_access,
         block_root_filesystem_probe=base.block_root_filesystem_probe,
         refusal_message=base.refusal_message,
@@ -1815,6 +1857,9 @@ def _command_path_tokens(command: str) -> list[str]:
                         current_prefix = "" if joined == "." else joined
                 continue
             if executable == "docker":
+                inner_command = _docker_run_inner_command(segment)
+                if inner_command:
+                    paths.extend(_command_path_tokens(inner_command))
                 continue
             paths.extend(_command_segment_path_tokens(segment, current_prefix))
     return list(dict.fromkeys(paths))
@@ -1867,7 +1912,12 @@ def _command_test_segments(command: str) -> list[tuple[list[str], list[str]]]:
             if not segment:
                 continue
             executable = PurePosixPath(segment[0]).name.lower()
-            if executable in {"cd", "docker"}:
+            if executable == "docker":
+                inner_command = _docker_run_inner_command(segment)
+                if inner_command:
+                    segments.extend(_command_test_segments(inner_command))
+                continue
+            if executable == "cd":
                 continue
             if _test_segment_is_broad(segment):
                 segments.append((segment, raw_segment))
@@ -2023,6 +2073,11 @@ def _command_runs_changed_test_script(command: str | None, test_paths: list[str]
         if not word or re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*=.*", word):
             continue
         name = PurePosixPath(word).name.lower()
+        if name == "docker":
+            inner_command = _docker_run_inner_command(words[index:])
+            if inner_command and _command_runs_changed_test_script(inner_command, test_paths):
+                return True
+            continue
         if name in shell_runners:
             for candidate in words[index + 1 :]:
                 if candidate.startswith("-"):
@@ -3886,6 +3941,18 @@ def _autonomous_permission_repair_reason(*, latest_verify_error: str | None = No
     return f"{reason} Latest verify_work error: {latest_verify_error or 'none observed'}."
 
 
+def _verification_failure_replan_hint() -> str:
+    return (
+        " Treat the failing public verification as evidence that at least one current "
+        "assumption is false. Before the next mutation, inspect the failing output and "
+        "the project path exercised by the command, update the expected outcome, and "
+        "switch implementation path if the evidence contradicts the current approach. "
+        "Check whether the edited files are actually consumed by the verifier, "
+        "including generated or derived artifacts, build outputs, entrypoints, and "
+        "nested checkouts."
+    )
+
+
 @dataclass
 class ExternalWorkspaceVerificationSnapshot:
     source_change_passed: bool = False
@@ -4437,6 +4504,7 @@ class ExternalWorkspaceVerifier:
                     reason=(
                         f"{snapshot.verification_error} "
                         f"Latest verify_work error: {latest_verify_error or 'none observed'}."
+                        f"{_verification_failure_replan_hint()}"
                     ),
                     confidence=1.0,
                     verifier_name=self.name,
@@ -4449,6 +4517,30 @@ class ExternalWorkspaceVerifier:
                 snapshot.latest_verification_error = (
                     "Passing verify_work did not use the configured default verifier. "
                     "External benchmark runs require harness-owned verifier evidence."
+                )
+                snapshot.verification_error = snapshot.latest_verification_error
+                return VerificationResult(
+                    can_finish=False,
+                    reason=snapshot.latest_verification_error,
+                    confidence=1.0,
+                    verifier_name=self.name,
+                    evidence_event_ids=[latest_verify_after_change.id],
+                )
+            if self.policy.required_no_network_verify_image and not (
+                isinstance(snapshot.latest_verification_command, str)
+                and _shell_command_uses_no_network_container(
+                    snapshot.latest_verification_command,
+                    image=self.policy.required_no_network_verify_image,
+                )
+            ):
+                snapshot.latest_verification_error = (
+                    "Passing verify_work did not reproduce the public check inside the "
+                    "declared no-network task image. Public task metadata declares "
+                    f"`{self.policy.required_no_network_verify_image}` with network "
+                    "disabled for isolated grading; run the relevant project check in "
+                    "that Docker image with `--network none`, using the current target "
+                    "checkout, then call verify_work again. Do not use hidden tests or "
+                    "reference solutions."
                 )
                 snapshot.verification_error = snapshot.latest_verification_error
                 return VerificationResult(
@@ -4553,6 +4645,7 @@ class ExternalWorkspaceVerifier:
                 reason=(
                     f"{snapshot.verification_error} "
                     f"Latest verify_work error: {latest_verify_error or 'none observed'}."
+                    f"{_verification_failure_replan_hint()}"
                 ),
                 confidence=1.0,
                 verifier_name=self.name,

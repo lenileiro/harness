@@ -21,6 +21,7 @@ import argparse
 import asyncio
 import json
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -212,6 +213,167 @@ def _hidden_verifier_command() -> str:
         "reward=$(cat /logs/verifier/reward.txt 2>/dev/null || echo 0); "
         'test "$reward" = 1'
     )
+
+
+def _offline_verification_command(run_root: Path, command: str) -> tuple[str, str]:
+    """Replay the agent's public verify command from the image repository root.
+
+    DeepSWE agents work in a wrapper workspace and usually clone the target repo
+    into a subdirectory such as `repo/`. The task image already has that target
+    repo at `/app`, so a leading `cd repo && ...` must be removed before replay.
+    """
+
+    normalized = command.strip()
+    target_path = run_root / "target_repo.txt"
+    if not normalized or not target_path.exists():
+        return command, normalized
+
+    try:
+        target_repo = Path(target_path.read_text(encoding="utf-8").strip())
+        target_rel = target_repo.relative_to(run_root / "agent-workspace").as_posix()
+    except (OSError, ValueError):
+        return command, normalized
+
+    variants = {
+        target_rel,
+        f"./{target_rel}",
+        shlex.quote(target_rel),
+        shlex.quote(f"./{target_rel}"),
+        f'"{target_rel}"',
+        f"'{target_rel}'",
+    }
+    for variant in sorted(variants, key=len, reverse=True):
+        pattern = rf"^\s*cd\s+{re.escape(variant)}\s*(?:&&|;)\s*"
+        stripped = re.sub(pattern, "", normalized, count=1)
+        if stripped != normalized:
+            return command, stripped.strip()
+    return command, normalized
+
+
+def _public_offline_verification_command(command: str) -> str:
+    quoted_command = shlex.quote(command)
+    return (
+        "mkdir -p /logs/offline-verification /logs/artifacts; "
+        "if [ -s /model.patch ]; then git apply --whitespace=nowarn /model.patch || exit $?; fi; "
+        f"bash -lc {quoted_command}"
+    )
+
+
+async def _run_public_offline_verification(
+    *,
+    task: DeepSWETask,
+    run_root: Path,
+    command: str,
+    timeout_sec: int | None = None,
+) -> CommandResult:
+    patch_path = run_root / "model.patch"
+    if not patch_path.exists():
+        return CommandResult(
+            stdout="",
+            stderr="model.patch was not captured before public offline verification",
+            return_code=2,
+        )
+    original_command, replay_command = _offline_verification_command(run_root, command)
+    if not replay_command:
+        return CommandResult(
+            stdout="",
+            stderr="latest verify_work command was empty; cannot replay offline",
+            return_code=2,
+        )
+    verifier_dir = run_root / "public-offline-verification"
+    verifier_dir.mkdir(parents=True, exist_ok=True)
+    result = await _run_exec(
+        [
+            "docker",
+            "run",
+            "--rm",
+            "--network",
+            "none",
+            "--workdir",
+            "/app",
+            "-v",
+            f"{verifier_dir}:/logs",
+            "-v",
+            f"{patch_path}:/model.patch:ro",
+            task.image,
+            "bash",
+            "-lc",
+            _public_offline_verification_command(replay_command),
+        ],
+        timeout_sec=timeout_sec or min(task.verifier_timeout_sec, 300),
+    )
+    (verifier_dir / "stdout.txt").write_text(
+        result.stdout,
+        encoding="utf-8",
+        errors="replace",
+    )
+    (verifier_dir / "stderr.txt").write_text(
+        result.stderr,
+        encoding="utf-8",
+        errors="replace",
+    )
+    (verifier_dir / "command.json").write_text(
+        json.dumps(
+            {
+                "original_command": original_command,
+                "replay_command": replay_command,
+                "return_code": result.return_code,
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return result
+
+
+def _should_run_public_offline_verification(
+    *,
+    task: DeepSWETask,
+    status: str,
+    model_patch_captured: bool,
+    metadata: dict[str, object],
+) -> bool:
+    return (
+        status == "passed"
+        and model_patch_captured
+        and not task.allow_internet
+        and bool(metadata.get("latest_verification_command"))
+    )
+
+
+def _enforce_public_offline_verification(
+    *,
+    status: str,
+    error: str,
+    metadata: dict[str, object],
+    result: CommandResult | None,
+) -> tuple[str, str, dict[str, object]]:
+    if result is None:
+        return status, error, metadata
+    updated = {
+        **metadata,
+        "public_offline_verification_exit_code": result.return_code,
+    }
+    if status == "passed" and result.return_code != 0:
+        preview_parts = [
+            part.strip()
+            for part in (result.stderr[-600:], result.stdout[-600:])
+            if part and part.strip()
+        ]
+        preview = "\n".join(preview_parts)
+        error = (
+            "RuntimeError: latest public verify_work command did not reproduce in "
+            "the task image with network disabled; refusing to report DeepSWE task "
+            "completion because the submitted patch is not self-contained for "
+            "isolated grading."
+        )
+        if preview:
+            error = f"{error} Offline verification tail: {preview}"
+        updated["run_error"] = error
+        status = "failed"
+    return status, error, updated
 
 
 def _git_diff_with_untracked_command(base_ref: str) -> str:
@@ -554,6 +716,7 @@ def _policy_for_task(
         forbidden_web_fragments=(*repository_fragments, *benchmark_web_fragments),
         allowed_git_clone_fragments=repository_fragments,
         required_git_base_commit=task.base_commit,
+        required_no_network_verify_image=task.image if not task.allow_internet else "",
         allow_web_access=allow_web_access,
         block_root_filesystem_probe=True,
         refusal_message="refused: external workspace policy blocks access to restricted artifacts",
@@ -607,6 +770,7 @@ async def run_deepswe_task(args: argparse.Namespace) -> int:
     context = SimpleNamespace(n_agent_steps=0, metadata={})
     started = asyncio.get_running_loop().time()
     hidden_verifier_result: CommandResult | None = None
+    public_offline_verification_result: CommandResult | None = None
     verifier_timeout_seconds = min(
         task.verifier_timeout_sec,
         max(1, int(args.verifier_timeout_seconds)),
@@ -669,6 +833,24 @@ async def run_deepswe_task(args: argparse.Namespace) -> int:
                 "hidden_verifier_skipped": "model patch was not captured",
             }
         model_patch_captured = capture_result.return_code == 0
+        if _should_run_public_offline_verification(
+            task=task,
+            status=status,
+            model_patch_captured=model_patch_captured,
+            metadata=metadata,
+        ):
+            public_offline_verification_result = await _run_public_offline_verification(
+                task=task,
+                run_root=run_root,
+                command=str(metadata.get("latest_verification_command") or ""),
+                timeout_sec=verifier_timeout_seconds,
+            )
+            status, error, metadata = _enforce_public_offline_verification(
+                status=status,
+                error=error,
+                metadata=metadata,
+                result=public_offline_verification_result,
+            )
         if _should_run_hidden_verifier(
             status=status,
             model_patch_captured=model_patch_captured,

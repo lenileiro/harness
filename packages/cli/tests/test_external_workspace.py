@@ -4347,6 +4347,8 @@ async def test_external_workspace_verifier_rejects_later_failed_verify_after_pas
 
     assert result.can_finish is False
     assert "latest verify_work after the final workspace mutation did not pass" in result.reason
+    assert "at least one current assumption is false" in result.reason
+    assert "switch implementation path" in result.reason
     assert verifier.latest.latest_verification_error == "1 failed"
     assert verifier.latest.verification_passed_after_source_change is False
 
@@ -4642,6 +4644,75 @@ async def test_external_workspace_verifier_requires_configured_default_verifier(
     assert "configured default verifier" in result.reason
     assert verifier.latest.latest_verification_command == "pytest"
     assert verifier.latest.latest_verification_used_default_command is False
+
+
+@pytest.mark.asyncio
+async def test_external_workspace_verifier_requires_public_no_network_image_check(
+    tmp_path: Path,
+) -> None:
+    env = StaticStatusEnvironment(
+        tmp_path,
+        statuses=[],
+        baseline_status=" M ast/expr.go\n M tests/test_expr.py\n",
+    )
+    verifier = ExternalWorkspaceVerifier(
+        env,
+        workdir=str(tmp_path),
+        policy=ExternalWorkspacePolicy(
+            required_no_network_verify_image="public.example/task:latest"
+        ),
+    )
+
+    result = await verifier.verify(
+        session=SimpleNamespace(),
+        activity=[
+            _completed("write_file", metadata={"path": "ast/expr.go"}),
+            _completed("write_file", metadata={"path": "tests/test_expr.py"}),
+            _completed("verify_work", metadata={"command": "go test ./..."}),
+        ],
+    )
+
+    assert result.can_finish is False
+    assert "declared no-network task image" in result.reason
+    assert "public.example/task:latest" in result.reason
+
+
+@pytest.mark.asyncio
+async def test_external_workspace_verifier_accepts_public_no_network_image_check(
+    tmp_path: Path,
+) -> None:
+    env = StaticStatusEnvironment(
+        tmp_path,
+        statuses=[],
+        baseline_status=" M ast/expr.go\n M tests/test_expr.py\n",
+    )
+    verifier = ExternalWorkspaceVerifier(
+        env,
+        workdir=str(tmp_path),
+        policy=ExternalWorkspacePolicy(
+            required_no_network_verify_image="public.example/task:latest"
+        ),
+    )
+
+    result = await verifier.verify(
+        session=SimpleNamespace(),
+        activity=[
+            _completed("write_file", metadata={"path": "ast/expr.go"}),
+            _completed("write_file", metadata={"path": "tests/test_expr.py"}),
+            _completed(
+                "verify_work",
+                metadata={
+                    "command": (
+                        "docker run --rm --network none -v $PWD:/app -w /app "
+                        "public.example/task:latest pytest tests/test_expr.py"
+                    )
+                },
+            ),
+        ],
+    )
+
+    assert result.can_finish is True
+    assert verifier.latest.verification_passed_after_source_change is True
 
 
 @pytest.mark.asyncio

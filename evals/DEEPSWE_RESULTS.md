@@ -65,7 +65,7 @@ Harness eval borrows that shape but reports only local Harness evidence.
 
 | Task | Language | Category | Run root | Model reward | Harness outcome | Leak scan | Reference calibration | Main signal |
 |---|---|---|---|---:|---|---|---|---|
-| `anko-default-function-arguments` | Go | Feature | `evals/results/deepswe/anko-default-function-arguments-bcf0315c` | 0 | Failed | Clean | Not rerun | Agent deferred setup / relied on unreliable verification evidence. |
+| `anko-default-function-arguments` | Go | Feature | `evals/results/deepswe/anko-default-function-arguments-8b18526a` | 0 | Failed | Clean | Not rerun | Agent discovered and cloned the target repo, but reverted partial parser changes and finished without a source patch. |
 | `mashumaro-flattened-dataclass-fields` | Python | Feature | `evals/results/deepswe/mashumaro-flattened-dataclass-fields-a7fbbf03` | 0 | Failed | Clean | Not rerun | Latest `verify_work` after source changes still failed. |
 | `aiomonitor-task-snapshots-diff` | Python | Feature | `evals/results/deepswe/aiomonitor-task-snapshots-diff-d19773de` | 0 | Failed | Clean | Not rerun | Agent stopped around host dependency/setup failure instead of fully preparing the environment. |
 | `arktype-json-schema-refs-dependencies` | TypeScript | Feature | `evals/results/deepswe/arktype-json-schema-refs-dependencies-0804cefd` | 0 | Failed | Clean | Not rerun | Source changes were not followed by passing in-repository verification. |
