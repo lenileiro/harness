@@ -35,6 +35,7 @@ from harness.cli.external_workspace import (
     _normalize_unified_diff_hunk_headers,
     _tool_result_counts_as_source_change,
     _verification_command_covers_test_changes,
+    _workspace_deleted_source_paths,
     _workspace_source_change_status,
     _workspace_test_change_paths,
     build_remote_tool_registry,
@@ -3152,6 +3153,10 @@ def test_workspace_source_change_status_separates_scratch_from_source() -> None:
     ) == ["tests/test_app.py"]
     assert _workspace_test_change_paths(" D tests/test_removed.py\n") == []
     assert _workspace_test_change_paths("R  tests/test_old.py -> tests/test_new.py\n") == []
+    assert _workspace_deleted_source_paths(
+        " D src/app.py\n D tests/test_removed.py\n M src/other.py\n?? scratch.py\n",
+        tracked_paths={"src/app.py", "tests/test_removed.py", "src/other.py"},
+    ) == ["src/app.py"]
     passed, source_paths, scratch_paths = _workspace_source_change_status(
         " M src/app.py\n D tests/test_removed.py\n"
     )
@@ -3590,6 +3595,66 @@ async def test_external_workspace_verifier_rejects_deleted_test_as_regression_ch
     assert verifier.latest.source_change_paths == ["ast/expr.go"]
     assert verifier.latest.test_change_paths == []
     assert "no in-repository regression test changes" in result.reason
+
+
+@pytest.mark.asyncio
+async def test_external_workspace_verifier_rejects_deleted_source_file(
+    tmp_path: Path,
+) -> None:
+    env = StaticStatusEnvironment(
+        tmp_path,
+        statuses=[],
+        baseline_status=" D parser/parser.go.y\n M parser/parser.go\n M parser/parser_test.go\n",
+        tracked_paths={
+            "parser/parser.go.y",
+            "parser/parser.go",
+            "parser/parser_test.go",
+        },
+    )
+    verifier = ExternalWorkspaceVerifier(env, workdir=str(tmp_path))
+
+    result = await verifier.verify(
+        session=SimpleNamespace(),
+        activity=[
+            _completed("edit_file", metadata={"path": "parser/parser.go"}),
+            _completed("write_file", metadata={"path": "parser/parser_test.go"}),
+            _completed("verify_work", metadata={"command": "go test ./..."}),
+        ],
+    )
+
+    assert result.can_finish is False
+    assert verifier.latest.source_change_paths == ["parser/parser.go.y", "parser/parser.go"]
+    assert verifier.latest.deleted_source_paths == ["parser/parser.go.y"]
+    assert "Tracked source files were deleted" in result.reason
+
+
+@pytest.mark.asyncio
+async def test_external_workspace_verifier_allows_deleted_source_when_policy_allows(
+    tmp_path: Path,
+) -> None:
+    env = StaticStatusEnvironment(
+        tmp_path,
+        statuses=[],
+        baseline_status=" D src/legacy.py\n M src/app.py\n M tests/test_app.py\n",
+        tracked_paths={"src/legacy.py", "src/app.py", "tests/test_app.py"},
+    )
+    verifier = ExternalWorkspaceVerifier(
+        env,
+        workdir=str(tmp_path),
+        policy=ExternalWorkspacePolicy(allow_tracked_source_deletions=True),
+    )
+
+    result = await verifier.verify(
+        session=SimpleNamespace(),
+        activity=[
+            _completed("shell", metadata={"workspace_changed": True, "exit_code": 0}),
+            _completed("write_file", metadata={"path": "tests/test_app.py"}),
+            _completed("verify_work", metadata={"command": "pytest tests/test_app.py"}),
+        ],
+    )
+
+    assert result.can_finish is True
+    assert verifier.latest.deleted_source_paths == ["src/legacy.py"]
 
 
 @pytest.mark.asyncio
@@ -6008,6 +6073,67 @@ async def test_external_environment_runner_rejects_deleted_test_as_regression_ch
 
     assert context.metadata["source_change_paths"] == ["src/app.py"]
     assert context.metadata["test_change_paths"] == []
+    assert context.metadata["verification_passed_after_source_change"] is False
+
+
+@pytest.mark.asyncio
+async def test_external_environment_runner_rejects_deleted_source_file(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    env = LocalEnvironment(tmp_path)
+    await env.exec("git init")
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "app.py").write_text("VALUE = 1\n", encoding="utf-8")
+    await env.exec("git add src/app.py")
+    await env.exec("git -c user.name=test -c user.email=test@example.com commit -m baseline")
+
+    adapter = ScriptedAdapter(
+        [
+            _planner_turn(),
+            _scripted_tool_turn(
+                "delete_source",
+                "shell",
+                {"command": "rm src/app.py && mkdir -p tests"},
+            ),
+            _scripted_tool_turn(
+                "write_src",
+                "write_file",
+                {"path": "src/replacement.py", "content": "VALUE = 2\n"},
+            ),
+            _scripted_tool_turn(
+                "write_test",
+                "write_file",
+                {"path": "tests/test_app.py", "content": "def test_app(): pass\n"},
+            ),
+            _scripted_tool_turn(
+                "verify",
+                "verify_work",
+                {"command": "python -m py_compile src/replacement.py tests/test_app.py"},
+            ),
+            [Done(final_message=Message(role="assistant", content="done"))],
+        ]
+    )
+    monkeypatch.setattr("harness.cli.external_workspace._build_adapter", lambda *_a, **_kw: adapter)
+    context = SimpleNamespace(n_agent_steps=0, metadata={})
+
+    with pytest.raises(RuntimeError, match="Tracked source files were deleted"):
+        await run_harness_on_external_environment(
+            instruction="fix the task",
+            environment=env,
+            context=context,
+            logs_dir=str(tmp_path / "logs"),
+            source_change_retries=0,
+            verification_retries=0,
+            pass_timeout_seconds=20,
+        )
+
+    assert context.metadata["source_change_paths"] == [
+        "src/app.py",
+        "src/replacement.py",
+    ]
+    assert context.metadata["deleted_source_paths"] == ["src/app.py"]
+    assert context.metadata["test_change_paths"] == ["tests/test_app.py"]
     assert context.metadata["verification_passed_after_source_change"] is False
 
 

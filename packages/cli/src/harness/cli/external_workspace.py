@@ -563,6 +563,7 @@ class ExternalWorkspacePolicy:
     allowed_git_clone_fragments: tuple[str, ...] = ()
     required_git_base_commit: str = ""
     required_no_network_verify_image: str = ""
+    allow_tracked_source_deletions: bool = False
     allow_web_access: bool = True
     block_root_filesystem_probe: bool = True
     refusal_message: str = (
@@ -1567,6 +1568,28 @@ def _workspace_source_change_status(
         else:
             scratch_paths.append(path)
     return bool(source_paths), source_paths, scratch_paths
+
+
+def _workspace_deleted_source_paths(
+    status: str,
+    *,
+    tracked_paths: set[str] | None = None,
+    baseline_untracked_paths: set[str] | None = None,
+    ignored_paths: set[str] | None = None,
+) -> list[str]:
+    deleted_paths: list[str] = []
+    for code, path in _porcelain_paths(status):
+        if code == "??" and path in (baseline_untracked_paths or set()):
+            continue
+        if "D" not in code:
+            continue
+        if _path_is_ignored(path, ignored_paths or set()):
+            continue
+        if _path_is_generated_artifact(path):
+            continue
+        if _path_counts_as_source_change(path, status_code=code, tracked_paths=tracked_paths):
+            deleted_paths.append(path)
+    return deleted_paths
 
 
 def _path_is_test_only(path: str) -> bool:
@@ -3959,6 +3982,7 @@ class ExternalWorkspaceVerificationSnapshot:
     source_change_paths: list[str] | None = None
     scratch_paths: list[str] | None = None
     test_change_paths: list[str] | None = None
+    deleted_source_paths: list[str] | None = None
     verification_passed_after_source_change: bool = False
     latest_verification_error: str | None = None
     latest_verification_command: str | None = None
@@ -3972,6 +3996,7 @@ class ExternalWorkspaceVerificationSnapshot:
             "source_change_paths": list(self.source_change_paths or []),
             "scratch_paths": list(self.scratch_paths or []),
             "test_change_paths": list(self.test_change_paths or []),
+            "deleted_source_paths": list(self.deleted_source_paths or []),
             "source_change_error": self.source_change_error,
             "verification_passed_after_source_change": self.verification_passed_after_source_change,
             "latest_verification_error": self.latest_verification_error,
@@ -4291,6 +4316,12 @@ class ExternalWorkspaceVerifier:
             baseline_untracked_paths=self.baseline_untracked_paths,
             ignored_paths=self.ignored_workspace_paths,
         )
+        deleted_source_paths = _workspace_deleted_source_paths(
+            status_text,
+            tracked_paths=tracked_paths,
+            baseline_untracked_paths=self.baseline_untracked_paths,
+            ignored_paths=self.ignored_workspace_paths,
+        )
         untracked_test_paths = [
             path
             for code, path in _porcelain_paths(status_text)
@@ -4302,6 +4333,7 @@ class ExternalWorkspaceVerifier:
             source_change_paths=source_paths,
             scratch_paths=scratch_paths,
             test_change_paths=test_paths,
+            deleted_source_paths=deleted_source_paths,
         )
         self.latest = snapshot
 
@@ -4370,6 +4402,24 @@ class ExternalWorkspaceVerifier:
                 can_finish=False,
                 reason=required_base_reason,
                 confidence=1.0,
+                verifier_name=self.name,
+            )
+
+        if deleted_source_paths and not self.policy.allow_tracked_source_deletions:
+            snapshot.latest_verification_error = (
+                "Tracked source files were deleted after the implementation attempt. "
+                "Restore deleted implementation files or replace them through an "
+                "intentional source move/refactor with focused in-repository regression "
+                "coverage, then run verify_work after the final code/test change."
+            )
+            snapshot.verification_error = snapshot.latest_verification_error
+            return VerificationResult(
+                can_finish=False,
+                reason=(
+                    f"{snapshot.latest_verification_error} "
+                    f"Deleted source paths: {', '.join(deleted_source_paths)}."
+                ),
+                confidence=0.98,
                 verifier_name=self.name,
             )
 
@@ -4990,7 +5040,10 @@ def _should_retry_external_workspace_with_fallback(
 
 def _snapshot_has_no_workspace_mutation(snapshot: ExternalWorkspaceVerificationSnapshot) -> bool:
     return not (
-        snapshot.source_change_paths or snapshot.test_change_paths or snapshot.scratch_paths
+        snapshot.source_change_paths
+        or snapshot.test_change_paths
+        or snapshot.scratch_paths
+        or snapshot.deleted_source_paths
     )
 
 
@@ -5002,6 +5055,7 @@ def _snapshot_has_external_workspace_state(
         or snapshot.source_change_paths
         or snapshot.test_change_paths
         or snapshot.scratch_paths
+        or snapshot.deleted_source_paths
         or snapshot.verification_passed_after_source_change
         or snapshot.latest_verification_error
         or snapshot.latest_verification_command
@@ -5411,6 +5465,7 @@ __all__ = [
     "RemoteVerifyWorkTool",
     "RemoteWorkspaceState",
     "RemoteWriteFileTool",
+    "_workspace_deleted_source_paths",
     "_workspace_source_change_status",
     "build_remote_tool_registry",
     "external_workspace_repair_attempts",

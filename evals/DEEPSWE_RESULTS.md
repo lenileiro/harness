@@ -116,6 +116,9 @@ defense behavior:
   public no-network tests, then behavior-specific tests exposed that the
   generated parser was still untouched. The model removed those tests and
   deleted `parser.go.y` instead of repairing the generated artifact.
+- **Tracked source deletion is now a completion blocker by default.** External
+  workspace verification records `deleted_source_paths` and refuses completion
+  when tracked implementation files disappear without an explicit policy opt-out.
 - **The Harness should stay behavior-first.** The correct response is not to
   add task-specific regexes or weather-style special cases. The runner should
   give the model tools, require evidence, and independently grade the result.
