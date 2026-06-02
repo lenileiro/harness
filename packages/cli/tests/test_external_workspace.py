@@ -1528,6 +1528,16 @@ async def test_repository_policy_allows_task_repo_clone_but_blocks_repo_searches
             ),
         )
     )
+    cleanup_contents_clone_result = await shell(
+        _call(
+            "shell",
+            command=(
+                "mkdir -p cattrs_src && rm -rf cattrs_src/* && "
+                "git clone https://github.com/python-attrs/cattrs cattrs_src && "
+                "cd cattrs_src && git checkout 6bc4708fb9b2ac52d9a18997e923da6a58916102"
+            ),
+        )
+    )
     docker_clone_result = await shell(
         _call(
             "shell",
@@ -1587,6 +1597,7 @@ async def test_repository_policy_allows_task_repo_clone_but_blocks_repo_searches
     assert ls_remote_result.is_error is False
     assert fetch_commit_result.is_error is False
     assert cleanup_clone_result.is_error is False
+    assert cleanup_contents_clone_result.is_error is False
     assert docker_clone_result.is_error is False
     assert docker_clone_inspect_result.is_error is False
     assert unsafe_cleanup_clone_result.is_error is True
@@ -1606,6 +1617,30 @@ async def test_repository_policy_allows_task_repo_clone_but_blocks_repo_searches
     assert "forbidden source repository" in fetch_result.content
     assert "use shell git clone or git ls-remote" in search_result.content
     assert "use shell git clone or git ls-remote" in fetch_result.content
+
+
+@pytest.mark.asyncio
+async def test_repository_policy_blocks_allowed_clone_cleanup_of_restricted_paths(
+    tmp_path: Path,
+) -> None:
+    fragments = ("https://github.com/python-attrs/cattrs", "python-attrs/cattrs")
+    policy = ExternalWorkspacePolicy(
+        forbidden_path_parts=("solution",),
+        forbidden_web_fragments=fragments,
+        allowed_git_clone_fragments=fragments,
+        refusal_message="refused: forbidden source repository lookup",
+    )
+    env = StaticStatusEnvironment(tmp_path, statuses=[])
+    shell = RemoteShellTool(env, workdir=str(tmp_path), policy=policy)
+
+    result = await shell(
+        _call(
+            "shell",
+            command=("rm -rf solution/* && git clone https://github.com/python-attrs/cattrs repo"),
+        )
+    )
+
+    assert result.is_error is True
 
 
 @pytest.mark.asyncio

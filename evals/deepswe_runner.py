@@ -290,8 +290,6 @@ def _candidate_target_repos(workspace: Path, base_commit: str) -> list[Path]:
     candidates: list[Path] = []
     for git_dir in workspace.rglob(".git"):
         repo = git_dir.parent
-        if repo == workspace:
-            continue
         head = _git_stdout(repo, "rev-parse", "HEAD")
         base_head = _git_stdout(repo, "rev-parse", base_commit)
         if not head or not base_head:
@@ -317,6 +315,7 @@ def _capture_target_patch(
     workspace: Path,
     run_root: Path,
 ) -> CommandResult:
+    run_root.mkdir(parents=True, exist_ok=True)
     patch_path = run_root / "model.patch"
     errors: list[str] = []
     for repo in _candidate_target_repos(workspace, task.base_commit):
@@ -484,9 +483,19 @@ class HostWorkspaceEnvironment:
         try:
             completed = await asyncio.to_thread(run)
         except subprocess.TimeoutExpired as exc:
+            stdout = (
+                exc.stdout.decode("utf-8", errors="replace")
+                if isinstance(exc.stdout, bytes)
+                else exc.stdout or ""
+            )
+            stderr = (
+                exc.stderr.decode("utf-8", errors="replace")
+                if isinstance(exc.stderr, bytes)
+                else exc.stderr or ""
+            )
             return CommandResult(
-                stdout=exc.stdout or "",
-                stderr=(exc.stderr or "") + f"\ncommand timed out after {timeout_sec}s",
+                stdout=stdout,
+                stderr=stderr + f"\ncommand timed out after {timeout_sec}s",
                 return_code=124,
             )
         return CommandResult(

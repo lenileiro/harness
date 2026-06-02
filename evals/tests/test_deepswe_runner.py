@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 from evals.deepswe_runner import (
     DeepSWETask,
@@ -312,6 +313,51 @@ def test_capture_target_patch_uses_agent_created_nested_repo(tmp_path: Path) -> 
     assert (tmp_path / "run" / "model.patch").read_text(encoding="utf-8") == result.stdout
 
 
+def test_capture_target_patch_allows_agent_checkout_at_workspace_root(
+    tmp_path: Path,
+) -> None:
+    task = load_task(_write_task(tmp_path))
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=workspace, check=True)
+    subprocess.run(
+        ["git", "config", "user.email", "test@example.invalid"],
+        cwd=workspace,
+        check=True,
+    )
+    subprocess.run(["git", "config", "user.name", "Test"], cwd=workspace, check=True)
+    (workspace / "pkg.txt").write_text("old\n", encoding="utf-8")
+    subprocess.run(["git", "add", "pkg.txt"], cwd=workspace, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "base"], cwd=workspace, check=True)
+    base_commit = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=workspace,
+        check=True,
+        text=True,
+        capture_output=True,
+    ).stdout.strip()
+    task = DeepSWETask(
+        task_id=task.task_id,
+        task_dir=task.task_dir,
+        instruction=task.instruction,
+        image=task.image,
+        repository_url=task.repository_url,
+        base_commit=base_commit,
+        allow_internet=task.allow_internet,
+        verifier_timeout_sec=task.verifier_timeout_sec,
+        agent_timeout_sec=task.agent_timeout_sec,
+    )
+    (workspace / "pkg.txt").write_text("new\n", encoding="utf-8")
+
+    result = _capture_target_patch(task=task, workspace=workspace, run_root=tmp_path / "run")
+
+    assert result.return_code == 0
+    assert "diff --git a/pkg.txt b/pkg.txt" in result.stdout
+    assert (tmp_path / "run" / "target_repo.txt").read_text(encoding="utf-8").strip() == str(
+        workspace
+    )
+
+
 def test_capture_target_patch_includes_committed_nested_repo_changes(tmp_path: Path) -> None:
     task = load_task(_write_task(tmp_path))
     workspace = _prepare_agent_workspace(task, tmp_path / "run")
@@ -444,7 +490,7 @@ def test_outcome_shape_remains_json_serializable(tmp_path: Path) -> None:
 
 def test_hidden_verifier_reward_is_required_for_deepswe_pass(tmp_path: Path) -> None:
     run_root = tmp_path / "run"
-    metadata = {"source_change_passed": True}
+    metadata: dict[str, object] = {"source_change_passed": True}
 
     status, error, updated = _enforce_hidden_verifier_reward(
         status="passed",
@@ -480,7 +526,7 @@ def test_hidden_verifier_reward_allows_deepswe_pass_when_reward_is_one(tmp_path:
 
 
 def test_failure_metadata_preserves_harness_runtime_cause() -> None:
-    context = argparse.Namespace(
+    context = SimpleNamespace(
         metadata={
             "latest_runtime_error_kind": "rate_limit",
             "latest_runtime_error": "OpenRouter rate-limited (429)",

@@ -981,7 +981,7 @@ def _shell_command_is_allowed_git_clone(
         }:
             continue
         if executable == "rm":
-            if not _safe_git_setup_rm_segment(segment):
+            if not _safe_git_setup_rm_segment(segment, policy):
                 return False
             continue
         if executable != "git":
@@ -1077,7 +1077,10 @@ def _docker_run_inner_command(words: list[str]) -> str:
     return " ".join(shlex.quote(word) for word in inner_words)
 
 
-def _safe_git_setup_rm_segment(segment: list[str]) -> bool:
+def _safe_git_setup_rm_segment(
+    segment: list[str],
+    policy: ExternalWorkspacePolicy,
+) -> bool:
     targets = [
         part.strip("()")
         for part in segment[1:]
@@ -1086,15 +1089,28 @@ def _safe_git_setup_rm_segment(segment: list[str]) -> bool:
     if not targets:
         return False
     for target in targets:
+        target_without_trailing_contents = target
+        if target_without_trailing_contents.endswith("/*"):
+            target_without_trailing_contents = target_without_trailing_contents[:-2]
         normalized = _normal_path(target)
+        normalized_without_trailing_contents = _normal_path(target_without_trailing_contents)
         parts = PurePosixPath(normalized).parts
+        concrete_parts = PurePosixPath(normalized_without_trailing_contents).parts
+        has_only_trailing_contents_wildcard = (
+            target.endswith("/*")
+            and normalized_without_trailing_contents
+            and normalized_without_trailing_contents not in {".", "./", "*"}
+            and not target_without_trailing_contents.startswith("/")
+            and ".." not in concrete_parts
+            and not any("*" in part for part in concrete_parts)
+        )
         if (
             not normalized
             or normalized in {".", "./", "*"}
             or target.startswith("/")
             or ".." in parts
-            or any("*" in part for part in parts)
-        ):
+            or (any("*" in part for part in parts) and not has_only_trailing_contents_wildcard)
+        ) or policy.rejects_relative_path(normalized_without_trailing_contents):
             return False
     return True
 
