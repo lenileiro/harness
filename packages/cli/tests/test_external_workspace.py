@@ -2542,6 +2542,32 @@ async def test_remote_verify_work_tool_reports_pass_and_failure(tmp_path: Path) 
 
 
 @pytest.mark.asyncio
+async def test_remote_verify_work_tool_allows_passing_test_names_with_failure_words(
+    tmp_path: Path,
+) -> None:
+    env = LocalEnvironment(tmp_path)
+    verify = RemoteVerifyWorkTool(env, workdir=str(tmp_path))
+    output = """
+
+  arktypeFastCheck
+    number
+      ✔ Invalid Bound
+      ✔ error handling does not cause failure
+    composition
+      ✔ if/then/else semantics
+
+  42 passing (120ms)
+"""
+
+    result = await verify(_call("verify_work", command="cat <<'EOF'\n" + output + "\nEOF"))
+
+    assert result.is_error is False
+    assert result.content.startswith("PASSED")
+    assert result.metadata["exit_code"] == 0
+    assert result.metadata["output_reports_failure"] is False
+
+
+@pytest.mark.asyncio
 async def test_remote_verify_work_tool_rejects_noop_commands(tmp_path: Path) -> None:
     env = LocalEnvironment(tmp_path)
     verify = RemoteVerifyWorkTool(env, workdir=str(tmp_path))

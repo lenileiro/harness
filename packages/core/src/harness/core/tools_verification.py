@@ -597,13 +597,15 @@ def _output_reports_failure(output: str) -> bool:
         return True
     if re.search(r"\b(?:failed|failures?)\s*[:=]\s*[1-9]\d*\b", normalized):
         return True
-    cleaned = re.sub(r"\b0\s+(?:failed|failures?)\b", "", normalized)
-    cleaned = re.sub(r"\b(?:failed|failures?)\s*[:=]\s*0\b", "", cleaned)
-    cleaned = re.sub(r"\bno\s+(?:failed|failures?|failure)\b", "", cleaned)
-    cleaned = re.sub(r"\b0\s+errors?\b", "", cleaned)
-    cleaned = re.sub(r"\berrors?\s*[:=]\s*0\b", "", cleaned)
-    cleaned = re.sub(r"\bno\s+errors?\b", "", cleaned)
-    return "failed" in cleaned or "failure" in cleaned
+    line_failure_patterns = (
+        r"(?m)^\s*(?:failed|failure)\s*$",
+        r"(?m)^\s*failed(?:\s|$)",
+        r"(?m)^\s*failed\s+(?:tests?|specs?|checks?|examples?)\b",
+        r"(?m)^\s*=+\s*(?:failures?|failed)\s*=+\s*$",
+        r"(?m)^\s*(?:failures?|failed)\s*[:=]\s*[1-9]\d*\b",
+        r"(?m)^\s*(?:tests?|test\s+suites?|specs?|checks?)\s*[:=].*\b[1-9]\d*\s+(?:failed|failures?)\b",
+    )
+    return any(re.search(pattern, normalized) for pattern in line_failure_patterns)
 
 
 def _successful_shell_stderr_reports_failure(
