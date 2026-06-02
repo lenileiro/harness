@@ -49,28 +49,55 @@ class GatewaySessionStore:
             raise FileNotFoundError(path)
         return GatewaySessionBinding.from_dict(json.loads(path.read_text(encoding="utf-8")))
 
+    def _profile_id(self, transport: str, user_id: str) -> str:
+        return f"gwp-{_slugify(f'{transport}-{user_id}')[:48]}"
+
     def _profile_path(self, transport: str, user_id: str) -> Path:
+        return self.profiles_dir / self._profile_id(transport, user_id) / "profile.json"
+
+    def _legacy_profile_path(self, transport: str, user_id: str) -> Path:
         name = f"{_slugify(transport)}-{_slugify(user_id)}"
         return self.profiles_dir / f"{name}.json"
 
     def save_profile(self, profile: GatewayUserProfile) -> Path:
         self.ensure_layout()
         target = self._profile_path(profile.transport, profile.user_id)
+        target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(json.dumps(profile.to_dict(), indent=2), encoding="utf-8")
-        return target
+        return target.parent
 
     def load_profile(self, transport: str, user_id: str) -> GatewayUserProfile:
         path = self._profile_path(transport, user_id)
         if not path.is_file():
-            raise FileNotFoundError(path)
+            legacy = self._legacy_profile_path(transport, user_id)
+            if legacy.is_file():
+                path = legacy
+            else:
+                for candidate in sorted(self.profiles_dir.glob("*/profile.json")):
+                    profile = GatewayUserProfile.from_dict(
+                        json.loads(candidate.read_text(encoding="utf-8"))
+                    )
+                    if profile.transport == transport and profile.user_id == user_id:
+                        return profile
+                raise FileNotFoundError(path)
         return GatewayUserProfile.from_dict(json.loads(path.read_text(encoding="utf-8")))
 
     def list_profiles(self) -> list[GatewayUserProfile]:
         if not self.profiles_dir.exists():
             return []
         items: list[GatewayUserProfile] = []
-        for path in sorted(self.profiles_dir.glob("*.json")):
-            items.append(GatewayUserProfile.from_dict(json.loads(path.read_text(encoding="utf-8"))))
+        seen: set[tuple[str, str]] = set()
+        paths = [
+            *sorted(self.profiles_dir.glob("*/profile.json")),
+            *sorted(self.profiles_dir.glob("*.json")),
+        ]
+        for path in paths:
+            profile = GatewayUserProfile.from_dict(json.loads(path.read_text(encoding="utf-8")))
+            key = (profile.transport, profile.user_id)
+            if key in seen:
+                continue
+            seen.add(key)
+            items.append(profile)
         return items
 
     def get_or_create_profile(self, *, transport: str, user_id: str) -> GatewayUserProfile:
@@ -78,7 +105,7 @@ class GatewaySessionStore:
             return self.load_profile(transport, user_id)
         except FileNotFoundError:
             profile = GatewayUserProfile(
-                id=f"gp-{_slugify(f'{transport}-{user_id}')[:32]}-{uuid4().hex[:8]}",
+                id=self._profile_id(transport, user_id),
                 transport=transport,
                 user_id=user_id,
             )

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from dataclasses import replace
 from pathlib import Path
@@ -33,6 +34,9 @@ class SchedulerStore:
     def ensure_layout(self) -> None:
         self.jobs_dir.mkdir(parents=True, exist_ok=True)
         self.runs_dir.mkdir(parents=True, exist_ok=True)
+
+    def _job_lock_path(self, job_id: str) -> Path:
+        return self.jobs_dir / job_id / "run.lock"
 
     def new_id(self, prefix: str, title: str) -> str:
         return f"{prefix}-{_slugify(title)[:32]}-{uuid4().hex[:8]}"
@@ -145,6 +149,46 @@ class SchedulerStore:
         resumed = replace(job, status="active", next_run_at=next_run_at, updated_at=updated_at)
         self.update_job(resumed)
         return resumed
+
+    def acquire_job_lock(self, job_id: str) -> bool:
+        self.ensure_layout()
+        job_dir = self.jobs_dir / job_id
+        job_dir.mkdir(parents=True, exist_ok=True)
+        lock_path = self._job_lock_path(job_id)
+        for attempt in range(2):
+            try:
+                fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            except FileExistsError:
+                if attempt > 0 or not self._is_stale_job_lock(lock_path):
+                    return False
+                lock_path.unlink(missing_ok=True)
+                continue
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                handle.write(str(os.getpid()))
+            return True
+        return False
+
+    def release_job_lock(self, job_id: str) -> None:
+        lock_path = self._job_lock_path(job_id)
+        try:
+            lock_path.unlink()
+        except FileNotFoundError:
+            return None
+
+    def _is_stale_job_lock(self, lock_path: Path) -> bool:
+        try:
+            pid = int(lock_path.read_text(encoding="utf-8").strip())
+        except (OSError, ValueError):
+            return True
+        if pid <= 0:
+            return True
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return True
+        except PermissionError:
+            return False
+        return False
 
 
 __all__ = ["SchedulerStore"]

@@ -24,7 +24,7 @@
         },
         {
           "path": ".harness/research-run-capture.json",
-          "substring": "\"profile\": \"minimal\""
+          "substring": "\"profile\": \"bare\""
         },
         {
           "path": ".harness/research-run-capture.json",

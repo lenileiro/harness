@@ -5,21 +5,206 @@ import json
 from pathlib import Path
 from typing import Any, cast
 
+import pytest
+import typer
 from typer.testing import CliRunner
 
 from harness.cli import __main__ as cli_main
-from harness.cli import gateway_commands
+from harness.cli import gateway_commands, gateway_runtime
 from harness.core import (
+    ActivityEvent,
     GatewaySessionStore,
+    Message,
     PendingApproval,
-    ToolCall,
-    ToolCallEvent,
     WhatsAppBridgeConfig,
     default_gateway_root,
     save_whatsapp_bridge_config,
 )
-from harness.core.gateway_models import GatewayUserProfile, GatewayWorkRef
+from harness.core.gateway_evidence import successful_tool_evidence_reply
 from harness.storage.sqlite import SQLiteStorage
+
+
+def test_gateway_turn_timeout_follows_whatsapp_child_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("HARNESS_GATEWAY_WORKFLOW_TIMEOUT", raising=False)
+    monkeypatch.setenv("HARNESS_WHATSAPP_CHILD_TIMEOUT_MS", "300000")
+
+    assert gateway_runtime._gateway_turn_timeout_seconds() == 290.0
+
+
+def test_gateway_turn_timeout_default_allows_repair_loop(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("HARNESS_GATEWAY_WORKFLOW_TIMEOUT", raising=False)
+    monkeypatch.delenv("HARNESS_WHATSAPP_CHILD_TIMEOUT_MS", raising=False)
+
+    assert gateway_runtime._gateway_turn_timeout_seconds() == 590.0
+
+
+def test_gateway_turn_timeout_override_wins(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("HARNESS_GATEWAY_WORKFLOW_TIMEOUT", "42")
+    monkeypatch.setenv("HARNESS_WHATSAPP_CHILD_TIMEOUT_MS", "300000")
+
+    assert gateway_runtime._gateway_turn_timeout_seconds() == 42.0
+
+
+def test_gateway_max_repair_defaults_to_multi_attempts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("HARNESS_GATEWAY_MAX_REPAIR", raising=False)
+
+    assert gateway_runtime._gateway_max_repair_attempts() == 3
+
+
+def test_gateway_max_repair_override_wins(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("HARNESS_GATEWAY_MAX_REPAIR", "5")
+
+    assert gateway_runtime._gateway_max_repair_attempts() == 5
+
+
+def test_tool_failure_reply_from_messages_reports_live_tool_error() -> None:
+    result = gateway_runtime._tool_failure_reply_from_messages(
+        [
+            Message(role="user", content="What is the weather in Tokyo?"),
+            Message(
+                role="tool",
+                name="web_search",
+                tool_call_id="call_1",
+                content="search failed: This request exceeds your plan's set usage limit.",
+            ),
+        ]
+    )
+
+    assert result is not None
+    assert "`web_search`" in result
+    assert "exceeds your plan" in result
+
+
+def test_tool_failure_reply_from_messages_ignores_stale_failure_after_verify_work() -> None:
+    result = gateway_runtime._tool_failure_reply_from_messages(
+        [
+            Message(role="user", content="Fix the failing tests."),
+            Message(
+                role="tool",
+                name="shell",
+                tool_call_id="call_1",
+                content="exit_code: 1\n\nstdout:\nFAILED tests/test_calculator.py",
+            ),
+            Message(
+                role="tool",
+                name="edit_file",
+                tool_call_id="call_2",
+                content="replaced 1 occurrence in calculator.py",
+            ),
+            Message(
+                role="tool",
+                name="verify_work",
+                tool_call_id="call_3",
+                content="PASSED\n\n1 passed in 0.01s",
+            ),
+        ]
+    )
+
+    assert result is None
+
+
+def test_successful_tool_evidence_reply_uses_web_search_source() -> None:
+    event = ActivityEvent(
+        session_id="sess-weather",
+        kind="tool_call.completed",
+        data={
+            "name": "web_search",
+            "is_error": False,
+            "metadata": {
+                "results": [
+                    {
+                        "title": "Weather in Tokyo",
+                        "url": "https://www.weatherapi.com/",
+                        "content": "Tokyo is sunny, 21 C, humidity 64%.",
+                    }
+                ]
+            },
+        },
+    )
+    result = successful_tool_evidence_reply([event])
+
+    assert result is not None
+    assert "Weather in Tokyo: https://www.weatherapi.com/" in result
+    assert "Tokyo is sunny" in result
+
+
+def test_successful_tool_evidence_reply_uses_local_shell_source() -> None:
+    event = ActivityEvent(
+        session_id="sess-time",
+        kind="tool_call.completed",
+        data={
+            "name": "shell",
+            "is_error": False,
+            "arguments": {"command": "TZ='America/New_York' date"},
+            "content_preview": "exit_code: 0\n\nstdout:\nSun May 31 08:21:39 EDT 2026\n",
+        },
+    )
+    result = successful_tool_evidence_reply([event])
+
+    assert result is not None
+    assert "local shell evidence" in result
+    assert "TZ='America/New_York' date" in result
+    assert "Sun May 31 08:21:39 EDT 2026" in result
+
+
+def test_successful_tool_evidence_reply_uses_verify_work_source() -> None:
+    event = ActivityEvent(
+        session_id="sess-verify",
+        kind="tool_call.completed",
+        data={
+            "name": "verify_work",
+            "is_error": False,
+            "arguments": {"command": "python3 test_slugify.py"},
+            "content_preview": "PASSED\n\n......\nRan 6 tests in 0.001s\n\nOK\n",
+        },
+    )
+    result = successful_tool_evidence_reply([event])
+
+    assert result is not None
+    assert "verify_work" in result
+    assert "python3 test_slugify.py" in result
+    assert "Ran 6 tests" in result
+
+
+def test_successful_tool_evidence_reply_redacts_shell_secrets() -> None:
+    fake_key = "sk-or-v1" + "-secret"
+    event = ActivityEvent(
+        session_id="sess-secret",
+        kind="tool_call.completed",
+        data={
+            "name": "shell",
+            "is_error": False,
+            "arguments": {"command": f"OPENROUTER_API_KEY={fake_key} printenv"},
+            "content_preview": f"exit_code: 0\n\nstdout:\n{fake_key}\n",
+        },
+    )
+    result = successful_tool_evidence_reply([event])
+
+    assert result is not None
+    assert "secret" not in result
+    assert "OPENROUTER_API_KEY=<redacted>" in result
+
+
+def test_default_gateway_provider_prefers_configured_api_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    assert gateway_runtime._default_gateway_provider() == "ollama"
+
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    assert gateway_runtime._default_gateway_provider() == "openrouter"
 
 
 def test_gateway_dispatch_can_start_mission_and_report_status(tmp_path: Path) -> None:
@@ -302,7 +487,7 @@ def test_gateway_whatsapp_setup_defaults_openrouter_model(tmp_path: Path) -> Non
     assert result.exit_code == 0, result.stdout
     payload = json.loads(result.stdout)
     assert payload["provider"] == "openrouter"
-    assert payload["model"] == "google/gemma-4-31b-it"
+    assert payload["model"] == "openai/gpt-5.4-nano"
 
 
 def test_gateway_whatsapp_status_reports_bridge_state(tmp_path: Path) -> None:
@@ -448,8 +633,8 @@ def test_gateway_converse_returns_chat_reply(tmp_path: Path) -> None:
             },
         }
 
-    original = gateway_commands._run_gateway_conversation
-    gateway_commands._run_gateway_conversation = _fake_converse
+    original = gateway_commands._run_gateway_converse_payload
+    gateway_commands._run_gateway_converse_payload = _fake_converse
     try:
         result = runner.invoke(
             cli_main.app,
@@ -470,7 +655,7 @@ def test_gateway_converse_returns_chat_reply(tmp_path: Path) -> None:
             ],
         )
     finally:
-        gateway_commands._run_gateway_conversation = original
+        gateway_commands._run_gateway_converse_payload = original
 
     assert result.exit_code == 0, result.stdout
     payload = json.loads(result.stdout)
@@ -478,7 +663,94 @@ def test_gateway_converse_returns_chat_reply(tmp_path: Path) -> None:
     assert payload["reply"]["text"] == "Hi from Harness"
 
 
-def test_run_gateway_conversation_auto_approves_tool_work(tmp_path: Path) -> None:
+def test_gateway_receive_routes_general_message_directly_to_converse(tmp_path: Path) -> None:
+    runner = CliRunner()
+
+    async def _fake_converse(**kwargs: object) -> dict[str, object]:
+        assert kwargs["message"] == "hello there"
+        return {
+            "reply": {
+                "session_id": "gw-test",
+                "command": "chat",
+                "status": "ok",
+                "text": "Hi from receive",
+                "data": {"harness_session_id": "sess_test"},
+            },
+            "session": {
+                "id": "gw-test",
+                "transport": "whatsapp",
+                "user_id": "15551234567",
+                "thread_id": "15551234567@s.whatsapp.net",
+                "current_mission_id": "",
+                "last_job_id": "",
+                "last_run_id": "",
+                "last_command": "chat",
+                "updated_at": "2026-05-27T00:00:00+00:00",
+                "metadata": {"harness_session_id": "sess_test"},
+            },
+        }
+
+    original = gateway_commands._run_gateway_receive_payload
+    gateway_commands._run_gateway_receive_payload = _fake_converse
+    try:
+        result = runner.invoke(
+            cli_main.app,
+            [
+                "gateway",
+                "receive",
+                "--cwd",
+                str(tmp_path),
+                "--transport",
+                "whatsapp",
+                "--user",
+                "15551234567",
+                "--thread",
+                "15551234567@s.whatsapp.net",
+                "--message",
+                "hello there",
+                "--json",
+            ],
+        )
+    finally:
+        gateway_commands._run_gateway_receive_payload = original
+
+    assert result.exit_code == 0, result.stdout
+    payload = json.loads(result.stdout)
+    assert payload["reply"]["command"] == "chat"
+    assert payload["reply"]["text"] == "Hi from receive"
+
+
+def test_gateway_receive_routes_control_message_to_dispatch(tmp_path: Path) -> None:
+    runner = CliRunner()
+
+    result = runner.invoke(
+        cli_main.app,
+        [
+            "gateway",
+            "receive",
+            "--cwd",
+            str(tmp_path),
+            "--transport",
+            "whatsapp",
+            "--user",
+            "15551234567",
+            "--thread",
+            "15551234567@s.whatsapp.net",
+            "--message",
+            "status",
+            "--json",
+        ],
+    )
+
+    assert result.exit_code == 0, result.stdout
+    payload = json.loads(result.stdout)
+    assert payload["reply"]["command"] == "status"
+
+
+def test_run_gateway_conversation_uses_core_runtime_for_all_messages(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     save_whatsapp_bridge_config(
         tmp_path,
         WhatsAppBridgeConfig(
@@ -492,38 +764,40 @@ def test_run_gateway_conversation_auto_approves_tool_work(tmp_path: Path) -> Non
     session_store = GatewaySessionStore(root=default_gateway_root(tmp_path))
     captured: dict[str, object] = {}
 
-    async def _fake_run_once(**kwargs: object) -> str:
+    async def _fake_chat_turn(**kwargs: object) -> str:
         captured.update(kwargs)
-        return "Done from chat"
+        return "Core runtime answer"
 
-    original = gateway_commands.__dict__["_run_once_impl"]
-    gateway_commands.__dict__["_run_once_impl"] = _fake_run_once
-    try:
-        payload = cast(
-            dict[str, Any],
-            asyncio.run(
-                gateway_commands._run_gateway_conversation(
-                    cwd=tmp_path,
-                    session_store=session_store,
-                    transport="whatsapp",
-                    user_id="15551234567",
-                    thread_id="15551234567@s.whatsapp.net",
-                    message="write a file",
-                )
-            ),
-        )
-    finally:
-        gateway_commands.__dict__["_run_once_impl"] = original
+    monkeypatch.setattr(gateway_runtime, "_run_gateway_chat_turn", _fake_chat_turn)
 
-    assert payload["reply"]["text"] == "Done from chat"
-    assert captured["yes"] is True
-    assert captured["inbox"] is False
-    prompt = cast(str, captured["default_system_prompt"])
-    assert "Execution-first policy" in prompt
-    assert "Do not make the user ask you to run the thing you just created" in prompt
+    payload = cast(
+        dict[str, Any],
+        asyncio.run(
+            gateway_runtime._run_gateway_conversation(
+                cwd=tmp_path,
+                session_store=session_store,
+                transport="whatsapp",
+                user_id="15551234567",
+                thread_id="15551234567@s.whatsapp.net",
+                message="What is the weather in Tokyo?",
+            )
+        ),
+    )
+
+    assert payload["reply"]["text"] == "Core runtime answer"
+    assert captured["prompt"] == "What is the weather in Tokyo?"
+    assert captured["chain"] == ["openrouter"]
+    assert captured["model"] == "google/gemma-4-31b-it"
+    assert "general-purpose AI work agent" in cast(str, captured["system_prompt"])
+    session_payload = cast(dict[str, Any], payload["session"])
+    assert "_general_openrouter-" in session_payload["metadata"]["harness_session_id"]
+    assert "workflow_id" not in payload["reply"]["data"]
 
 
-def test_run_gateway_conversation_includes_shared_user_work_context(tmp_path: Path) -> None:
+def test_run_gateway_conversation_reuses_stable_core_session(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     save_whatsapp_bridge_config(
         tmp_path,
         WhatsAppBridgeConfig(
@@ -535,77 +809,108 @@ def test_run_gateway_conversation_includes_shared_user_work_context(tmp_path: Pa
         ),
     )
     session_store = GatewaySessionStore(root=default_gateway_root(tmp_path))
-    other_session = session_store.get_or_create_session(
+    session_ids: list[str] = []
+
+    async def _fake_chat_turn(**kwargs: object) -> str:
+        session_ids.append(cast(str, kwargs["session_id"]))
+        return "ok"
+
+    monkeypatch.setattr(gateway_runtime, "_run_gateway_chat_turn", _fake_chat_turn)
+
+    for message in ["Hello", "What is the time in Tokyo?"]:
+        asyncio.run(
+            gateway_runtime._run_gateway_conversation(
+                cwd=tmp_path,
+                session_store=session_store,
+                transport="whatsapp",
+                user_id="15551234567",
+                thread_id="15551234567@s.whatsapp.net",
+                message=message,
+            )
+        )
+
+    assert len(session_ids) == 2
+    assert session_ids[0] == session_ids[1]
+
+
+def test_run_gateway_conversation_includes_shared_user_context(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session_store = GatewaySessionStore(root=default_gateway_root(tmp_path))
+    profile = session_store.get_or_create_profile(transport="whatsapp", user_id="15551234567")
+    session_store.save_profile(
+        profile.__class__.from_dict(
+            {
+                **profile.to_dict(),
+                "active_work": [
+                    {
+                        "ref": "job:weather",
+                        "kind": "reminder",
+                        "title": "continue the Tokyo weather follow-up",
+                        "summary": "Okay. I'll remind you in 5 minute(s): continue the Tokyo weather follow-up",
+                        "source_thread_id": "thread-a",
+                    }
+                ],
+                "recent_threads": ["thread-a"],
+            }
+        )
+    )
+    thread_a = session_store.get_or_create_session(
         transport="whatsapp",
         user_id="15551234567",
-        thread_id="other-chat",
+        thread_id="thread-a",
     )
     session_store.save_session(
-        other_session.__class__(
+        thread_a.__class__(
             **{
-                **other_session.to_dict(),
+                **thread_a.to_dict(),
                 "metadata": {
-                    **other_session.metadata,
-                    "thread_summary": "Working on a Tokyo weather script and a New York follow-up.",
+                    "thread_summary": (
+                        "Latest user ask: I started the Tokyo weather work. "
+                        "Last reply: The current weather in Tokyo is clear and 22°C."
+                    )
                 },
             }
         )
     )
-    profile = GatewayUserProfile(
-        id=session_store.get_or_create_profile(transport="whatsapp", user_id="15551234567").id,
-        transport="whatsapp",
-        user_id="15551234567",
-        active_work=[
-            GatewayWorkRef(
-                ref="job:weather",
-                kind="script",
-                title="Tokyo weather script",
-                summary="Built a weather fetcher and still need the New York/time follow-up.",
-                source_thread_id="other-chat",
-            )
-        ],
-        recent_threads=["other-chat"],
-    )
-    session_store.save_profile(profile)
     captured: dict[str, object] = {}
 
-    async def _fake_run_once(**kwargs: object) -> str:
+    async def _fake_chat_turn(**kwargs: object) -> str:
         captured.update(kwargs)
-        return "Done from shared context"
+        return "shared context ok"
 
-    original = gateway_commands.__dict__["_run_once_impl"]
-    gateway_commands.__dict__["_run_once_impl"] = _fake_run_once
-    try:
-        payload = cast(
-            dict[str, Any],
-            asyncio.run(
-                gateway_commands._run_gateway_conversation(
-                    cwd=tmp_path,
-                    session_store=session_store,
-                    transport="whatsapp",
-                    user_id="15551234567",
-                    thread_id="fresh-chat",
-                    message="continue that work and also check New York",
-                )
-            ),
-        )
-    finally:
-        gateway_commands.__dict__["_run_once_impl"] = original
+    monkeypatch.setattr(gateway_runtime, "_run_gateway_chat_turn", _fake_chat_turn)
 
-    assert payload["reply"]["text"] == "Done from shared context"
-    prompt = cast(str, captured["prompt"])
-    assert "Shared active work for this user:" in prompt
-    assert "Tokyo weather script [script]" in prompt
-    assert "Other recent chats for this user:" in prompt
-    assert "other-chat: Working on a Tokyo weather script" in prompt
-    assert "User message:\ncontinue that work and also check New York" in prompt
-    updated_profile = session_store.get_or_create_profile(
-        transport="whatsapp", user_id="15551234567"
+    payload = cast(
+        dict[str, Any],
+        asyncio.run(
+            gateway_runtime._run_gateway_conversation(
+                cwd=tmp_path,
+                session_store=session_store,
+                transport="whatsapp",
+                user_id="15551234567",
+                thread_id="thread-b",
+                message="continue that work and also check New York",
+            )
+        ),
     )
-    assert updated_profile.recent_threads[-1] == "fresh-chat"
+
+    prompt = cast(str, captured["prompt"])
+    assert "Continuity context only. It is not verified evidence" in prompt
+    assert "Shared active work for this user:" in prompt
+    assert "continue the Tokyo weather follow-up [reminder]" in prompt
+    assert "Other recent chats for this user:" in prompt
+    assert "thread-a: Latest user ask: I started the Tokyo weather work." in prompt
+    assert "The current weather in Tokyo is clear and 22°C" not in prompt
+    assert "User message:\ncontinue that work and also check New York" in prompt
+    assert payload["reply"]["text"] == "shared context ok"
 
 
-def test_run_gateway_conversation_sends_event_driven_progress_updates(tmp_path: Path) -> None:
+def test_run_gateway_conversation_compacts_thread_context_and_runtime_metadata(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     save_whatsapp_bridge_config(
         tmp_path,
         WhatsAppBridgeConfig(
@@ -617,101 +922,647 @@ def test_run_gateway_conversation_sends_event_driven_progress_updates(tmp_path: 
         ),
     )
     session_store = GatewaySessionStore(root=default_gateway_root(tmp_path))
-    seeded = session_store.get_or_create_session(
+    session = session_store.get_or_create_session(
         transport="whatsapp",
         user_id="15551234567",
         thread_id="15551234567@s.whatsapp.net",
     )
     session_store.save_session(
-        seeded.__class__(
+        session.__class__(
             **{
-                **seeded.to_dict(),
+                **session.to_dict(),
                 "metadata": {
-                    **seeded.metadata,
-                    "thread_context": [
-                        "user: can you make the script?",
-                        "assistant: I am starting with the file layout.",
-                    ],
+                    **session.metadata,
+                    "thread_context": ["assistant: " + ("long response " * 200)],
+                    "harness_session_id_openrouter-4bd07e53_chat-deadbeef": "old",
                 },
             }
         )
     )
-    sent: list[str] = []
+
+    async def _fake_chat_turn(**_kwargs: object) -> str:
+        return "reply " + ("body " * 300)
+
+    monkeypatch.setattr(gateway_runtime, "_run_gateway_chat_turn", _fake_chat_turn)
+
+    asyncio.run(
+        gateway_runtime._run_gateway_conversation(
+            cwd=tmp_path,
+            session_store=session_store,
+            transport="whatsapp",
+            user_id="15551234567",
+            thread_id="15551234567@s.whatsapp.net",
+            message="Hello",
+        )
+    )
+
+    updated = session_store.get_or_create_session(
+        transport="whatsapp",
+        user_id="15551234567",
+        thread_id="15551234567@s.whatsapp.net",
+    )
+    assert "harness_session_id_openrouter-4bd07e53_chat-deadbeef" not in (updated.metadata)
+    context = updated.metadata["thread_context"]
+    assert all(len(line) < 650 for line in context)
+    assert context[-1].endswith("...")
+
+
+def test_gateway_core_turn_uses_core_runner_with_tools_prediction_and_verification(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from harness.cli import run_commands
+
+    captured: dict[str, object] = {}
 
     async def _fake_run_once(**kwargs: object) -> str:
-        render = cast(Any, kwargs)["render"]
-        assert callable(render)
-        render(
-            ToolCallEvent(
-                call=ToolCall(
-                    id="call_write",
-                    name="write_file",
-                    arguments={"path": "weather_tokyo.py", "content": "print('hi')"},
-                )
-            )
+        captured.update(kwargs)
+        return "Plain sourced answer."
+
+    monkeypatch.setattr(run_commands, "run_once", _fake_run_once)
+
+    result = asyncio.run(
+        gateway_runtime._run_gateway_chat_turn(
+            cwd=tmp_path,
+            prompt="What is happening with the service?",
+            chain=["openrouter"],
+            model="google/gemma-4-31b-it",
+            session_id="sess-test",
+            max_steps=8,
+            config=object(),
+            system_prompt="system prompt",
         )
-        render(
-            ToolCallEvent(
-                call=ToolCall(
-                    id="call_verify",
-                    name="verify_work",
-                    arguments={"command": "uv run python weather_tokyo.py"},
-                )
+    )
+
+    assert result == "Plain sourced answer."
+    assert captured["chain"] == ["openrouter"]
+    assert captured["domain"] == "coding"
+    assert captured["require_tools"] is False
+    assert captured["verify"] == "auto"
+    assert captured["predict"] is True
+    assert captured["max_repair"] == 3
+    assert captured["profile"] == "adaptive"
+    assert captured["include_workspace_context"] is False
+    assert captured["prompt"] == "What is happening with the service?"
+
+
+def test_gateway_run_failure_reply_reports_rate_limit_without_configuration_blame() -> None:
+    result = gateway_runtime._run_failure_reply_from_activity(
+        [
+            ActivityEvent(
+                session_id="sess",
+                kind="agent_run.failed",
+                data={
+                    "kind": "rate_limit",
+                    "error": "OpenRouter rate-limited (429). Body: upstream limit",
+                },
             )
+        ]
+    )
+
+    assert result is not None
+    assert "provider rate limit" in result
+    assert "core runtime retried" in result
+    assert "Configure a working model/provider" not in result
+
+
+def test_gateway_verification_failure_reply_reports_core_blocker() -> None:
+    result = gateway_runtime._verification_failure_reply_from_activity(
+        [
+            ActivityEvent(
+                session_id="sess",
+                kind="verification.completed",
+                data={
+                    "can_finish": False,
+                    "reason": (
+                        "The latest passing verify_work after the final state change "
+                        "did not run a meaningful test/check command tied to the changed work."
+                    ),
+                },
+            )
+        ]
+    )
+
+    assert result is not None
+    assert "core verification blocked" in result
+    assert "meaningful test/check command" in result
+    assert "Configure a working model/provider" not in result
+
+
+def test_gateway_verification_failure_reply_ignores_stale_blocker_after_success() -> None:
+    result = gateway_runtime._verification_failure_reply_from_activity(
+        [
+            ActivityEvent(
+                session_id="sess",
+                kind="verification.completed",
+                data={
+                    "can_finish": False,
+                    "reason": "verify_work was missing after the edit.",
+                },
+            ),
+            ActivityEvent(
+                session_id="sess",
+                kind="verification.completed",
+                data={
+                    "can_finish": True,
+                    "reason": "latest verify_work passed after the edit.",
+                },
+            ),
+        ]
+    )
+
+    assert result is None
+
+
+def test_gateway_successful_verified_reply_uses_latest_verify_work_evidence() -> None:
+    result = gateway_runtime._successful_verified_reply_from_activity(
+        [
+            ActivityEvent(
+                session_id="sess",
+                kind="tool_call.completed",
+                data={
+                    "name": "write_file",
+                    "is_error": False,
+                    "arguments": {"path": "slug_cli.py"},
+                    "content_preview": "wrote 700 bytes to slug_cli.py",
+                },
+            ),
+            ActivityEvent(
+                session_id="sess",
+                kind="tool_call.completed",
+                data={
+                    "name": "verify_work",
+                    "is_error": False,
+                    "arguments": {"command": "python3 test_slug.py"},
+                    "content_preview": "PASSED\n\nAll tests passed!",
+                },
+            ),
+            ActivityEvent(
+                session_id="sess",
+                kind="verification.completed",
+                data={
+                    "can_finish": True,
+                    "reason": "verified with verify_work",
+                },
+            ),
+        ]
+    )
+
+    assert result is not None
+    assert "verify_work" in result
+    assert "python3 test_slug.py" in result
+    assert "All tests passed" in result
+
+
+def test_gateway_unverified_workspace_change_reply_reports_change_after_verifier() -> None:
+    result = gateway_runtime._unverified_workspace_change_reply_from_activity(
+        [
+            ActivityEvent(
+                session_id="sess",
+                kind="tool_call.completed",
+                data={
+                    "name": "write_file",
+                    "is_error": False,
+                    "arguments": {"path": "weather.py"},
+                },
+            ),
+            ActivityEvent(
+                session_id="sess",
+                kind="verification.completed",
+                data={
+                    "can_finish": False,
+                    "reason": "verify_work was missing after the edit.",
+                },
+            ),
+            ActivityEvent(
+                session_id="sess",
+                kind="tool_call.completed",
+                data={
+                    "name": "write_file",
+                    "is_error": False,
+                    "arguments": {"path": "test_weather.py"},
+                },
+            ),
+        ]
+    )
+
+    assert result is not None
+    assert "after the final workspace change" in result
+    assert "`write_file` on `test_weather.py`" in result
+
+
+def test_gateway_unverified_workspace_change_reply_allows_current_verifier() -> None:
+    result = gateway_runtime._unverified_workspace_change_reply_from_activity(
+        [
+            ActivityEvent(
+                session_id="sess",
+                kind="tool_call.completed",
+                data={
+                    "name": "write_file",
+                    "is_error": False,
+                    "arguments": {"path": "weather.py"},
+                },
+            ),
+            ActivityEvent(
+                session_id="sess",
+                kind="verification.completed",
+                data={
+                    "can_finish": False,
+                    "reason": "verify_work was missing after the edit.",
+                },
+            ),
+        ]
+    )
+
+    assert result is None
+
+
+def test_run_gateway_conversation_rate_limit_uses_core_failure_message(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    save_whatsapp_bridge_config(
+        tmp_path,
+        WhatsAppBridgeConfig(
+            enabled=True,
+            provider="openrouter",
+            model="google/gemma-4-31b-it",
+            mode="self-chat",
+            allowed_users=["15551234567"],
+        ),
+    )
+    session_store = GatewaySessionStore(root=default_gateway_root(tmp_path))
+
+    async def _rate_limited_chat(**_kwargs: object) -> str:
+        raise typer.Exit(1)
+
+    async def _rate_limit_reply(**_kwargs: object) -> str:
+        return (
+            "Harness hit a provider rate limit while generating this reply. "
+            "The core runtime retried the request; please try again shortly."
         )
-        await asyncio.sleep(0)
-        return "Completed."
 
-    def _fake_send(*, cwd: Path | None = None, to: str, text: str, reply_to: str | None = None):
-        assert cwd == tmp_path
-        assert to == "15551234567"
-        assert reply_to is None
-        sent.append(text)
-        return {"ok": True, "messageId": "wamid.local"}
+    monkeypatch.setattr(gateway_runtime, "_run_gateway_chat_turn", _rate_limited_chat)
+    monkeypatch.setattr(gateway_runtime, "_latest_run_failure_reply", _rate_limit_reply)
 
-    async def _fake_progress_note(
-        *,
-        provider: str,
-        model: str,
-        config: Any,
-        thread_context: list[str],
-        user_prompt: str,
-        event_summary: str,
-        work_context: list[str],
-    ) -> str:
-        assert provider == "openrouter"
-        assert model == "google/gemma-4-31b-it"
-        assert thread_context
-        assert "assistant: I am starting with the file layout." in thread_context
-        assert user_prompt == "make the script"
-        assert work_context
-        assert "Writing weather_tokyo.py." in work_context
-        return f"LLM progress: {event_summary}"
+    payload = cast(
+        dict[str, Any],
+        asyncio.run(
+            gateway_runtime._run_gateway_conversation(
+                cwd=tmp_path,
+                session_store=session_store,
+                transport="whatsapp",
+                user_id="15551234567",
+                thread_id="15551234567@s.whatsapp.net",
+                message="Hello there",
+            )
+        ),
+    )
 
-    original_run_once = gateway_commands.__dict__["_run_once_impl"]
-    original_send = gateway_commands.send_whatsapp_text_message
-    original_progress_note = gateway_commands._generate_progress_note
-    gateway_commands.__dict__["_run_once_impl"] = _fake_run_once
-    gateway_commands.send_whatsapp_text_message = _fake_send
-    gateway_commands._generate_progress_note = _fake_progress_note
-    try:
-        payload = cast(
-            dict[str, Any],
-            asyncio.run(
-                gateway_commands._run_gateway_conversation(
+    assert "provider rate limit" in payload["reply"]["text"]
+    assert "Configure a working model/provider" not in payload["reply"]["text"]
+
+
+def test_run_gateway_conversation_verification_failure_uses_core_message(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    save_whatsapp_bridge_config(
+        tmp_path,
+        WhatsAppBridgeConfig(
+            enabled=True,
+            provider="openrouter",
+            model="google/gemma-4-31b-it",
+            mode="self-chat",
+            allowed_users=["15551234567"],
+        ),
+    )
+    session_store = GatewaySessionStore(root=default_gateway_root(tmp_path))
+
+    async def _blocked_chat(**_kwargs: object) -> str:
+        raise typer.Exit(1)
+
+    async def _no_run_failure(**_kwargs: object) -> None:
+        return None
+
+    async def _verification_failure(**_kwargs: object) -> str:
+        return (
+            "Harness core verification blocked the final reply: "
+            "the latest verify_work did not validate the changed work."
+        )
+
+    monkeypatch.setattr(gateway_runtime, "_run_gateway_chat_turn", _blocked_chat)
+    monkeypatch.setattr(gateway_runtime, "_latest_run_failure_reply", _no_run_failure)
+    monkeypatch.setattr(
+        gateway_runtime,
+        "_latest_verification_failure_reply",
+        _verification_failure,
+    )
+
+    payload = cast(
+        dict[str, Any],
+        asyncio.run(
+            gateway_runtime._run_gateway_conversation(
+                cwd=tmp_path,
+                session_store=session_store,
+                transport="whatsapp",
+                user_id="15551234567",
+                thread_id="15551234567@s.whatsapp.net",
+                message="Create the script and verify it.",
+            )
+        ),
+    )
+
+    assert "core verification blocked" in payload["reply"]["text"]
+    assert "Configure a working model/provider" not in payload["reply"]["text"]
+
+
+def test_run_gateway_conversation_timeout_prefers_verification_blocker_over_tool_evidence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    save_whatsapp_bridge_config(
+        tmp_path,
+        WhatsAppBridgeConfig(
+            enabled=True,
+            provider="openrouter",
+            model="google/gemma-4-31b-it",
+            mode="self-chat",
+            allowed_users=["15551234567"],
+        ),
+    )
+    session_store = GatewaySessionStore(root=default_gateway_root(tmp_path))
+
+    async def _slow_chat(**_kwargs: object) -> str:
+        await asyncio.Event().wait()
+        return "never"
+
+    async def _no_reply(**_kwargs: object) -> None:
+        return None
+
+    async def _verification_failure(**_kwargs: object) -> str:
+        return (
+            "Harness core verification blocked the final reply: "
+            "You made file changes but never ran verify_work."
+        )
+
+    async def _misleading_tool_evidence(**_kwargs: object) -> str:
+        return "I verified this with local shell evidence from `python3 script.py`."
+
+    monkeypatch.setattr(gateway_runtime, "_gateway_turn_timeout_seconds", lambda: 0.01)
+    monkeypatch.setattr(gateway_runtime, "_run_gateway_chat_turn", _slow_chat)
+    monkeypatch.setattr(gateway_runtime, "_latest_run_failure_reply", _no_reply)
+    monkeypatch.setattr(
+        gateway_runtime,
+        "_latest_verification_failure_reply",
+        _verification_failure,
+    )
+    monkeypatch.setattr(gateway_runtime, "_latest_tool_failure_reply", _no_reply)
+    monkeypatch.setattr(
+        gateway_runtime,
+        "_latest_successful_tool_evidence_reply",
+        _misleading_tool_evidence,
+    )
+
+    payload = cast(
+        dict[str, Any],
+        asyncio.run(
+            gateway_runtime._run_gateway_conversation(
+                cwd=tmp_path,
+                session_store=session_store,
+                transport="whatsapp",
+                user_id="15551234567",
+                thread_id="15551234567@s.whatsapp.net",
+                message="Create the script and verify it.",
+            )
+        ),
+    )
+
+    assert "core verification blocked" in payload["reply"]["text"]
+    assert "never ran verify_work" in payload["reply"]["text"]
+    assert "local shell evidence" not in payload["reply"]["text"]
+
+
+def test_run_gateway_conversation_timeout_prefers_unverified_change_over_stale_verifier(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    save_whatsapp_bridge_config(
+        tmp_path,
+        WhatsAppBridgeConfig(
+            enabled=True,
+            provider="openrouter",
+            model="google/gemma-4-31b-it",
+            mode="self-chat",
+            allowed_users=["15551234567"],
+        ),
+    )
+    session_store = GatewaySessionStore(root=default_gateway_root(tmp_path))
+
+    async def _slow_chat(**_kwargs: object) -> str:
+        await asyncio.Event().wait()
+        return "never"
+
+    async def _no_reply(**_kwargs: object) -> None:
+        return None
+
+    async def _unverified_change(**_kwargs: object) -> str:
+        return (
+            "Harness stopped before completing verification after the final workspace "
+            "change. Latest unverified change: `write_file` on `test_weather.py`."
+        )
+
+    async def _stale_verification(**_kwargs: object) -> str:
+        return "Harness core verification blocked the final reply: stale verifier text."
+
+    monkeypatch.setattr(gateway_runtime, "_gateway_turn_timeout_seconds", lambda: 0.01)
+    monkeypatch.setattr(gateway_runtime, "_run_gateway_chat_turn", _slow_chat)
+    monkeypatch.setattr(gateway_runtime, "_latest_run_failure_reply", _no_reply)
+    monkeypatch.setattr(
+        gateway_runtime,
+        "_latest_unverified_workspace_change_reply",
+        _unverified_change,
+    )
+    monkeypatch.setattr(
+        gateway_runtime,
+        "_latest_verification_failure_reply",
+        _stale_verification,
+    )
+    monkeypatch.setattr(gateway_runtime, "_latest_tool_failure_reply", _no_reply)
+
+    payload = cast(
+        dict[str, Any],
+        asyncio.run(
+            gateway_runtime._run_gateway_conversation(
+                cwd=tmp_path,
+                session_store=session_store,
+                transport="whatsapp",
+                user_id="15551234567",
+                thread_id="15551234567@s.whatsapp.net",
+                message="Create the script and verify it.",
+            )
+        ),
+    )
+
+    assert "after the final workspace change" in payload["reply"]["text"]
+    assert "test_weather.py" in payload["reply"]["text"]
+    assert "stale verifier text" not in payload["reply"]["text"]
+
+
+def test_run_gateway_conversation_handoff_uses_successful_verified_evidence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    save_whatsapp_bridge_config(
+        tmp_path,
+        WhatsAppBridgeConfig(
+            enabled=True,
+            provider="openrouter",
+            model="google/gemma-4-31b-it",
+            mode="self-chat",
+            allowed_users=["15551234567"],
+        ),
+    )
+    session_store = GatewaySessionStore(root=default_gateway_root(tmp_path))
+
+    async def _handoff_chat(**_kwargs: object) -> str:
+        return gateway_runtime._RUNTIME_VERIFICATION_HANDOFF_TEXT
+
+    async def _no_reply(**_kwargs: object) -> None:
+        return None
+
+    async def _verified_reply(**_kwargs: object) -> str:
+        return "I verified this with `verify_work` using `python3 test_slug.py`: PASSED"
+
+    monkeypatch.setattr(gateway_runtime, "_run_gateway_chat_turn", _handoff_chat)
+    monkeypatch.setattr(
+        gateway_runtime,
+        "_latest_unverified_workspace_change_reply",
+        _no_reply,
+    )
+    monkeypatch.setattr(gateway_runtime, "_latest_verification_failure_reply", _no_reply)
+    monkeypatch.setattr(
+        gateway_runtime,
+        "_latest_successful_verified_reply",
+        _verified_reply,
+    )
+
+    payload = cast(
+        dict[str, Any],
+        asyncio.run(
+            gateway_runtime._run_gateway_conversation(
+                cwd=tmp_path,
+                session_store=session_store,
+                transport="whatsapp",
+                user_id="15551234567",
+                thread_id="15551234567@s.whatsapp.net",
+                message="Create the script and verify it.",
+            )
+        ),
+    )
+
+    assert "verify_work" in payload["reply"]["text"]
+    assert "test_slug.py" in payload["reply"]["text"]
+    assert "Handing the current state" not in payload["reply"]["text"]
+
+
+def test_run_gateway_conversation_without_whatsapp_config_uses_openrouter_env(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    session_store = GatewaySessionStore(root=default_gateway_root(tmp_path))
+    captured: dict[str, object] = {}
+
+    async def _fake_chat_turn(**kwargs: object) -> str:
+        captured.update(kwargs)
+        return "Tokyo weather answer"
+
+    monkeypatch.setattr(gateway_runtime, "_run_gateway_chat_turn", _fake_chat_turn)
+
+    asyncio.run(
+        gateway_runtime._run_gateway_conversation(
+            cwd=tmp_path,
+            session_store=session_store,
+            transport="whatsapp",
+            user_id="15551234567",
+            thread_id="15551234567@s.whatsapp.net",
+            message="What is the weather in Tokyo?",
+        )
+    )
+
+    assert captured["chain"] == ["openrouter"]
+    assert captured["model"] == "openai/gpt-5.4-nano"
+
+
+def test_run_gateway_conversation_honors_provider_model_env_overrides(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    monkeypatch.setenv("HARNESS_GATEWAY_PROVIDER", "openrouter")
+    monkeypatch.setenv("HARNESS_GATEWAY_MODEL", "anthropic/claude-3.5-sonnet")
+    session_store = GatewaySessionStore(root=default_gateway_root(tmp_path))
+    captured: dict[str, object] = {}
+
+    async def _fake_chat_turn(**kwargs: object) -> str:
+        captured.update(kwargs)
+        return "Done"
+
+    monkeypatch.setattr(gateway_runtime, "_run_gateway_chat_turn", _fake_chat_turn)
+
+    asyncio.run(
+        gateway_runtime._run_gateway_conversation(
+            cwd=tmp_path,
+            session_store=session_store,
+            transport="whatsapp",
+            user_id="15551234567",
+            thread_id="15551234567@s.whatsapp.net",
+            message="Do the task.",
+        )
+    )
+
+    assert captured["chain"] == ["openrouter"]
+    assert captured["model"] == "anthropic/claude-3.5-sonnet"
+
+
+def test_run_gateway_conversation_times_out_before_bridge_child_timeout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(gateway_runtime, "_GATEWAY_TURN_TIMEOUT_SECONDS", 0.01)
+    save_whatsapp_bridge_config(
+        tmp_path,
+        WhatsAppBridgeConfig(
+            enabled=True,
+            provider="openrouter",
+            model="google/gemma-4-31b-it",
+            mode="self-chat",
+            allowed_users=["15551234567"],
+        ),
+    )
+    session_store = GatewaySessionStore(root=default_gateway_root(tmp_path))
+
+    async def _slow_chat_turn(**_kwargs: object) -> str:
+        await asyncio.Event().wait()
+        return "never"
+
+    monkeypatch.setattr(gateway_runtime, "_run_gateway_chat_turn", _slow_chat_turn)
+
+    payload = cast(
+        dict[str, Any],
+        asyncio.run(
+            asyncio.wait_for(
+                gateway_runtime._run_gateway_conversation(
                     cwd=tmp_path,
                     session_store=session_store,
                     transport="whatsapp",
                     user_id="15551234567",
                     thread_id="15551234567@s.whatsapp.net",
-                    message="make the script",
-                )
-            ),
-        )
-    finally:
-        gateway_commands.__dict__["_run_once_impl"] = original_run_once
-        gateway_commands.send_whatsapp_text_message = original_send
-        gateway_commands._generate_progress_note = original_progress_note
+                    message="Yo my guy",
+                ),
+                timeout=1.0,
+            )
+        ),
+    )
 
-    assert payload["reply"]["text"] == "Completed."
-    assert "LLM progress: Writing weather_tokyo.py." in sent
+    assert "timed out while waiting for the model" in payload["reply"]["text"]

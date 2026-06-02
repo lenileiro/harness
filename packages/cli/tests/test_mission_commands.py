@@ -8,7 +8,10 @@ from typer.testing import CliRunner
 
 from harness.cli import __main__ as cli_main
 from harness.cli import mission_commands
+from harness.core import ResumeContract, default_scheduler_root
 from harness.core.research_store import ResearchStore, default_research_root
+from harness.core.scheduler_store import SchedulerStore
+from harness.storage.sqlite import SQLiteStorage
 
 
 def test_mission_create_show_and_list(tmp_path) -> None:
@@ -139,6 +142,144 @@ def test_mission_plan_and_approve_flow(tmp_path) -> None:
     )
     assert shown.exit_code == 0, shown.stdout
     assert "status=approved" in shown.stdout
+
+
+def test_mission_launch_bootstraps_long_running_workflow(tmp_path) -> None:
+    runner = CliRunner()
+
+    launched = runner.invoke(
+        cli_main.app,
+        [
+            "mission",
+            "launch",
+            "--title",
+            "Long running demo",
+            "--goal",
+            "Keep pushing the checkout migration forward.",
+            "--feature",
+            "checkout-migration",
+            "--phases",
+            "plan,act,verify",
+            "--every",
+            "45m",
+            "--cwd",
+            str(tmp_path),
+        ],
+    )
+    assert launched.exit_code == 0, launched.stdout
+    assert "Launched long-running workflow" in launched.stdout
+    assert "task_ref=" in launched.stdout
+    assert "mission_id=" in launched.stdout
+    assert "scheduler_job_id=" in launched.stdout
+
+    resume = ResumeContract.load(tmp_path / ".harness" / "resume.json")
+    assert resume is not None
+    assert resume.current == "checkout-migration"
+    current = resume.current_feature()
+    assert current is not None
+    assert current.phases == ["plan", "act", "verify"]
+
+    mission_root = tmp_path / ".harness" / "missions" / "missions"
+    mission_id = next(mission_root.iterdir()).name
+    mission_json = json.loads(
+        (mission_root / mission_id / "mission.json").read_text(encoding="utf-8")
+    )
+    assert mission_json["status"] == "approved"
+    assert mission_json["current_milestone_id"]
+
+    features_root = tmp_path / ".harness" / "missions" / "features"
+    feature_json = json.loads(
+        (next(features_root.iterdir()) / "feature.json").read_text(encoding="utf-8")
+    )
+    assert feature_json["title"] == "checkout-migration"
+    assert feature_json["status"] == "pending"
+
+    contracts_root = tmp_path / ".harness" / "missions" / "contracts"
+    contract_json = json.loads(
+        (next(contracts_root.iterdir()) / "contract.json").read_text(encoding="utf-8")
+    )
+    assert contract_json["assertions"]
+
+    scheduler_store = SchedulerStore(root=default_scheduler_root(tmp_path))
+    jobs = scheduler_store.list_jobs()
+    assert len(jobs) == 1
+    assert jobs[0].payload["mission_id"] == mission_id
+    assert jobs[0].schedule.kind == "every"
+
+    contract_file = tmp_path / ".harness" / "contracts" / "long-running-demo.json"
+    assert contract_file.exists()
+    tip_file = tmp_path / ".harness" / "tips.jsonl"
+    assert tip_file.exists()
+    assert "checkout-migration" in tip_file.read_text(encoding="utf-8")
+
+    async def verify_storage() -> None:
+        storage = SQLiteStorage(path=tmp_path / ".harness" / "harness.db")
+        try:
+            tasks = await storage.list_tasks(limit=10)
+            assert len(tasks) == 1
+            task = tasks[0]
+            assert task.status == "in_progress"
+            assert task.metadata["mission_id"] == mission_id
+            assert task.metadata["resume_feature"] == "checkout-migration"
+            assert task.metadata["env_contract"] == ".harness/contracts/long-running-demo.json"
+            assert task.metadata["tips_path"] == ".harness/tips.jsonl"
+
+            memories = await storage.list_memory(limit=10)
+            assert len(memories) == 1
+            assert "Long-running workflow" in memories[0].text
+        finally:
+            await storage.close()
+
+    import asyncio
+
+    asyncio.run(verify_storage())
+
+
+def test_mission_launch_run_now_creates_scheduler_and_mission_run_artifacts(tmp_path) -> None:
+    runner = CliRunner()
+
+    launched = runner.invoke(
+        cli_main.app,
+        [
+            "mission",
+            "launch",
+            "--title",
+            "Run now demo",
+            "--goal",
+            "Create the workflow and immediately execute the first bounded burst.",
+            "--feature",
+            "run-now-feature",
+            "--every",
+            "10m",
+            "--run-now",
+            "--cwd",
+            str(tmp_path),
+        ],
+    )
+    assert launched.exit_code == 0, launched.stdout
+    assert "scheduler_run_id=" in launched.stdout
+    assert "scheduler_run_status=paused" in launched.stdout
+
+    scheduler_store = SchedulerStore(root=default_scheduler_root(tmp_path))
+    records = scheduler_store.list_run_records()
+    assert len(records) == 1
+    assert records[0].result_status == "paused"
+    assert records[0].result_stop_reason == "feature_dispatched"
+
+    mission_runs_root = tmp_path / ".harness" / "missions" / "runs"
+    run_dirs = list(mission_runs_root.iterdir())
+    assert len(run_dirs) >= 1
+    scheduled_runs = [
+        json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+        for run_dir in run_dirs
+        if (run_dir / "run.json").is_file()
+    ]
+    run_json = next(
+        item for item in scheduled_runs if item.get("stop_reason") == "feature_dispatched"
+    )
+    assert run_json["status"] == "paused"
+    assert run_json["stop_reason"] == "feature_dispatched"
+    assert run_json["steps_run"] >= 1
 
 
 def test_mission_plan_supports_research_refs(tmp_path) -> None:

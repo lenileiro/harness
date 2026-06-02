@@ -182,7 +182,7 @@ class Flow(Generic[StateT]):
 # ---------------------------------------------------------------------------
 
 
-class FlowRunner:
+class FlowRunner(Generic[StateT]):
     """Execute a :class:`Flow` DAG built from decorator metadata.
 
     The runner inspects all decorated methods on the flow instance at
@@ -203,7 +203,7 @@ class FlowRunner:
 
     def __init__(
         self,
-        flow: Flow,
+        flow: Flow[StateT],
         *,
         checkpoint_store: CheckpointStore | None = None,
         flow_id: str | None = None,
@@ -305,7 +305,7 @@ class FlowRunner:
                 if join_step not in executed and join_step not in queue and deps.issubset(executed):
                     queue.append(join_step)
 
-        return self._flow.state  # type: ignore[return-value]
+        return self._flow.state
 
     async def _save_checkpoint(self, step_name: str) -> None:
         from harness.core.flow_checkpoint import FlowCheckpoint
@@ -325,10 +325,10 @@ class FlowRunner:
     def from_checkpoint(
         cls,
         checkpoint: FlowCheckpoint,
-        flow: Flow,
+        flow: Flow[StateT],
         *,
         checkpoint_store: CheckpointStore | None = None,
-    ) -> FlowRunner:
+    ) -> FlowRunner[StateT]:
         """Return a :class:`FlowRunner` with state restored from *checkpoint*.
 
         Execution resumes from the listeners of the persisted step — i.e. the

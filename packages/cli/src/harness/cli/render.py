@@ -3,7 +3,9 @@ from __future__ import annotations
 import difflib
 from typing import Any
 
+from rich.markup import escape
 from rich.panel import Panel
+from rich.text import Text
 
 from harness.cli.common import _ago, _args_preview, console
 from harness.core import PendingApproval, Session
@@ -95,31 +97,29 @@ def _task_status_style(status: str) -> str:
 
 def _render_session(session: Session) -> None:
     header = (
-        f"[bold]{session.id}[/bold]  "
+        f"[bold]{escape(session.id)}[/bold]  "
         f"{_status_style(session.status)}  "
-        f"{session.provider}/{session.model}\n"
+        f"{escape(session.provider)}/{escape(session.model)}\n"
         f"[dim]created {_ago(session.created_at)}, updated {_ago(session.updated_at)}[/dim]\n"
-        f"[dim]cwd: {session.cwd}[/dim]"
+        f"[dim]cwd: {escape(str(session.cwd))}[/dim]"
     )
     console.print(Panel(header, title="session", expand=False))
 
     for msg in session.messages:
         if msg.role == "user":
-            console.print(Panel(msg.content or "", title="[cyan]user[/cyan]", expand=False))
+            console.print(Panel(Text(msg.content or ""), title="[cyan]user[/cyan]", expand=False))
         elif msg.role == "system":
-            console.print(Panel(msg.content or "", title="[grey]system[/grey]", expand=False))
+            console.print(Panel(Text(msg.content or ""), title="[grey]system[/grey]", expand=False))
         elif msg.role == "assistant":
             parts: list[str] = []
             if msg.content:
                 parts.append(msg.content)
             if msg.tool_calls:
                 for tc in msg.tool_calls:
-                    parts.append(
-                        f"→ {tc.name}({_args_preview(tc.arguments)})  [dim]({tc.id})[/dim]"
-                    )
+                    parts.append(f"→ {tc.name}({_args_preview(tc.arguments)})  ({tc.id})")
             console.print(
                 Panel(
-                    "\n".join(parts) or "[dim](empty turn)[/dim]",
+                    Text("\n".join(parts) or "(empty turn)"),
                     title="[green]assistant[/green]",
                     expand=False,
                 )
@@ -127,8 +127,11 @@ def _render_session(session: Session) -> None:
         elif msg.role == "tool":
             console.print(
                 Panel(
-                    msg.content or "",
-                    title=f"[yellow]tool: {msg.name}[/yellow]  [dim]({msg.tool_call_id})[/dim]",
+                    Text(msg.content or ""),
+                    title=(
+                        f"[yellow]tool: {escape(str(msg.name or ''))}[/yellow]  "
+                        f"[dim]({escape(str(msg.tool_call_id or ''))})[/dim]"
+                    ),
                     expand=False,
                 )
             )

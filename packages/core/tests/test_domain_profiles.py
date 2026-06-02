@@ -32,14 +32,21 @@ def test_code_review_profile_is_read_only() -> None:
 def test_research_profile_is_read_only_and_structured() -> None:
     profile = get_domain_profile("research")
     assert profile.output_schema == "research_memo"
-    assert profile.allowed_tools == ("read_file", "list_dir", "glob")
+    assert profile.allowed_tools == ("read_file", "list_dir", "glob", "fetch_url", "web_search")
     assert "Return JSON only" in (profile.system_prompt or "")
 
 
 def test_comprehension_profile_builds_mental_model() -> None:
     profile = get_domain_profile("comprehension")
     assert profile.output_schema is None
-    assert profile.allowed_tools == ("read_file", "list_dir", "glob", "shell")
+    assert profile.allowed_tools == (
+        "read_file",
+        "list_dir",
+        "glob",
+        "shell",
+        "fetch_url",
+        "web_search",
+    )
     assert "mental model" in (profile.system_prompt or "")
     assert "Stay read-only" in (profile.system_prompt or "")
     assert "Mermaid" in (profile.system_prompt or "")
@@ -64,7 +71,7 @@ def test_docs_audit_profile_is_read_only_and_structured() -> None:
 def test_mission_planning_profile_is_structured() -> None:
     profile = get_domain_profile("mission-planning")
     assert profile.output_schema == "mission_plan_draft"
-    assert profile.allowed_tools == ("read_file", "list_dir", "glob")
+    assert profile.allowed_tools == ("read_file", "list_dir", "glob", "fetch_url", "web_search")
     assert "Return JSON only" in (profile.system_prompt or "")
 
 

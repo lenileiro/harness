@@ -17,6 +17,7 @@ from harness.core import (
     ToolRegistry,
 )
 from harness.core import activity as activity_kinds
+from harness.tools.shell import ShellTool
 
 from .conftest import MockAdapter, MockStorage, MockTool, text_turn, tool_call_turn
 
@@ -45,7 +46,9 @@ class InMemoryActivitySink(ActivityStore):
             items = [e for e in items if e.session_id == session_id]
         if kinds is not None:
             items = [e for e in items if e.kind in kinds]
-        return items[:limit]
+        if limit <= 0:
+            return []
+        return items[-limit:]
 
 
 def _build_agent(adapters: dict, *, tools=None, activity_store=None) -> tuple[Agent, MockStorage]:
@@ -105,6 +108,33 @@ class TestAgentActivityEmission:
         assert activity_kinds.TOOL_CALL_COMPLETED in kinds
         # No approval event when the tool is auto-approved.
         assert activity_kinds.APPROVAL_REQUESTED not in kinds
+
+    async def test_shell_tool_emits_running_pid(self, tmp_path: Path) -> None:
+        sink = InMemoryActivitySink()
+        adapter = MockAdapter(
+            "mock",
+            scripts=[
+                tool_call_turn(
+                    call_id="c1",
+                    name="shell",
+                    arguments={"command": "printf hello"},
+                ),
+                text_turn("done"),
+            ],
+        )
+        tool = ShellTool(cwd=tmp_path)
+        tool.approval = "auto"
+        agent, _ = _build_agent({"mock": adapter}, tools=[tool], activity_store=sink)
+        await _drain(agent.run(RunRequest(prompt="run shell", session_id="sess1", model="m")))
+
+        running = next(
+            event for event in sink.events if event.kind == activity_kinds.TOOL_CALL_RUNNING
+        )
+        assert running.session_id == "sess1"
+        assert running.data["tool_call_id"] == "c1"
+        assert running.data["name"] == "shell"
+        assert isinstance(running.data["pid"], int)
+        assert running.data["command"] == "printf hello"
 
     async def test_prompt_approval_emits_requested_and_granted(self, tmp_path: Path) -> None:
         sink = InMemoryActivitySink()

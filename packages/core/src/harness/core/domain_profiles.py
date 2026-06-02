@@ -210,14 +210,14 @@ _PROFILES: dict[str, DomainProfile] = {
     "research": DomainProfile(
         name="research",
         description="Read-only research and synthesis across repo files and web sources.",
-        allowed_tools=("read_file", "list_dir", "glob"),
+        allowed_tools=("read_file", "list_dir", "glob", "fetch_url", "web_search"),
         system_prompt=_RESEARCH_PROMPT,
         output_schema="research_memo",
     ),
     "comprehension": DomainProfile(
         name="comprehension",
         description="Read-only repo catch-up that builds a mental model before implementation.",
-        allowed_tools=("read_file", "list_dir", "glob", "shell"),
+        allowed_tools=("read_file", "list_dir", "glob", "shell", "fetch_url", "web_search"),
         system_prompt=_COMPREHENSION_PROMPT,
     ),
     "docs-audit": DomainProfile(
@@ -230,7 +230,7 @@ _PROFILES: dict[str, DomainProfile] = {
     "mission-planning": DomainProfile(
         name="mission-planning",
         description="Structured mission planning before implementation begins.",
-        allowed_tools=("read_file", "list_dir", "glob"),
+        allowed_tools=("read_file", "list_dir", "glob", "fetch_url", "web_search"),
         system_prompt=_MISSION_PLANNING_PROMPT,
         output_schema="mission_plan_draft",
     ),

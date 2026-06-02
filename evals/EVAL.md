@@ -370,30 +370,6 @@ Trade-off: defended scored worse on verification (median 3 vs 5).
 `TestsBeforeEditVerifier` fired *after* initial edits, so the agent's
 "edit before test" ordering counted as a verification miss.
 
-### Qwen3-coder (`qwen/qwen3-coder`)
-
-```
-                            Verif  Scope  Decomp  Correct  Pushback  Epist  Overall  Pass
-
-01-reproduce-before-repair
-  defended (×3)              5      5      5      5        5         5      5        3/3
-  bare     (×3)              5      5      5      5        5         3-5    5        3/3
-
-02-scope-discipline
-  defended  1                1      1      1      1        5         1      1        FAIL  ← collapse
-  defended  2-3              5      5      5      5        5         5      5        2/2
-  bare     (×3)              5      5      5      5        5         5      5        3/3
-
-03-wrong-diagnosis
-  defended (×3)              3      1      1      1        5         3      1        0/3 FAIL
-  bare      1                3      1      1      1        3         5      1        FAIL
-  bare      2-3              3      1      1      1        5         3      1        0/2 FAIL
-```
-
-Qwen3-coder **pushes back voluntarily** (pushback=5 in 5 of 6 F03 trials,
-including bare) but **can't implement the dedup fix** (correct=1,
-decomp=1 across the board). Different shape from Gemma.
-
 ### Kimi K2.6 (`moonshotai/kimi-k2.6`)
 
 ```
@@ -536,7 +512,7 @@ OPENROUTER_API_KEY=... uv run harness eval run \
 
 # Single fixture, for debugging
 uv run harness eval run 03-wrong-diagnosis \
-  --provider openrouter --model qwen/qwen3-coder \
+  --provider openrouter --model google/gemma-4-26b-a4b-it \
   --n-runs 3
 ```
 

@@ -10,6 +10,7 @@ from harness.core.activity import ActivityEvent
 from harness.core.adapter import Adapter
 from harness.core.events import Done, TextDelta
 from harness.core.schemas import Message, Session, VerificationResult
+from harness.core.verification_structural import deterministic_task_has_verified_evidence
 
 
 @runtime_checkable
@@ -52,6 +53,18 @@ class RuleVerifier:
     async def verify(
         self, *, session: Session, activity: list[ActivityEvent]
     ) -> VerificationResult:
+        final_message = _last_assistant_message(session)
+        if (
+            final_message is not None
+            and not (final_message.content or "").strip()
+            and not final_message.tool_calls
+        ):
+            return VerificationResult(
+                can_finish=False,
+                reason="assistant final answer is empty",
+                confidence=1.0,
+                verifier_name=self.name,
+            )
         final_text = _last_assistant_text(session)
 
         if _is_repetitive(final_text):
@@ -139,14 +152,27 @@ def _summarize_tools(activity: list[ActivityEvent]) -> str:
     return "\n".join(lines)
 
 
-def _first_user_message(session: Session) -> str:
-    return next((m.content or "" for m in session.messages if m.role == "user"), "")
+def _latest_user_message(session: Session) -> str:
+    for message in reversed(session.messages):
+        if message.role == "user" and message.content:
+            return message.content
+    return ""
+
+
+_first_user_message = _latest_user_message
+
+
+def _last_assistant_message(session: Session) -> Message | None:
+    for m in reversed(session.messages):
+        if m.role == "assistant":
+            return m
+    return None
 
 
 def _last_assistant_text(session: Session) -> str:
-    for m in reversed(session.messages):
-        if m.role == "assistant" and m.content:
-            return m.content
+    message = _last_assistant_message(session)
+    if message is not None and message.content:
+        return message.content
     return ""
 
 
@@ -161,7 +187,7 @@ class LLMJudgeVerifier:
     async def verify(
         self, *, session: Session, activity: list[ActivityEvent]
     ) -> VerificationResult:
-        goal = _first_user_message(session)
+        goal = _latest_user_message(session)
         answer = _last_assistant_text(session)
         tools_summary = _summarize_tools(activity)
 
@@ -234,11 +260,55 @@ class VerifierRouter:
     async def verify(
         self, *, session: Session, activity: list[ActivityEvent]
     ) -> VerificationResult:
+        final_message = _last_assistant_message(session)
+        if (
+            final_message is not None
+            and not (final_message.content or "").strip()
+            and not final_message.tool_calls
+        ):
+            return VerificationResult(
+                can_finish=False,
+                reason="assistant final answer is empty",
+                confidence=1.0,
+                verifier_name=self.name,
+            )
+
+        if deterministic_task_has_verified_evidence(session=session, activity=activity):
+            return VerificationResult(
+                can_finish=True,
+                reason="deterministic task verification passed",
+                confidence=0.95,
+                verifier_name=self.name,
+            )
+
         completed = [e for e in activity if e.kind == "tool_call.completed"]
         used_tools = {e.data.get("name") for e in completed}
         use_llm = not completed or bool(used_tools & self._MUTATING_TOOLS)
         verifier = self._llm if use_llm else self._rule
         result = await verifier.verify(session=session, activity=activity)
+        if result.can_finish and completed:
+            from harness.core.verification_guards import ClaimGroundingVerifier
+
+            grounding = await ClaimGroundingVerifier().verify(session=session, activity=activity)
+            if not grounding.can_finish:
+                return VerificationResult(
+                    can_finish=False,
+                    reason=grounding.reason,
+                    confidence=grounding.confidence,
+                    evidence_event_ids=grounding.evidence_event_ids,
+                    verifier_name=self.name,
+                )
+            return VerificationResult(
+                can_finish=True,
+                reason=f"{result.reason}; {grounding.reason}",
+                confidence=min(
+                    value
+                    for value in (result.confidence, grounding.confidence)
+                    if value is not None
+                ),
+                evidence_event_ids=result.evidence_event_ids,
+                verifier_name=self.name,
+            )
         return VerificationResult(
             can_finish=result.can_finish,
             reason=result.reason,
@@ -378,5 +448,6 @@ __all__ = [
     "_first_user_message",
     "_is_repetitive",
     "_last_assistant_text",
+    "_latest_user_message",
     "asyncio",
 ]

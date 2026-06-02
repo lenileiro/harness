@@ -73,7 +73,7 @@
         },
         {
           "path": ".harness/gateway/profiles/gwp-whatsapp-15551234567/profile.json",
-          "substring": "\"kind\": \"reminder.once\""
+          "substring": "\"kind\": \"reminder\""
         },
         {
           "path": ".harness/gateway/sessions/gw-whatsapp-thread-primary/session.json",

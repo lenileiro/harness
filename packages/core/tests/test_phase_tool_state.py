@@ -177,6 +177,53 @@ class TestTestsBeforeEditBypass:
         result = await verifier.verify(session=session, activity=activity)
         assert not result.can_finish
 
+    async def test_bug_fix_with_regression_test_and_verification_can_finish(self) -> None:
+        verifier = _TestsBeforeEditVerifier()
+        session = Session(provider="x", model="y", cwd=Path("/tmp"))
+        session.messages.append(
+            Message(
+                role="user",
+                content=(
+                    "# Fix the format bug\n\n"
+                    "format_compact_price(None) fails. Also add a regression test."
+                ),
+            )
+        )
+        from harness.core.activity import ActivityEvent
+
+        activity = [
+            ActivityEvent(
+                kind="tool_call.completed",
+                data={
+                    "name": "edit_file",
+                    "is_error": False,
+                    "arguments": {"path": "src/format.py"},
+                    "content_preview": "edited",
+                },
+            ),
+            ActivityEvent(
+                kind="tool_call.completed",
+                data={
+                    "name": "edit_file",
+                    "is_error": False,
+                    "arguments": {"path": "tests/test_format.py"},
+                    "content_preview": "edited",
+                },
+            ),
+            ActivityEvent(
+                kind="tool_call.completed",
+                data={
+                    "name": "verify_work",
+                    "is_error": False,
+                    "arguments": {"command": "pytest tests/test_format.py"},
+                    "content_preview": "5 passed",
+                },
+            ),
+        ]
+        result = await verifier.verify(session=session, activity=activity)
+        assert result.can_finish
+        assert "regression-test workflow" in result.reason
+
     async def test_shell_pytest_before_edit_counts_as_pre_edit_test_run(self) -> None:
         verifier = _TestsBeforeEditVerifier()
         session = Session(provider="x", model="y", cwd=Path("/tmp"))

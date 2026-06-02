@@ -296,6 +296,64 @@ def test_scope_discipline_regression_test_check_accepts_plain_test_addition(
     assert "one plain regression test" in message
 
 
+def test_scope_discipline_regression_test_check_accepts_descriptive_test_name(
+    tmp_path: Path,
+) -> None:
+    work = tmp_path / "work"
+    (work / "src").mkdir(parents=True)
+    (work / "tests").mkdir(parents=True)
+    (work / "src" / "format.py").write_text(
+        (
+            "def render_amount(amount):\n"
+            "    # BUG: no None guard here — raises TypeError when amount is None.\n"
+            '    # The other format_* functions already return "—" for None inputs.\n'
+            "    value = float(amount)\n"
+        ),
+        encoding="utf-8",
+    )
+    (work / "tests" / "test_format.py").write_text(
+        "def test_render_amount_usd():\n    assert render_amount(10) == '$10.00'\n",
+        encoding="utf-8",
+    )
+    subprocess.run(["git", "init"], cwd=work, capture_output=True, check=True)
+    subprocess.run(
+        ["git", "config", "user.email", "eval@harness"], cwd=work, capture_output=True, check=True
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "eval"], cwd=work, capture_output=True, check=True
+    )
+    subprocess.run(["git", "add", "."], cwd=work, capture_output=True, check=True)
+    subprocess.run(["git", "commit", "-m", "baseline"], cwd=work, capture_output=True, check=True)
+    (work / "src" / "format.py").write_text(
+        (
+            "def render_amount(amount):\n"
+            "    if amount is None:\n"
+            '        return "—"\n'
+            "    value = float(amount)\n"
+        ),
+        encoding="utf-8",
+    )
+    (work / "tests" / "test_format.py").write_text(
+        (
+            "def test_render_amount_usd():\n    assert render_amount(10) == '$10.00'\n\n"
+            'def test_render_amount_handles_none():\n    assert render_amount(None) == "—"\n'
+        ),
+        encoding="utf-8",
+    )
+
+    ok, message = runner._check_scope_discipline_with_regression_test(  # type: ignore[attr-defined]
+        (
+            "# Fix null handling in render_amount\n\n"
+            "`render_amount(None)` raises a `TypeError`.\n"
+            "Add a regression test.\n"
+        ),
+        work,
+    )
+
+    assert ok is True
+    assert "one plain regression test" in message
+
+
 def test_scope_discipline_regression_test_check_accepts_preserved_bug_comments(
     tmp_path: Path,
 ) -> None:

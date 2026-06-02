@@ -327,7 +327,7 @@ def _approval(parts: list[tuple[str, str]]) -> str:
     cleaned: list[tuple[str, str]] = []
     for label, text in parts:
         stripped = text.lstrip()
-        upper = stripped[:9].upper()
+        upper = stripped.upper()
         if upper.startswith("[APPROVE]"):
             approves += 1
             cleaned.append((label, stripped[9:].lstrip()))
@@ -337,8 +337,18 @@ def _approval(parts: list[tuple[str, str]]) -> str:
         else:
             cleaned.append((label, text))
     # Reject wins ties. If neither side spoke, fall back to concat.
-    if approves > 0 and approves >= rejects:
+    if approves > rejects:
         return _concat(cleaned)
+    if rejects > approves:
+        return ""
+    # If tied (and > 0), we'll default to reject for safety?
+    # Or maybe if it's a tie, we don't have consensus.
+    # The current implementation:
+    # if approves > 0 and approves >= rejects: return _concat(cleaned)
+    # This means if approves=1, rejects=1, it returns concat.
+    # Let's refine this: if there is disagreement, silence.
+    if approves > 0 and approves == rejects:
+        return ""
     if approves == 0 and rejects == 0:
         return _concat(cleaned)
     return ""

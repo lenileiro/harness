@@ -309,7 +309,28 @@ class TestWireFormat:
             await collect(adapter.stream(model="llama3.2", messages=messages))
 
         wire = captured["body"]["messages"]
+        assert wire[1]["content"] == ""
         assert wire[1]["tool_calls"][0]["function"]["name"] == "now"
         assert json.loads(wire[1]["tool_calls"][0]["function"]["arguments"]) == {"tz": "UTC"}
         assert wire[2]["tool_call_id"] == "c1"
         assert wire[2]["role"] == "tool"
+
+    async def test_empty_assistant_message_serializes_content_string(self) -> None:
+        captured: dict = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured["body"] = json.loads(request.content)
+            return httpx.Response(200, content=make_sse(text_chunk("ok"), "[DONE]"))
+
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            adapter = OllamaAdapter(client=client)
+            messages = [
+                Message(role="user", content="hi"),
+                Message(role="assistant", content=None),
+                Message(role="user", content="retry"),
+            ]
+            await collect(adapter.stream(model="llama3.2", messages=messages))
+
+        wire = captured["body"]["messages"]
+        assert wire[1]["role"] == "assistant"
+        assert wire[1]["content"] == ""

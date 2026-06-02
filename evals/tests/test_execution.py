@@ -11,6 +11,12 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from evals import runner
+from evals.artifacts import (
+    check_benchmark_integrity,
+    compute_hard_metrics,
+    extract_tool_sequence,
+    transcript_mentions_verification,
+)
 
 
 def _write_fixture(root: Path, name: str, *, metadata: str = "") -> Path:
@@ -111,6 +117,81 @@ class TestRunFixture:
         assert outcome.hard_metrics.verify_passed is False
         assert "expected original value 5" in outcome.test_output
 
+    def test_agent_timeout_persists_failed_artifacts(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _write_fixture(
+            tmp_path,
+            "04-timeout",
+            metadata="verify_command: python -c \"print('verify ok')\"\n",
+        )
+        fixture = runner.discover_fixtures(tmp_path / "evals")[0]
+        artifact_dir = tmp_path / "artifacts"
+
+        def fake_agent_cmd(*_args, **_kwargs) -> list[str]:
+            script = (
+                "from pathlib import Path; "
+                "Path('mod.py').write_text('VALUE = 2\\n', encoding='utf-8'); "
+                "import time; time.sleep(5)"
+            )
+            return [sys.executable, "-c", script]
+
+        monkeypatch.setattr(runner, "_agent_cmd", fake_agent_cmd)
+
+        outcome = runner.run_fixture(
+            fixture,
+            provider="ollama",
+            model="test",
+            artifact_dir=artifact_dir,
+            agent_timeout=1,
+        )
+
+        assert outcome.agent_exit_code == 124
+        assert outcome.hard_metrics is not None
+        assert outcome.hard_metrics.verify_passed is False
+        assert "[agent] timed out after" in outcome.transcript
+        assert "VALUE = 2" in outcome.git_diff
+        saved = json.loads((artifact_dir / "outcome.json").read_text(encoding="utf-8"))
+        assert saved["agent_exit_code"] == 124
+        assert saved["hard_metrics"]["verify_passed"] is False
+        assert (artifact_dir / "git_diff.patch").read_text(encoding="utf-8") == outcome.git_diff
+
+    def test_benchmark_integrity_failure_fails_run(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _write_fixture(
+            tmp_path,
+            "05-benchmark",
+            metadata=(
+                "verify_command: python -c \"print('verify ok')\"\n"
+                "benchmark_integrity: true\n"
+                "forbidden_repo_urls: github.com/datacurve-ai/deep-swe\n"
+            ),
+        )
+        fixture = runner.discover_fixtures(tmp_path / "evals")[0]
+
+        def fake_agent_cmd(*_args, **_kwargs) -> list[str]:
+            return [
+                "/bin/sh",
+                "-c",
+                "printf \"→ web_search(query='deep-swe anko default function arguments')\\n\"",
+            ]
+
+        monkeypatch.setattr(runner, "_agent_cmd", fake_agent_cmd)
+
+        outcome = runner.run_fixture(
+            fixture,
+            provider="ollama",
+            model="test",
+            artifact_dir=tmp_path / "artifacts",
+        )
+
+        assert outcome.test_exit_code == 1
+        assert outcome.hard_metrics is not None
+        assert outcome.hard_metrics.verify_passed is False
+        assert outcome.hard_metrics.benchmark_integrity_passed is False
+        assert "forbidden source repo lookup" in outcome.test_output
+
 
 def test_defended_eval_arm_uses_adaptive_profile(tmp_path: Path) -> None:
     fixture = _write_fixture(tmp_path, "01-demo")
@@ -126,6 +207,85 @@ def test_defended_eval_arm_uses_adaptive_profile(tmp_path: Path) -> None:
     )
     assert "--profile" in cmd
     assert "adaptive" in cmd
+
+
+def test_eval_metrics_ignore_file_content_mentions_of_pytest() -> None:
+    transcript = "\n".join(
+        [
+            "→ read_file(path='tests/test_calculator.py')",
+            "✓ read_file: import pytest",
+            "→ edit_file(path='src/calculator.py', old='x', new='y')",
+            "✓ edit_file: replaced 1 occurrence",
+        ]
+    )
+
+    assert extract_tool_sequence(transcript) == ["read_file", "edit_file"]
+    assert not transcript_mentions_verification(transcript, "pytest tests/")
+    metrics = compute_hard_metrics(
+        transcript,
+        "diff --git a/src/calculator.py b/src/calculator.py\n+++ b/src/calculator.py\n+change\n",
+        "pytest tests/",
+        run_exit_code=124,
+        verify_exit_code=0,
+        agent_duration_seconds=120.0,
+        verify_duration_seconds=0.1,
+    )
+    assert metrics.tool_calls == 2
+    assert metrics.did_run_verification is False
+    assert metrics.verify_passed is False
+
+
+def test_benchmark_integrity_rejects_reference_solution_access() -> None:
+    report = check_benchmark_integrity("→ shell(command='cat solution/solve.sh')\n")
+
+    assert report.passed is False
+    assert any("reference solution access" in item for item in report.violations)
+
+
+def test_benchmark_integrity_rejects_hidden_test_access() -> None:
+    report = check_benchmark_integrity("→ read_file(path='/tests/test_default_args.py')\n")
+
+    assert report.passed is False
+    assert any("hidden verifier test access" in item for item in report.violations)
+
+
+def test_benchmark_integrity_rejects_oracle_runner() -> None:
+    report = check_benchmark_integrity(
+        "",
+        agent_command=["benchmark-runner", "run", "tasks", "--agent", "oracle"],
+    )
+
+    assert report.passed is False
+    assert report.violations == ["solution-bearing oracle runner was used"]
+
+
+def test_benchmark_integrity_rejects_configured_repo_lookup() -> None:
+    report = check_benchmark_integrity(
+        "→ fetch_url(url='https://github.com/datacurve-ai/deep-swe')\n",
+        forbidden_repo_urls=["https://github.com/datacurve-ai/deep-swe"],
+    )
+
+    assert report.passed is False
+    assert any("forbidden source repo lookup" in item for item in report.violations)
+
+
+def test_benchmark_integrity_ignores_ordinary_solution_language_and_import_paths() -> None:
+    transcript = "\n".join(
+        [
+            "assistant: The solution must work for all users.",
+            "✓ read_file: import github.com/mattn/anko/parser",
+            "→ read_file(path='docs/deep-swe-note.md')",
+            "→ read_file(path='tests/test_visible_contract.py')",
+        ]
+    )
+
+    report = check_benchmark_integrity(
+        transcript,
+        forbidden_repo_urls=["https://github.com/datacurve-ai/deep-swe"],
+    )
+
+    assert report.passed is True
+    assert report.violations == []
 
 
 def test_scope_fixture_defended_arm_does_not_force_critic(tmp_path: Path) -> None:
@@ -193,6 +353,26 @@ def test_eval_arm_forwards_max_output_tokens(tmp_path: Path) -> None:
     )
     assert "--max-output-tokens" in cmd
     assert "2048" in cmd
+
+
+def test_eval_arm_forwards_config_path(tmp_path: Path) -> None:
+    fixture = _write_fixture(tmp_path, "01-demo")
+    discovered = runner.discover_fixtures(tmp_path / "evals")[0]
+    config_path = tmp_path / "config.toml"
+
+    cmd = runner._agent_cmd(  # type: ignore[attr-defined]
+        "openrouter",
+        "test-model",
+        discovered.task_text,
+        fixture,
+        harness_bin="harness",
+        verify_command=discovered.verify_command,
+        variant="defended",
+        config_path=config_path,
+    )
+
+    assert "--config" in cmd
+    assert str(config_path) in cmd
 
 
 def test_copy_fixture_for_run_hides_eval_metadata(tmp_path: Path) -> None:

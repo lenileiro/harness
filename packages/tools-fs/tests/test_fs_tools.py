@@ -5,6 +5,7 @@ ReadFileTool is covered separately in test_read_file.py.
 
 from __future__ import annotations
 
+# pyright: reportOptionalSubscript=false
 from pathlib import Path
 
 import pytest
@@ -116,6 +117,17 @@ class TestListDir:
         assert "a.txt" in result.content
         assert "b/" in result.content
 
+    async def test_hides_workspace_noise_by_default(self, tmp_path: Path) -> None:
+        (tmp_path / ".harness").mkdir()
+        (tmp_path / ".venv").mkdir()
+        (tmp_path / "node_modules").mkdir()
+        (tmp_path / "src").mkdir()
+        tool = ListDirTool(cwd=tmp_path)
+        result = await tool(_call("list_dir"))
+        assert result.is_error is False
+        assert result.content.strip() == "src/"
+        assert result.metadata["ignored_entries"] == 3
+
     async def test_lists_subdir(self, tmp_path: Path) -> None:
         (tmp_path / "sub").mkdir()
         (tmp_path / "sub" / "x.txt").write_text("", encoding="utf-8")
@@ -166,6 +178,33 @@ class TestGlob:
         names = set(result.content.split("\n"))
         assert "z.py" in names
         assert "x/y.py" in names
+
+    async def test_fnmatch_fallback_for_non_path_component_double_star(
+        self, tmp_path: Path
+    ) -> None:
+        (tmp_path / "httpx").mkdir()
+        (tmp_path / "httpx" / "_models.py").write_text("", encoding="utf-8")
+        (tmp_path / "httpx" / "_client.py").write_text("", encoding="utf-8")
+        tool = GlobTool(cwd=tmp_path)
+
+        result = await tool(_call("glob", pattern="httpx/**.py"))
+
+        assert result.is_error is False
+        names = set(result.content.split("\n"))
+        assert "httpx/_models.py" in names
+        assert "httpx/_client.py" in names
+
+    async def test_recursive_match_hides_workspace_noise(self, tmp_path: Path) -> None:
+        (tmp_path / ".venv" / "lib").mkdir(parents=True)
+        (tmp_path / ".venv" / "lib" / "ignored.py").write_text("", encoding="utf-8")
+        (tmp_path / ".harness").mkdir()
+        (tmp_path / ".harness" / "ignored.py").write_text("", encoding="utf-8")
+        (tmp_path / "src").mkdir()
+        (tmp_path / "src" / "app.py").write_text("", encoding="utf-8")
+        tool = GlobTool(cwd=tmp_path)
+        result = await tool(_call("glob", pattern="**/*.py"))
+        assert result.is_error is False
+        assert result.content.strip() == "src/app.py"
 
     async def test_no_match_returns_marker(self, tmp_path: Path) -> None:
         tool = GlobTool(cwd=tmp_path)

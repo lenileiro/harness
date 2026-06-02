@@ -585,7 +585,7 @@ Notes:
 - conversational WhatsApp replies use the provider/model stored in
   `.harness/gateway/whatsapp/config.json`
 - the current OpenRouter default for the WhatsApp chat path is
-  `google/gemma-4-31b-it`
+  `openai/gpt-5.4-nano`
 - while the model is thinking, the bridge sends WhatsApp typing presence so the
   user sees an active writing bubble
 - control commands still work inside the same chat thread, so `status` and

@@ -6,7 +6,7 @@ import json
 from itertools import pairwise
 from pathlib import Path
 
-from evals.types import HardMetrics, RunOutcome, TraceEvent
+from evals.types import BenchmarkIntegrityReport, HardMetrics, RunOutcome, TraceEvent
 
 _TOOL_NAMES = (
     "read_file",
@@ -15,8 +15,32 @@ _TOOL_NAMES = (
     "list_dir",
     "glob",
     "shell",
+    "fetch_url",
+    "web_search",
+    "google_search",
+    "tavily_search",
     "verify_work",
     "complete_work_item",
+)
+
+_ACTION_PREFIXES = (*(f"{name}(" for name in _TOOL_NAMES), "→ ", "$ ")
+_REFERENCE_SOLUTION_PATH_HINTS = (
+    "/solution/",
+    "/solution",
+    "solution/",
+    "solution.patch",
+    "solve.sh",
+)
+_HIDDEN_TEST_PATH_HINTS = (
+    "/tests/",
+    "/tests",
+    "test.patch",
+    "hidden_tests/",
+    "hidden-tests/",
+)
+_SECRET_PREFIXES = (
+    "OPENROUTER_API_KEY=",
+    "TAVILY_API_KEY=",
 )
 
 
@@ -51,22 +75,156 @@ def build_trace_events(
 def extract_tool_sequence(transcript: str) -> list[str]:
     sequence: list[str] = []
     for line in transcript.splitlines():
-        lowered = line.lower()
+        stripped = line.strip()
+        lowered = stripped.lower()
+        if stripped.startswith("→ "):
+            lowered = stripped[2:].lstrip().lower()
+        elif not any(
+            lowered == tool_name or lowered.startswith(f"{tool_name}(") for tool_name in _TOOL_NAMES
+        ):
+            continue
         for tool_name in _TOOL_NAMES:
-            if tool_name in lowered:
+            if lowered == tool_name or lowered.startswith(f"{tool_name}("):
                 sequence.append(tool_name)
                 break
     return sequence
 
 
+def _redact_evidence(text: str) -> str:
+    redacted = text
+    for prefix in _SECRET_PREFIXES:
+        if prefix in redacted:
+            start = redacted.find(prefix) + len(prefix)
+            end = start
+            while end < len(redacted) and not redacted[end].isspace():
+                end += 1
+            redacted = redacted[:start] + "<redacted>" + redacted[end:]
+    for marker in ("sk-or-v1" + "-", "tvly" + "-"):
+        index = redacted.find(marker)
+        while index != -1:
+            end = index
+            while end < len(redacted) and (redacted[end].isalnum() or redacted[end] in "-_"):
+                end += 1
+            redacted = redacted[:index] + marker + "<redacted>" + redacted[end:]
+            index = redacted.find(marker, index + len(marker) + len("<redacted>"))
+    return redacted[:240]
+
+
+def _looks_like_action_line(line: str) -> bool:
+    stripped = line.strip()
+    lowered = stripped.lower()
+    if lowered.startswith(_ACTION_PREFIXES):
+        return True
+    return any(lowered.startswith(f"{name}(") for name in _TOOL_NAMES)
+
+
+def _repo_lookup_terms(forbidden_repo_urls: list[str] | tuple[str, ...]) -> set[str]:
+    terms: set[str] = set()
+    for raw_url in forbidden_repo_urls:
+        cleaned = raw_url.strip().lower()
+        if not cleaned:
+            continue
+        cleaned = cleaned.removeprefix("https://").removeprefix("http://")
+        cleaned = cleaned.removeprefix("www.")
+        cleaned = cleaned.rstrip("/")
+        terms.add(cleaned)
+        if "/" in cleaned:
+            path = cleaned.split("/", 1)[1]
+            if path:
+                terms.add(path)
+            repo_name = path.rsplit("/", 1)[-1]
+            if repo_name:
+                terms.add(repo_name)
+    return terms
+
+
+def _looks_like_external_lookup_action(lowered_action_line: str) -> bool:
+    if lowered_action_line.startswith(
+        ("web_search(", "fetch_url(", "google_search(", "tavily_search(")
+    ):
+        return True
+    if lowered_action_line.startswith("→ "):
+        return _looks_like_external_lookup_action(lowered_action_line[2:].lstrip())
+    return any(
+        command in lowered_action_line
+        for command in (
+            "curl ",
+            "wget ",
+            "git clone ",
+            "gh repo clone ",
+            "gh repo view ",
+            "pip install git+http",
+        )
+    )
+
+
+def check_benchmark_integrity(
+    transcript: str,
+    *,
+    enabled: bool = True,
+    agent_command: list[str] | tuple[str, ...] | None = None,
+    forbidden_repo_urls: list[str] | tuple[str, ...] = (),
+) -> BenchmarkIntegrityReport:
+    """Detect benchmark leakage in an agent trajectory.
+
+    This is intentionally about benchmark artifacts, not task-domain keywords:
+    solution folders, hidden verifier tests, solution-bearing runners, and
+    configured source-repo lookups.
+    """
+    if not enabled:
+        return BenchmarkIntegrityReport(passed=True)
+
+    violations: list[str] = []
+    command = list(agent_command or [])
+    command_text = " ".join(command).lower()
+    if "--agent oracle" in command_text or any(
+        prev == "--agent" and current.lower() == "oracle" for prev, current in pairwise(command)
+    ):
+        violations.append("solution-bearing oracle runner was used")
+
+    repo_terms = _repo_lookup_terms(forbidden_repo_urls)
+    seen: set[str] = set()
+    for line in transcript.splitlines():
+        if not _looks_like_action_line(line):
+            continue
+        lowered = line.lower()
+        evidence = _redact_evidence(line.strip())
+        if any(hint in lowered for hint in _REFERENCE_SOLUTION_PATH_HINTS):
+            message = f"reference solution access detected: {evidence}"
+            if message not in seen:
+                violations.append(message)
+                seen.add(message)
+        if any(hint in lowered for hint in _HIDDEN_TEST_PATH_HINTS):
+            message = f"hidden verifier test access detected: {evidence}"
+            if message not in seen:
+                violations.append(message)
+                seen.add(message)
+        if (
+            repo_terms
+            and _looks_like_external_lookup_action(lowered)
+            and any(term in lowered for term in repo_terms)
+        ):
+            message = f"forbidden source repo lookup detected: {evidence}"
+            if message not in seen:
+                violations.append(message)
+                seen.add(message)
+
+    return BenchmarkIntegrityReport(passed=not violations, violations=violations)
+
+
 def transcript_mentions_verification(transcript: str, verify_command: str) -> bool:
-    lowered = transcript.lower()
-    if "verify_work" in lowered:
+    if "verify_work" in extract_tool_sequence(transcript):
         return True
     verify_head = verify_command.strip().split()[0].lower() if verify_command.strip() else ""
-    if verify_head and verify_head in lowered:
-        return True
-    return any(marker in lowered for marker in ("pytest", "cargo test", "go test", "npm test"))
+    if not verify_head:
+        return False
+    for line in transcript.splitlines():
+        lowered = line.strip().lower()
+        if lowered.startswith("→ shell(") and verify_head in lowered:
+            return True
+        if lowered.startswith("$ ") and verify_head in lowered:
+            return True
+    return False
 
 
 def diff_stats(git_diff: str) -> tuple[int, int, int]:
@@ -95,6 +253,9 @@ def compute_hard_metrics(
     verify_exit_code: int,
     agent_duration_seconds: float,
     verify_duration_seconds: float,
+    benchmark_integrity_enabled: bool = False,
+    agent_command: list[str] | tuple[str, ...] | None = None,
+    forbidden_repo_urls: list[str] | tuple[str, ...] = (),
 ) -> HardMetrics:
     files_touched, lines_added, lines_deleted = diff_stats(git_diff)
     tool_sequence = extract_tool_sequence(transcript)
@@ -123,8 +284,14 @@ def compute_hard_metrics(
         did_run_verification and verify_exit_code == 0 and run_exit_code != 0
     )
     shell_commands = tool_sequence.count("shell")
+    integrity_report = check_benchmark_integrity(
+        transcript,
+        enabled=benchmark_integrity_enabled,
+        agent_command=agent_command,
+        forbidden_repo_urls=forbidden_repo_urls,
+    )
     return HardMetrics(
-        verify_passed=verify_exit_code == 0,
+        verify_passed=run_exit_code == 0 and verify_exit_code == 0 and integrity_report.passed,
         run_exit_code=run_exit_code,
         verify_exit_code=verify_exit_code,
         files_touched=files_touched,
@@ -142,6 +309,8 @@ def compute_hard_metrics(
         redundant_tool_calls=redundant_tool_calls,
         retry_loops=retry_loops,
         verification_after_failure=verification_after_failure,
+        benchmark_integrity_passed=integrity_report.passed,
+        benchmark_integrity_violations=integrity_report.violations,
     )
 
 

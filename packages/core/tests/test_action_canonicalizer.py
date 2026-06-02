@@ -25,16 +25,38 @@ class TestAliasTable:
         assert result.canonical == "shell"
         assert result.reason.startswith("alias:bash->shell")
 
+    def test_run_shell_command_resolves_to_shell(self) -> None:
+        result = canonicalize_tool_name("run_shell_command", known=["shell"])
+        assert result.canonical == "shell"
+        assert result.reason.startswith("alias:run_shell_command->shell")
+
     def test_read_resolves_to_read_file(self) -> None:
         result = canonicalize_tool_name("read", known=["read_file"])
         assert result.canonical == "read_file"
         assert result.changed
+
+    def test_google_search_resolves_to_web_search(self) -> None:
+        result = canonicalize_tool_name("google_search", known=["web_search"])
+        assert result.canonical == "web_search"
+        assert result.reason.startswith("alias:google_search->web_search")
 
     def test_alias_only_used_when_target_registered(self) -> None:
         """If the alias's target isn't registered, fall through (no invention)."""
         result = canonicalize_tool_name("bash", known=["python"])
         # Falls through to fuzzy and then no_match.
         assert result.canonical != "shell"
+
+
+class TestRepeatedTokenRepair:
+    def test_repeated_tool_name_token_collapses_to_registered_tool(self) -> None:
+        result = canonicalize_tool_name(
+            "write_write_file",
+            known=["read_file", "write_file", "shell"],
+        )
+
+        assert result.canonical == "write_file"
+        assert result.reason.startswith("repeated_token_collapse")
+        assert result.confidence == 0.94
 
 
 class TestFuzzyMatch:

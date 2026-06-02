@@ -273,11 +273,15 @@ def build_agent(
     compactor: Any | None = None,
     max_repair_attempts: int = 3,
     profile: str = "minimal",
+    verify_command: str | None = None,
     phases_enabled: bool = False,
     loop_detector: Any | None = None,
     contracts: Any | None = None,
     tips_provider: Any | None = None,
     resume: Any | None = None,
+    memory_tools_enabled: bool = True,
+    auxiliary_tools_enabled: bool = True,
+    project_context_enabled: bool = True,
 ) -> Agent:
     if not chain:
         raise typer.BadParameter("provider chain is empty")
@@ -289,55 +293,80 @@ def build_agent(
         provider_base_url = base_url if index == 0 else None
         adapters[provider] = build_adapter(provider, base_url=provider_base_url, config=config)
 
-    project_ctx = load_project_context(cwd)
+    project_ctx = load_project_context(cwd) if project_context_enabled else ""
     if project_ctx and system_prompt:
         system_prompt = f"{system_prompt}\n\n{project_ctx}"
     elif project_ctx:
         system_prompt = project_ctx
 
     tools = build_tools(cwd)
-    tools.register(VerifyWorkTool(cwd=cwd))
-    if phases_enabled:
-        tools.register(PhaseTool(activity_store=activity_store))
+    if auxiliary_tools_enabled:
+        tools.register(VerifyWorkTool(cwd=cwd, default_command=verify_command))
+        if phases_enabled:
+            tools.register(PhaseTool(activity_store=activity_store))
     primary_adapter = adapters[chain[0]]
-    tools.register(
-        RequestCritiqueTool(
-            adapter=primary_adapter,
-            model=model,
-            search_fn=build_search_fn(),
+    if auxiliary_tools_enabled:
+        tools.register(
+            RequestCritiqueTool(
+                adapter=primary_adapter,
+                model=model,
+                search_fn=build_search_fn(),
+            )
         )
-    )
 
     if profile == "strict":
+        verify_before_done = VerifyBeforeDoneVerifier(
+            default_verify_command_available=bool(verify_command)
+        )
         structural = ChainedVerifier(
             FileScopeVerifier(),
             ResearchPromotionFlowVerifier(),
             MinimalFixVerifier(),
             TestsBeforeEditVerifier(),
-            VerifyBeforeDoneVerifier(),
+            verify_before_done,
             DiagnosisAlignmentVerifier(),
             MisdirectedSuggestionVerifier(),
             NegativeConstraintVerifier(),
             BugfixCommentRewriteVerifier(),
             PromptSurfaceRevertVerifier(),
             PhaseGateVerifier(),
+            fail_fast=False,
         )
-        verifier = ChainedVerifier(structural, verifier) if verifier is not None else structural
+        verifier = (
+            ChainedVerifier(structural, verifier, fail_fast=False)
+            if verifier is not None
+            else structural
+        )
     elif profile == "diagnostic":
+        verify_before_done = VerifyBeforeDoneVerifier(
+            default_verify_command_available=bool(verify_command)
+        )
         structural = ChainedVerifier(
             FileScopeVerifier(),
             ResearchPromotionFlowVerifier(),
-            VerifyBeforeDoneVerifier(),
+            verify_before_done,
             DiagnosisAlignmentVerifier(),
             MisdirectedSuggestionVerifier(),
             NegativeConstraintVerifier(),
             BugfixCommentRewriteVerifier(),
             PromptSurfaceRevertVerifier(),
+            fail_fast=False,
         )
-        verifier = ChainedVerifier(structural, verifier) if verifier is not None else structural
+        verifier = (
+            ChainedVerifier(structural, verifier, fail_fast=False)
+            if verifier is not None
+            else structural
+        )
     elif profile == "minimal":
-        verify_only = ChainedVerifier(ResearchPromotionFlowVerifier(), VerifyBeforeDoneVerifier())
-        verifier = ChainedVerifier(verify_only, verifier) if verifier is not None else verify_only
+        verify_before_done = VerifyBeforeDoneVerifier(
+            default_verify_command_available=bool(verify_command)
+        )
+        verify_only = ChainedVerifier(ResearchPromotionFlowVerifier(), verify_before_done)
+        verifier = (
+            ChainedVerifier(verify_only, verifier, fail_fast=False)
+            if verifier is not None
+            else verify_only
+        )
 
     approval_policy = ApprovalPolicy(default="prompt", per_tool=dict(config.approval))
     if yes:
@@ -348,19 +377,20 @@ def build_agent(
     else:
         approval_handler = RichApprovalHandler(console=console, session_overrides=session_overrides)
 
-    tools.register(
-        SpawnAgentsTool(
-            provider=chain[0],
-            model=model,
-            cwd=cwd,
-            config=config,
-            build_adapter=build_adapter,
-            build_tools=build_tools,
-            build_search_fn=build_search_fn,
-            approval_policy=approval_policy,
-            approval_handler=approval_handler,
+    if auxiliary_tools_enabled:
+        tools.register(
+            SpawnAgentsTool(
+                provider=chain[0],
+                model=model,
+                cwd=cwd,
+                config=config,
+                build_adapter=build_adapter,
+                build_tools=build_tools,
+                build_search_fn=build_search_fn,
+                approval_policy=approval_policy,
+                approval_handler=approval_handler,
+            )
         )
-    )
 
     multi = len(chain) > 1
     return Agent(
@@ -394,7 +424,7 @@ def build_agent(
         contracts=contracts,
         tips_provider=tips_provider,
         resume=resume,
-        memory_tools_enabled=True,
+        memory_tools_enabled=memory_tools_enabled,
     )
 
 

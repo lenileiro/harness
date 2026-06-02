@@ -82,6 +82,8 @@ def rules_from_metadata(eval_md: str, metadata: dict[str, object]) -> FixtureRul
         ),
         allowed_paths=ensure_list(metadata.get("allowed_paths")),
         disallowed_paths=ensure_list(metadata.get("disallowed_paths")),
+        benchmark_integrity=coerce_bool(metadata.get("benchmark_integrity")),
+        forbidden_repo_urls=ensure_list(metadata.get("forbidden_repo_urls")),
         required_verification=str(metadata.get("required_verification") or ""),
         trap=str(metadata.get("trap") or extract_eval_field(eval_md, "trap")),
         correct_fix=str(metadata.get("correct_fix") or extract_eval_field(eval_md, "correct_fix")),
@@ -104,6 +106,14 @@ def ensure_list(value: object) -> list[str]:
             return parse_csv_field(inner)
         return parse_csv_field(value)
     return [str(value)]
+
+
+def coerce_bool(value: object) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
 
 
 def coerce_optional_list(value: object) -> list[str] | None:

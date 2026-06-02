@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from harness.core.extensions import ToolProvider
@@ -7,7 +8,17 @@ from harness.core.tool_entry import ToolBuildContext, ToolSpec
 from harness.core.tools import ToolRegistry
 from harness.tools.fs import EditFileTool, GlobTool, ListDirTool, ReadFileTool, WriteFileTool
 from harness.tools.shell import ShellTool
-from harness.tools.web import FetchUrlTool, TavilySearchTool
+from harness.tools.web import FetchUrlTool, WebSearchTool
+
+
+def _shell_default_timeout() -> float:
+    raw = os.environ.get("HARNESS_SHELL_DEFAULT_TIMEOUT")
+    if raw is None:
+        return 120.0
+    try:
+        return max(0.1, float(raw))
+    except ValueError:
+        return 120.0
 
 
 class BuiltinToolProvider(ToolProvider):
@@ -43,12 +54,17 @@ class BuiltinToolProvider(ToolProvider):
             ToolSpec(
                 name="shell",
                 category="execution",
-                factory=lambda ctx: ShellTool(cwd=ctx.cwd),
+                factory=lambda ctx: ShellTool(
+                    cwd=ctx.cwd,
+                    default_timeout=_shell_default_timeout(),
+                    clean_env=bool(ctx.get("clean_shell_env", False)),
+                    pipefail=bool(ctx.get("shell_pipefail", False)),
+                ),
             ),
             ToolSpec(
                 name="web_search",
                 category="web",
-                factory=lambda ctx: TavilySearchTool(),
+                factory=lambda ctx: WebSearchTool(),
             ),
             ToolSpec(
                 name="fetch_url",

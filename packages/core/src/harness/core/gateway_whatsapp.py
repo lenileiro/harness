@@ -3,7 +3,10 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import signal
 import subprocess
+import time
+from contextlib import suppress
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
@@ -13,6 +16,8 @@ from harness.core.gateway_whatsapp_assets import (
     WHATSAPP_BRIDGE_JS,
     WHATSAPP_BRIDGE_PACKAGE_JSON,
 )
+
+DEFAULT_GATEWAY_CHILD_TIMEOUT_SECONDS = 600
 
 
 @dataclass(slots=True)
@@ -26,7 +31,7 @@ class WhatsAppBridgeConfig:
     reply_prefix: str = "Harness Agent\n────────────\n"
     max_gateway_concurrency: int = 1
     max_gateway_queue: int = 3
-    gateway_child_timeout_seconds: int = 120
+    gateway_child_timeout_seconds: int = DEFAULT_GATEWAY_CHILD_TIMEOUT_SECONDS
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -105,7 +110,13 @@ def load_whatsapp_bridge_config(cwd: Path) -> WhatsAppBridgeConfig:
         max_gateway_concurrency=max(1, int(payload.get("max_gateway_concurrency", 1))),
         max_gateway_queue=max(0, int(payload.get("max_gateway_queue", 3))),
         gateway_child_timeout_seconds=max(
-            5, int(payload.get("gateway_child_timeout_seconds", 120))
+            5,
+            int(
+                payload.get(
+                    "gateway_child_timeout_seconds",
+                    DEFAULT_GATEWAY_CHILD_TIMEOUT_SECONDS,
+                )
+            ),
         ),
     )
 
@@ -125,6 +136,111 @@ def ensure_whatsapp_bridge_project(cwd: Path) -> Path:
     bridge_path.write_text(WHATSAPP_BRIDGE_JS, encoding="utf-8")
     bridge_path.chmod(0o755)
     return project_dir
+
+
+def _active_whatsapp_bridge_path(cwd: Path) -> Path:
+    return default_whatsapp_session_dir(cwd) / "active-bridge.json"
+
+
+def _read_active_whatsapp_bridge_pid(cwd: Path) -> int | None:
+    path = _active_whatsapp_bridge_path(cwd)
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    try:
+        pid = int(payload.get("pid", 0))
+    except (TypeError, ValueError):
+        return None
+    return pid if pid > 0 else None
+
+
+def _process_command(pid: int) -> str:
+    result = subprocess.run(
+        ["ps", "-p", str(pid), "-o", "command="],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        return ""
+    return result.stdout.strip()
+
+
+def _process_exists(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except OSError:
+        return False
+    return True
+
+
+def _is_whatsapp_bridge_command(cwd: Path, command: str) -> bool:
+    bridge_script = default_whatsapp_project_dir(cwd) / "bridge.js"
+    bridge_paths = {str(bridge_script), str(bridge_script.resolve())}
+    return any(path in command for path in bridge_paths)
+
+
+def _discover_whatsapp_bridge_pids(cwd: Path) -> list[int]:
+    result = subprocess.run(
+        ["ps", "-axo", "pid=,command="],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        return []
+
+    current_pid = os.getpid()
+    pids: list[int] = []
+    for line in result.stdout.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        parts = stripped.split(None, 1)
+        if len(parts) != 2:
+            continue
+        try:
+            pid = int(parts[0])
+        except ValueError:
+            continue
+        if pid <= 0 or pid == current_pid:
+            continue
+        if _is_whatsapp_bridge_command(cwd, parts[1]):
+            pids.append(pid)
+    return pids
+
+
+def _stop_whatsapp_bridge_pid(pid: int, *, grace_seconds: float) -> bool:
+    try:
+        os.kill(pid, signal.SIGTERM)
+    except (OSError, PermissionError):
+        return False
+
+    deadline = time.monotonic() + max(0.0, grace_seconds)
+    while time.monotonic() < deadline:
+        if not _process_exists(pid):
+            return True
+        time.sleep(0.05)
+
+    with suppress(OSError, PermissionError):
+        os.kill(pid, signal.SIGKILL)
+    return True
+
+
+def stop_stale_whatsapp_bridge(cwd: Path, *, grace_seconds: float = 1.0) -> bool:
+    pid = _read_active_whatsapp_bridge_pid(cwd)
+    stale_pids: list[int] = []
+    if pid and pid != os.getpid() and _is_whatsapp_bridge_command(cwd, _process_command(pid)):
+        stale_pids.append(pid)
+    for discovered_pid in _discover_whatsapp_bridge_pids(cwd):
+        if discovered_pid not in stale_pids:
+            stale_pids.append(discovered_pid)
+
+    stopped = False
+    for stale_pid in stale_pids:
+        stopped = _stop_whatsapp_bridge_pid(stale_pid, grace_seconds=grace_seconds) or stopped
+    return stopped
 
 
 def install_whatsapp_bridge_dependencies(
@@ -156,6 +272,7 @@ def is_whatsapp_paired(cwd: Path) -> bool:
 def build_whatsapp_bridge_env(cwd: Path) -> dict[str, str]:
     config = load_whatsapp_bridge_config(cwd)
     dotenv_path = cwd / ".env"
+    shell_timeout_seconds = max(1, min(30, config.gateway_child_timeout_seconds - 5))
     return {
         "HARNESS_WHATSAPP_MODE": config.mode,
         "HARNESS_WHATSAPP_ALLOWED_USERS": ",".join(config.allowed_users),
@@ -166,6 +283,7 @@ def build_whatsapp_bridge_env(cwd: Path) -> dict[str, str]:
         "HARNESS_WHATSAPP_MAX_CONCURRENCY": str(config.max_gateway_concurrency),
         "HARNESS_WHATSAPP_MAX_QUEUE": str(config.max_gateway_queue),
         "HARNESS_WHATSAPP_CHILD_TIMEOUT_MS": str(config.gateway_child_timeout_seconds * 1000),
+        "HARNESS_SHELL_DEFAULT_TIMEOUT": str(shell_timeout_seconds),
     }
 
 
@@ -205,6 +323,7 @@ def start_whatsapp_bridge(
     project_dir = ensure_whatsapp_bridge_project(cwd)
     session_dir = default_whatsapp_session_dir(cwd)
     session_dir.mkdir(parents=True, exist_ok=True)
+    stop_stale_whatsapp_bridge(cwd)
     config = load_whatsapp_bridge_config(cwd)
     env = build_whatsapp_bridge_env(cwd)
     runtime_env = {**os.environ, **env}
@@ -318,4 +437,5 @@ __all__ = [
     "save_whatsapp_bridge_config",
     "send_whatsapp_text_message",
     "start_whatsapp_bridge",
+    "stop_stale_whatsapp_bridge",
 ]

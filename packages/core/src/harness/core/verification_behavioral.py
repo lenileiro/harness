@@ -146,27 +146,20 @@ class MisdirectedSuggestionVerifier:
         return VerificationResult(
             can_finish=False,
             reason=(
-                f"STOP — the diff contains unnecessary changes that you MUST "
-                f"revert before finishing.\n\n"
-                f"PROOF this is wrong: the failing tests were "
+                f"The diff contains changes outside the verified failure evidence.\n\n"
+                f"Observed failing tests were "
                 f"{', '.join(all_failing[:3])}. "
                 f"Their names point at concepts "
                 f"{sorted(novel_test_keywords)[:5]} which appear nowhere in "
                 f"the user's prompt — that means the user's literal instruction "
-                f"was a MISDIAGNOSIS. The real bug is what the test names "
-                f"describe, and your {aligned_count} aligned edit(s) already "
+                f"does not identify the verified failure surface. The real bug is "
+                f"what the test names describe, and {aligned_count} aligned edit(s) already "
                 f"fix it. Tests pass right now because of those aligned edits, "
-                f"NOT because of the unaligned ones below.\n\n"
-                f"REQUIRED ACTION: use edit_file to revert these unaligned "
-                f"changes to their ORIGINAL values:\n"
+                f"not because of the unaligned ones below.\n\n"
+                f"Unaligned changes:\n"
                 f"{unaligned_block}\n\n"
-                f"After reverting, call verify_work again. The tests will "
-                f"still pass — that is the proof these edits were unnecessary "
-                f"scope creep. Do NOT keep both fixes 'just in case'; the user "
-                f"prompt was wrong about the fix, and leaving the wrong fix in "
-                f"the diff is a real defect. Following the prompt literally is "
-                f"the wrong call here; the failing test names are the ground "
-                f"truth, not the prompt's suggested action."
+                f"Harness cannot accept a final diff that keeps changes outside "
+                f"the verified failure surface."
             ),
             confidence=0.85,
             verifier_name=self.name,
@@ -242,14 +235,6 @@ class PromptSurfaceRevertVerifier:
             return VerificationResult(
                 can_finish=True,
                 reason="no verify_work calls — nothing to validate against prompt drift",
-                confidence=0.4,
-                verifier_name=self.name,
-            )
-
-        if verify_events[-1].data.get("is_error"):
-            return VerificationResult(
-                can_finish=True,
-                reason="latest verify_work failed — prompt-surface revert not applicable yet",
                 confidence=0.4,
                 verifier_name=self.name,
             )
@@ -330,12 +315,29 @@ class PromptSurfaceRevertVerifier:
                 verifier_name=self.name,
             )
 
+        latest_verify_failed = bool(verify_events[-1].data.get("is_error"))
+        verification_state = (
+            "The latest verify_work is still failing, so this prompt-surface edit "
+            "must be removed as part of the remaining repair instead of being "
+            "carried forward."
+            if latest_verify_failed
+            else (
+                "Tests now pass, but the current diff still contains the prompt's "
+                "disproven symptom edit."
+            )
+        )
+        historical_context = (
+            f"There have been {len(historical_failures)} failing verify_work run(s), "
+            if latest_verify_failed
+            else f"There were {len(historical_failures)} failing verify_work run(s) before success, "
+        )
         return VerificationResult(
             can_finish=False,
             reason=(
-                "STOP — tests now pass, but the current diff still contains the "
-                "prompt's disproven symptom edit alongside later repair work. "
-                f"There were {len(historical_failures)} failing verify_work run(s) before success, "
+                "STOP — the current diff still contains the prompt's disproven "
+                "symptom edit alongside later repair work. "
+                f"{verification_state} "
+                f"{historical_context}"
                 f"and you made {later_writes} additional write(s) after the first failure. "
                 "That means the literal prompt edit did not solve the problem on its own. "
                 "The current diff still changes concrete prompt-surface identifiers "

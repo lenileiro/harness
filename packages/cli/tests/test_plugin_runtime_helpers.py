@@ -6,8 +6,8 @@ import pytest
 import typer
 
 from harness.cli.config import HarnessConfig
-from harness.cli.runtime_helpers import build_critic, build_verifier
-from harness.core import Capabilities
+from harness.cli.runtime_helpers import build_critic, build_search_fn, build_verifier
+from harness.core import Capabilities, ToolResult
 
 
 class FakeAdapter:
@@ -94,6 +94,22 @@ class DemoProvider:
         build_adapter=lambda *args, **kwargs: FakeAdapter(),
     )
     assert critic is not None
+
+
+def test_build_search_fn_does_not_require_tavily_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("TAVILY_API_KEY", raising=False)
+
+    async def _fake_call(self, call):
+        return ToolResult(
+            tool_call_id=call.id,
+            name="web_search",
+            content="Results for: OpenAI\n\n1. OpenAI News",
+            metadata={"backend": "duckduckgo"},
+        )
+
+    monkeypatch.setattr("harness.tools.web.WebSearchTool.__call__", _fake_call)
+
+    assert build_search_fn() is not None
 
 
 def test_build_verifier_rejects_unknown_plugin(tmp_path: Path) -> None:

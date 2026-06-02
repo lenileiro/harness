@@ -8,8 +8,10 @@ from unittest.mock import AsyncMock, patch
 from rich.console import Console
 from typer.testing import CliRunner
 
+from harness.cli import render as render_module
 from harness.cli.__main__ import app
-from harness.cli.render import _render_session_diff
+from harness.cli.render import _render_session, _render_session_diff
+from harness.core import Message, Session, ToolCall
 from harness.tasks import ActivityEvent
 
 
@@ -78,6 +80,42 @@ class TestRenderSessionDiff:
         con, buf = _console()
         _render_session_diff([], con)
         assert "No file changes" in buf.getvalue()
+
+
+def test_render_session_escapes_agent_content_markup(monkeypatch) -> None:
+    con, buf = _console()
+    monkeypatch.setattr(render_module, "console", con)
+    session = Session(
+        id="s1",
+        provider="mock",
+        model="m",
+        cwd="[/workspace]",  # type: ignore[arg-type]
+        messages=[
+            Message(role="user", content="show [/workspace]"),
+            Message(
+                role="assistant",
+                content="I saw [/workspace]",
+                tool_calls=[
+                    ToolCall(
+                        id="call_1",
+                        name="shell",
+                        arguments={"command": "printf '[/workspace]'"},
+                    )
+                ],
+            ),
+            Message(
+                role="tool",
+                name="shell",
+                tool_call_id="call_1",
+                content="[/workspace]",
+            ),
+        ],
+        status="done",
+    )
+
+    _render_session(session)
+
+    assert "[/workspace]" in buf.getvalue()
 
     def test_write_new_file_shows_additions(self) -> None:
         con, buf = _console()

@@ -12,8 +12,8 @@ from harness.core.prediction import (
 from harness.core.schemas import ToolCall, ToolResult
 
 
-def _call(name: str = "some_tool") -> ToolCall:
-    return ToolCall(id="call_001", name=name, arguments={})
+def _call(name: str = "some_tool", **arguments: object) -> ToolCall:
+    return ToolCall(id="call_001", name=name, arguments=arguments)
 
 
 def _result(*, is_error: bool = False) -> ToolResult:
@@ -62,6 +62,20 @@ class TestConsequencePredictor:
         assert pred.expected_status == "ok_or_error"
         assert pred.confidence == pytest.approx(0.60)
 
+    def test_tool_expected_status_override_is_used(self) -> None:
+        predictor = ConsequencePredictor()
+        call = _call("shell", command="go test ./...")
+
+        pred = predictor.predict(
+            tool_name="shell",
+            call=call,
+            effect_scope="workspace_durable",
+            expected_status="ok_or_error",
+        )
+
+        assert pred.expected_status == "ok_or_error"
+        assert compare_prediction(pred, _result(is_error=True)).matched is True
+
     def test_prediction_id_is_stable_and_prefixed(self) -> None:
         predictor = ConsequencePredictor()
         call = _call("read_file")
@@ -84,6 +98,44 @@ class TestConsequencePredictor:
         for scope in ("read_only", "workspace_durable", "external_side_effect", None):
             pred = predictor.predict(tool_name="t", call=call, effect_scope=scope)  # type: ignore[arg-type]
             assert len(pred.possible_failures) > 0
+
+    def test_missing_required_argument_predicts_blocked_before_execution(self) -> None:
+        predictor = ConsequencePredictor()
+        call = _call("apply_patch")
+
+        pred = predictor.predict(
+            tool_name="apply_patch",
+            call=call,
+            effect_scope="workspace_durable",
+            parameters_schema={
+                "type": "object",
+                "properties": {"patch": {"type": "string"}},
+                "required": ["patch"],
+            },
+        )
+
+        assert pred.expected_status == "blocked_before_execution"
+        assert pred.confidence == pytest.approx(0.98)
+        assert pred.reversibility == "always"
+        assert pred.possible_failures == ["invalid_required_argument:patch"]
+
+    def test_blank_required_string_predicts_blocked_before_execution(self) -> None:
+        predictor = ConsequencePredictor()
+        call = _call("apply_patch", patch="   ")
+
+        pred = predictor.predict(
+            tool_name="apply_patch",
+            call=call,
+            effect_scope="workspace_durable",
+            parameters_schema={
+                "type": "object",
+                "properties": {"patch": {"type": "string"}},
+                "required": ["patch"],
+            },
+        )
+
+        assert pred.expected_status == "blocked_before_execution"
+        assert pred.possible_failures == ["invalid_required_argument:patch"]
 
 
 class TestComparePrediction:

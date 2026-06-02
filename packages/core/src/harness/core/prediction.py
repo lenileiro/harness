@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import hashlib
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -141,18 +141,70 @@ class ConsequencePredictor:
         tool_name: str,
         call: ToolCall,
         effect_scope: EffectScope | None,
+        parameters_schema: dict[str, Any] | None = None,
+        expected_status: str | None = None,
     ) -> ToolPrediction:
+        invalid_arguments = _invalid_required_arguments(call, parameters_schema)
+        if invalid_arguments:
+            return ToolPrediction(
+                prediction_id=_pred_id(call.id, effect_scope),
+                tool_call_id=call.id,
+                tool_name=tool_name,
+                effect_scope=effect_scope,
+                expected_status="blocked_before_execution",
+                possible_failures=[
+                    f"invalid_required_argument:{name}" for name in invalid_arguments
+                ],
+                confidence=0.98,
+                reversibility="always",
+            )
         cfg = _SCOPE_CONFIG[effect_scope]
+        status = _coerce_expected_status(expected_status) or cfg["status"]
         return ToolPrediction(
             prediction_id=_pred_id(call.id, effect_scope),
             tool_call_id=call.id,
             tool_name=tool_name,
             effect_scope=effect_scope,
-            expected_status=cfg["status"],
+            expected_status=status,
             possible_failures=cfg["failures"],
             confidence=cfg["confidence"],
             reversibility=cfg["reversibility"],
         )
+
+
+def _invalid_required_arguments(
+    call: ToolCall,
+    parameters_schema: dict[str, Any] | None,
+) -> list[str]:
+    if not isinstance(parameters_schema, dict):
+        return []
+    required = parameters_schema.get("required")
+    if not isinstance(required, list):
+        return []
+    properties = parameters_schema.get("properties")
+    if not isinstance(properties, dict):
+        properties = {}
+    invalid: list[str] = []
+    for raw_name in required:
+        if not isinstance(raw_name, str) or not raw_name:
+            continue
+        if raw_name not in call.arguments:
+            invalid.append(raw_name)
+            continue
+        value = call.arguments.get(raw_name)
+        property_schema = properties.get(raw_name)
+        expected_type = property_schema.get("type") if isinstance(property_schema, dict) else None
+        if value is None or (
+            expected_type == "string" and isinstance(value, str) and not value.strip()
+        ):
+            invalid.append(raw_name)
+    return invalid
+
+
+def _coerce_expected_status(value: str | None) -> ExpectedStatus | None:
+    if value in {"ok", "ok_or_error", "blocked_before_execution"}:
+        return cast(ExpectedStatus, value)
+    return None
 
 
 # ---------------------------------------------------------------------------

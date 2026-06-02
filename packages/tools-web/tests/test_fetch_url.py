@@ -68,6 +68,23 @@ class TestFetchUrl:
         assert result.is_error is True
         assert "too large" in result.content
 
+    async def test_large_allowed_body_returns_truncated_visible_content(self) -> None:
+        body = ("0123456789" * 20).encode()
+        result = await _run(
+            lambda _r: httpx.Response(200, headers={"content-type": "text/plain"}, content=body),
+            max_bytes=1024,
+            max_output_chars=25,
+        )
+        assert result.is_error is False
+        assert "0123456789012345678901234" in result.content
+        assert "01234567890123456789012345" not in result.content
+        assert "[truncated: showing first 25 of 200 characters" in result.content
+        assert result.metadata is not None
+        assert result.metadata["bytes"] == 200
+        assert result.metadata["characters"] == 200
+        assert result.metadata["returned_characters"] == 25
+        assert result.metadata["truncated"] is True
+
     async def test_non_http_scheme_refused(self) -> None:
         async with httpx.AsyncClient(
             transport=httpx.MockTransport(lambda _r: httpx.Response(200, content=b"x"))
@@ -94,6 +111,7 @@ class TestFetchUrl:
         assert result.is_error is True
         assert "connection error" in result.content
 
-    async def test_default_approval_is_prompt(self) -> None:
+    async def test_default_approval_is_auto_read_only(self) -> None:
         tool = FetchUrlTool()
-        assert tool.approval == "prompt"
+        assert tool.approval == "auto"
+        assert tool.effect_scope == "read_only"

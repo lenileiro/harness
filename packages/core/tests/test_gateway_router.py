@@ -5,8 +5,9 @@ from pathlib import Path
 from typing import cast
 
 from harness.core.approval import ApprovalStore
-from harness.core.gateway_models import GatewayMessage
-from harness.core.gateway_router import dispatch_gateway_message
+from harness.core.dynamic_workflows import WorkflowStore, default_workflow_root
+from harness.core.gateway_models import GatewayMessage, GatewayUserProfile
+from harness.core.gateway_router import dispatch_gateway_message, is_gateway_control_message
 from harness.core.gateway_sessions import GatewaySessionStore
 from harness.core.scheduler_store import SchedulerStore
 
@@ -119,6 +120,138 @@ def test_gateway_router_can_schedule_reminder_intent(tmp_path: Path, monkeypatch
     assert len(profile.active_work) == 1
     assert profile.active_work[0].ref == f"job:{job.id}"
     assert profile.active_work[0].summary.startswith("Okay. I'll remind you")
+    assert (
+        tmp_path / ".harness" / "gateway" / "profiles" / "gwp-whatsapp-15551234567" / "profile.json"
+    ).is_file()
+
+
+def test_gateway_session_store_reads_legacy_flat_profile(tmp_path: Path) -> None:
+    session_store = GatewaySessionStore(root=tmp_path / ".harness" / "gateway")
+    legacy = tmp_path / ".harness" / "gateway" / "profiles" / "whatsapp-15551234567.json"
+    legacy.parent.mkdir(parents=True)
+    legacy.write_text(
+        "{\n"
+        '  "id": "gp-whatsapp-15551234567-old",\n'
+        '  "transport": "whatsapp",\n'
+        '  "user_id": "15551234567",\n'
+        '  "active_work": [],\n'
+        '  "recent_threads": ["thread-a"],\n'
+        '  "updated_at": "2026-05-31T00:00:00+00:00",\n'
+        '  "metadata": {}\n'
+        "}\n",
+        encoding="utf-8",
+    )
+
+    profile = session_store.load_profile("whatsapp", "15551234567")
+
+    assert profile.id == "gp-whatsapp-15551234567-old"
+    assert profile.recent_threads == ["thread-a"]
+    session_store.save_profile(
+        GatewayUserProfile(
+            id="gwp-whatsapp-15551234567",
+            transport=profile.transport,
+            user_id=profile.user_id,
+            recent_threads=profile.recent_threads,
+        )
+    )
+    assert (
+        tmp_path / ".harness" / "gateway" / "profiles" / "gwp-whatsapp-15551234567" / "profile.json"
+    ).is_file()
+
+
+def test_gateway_router_can_create_workflow(tmp_path: Path) -> None:
+    session_store = GatewaySessionStore(root=tmp_path / ".harness" / "gateway")
+    scheduler_store = SchedulerStore(root=tmp_path / ".harness" / "scheduler")
+
+    async def _run() -> None:
+        reply, session = await dispatch_gateway_message(
+            cwd=tmp_path,
+            session_store=session_store,
+            scheduler_store=scheduler_store,
+            message=GatewayMessage(
+                id="msg-workflow",
+                transport="whatsapp",
+                user_id="15551234567",
+                thread_id="15551234567@s.whatsapp.net",
+                text="workflow start audit checkout from every angle",
+            ),
+        )
+        assert reply.command == "workflow.start"
+        assert reply.status == "ok"
+        assert "harness workflow resume" in reply.text
+        assert session.last_run_id == reply.data["workflow_id"]
+
+    asyncio.run(_run())
+
+    workflow_id = session_store.get_or_create_session(
+        transport="whatsapp",
+        user_id="15551234567",
+        thread_id="15551234567@s.whatsapp.net",
+    ).last_run_id
+    run = WorkflowStore(root=default_workflow_root(tmp_path)).load_run(workflow_id)
+    assert run.goal == "audit checkout from every angle"
+    assert len(run.nodes) == 7
+    profile = session_store.get_or_create_profile(transport="whatsapp", user_id="15551234567")
+    assert profile.active_work[0].ref == f"workflow:{workflow_id}"
+    assert is_gateway_control_message("workflow start audit checkout") is True
+
+
+def test_gateway_router_workflow_status_resume_events_and_cancel(
+    tmp_path: Path, monkeypatch
+) -> None:
+    session_store = GatewaySessionStore(root=tmp_path / ".harness" / "gateway")
+    scheduler_store = SchedulerStore(root=tmp_path / ".harness" / "scheduler")
+    launched: dict[str, object] = {}
+
+    class PopenStub:
+        pid = 9876
+
+        def __init__(self, args, **kwargs) -> None:
+            launched["args"] = list(args)
+            launched["cwd"] = kwargs.get("cwd")
+
+    monkeypatch.setattr("harness.core.gateway_router.subprocess.Popen", PopenStub)
+
+    async def _message(text: str):
+        return await dispatch_gateway_message(
+            cwd=tmp_path,
+            session_store=session_store,
+            scheduler_store=scheduler_store,
+            message=GatewayMessage(
+                id=f"msg-{text}",
+                transport="whatsapp",
+                user_id="15551234567",
+                thread_id="15551234567@s.whatsapp.net",
+                text=text,
+            ),
+        )
+
+    async def _run() -> None:
+        start_reply, _ = await _message("workflow start audit status path")
+        workflow_id = start_reply.data["workflow_id"]
+
+        status_reply, _ = await _message(f"workflow status {workflow_id}")
+        assert status_reply.command == "workflow.status"
+        assert "pending" in status_reply.text
+
+        resume_reply, _ = await _message(f"workflow resume {workflow_id}")
+        assert resume_reply.command == "workflow.resume"
+        assert resume_reply.data["pid"] == "9876"
+
+        events_reply, _ = await _message(f"workflow events {workflow_id}")
+        assert events_reply.command == "workflow.events"
+        assert "workflow.launch" in events_reply.text
+
+        cancel_reply, session = await _message(f"workflow cancel {workflow_id}")
+        assert cancel_reply.command == "workflow.cancel"
+        assert cancel_reply.data["status"] == "cancelled"
+        assert session.last_run_id == workflow_id
+
+    asyncio.run(_run())
+
+    assert cast(list[str], launched["args"])[1:4] == ["run", "harness", "workflow"]
+    assert is_gateway_control_message("workflow status workflow-123") is True
+    assert is_gateway_control_message("workflow idea for next quarter") is False
 
 
 def test_gateway_router_can_schedule_daily_reminder(tmp_path: Path, monkeypatch) -> None:

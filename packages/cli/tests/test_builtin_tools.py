@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from harness.cli.builtin_tools import BuiltinToolProvider
 
 
@@ -27,6 +29,16 @@ def test_builtin_tool_provider_uses_cwd_for_workspace_tools(tmp_path: Path) -> N
 
     assert Path(read_tool.cwd) == tmp_path  # type: ignore[attr-defined]
     assert Path(shell_tool.cwd) == tmp_path  # type: ignore[attr-defined]
+
+
+def test_builtin_tool_provider_honors_shell_timeout_env(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HARNESS_SHELL_DEFAULT_TIMEOUT", "7.5")
+    registry = BuiltinToolProvider().build_registry(cwd=tmp_path)
+    shell_tool = registry.get("shell")
+
+    assert shell_tool.default_timeout == 7.5  # type: ignore[attr-defined]
 
 
 def test_builtin_tool_provider_can_filter_tool_subset(tmp_path: Path) -> None:

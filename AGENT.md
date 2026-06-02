@@ -1,0 +1,11 @@
+## Implementation Rules
+
+- Keep the harness general-purpose. Do not add domain-specific regex lists, keyword buckets, or special-case tools for examples such as weather, finance, sports, or coding requests.
+- Treat `_MARKERS`-style routing tables and value-list regexes as implementation smells. Prefer explicit state, workflow planning, tool evidence, classifiers with tests, or verifier contracts that are domain-neutral.
+- Workflow agents should inspect their environment before work that depends on local tools, packages, or commands. If a tool is missing, that evidence should feed planning, alternative selection, or web research; after installs or updates, the agent must re-check the environment before relying on it.
+- Web research is a normal read-only capability for autonomous Harness work. Restrict it only through task-scoped policy for concrete contamination risks such as hidden benchmark artifacts, source-repository solution lookup, or user-forbidden domains.
+- Benchmark agents must not have access to reference solutions, hidden tests, or unrestricted repository search. Use solution-bearing runners only to validate task wiring, never as an LLM benchmark result.
+- Harness runtime must not be given user-prepared hidden verifiers, hidden tests, solution patches, or benchmark grading entry points as its own verifier or tool. Those artifacts are evaluator-only and may be used after the agent finishes to grade the final patch, not to guide or validate the agent while it is working.
+- Benchmark runners must not pre-start or operate the task Docker container for the agent. Provide only public task metadata and ordinary tools; the agent must discover Docker/git/environment setup and run whatever public checks it needs on its own.
+- Benchmark prompts should stay short, natural, and behavior-focused. Do not add SWE-bench-style step lists, "minimal non-test changes" constraints, or instructions that tell the agent not to create tests; enforce contamination and verification requirements through tools, policies, and verifiers.
+- Do not add Pier-specific or Pier-compatible agent classes, bridge files, or compatibility wrappers. External benchmark/workspace execution should be handled by Harness-owned runtimes, workflow planning, and tool registries.

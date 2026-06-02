@@ -202,6 +202,37 @@ class TestWireAndHeaders:
         assert captured["url"] == "https://api.openai.com/v1/chat/completions"
         assert captured["headers"]["authorization"] == "Bearer my-key"
 
+    async def test_required_tool_choice_is_forwarded(self) -> None:
+        captured: dict = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            captured["body"] = json.loads(request.content)
+            return httpx.Response(200, content=make_sse(text_chunk("ok"), "[DONE]"))
+
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "web_search",
+                    "description": "Search the web.",
+                    "parameters": {"type": "object", "properties": {}},
+                },
+            }
+        ]
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            adapter = OpenAIAdapter(api_key="k", client=client)
+            await collect(
+                adapter.stream(
+                    model="gpt-5.5",
+                    messages=[Message(role="user", content="weather")],
+                    tools=tools,
+                    tool_choice="required",
+                )
+            )
+
+        assert captured["body"]["tools"] == tools
+        assert captured["body"]["tool_choice"] == "required"
+
 
 @pytest.mark.asyncio
 class TestErrorMapping:

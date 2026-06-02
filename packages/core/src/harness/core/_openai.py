@@ -28,6 +28,8 @@ def message_to_wire(m: Message) -> dict[str, Any]:
     out: dict[str, Any] = {"role": m.role}
     if m.content is not None:
         out["content"] = m.content
+    else:
+        out["content"] = ""
     if m.tool_calls:
         out["tool_calls"] = [
             {

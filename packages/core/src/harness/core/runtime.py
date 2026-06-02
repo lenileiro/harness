@@ -3,12 +3,12 @@
 The Agent ties adapters, tools, storage, planner, approval, and failover into
 a single ReAct loop. Inputs are `RunRequest`; outputs are streams of `Event`.
 
-Failover semantics in v1:
-- The failover chain is consulted on the *first* call to an adapter.
-- Once any event has been yielded to the consumer we stop failing over —
-  partial state can't be cleanly retried against a different provider.
-- Adapter-level errors before any yield trigger backoff + retry per
-  `FailoverPolicy.should_retry`.
+Failover semantics:
+- The failover chain is consulted for retryable adapter errors.
+- Text streamed to the consumer is not replayable, so failover stops after
+  visible text. Durable tool evidence is stored in the session, so another
+  provider may continue from it.
+- Adapter-level errors trigger backoff + retry per `FailoverPolicy.should_retry`.
 
 Tool dispatch:
 - The adapter emits each ToolCallEvent during streaming AND echoes the
@@ -25,9 +25,11 @@ injected dependencies.
 from __future__ import annotations
 
 import asyncio
+import os
 import time
-from collections.abc import AsyncIterator
-from typing import TYPE_CHECKING, Any
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import suppress
+from typing import TYPE_CHECKING, Any, cast
 
 if TYPE_CHECKING:
     from harness.core.agent_iter import AgentRun
@@ -47,8 +49,12 @@ from harness.core.errors import (
     Handoff,
     HarnessError,
     InternalError,
+    ModelUnavailableError,
     StallError,
     ToolRetry,
+)
+from harness.core.errors import (
+    TimeoutError as HarnessTimeoutError,
 )
 from harness.core.events import (
     Critique,
@@ -58,11 +64,13 @@ from harness.core.events import (
     GuardrailTrippedEvent,
     HandoffEvent,
     ModelRequestEvent,
+    ModelSelectedEvent,
     PredictionEvent,
     PredictionMismatchEvent,
     StepCompleted,
     StepStarted,
     TextDelta,
+    ToolCallEvent,
     ToolResultEvent,
     Verification,
 )
@@ -86,8 +94,23 @@ from harness.core.tools import (
     tool_matches_phase,
 )
 from harness.core.verification import EvidenceContract, VerificationGateway, Verifier
+from harness.core.verification_structural import (
+    missing_verify_work_after_last_state_change,
+    tool_event_changes_state,
+    verify_work_event_changes_state,
+)
 
 logger = get_logger("harness.runtime")
+
+_AUTONOMOUS_REPAIR_GUIDANCE = (
+    "\n\nContinue autonomously from this evidence. Use the available tools to inspect, "
+    "edit, or verify the next concrete step. Do not ask the user to choose an "
+    "implementation, test subset, dependency install, purchase/support path, or "
+    "confirmation unless the available tools cannot make meaningful progress. If "
+    "a local tool or dependency appears missing, inspect the project setup, try an "
+    "available install or equivalent command, and use web_search for public "
+    "documentation when that can unblock the objective."
+)
 
 
 def _normalize_outcome(raw: bool | ApprovalOutcome) -> ApprovalOutcome:
@@ -106,6 +129,93 @@ _OUTCOME_TO_ACTIVITY = {
     "denied": activity_kinds.APPROVAL_DENIED,
     "queued": activity_kinds.APPROVAL_QUEUED,
 }
+
+_DEFAULT_MODEL_STREAM_IDLE_TIMEOUT_SECONDS = 45.0
+_DEFAULT_MODEL_TURN_TIMEOUT_SECONDS = 60.0
+_RUNTIME_DONE_CONTROL_KEY = "harness_runtime"
+_RUNTIME_DONE_VERIFY_CURRENT_STATE = "verify_current_state"
+_DIRECT_MUTATING_TOOL_NAMES = frozenset({"write_file", "edit_file", "apply_diff", "patch"})
+_WORKSPACE_CHANGE_TOOL_NAMES = _DIRECT_MUTATING_TOOL_NAMES | frozenset(
+    {"shell", "bash", "run_command", "execute"}
+)
+
+
+def _model_stream_idle_timeout_seconds() -> float:
+    raw = os.environ.get("HARNESS_MODEL_STREAM_IDLE_TIMEOUT", "").strip()
+    if raw:
+        with suppress(ValueError):
+            return max(0.1, float(raw))
+    return _DEFAULT_MODEL_STREAM_IDLE_TIMEOUT_SECONDS
+
+
+def _model_turn_timeout_seconds() -> float:
+    raw = os.environ.get("HARNESS_MODEL_TURN_TIMEOUT", "").strip()
+    if raw:
+        with suppress(ValueError):
+            return max(0.1, float(raw))
+    return _DEFAULT_MODEL_TURN_TIMEOUT_SECONDS
+
+
+def _runtime_verify_current_state_result(*, reason: str) -> dict[str, dict[str, str]]:
+    return {
+        _RUNTIME_DONE_CONTROL_KEY: {
+            "action": _RUNTIME_DONE_VERIFY_CURRENT_STATE,
+            "reason": reason,
+        }
+    }
+
+
+def _done_requests_current_state_verification(event: Event) -> bool:
+    if not isinstance(event, Done) or not isinstance(event.structured_result, dict):
+        return False
+    control = event.structured_result.get(_RUNTIME_DONE_CONTROL_KEY)
+    return isinstance(control, dict) and control.get("action") == _RUNTIME_DONE_VERIFY_CURRENT_STATE
+
+
+async def _ensure_adapter_supports_tools(
+    adapter: Adapter,
+    *,
+    model: str,
+) -> None:
+    """Fail before sending tool schemas to a model that cannot use them."""
+    model_checker = getattr(adapter, "model_supports_tools", None)
+    if callable(model_checker):
+        supports_tools = await cast(Callable[[str], Awaitable[bool]], model_checker)(model)
+        if supports_tools is False:
+            provider = getattr(adapter, "name", "adapter")
+            raise ModelUnavailableError(
+                f"{provider} model {model!r} does not support tool use; choose a model whose "
+                "provider metadata includes the `tools` parameter."
+            )
+        if supports_tools is True:
+            return
+
+    capabilities = await adapter.capabilities()
+    if not capabilities.tool_use:
+        provider = getattr(adapter, "name", "adapter")
+        raise ModelUnavailableError(f"{provider} does not support tool use")
+
+
+async def _events_with_idle_timeout(
+    source: AsyncIterator[Event],
+    *,
+    timeout_seconds: float,
+) -> AsyncIterator[Event]:
+    iterator = source.__aiter__()
+    while True:
+        try:
+            event = await asyncio.wait_for(iterator.__anext__(), timeout=timeout_seconds)
+        except StopAsyncIteration:
+            return
+        except TimeoutError as exc:
+            aclose = getattr(iterator, "aclose", None)
+            if aclose is not None:
+                with suppress(Exception):
+                    await aclose()
+            raise HarnessTimeoutError(
+                f"model stream produced no events for {timeout_seconds:.1f}s"
+            ) from exc
+        yield event
 
 
 class Agent:
@@ -223,6 +333,15 @@ class Agent:
         self._memory_tools_registered = False
         """Idempotent guard so the tools are only registered once even
         if the same Agent instance handles multiple runs."""
+        self._model_stream_idle_timeout_seconds = _model_stream_idle_timeout_seconds()
+        self._model_turn_timeout_seconds = _model_turn_timeout_seconds()
+        self._ephemeral_activity: dict[str, list[ActivityEvent]] = {}
+        """In-memory activity ledger used when no ActivityStore is configured.
+
+        Structural verifiers rely on tool evidence. Direct Agent users should
+        not silently lose those defenses just because they did not provide a
+        durable activity store.
+        """
 
     # ------------------------------------------------------------------ #
     # Approval replay                                                     #
@@ -302,7 +421,27 @@ class Agent:
                 )
 
             # Overwrite the queued placeholder in transcript.
-            tool_msg.content = result.content
+            updated_session = session.model_copy(deep=True)
+            updated_tool_msg = next(
+                (
+                    m
+                    for m in updated_session.messages
+                    if m.role == "tool" and m.tool_call_id == approval.tool_call_id
+                ),
+                None,
+            )
+            if updated_tool_msg is None:
+                logger.warning(
+                    "agent.approval.replay.no_tool_message_after_clone",
+                    approval=approval.id,
+                    tool_call_id=approval.tool_call_id,
+                )
+                continue
+            updated_tool_msg.content = result.content
+            updated_session.touch()
+            await self.storage.save(updated_session)
+            session.messages = updated_session.messages
+            session.updated_at = updated_session.updated_at
             await self.approval_store.mark_replayed(approval.id)
             await self._emit(
                 session,
@@ -315,10 +454,8 @@ class Agent:
                 },
             )
 
-        # Persist the mutated transcript so subsequent loads see the real
-        # results, not the queued placeholders.
-        session.touch()
-        await self.storage.save(session)
+        # The transcript was already persisted per replay before each approval
+        # was marked replayed, so there is nothing left to flush here.
 
     # ------------------------------------------------------------------ #
     # Activity log emission                                               #
@@ -330,16 +467,16 @@ class Agent:
         Swallows storage errors (logged, not raised) so a flaky ledger never
         breaks the agent loop.
         """
-        if self.activity_store is None:
-            return
+        event = ActivityEvent(
+            task_id=session.task_id,
+            session_id=session.id,
+            kind=kind,
+            data=data or {},
+        )
+        self._ephemeral_activity.setdefault(session.id, []).append(event)
         try:
-            event = ActivityEvent(
-                task_id=session.task_id,
-                session_id=session.id,
-                kind=kind,
-                data=data or {},
-            )
-            await self.activity_store.append_activity(event)
+            if self.activity_store is not None:
+                await self.activity_store.append_activity(event)
         except Exception as exc:
             logger.warning("agent.activity.emit_failed", kind=kind, error=str(exc))
 
@@ -605,6 +742,7 @@ class Agent:
                     {"step": step_idx, "description": step.description},
                 )
 
+                verify_current_state = False
                 async for event in self._step_with_failover(
                     request=request,
                     session=session,
@@ -613,7 +751,11 @@ class Agent:
                 ):
                     any_yielded = True
                     yield event
+                    if _done_requests_current_state_verification(event):
+                        verify_current_state = True
 
+                if verify_current_state:
+                    break
                 yield StepCompleted(step=step_idx)
                 await self._emit(session, activity_kinds.STEP_COMPLETED, {"step": step_idx})
         except asyncio.CancelledError:
@@ -685,7 +827,8 @@ class Agent:
                     if critique_text:
                         yield Critique(attempt=_repair_attempt + 1, text=critique_text)
 
-                # Build the repair directive: critique (if any) + raw failure output.
+                # Build the repair directive from verifier evidence only. The verifier/tool
+                # surface owns the checks; the model should decide the next action itself.
                 attempt_label = (
                     f"Verification failed (attempt {_repair_attempt + 1} of "
                     f"{self._max_repair_attempts}).\n\n"
@@ -698,12 +841,15 @@ class Agent:
                     repair_msg = (
                         attempt_label + failing_header + f"**Code Review:**\n{critique_text}\n\n"
                         f"**Test Output:**\n{last_verification.result.reason}\n\n"
-                        "Address the code review and fix the remaining failures."
+                        "Continue from this evidence."
+                        f"{_AUTONOMOUS_REPAIR_GUIDANCE}"
                     )
                 else:
                     repair_msg = (
-                        attempt_label + failing_header + f"{last_verification.result.reason}\n\n"
-                        "Fix the remaining failures and try again."
+                        attempt_label
+                        + failing_header
+                        + last_verification.result.reason
+                        + _AUTONOMOUS_REPAIR_GUIDANCE
                     )
                 session.messages.append(Message(role="user", content=repair_msg))
                 await self._emit(
@@ -716,13 +862,39 @@ class Agent:
                         "reason_preview": last_verification.result.reason[:300],
                     },
                 )
-                async for ev in self._step_with_failover(
-                    request=request,
-                    session=session,
-                    initial_yield_flag=True,
-                    memory_prefix=memory_prefix,
-                ):
-                    yield ev
+                try:
+                    async for ev in self._step_with_failover(
+                        request=request,
+                        session=session,
+                        initial_yield_flag=True,
+                        memory_prefix=memory_prefix,
+                    ):
+                        yield ev
+                except asyncio.CancelledError:
+                    session.status = "cancelled"
+                    session.touch()
+                    await self.storage.save(session)
+                    await self._emit(session, activity_kinds.AGENT_RUN_CANCELLED)
+                    raise
+                except CancelledError:
+                    session.status = "cancelled"
+                    session.touch()
+                    await self.storage.save(session)
+                    await self._emit(session, activity_kinds.AGENT_RUN_CANCELLED)
+                    raise
+                except HarnessError as exc:
+                    kind = classify(exc)
+                    logger.error("agent.run.failed", error=str(exc), kind=kind)
+                    session.status = "failed"
+                    session.touch()
+                    await self.storage.save(session)
+                    await self._emit(
+                        session,
+                        activity_kinds.AGENT_RUN_FAILED,
+                        {"error": str(exc), "kind": kind},
+                    )
+                    yield ErrorEvent(error=str(exc), kind=kind, recoverable=False)
+                    return
 
         session.status = "done"
         session.touch()
@@ -761,42 +933,80 @@ class Agent:
                 yield event
             return
 
-        # Launch parallel guardrails as background tasks
-        guard_tasks = [asyncio.ensure_future(g(messages)) for g in parallel]
-        guard_names = [g.name for g in parallel]
+        async def _close_stream() -> None:
+            aclose = getattr(stream, "aclose", None)
+            if aclose is None:
+                return
+            with suppress(Exception):
+                await aclose()
 
-        async for event in stream:
-            # Yield a tick so scheduled guardrail tasks can run.
-            await asyncio.sleep(0)
-            # Check completed guardrail tasks after each streamed event
-            for i, task in enumerate(guard_tasks):
-                if task.done() and not task.cancelled():
-                    try:
-                        gr = task.result()
-                        if gr.tripped:
-                            for t in guard_tasks:
-                                if not t.done():
-                                    t.cancel()
-                            yield GuardrailTrippedEvent(
-                                guardrail_name=guard_names[i], reason=gr.reason
-                            )
-                            return
-                    except Exception:
-                        pass
-            yield event
+        async def _cancel_tasks(tasks: list[asyncio.Task[Any]]) -> None:
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
+            if tasks:
+                await asyncio.gather(*tasks, return_exceptions=True)
 
-        # Stream finished — await any remaining guardrail tasks before declaring clean.
-        for i, task in enumerate(guard_tasks):
+        async def _next_stream_event() -> Event:
+            return await anext(stream_iter)
+
+        guard_task_map: dict[asyncio.Task[Any], str] = {
+            asyncio.create_task(g(messages)): g.name for g in parallel
+        }
+        stream_iter = stream.__aiter__()
+        next_event_task: asyncio.Task[Event] | None = None
+
+        while True:
+            if next_event_task is None:
+                next_event_task = asyncio.create_task(_next_stream_event())
+            done, _pending = await asyncio.wait(
+                [next_event_task, *guard_task_map],
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+
+            tripped_name: str | None = None
+            tripped_reason = ""
+            completed_guard_tasks = [task for task in guard_task_map if task in done]
+            for task in completed_guard_tasks:
+                name = guard_task_map.pop(task)
+                try:
+                    gr = task.result()
+                except Exception:
+                    continue
+                if gr.tripped and tripped_name is None:
+                    tripped_name = name
+                    tripped_reason = gr.reason
+
+            if tripped_name is not None:
+                pending_guard_tasks: list[asyncio.Task[Any]] = list(guard_task_map)
+                if next_event_task is not None:
+                    pending_guard_tasks.append(next_event_task)
+                await _cancel_tasks(pending_guard_tasks)
+                await _close_stream()
+                yield GuardrailTrippedEvent(
+                    guardrail_name=tripped_name,
+                    reason=tripped_reason,
+                )
+                return
+
+            if next_event_task in done:
+                try:
+                    event = next_event_task.result()
+                except StopAsyncIteration:
+                    next_event_task = None
+                    break
+                next_event_task = None
+                yield event
+
+        for task, name in list(guard_task_map.items()):
             try:
                 gr = await task
-                if gr.tripped:
-                    for t in guard_tasks:
-                        if not t.done():
-                            t.cancel()
-                    yield GuardrailTrippedEvent(guardrail_name=guard_names[i], reason=gr.reason)
-                    return
             except (asyncio.CancelledError, Exception):
-                pass
+                continue
+            if gr.tripped:
+                await _close_stream()
+                yield GuardrailTrippedEvent(guardrail_name=name, reason=gr.reason)
+                return
 
     async def _maybe_compact(self, session: Session) -> None:
         if self._compactor is None:
@@ -868,11 +1078,14 @@ class Agent:
     async def _run_verification(self, session: Session) -> AsyncIterator[Event]:
         """Call the configured verifier, emit Verification event + activity."""
         assert self.verifier is not None  # guarded by caller
-        activity_events: list[ActivityEvent] = []
-        if self.activity_store is not None:
-            activity_events = await self.activity_store.list_activity(
-                session_id=session.id, limit=500
-            )
+        activity_events = await self._list_activity_for_verification(session)
+        if self._should_auto_run_default_verify_work(activity_events):
+            call = ToolCall(id=f"auto_verify_{int(time.time() * 1000)}", name="verify_work")
+            result, extra_events = await self._invoke_tool(call, session)
+            for event in extra_events:
+                yield event
+            yield ToolResultEvent(result=result)
+            activity_events = await self._list_activity_for_verification(session)
         # Phase 4 — wrap verifier in VerificationGateway when evidence_contract is set.
         verifier = self.verifier
         if self._evidence_contract is not None:
@@ -903,6 +1116,86 @@ class Agent:
             },
         )
         yield Verification(result=result)
+
+    async def _list_activity_for_verification(self, session: Session) -> list[ActivityEvent]:
+        if self.activity_store is not None:
+            return await self.activity_store.list_activity(session_id=session.id, limit=500)
+        return list(self._ephemeral_activity.get(session.id, []))[-500:]
+
+    def _should_auto_run_default_verify_work(self, activity_events: list[ActivityEvent]) -> bool:
+        if not self.tools.has("verify_work"):
+            return False
+        try:
+            verify_tool = self.tools.get("verify_work")
+        except KeyError:
+            return False
+        if not bool(getattr(verify_tool, "has_default_command", False)):
+            return False
+        return missing_verify_work_after_last_state_change(activity_events)
+
+    def _tool_result_changed_workspace(self, call: ToolCall, result: ToolResult) -> bool:
+        metadata = result.metadata if isinstance(result.metadata, dict) else {}
+        if metadata.get("workspace_changed") is True:
+            return True
+        if result.is_error:
+            return False
+        event = ActivityEvent(
+            kind=activity_kinds.TOOL_CALL_COMPLETED,
+            data={
+                "name": call.name,
+                "is_error": result.is_error,
+                "arguments": call.arguments,
+            },
+        )
+        if tool_event_changes_state(event, _WORKSPACE_CHANGE_TOOL_NAMES):
+            return True
+        if call.name in _WORKSPACE_CHANGE_TOOL_NAMES:
+            return False
+        if not self.tools.has(call.name):
+            return False
+        tool = self.tools.get(call.name)
+        return getattr(tool, "effect_scope", None) in {
+            "workspace_durable",
+            "external_side_effect",
+        }
+
+    async def _has_unverified_workspace_change(self, session: Session) -> bool:
+        activity_events = await self._list_activity_for_verification(session)
+        changed_since_boundary = False
+        for event in activity_events:
+            if event.kind == activity_kinds.VERIFICATION_COMPLETED:
+                changed_since_boundary = False
+                continue
+            if event.kind != activity_kinds.TOOL_CALL_COMPLETED:
+                continue
+            if str(event.data.get("name") or "") == "verify_work":
+                changed_since_boundary = verify_work_event_changes_state(event)
+                continue
+            if tool_event_changes_state(event, _WORKSPACE_CHANGE_TOOL_NAMES):
+                changed_since_boundary = True
+        return changed_since_boundary
+
+    async def _has_passing_verify_work_since_last_verification(self, session: Session) -> bool:
+        activity_events = await self._list_activity_for_verification(session)
+        saw_passing_verify_work = False
+        for event in activity_events:
+            if event.kind == activity_kinds.VERIFICATION_COMPLETED:
+                saw_passing_verify_work = False
+                continue
+            if event.kind != activity_kinds.TOOL_CALL_COMPLETED:
+                continue
+            if str(event.data.get("name") or "") != "verify_work":
+                continue
+            metadata = event.data.get("metadata")
+            metadata = metadata if isinstance(metadata, dict) else {}
+            if event.data.get("is_error") is True:
+                continue
+            if metadata.get("workspace_changed") is True:
+                continue
+            if metadata.get("output_reports_failure") is True:
+                continue
+            saw_passing_verify_work = True
+        return saw_passing_verify_work
 
     async def resume(
         self,
@@ -969,10 +1262,12 @@ class Agent:
     ):
         """Run one plan step with bounded failover.
 
-        Once we've yielded any token through (`yielded_any` becomes True),
-        further failover is suppressed — we can't unsay events.
+        Durable tool evidence is safe to continue from with another provider,
+        but streamed text is not replayable.
         """
-        yielded_any = False
+        yielded_unreplayable = False
+        yielded_durable_tool_evidence = False
+        pending_tool_calls: set[str] = set()
         last_exc: BaseException | None = None
 
         for attempt in range(self.failover.max_attempts):
@@ -986,8 +1281,19 @@ class Agent:
                     async for event in self._react_with(
                         adapter, request, session, memory_prefix=memory_prefix
                     ):
-                        if not isinstance(event, ModelRequestEvent):
-                            yielded_any = True
+                        if isinstance(event, ToolCallEvent):
+                            pending_tool_calls.add(event.call.id)
+                        elif isinstance(event, ToolResultEvent):
+                            yielded_durable_tool_evidence = True
+                            pending_tool_calls.discard(event.result.tool_call_id)
+                        elif not isinstance(
+                            event,
+                            ModelRequestEvent
+                            | ModelSelectedEvent
+                            | PredictionEvent
+                            | PredictionMismatchEvent,
+                        ):
+                            yielded_unreplayable = True
                         yield event
                 return
             except asyncio.CancelledError:
@@ -1003,7 +1309,14 @@ class Agent:
                     kind=classify(exc),
                     error=str(exc),
                 )
-                if yielded_any:
+                if yielded_unreplayable or pending_tool_calls:
+                    raise
+                if yielded_durable_tool_evidence and classify(exc) not in {
+                    "network",
+                    "rate_limit",
+                    "timeout",
+                    "model_unavailable",
+                }:
                     raise
                 if not self.failover.should_retry(exc, attempt=attempt):
                     raise
@@ -1036,79 +1349,316 @@ class Agent:
         from pydantic import ValidationError as _ValidationError
 
         _retry_counts: dict[str, int] = {}
+        _model_error_retries = 0
+        _max_model_error_retries = max(0, self._max_repair_attempts)
+        _changed_workspace = False
+        _last_tool_result_error = False
         for _turn in range(request.max_steps):
             final: Message | None = None
             usage = None
             char_count = 0
+            turn_yielded_model_output = False
 
             messages_for_turn = await self._apply_budget(session, request)
             if memory_prefix:
                 messages_for_turn = memory_prefix + messages_for_turn
             yield ModelRequestEvent(messages=messages_for_turn)
             _any_tool_called = any(m.role == "tool" for m in session.messages)
-            _tool_choice: str | None = (
-                "required"
-                if request.require_tool_use
-                and not _any_tool_called
-                and self.tools.openai_schemas(phase=self.current_phase)
-                else None
-            )
-            stream = adapter.stream(
-                model=request.model or session.model,
-                messages=messages_for_turn,
-                tools=self.tools.openai_schemas(phase=self.current_phase) or None,
-                temperature=request.temperature,
-                max_tokens=request.max_tokens,
-                tool_choice=_tool_choice,
-            )
-            _stream_source = (
-                self._stream_with_guardrails(stream, messages_for_turn)
-                if self.guardrails
-                else stream
-            )
-            async for event in _stream_source:
-                if isinstance(event, GuardrailTrippedEvent):
-                    yield event
+            tool_schemas = self.tools.openai_schemas(phase=self.current_phase)
+            turn_model = request.model or session.model
+            try:
+                async with asyncio.timeout(self._model_turn_timeout_seconds):
+                    if tool_schemas:
+                        await _ensure_adapter_supports_tools(adapter, model=turn_model)
+                    _tool_choice: str | None = (
+                        "required"
+                        if request.require_tool_use and not _any_tool_called and tool_schemas
+                        else None
+                    )
+                    stream = adapter.stream(
+                        model=turn_model,
+                        messages=messages_for_turn,
+                        tools=tool_schemas or None,
+                        temperature=request.temperature,
+                        max_tokens=request.max_tokens,
+                        tool_choice=_tool_choice,
+                    )
+                    _stream_source = (
+                        self._stream_with_guardrails(stream, messages_for_turn)
+                        if self.guardrails
+                        else stream
+                    )
+                    _stream_source = _events_with_idle_timeout(
+                        _stream_source,
+                        timeout_seconds=self._model_stream_idle_timeout_seconds,
+                    )
+                    async for event in _stream_source:
+                        if final is not None:
+                            continue
+                        if isinstance(event, GuardrailTrippedEvent):
+                            yield event
+                            return
+                        if isinstance(event, Done):
+                            final = event.final_message
+                            usage = event.usage
+                            # Surface token + cache stats to the activity ledger
+                            # so the defense ledger can compute cache hit ratios.
+                            if usage is not None:
+                                await self._emit(
+                                    session,
+                                    activity_kinds.USAGE_RECORDED,
+                                    {
+                                        "prompt_tokens": usage.prompt_tokens,
+                                        "completion_tokens": usage.completion_tokens,
+                                        "cache_creation_input_tokens": usage.cache_creation_input_tokens,
+                                        "cache_read_input_tokens": usage.cache_read_input_tokens,
+                                    },
+                                )
+                            continue
+                        if isinstance(event, TextDelta):
+                            char_count += len(event.text)
+                            if event.text.strip():
+                                turn_yielded_model_output = True
+                            if char_count > self._STALL_CHAR_LIMIT:
+                                await self._emit(
+                                    session,
+                                    activity_kinds.AGENT_RUN_STALLED,
+                                    {"chars_before_abort": char_count},
+                                )
+                                raise StallError(
+                                    f"model stall: output exceeded {self._STALL_CHAR_LIMIT:,} "
+                                    "chars in a single turn — possible generation loop. "
+                                    "Try a smaller/different model."
+                                )
+                        elif not isinstance(event, ModelSelectedEvent):
+                            turn_yielded_model_output = True
+                        yield event
+            except (HarnessError, TimeoutError) as exc:
+                if isinstance(exc, TimeoutError):
+                    exc = HarnessTimeoutError(
+                        f"model turn exceeded {self._model_turn_timeout_seconds:.1f}s"
+                    )
+                retryable_post_tool_timeout = (
+                    classify(exc) == "timeout"
+                    and _any_tool_called
+                    and _model_error_retries < _max_model_error_retries
+                )
+                workspace_changed = _changed_workspace
+                if not workspace_changed and self.verifier is not None:
+                    workspace_changed = await self._has_unverified_workspace_change(session)
+                verify_work_passed = False
+                if not workspace_changed and self.verifier is not None:
+                    verify_work_passed = (
+                        await self._has_passing_verify_work_since_last_verification(session)
+                    )
+                verify_current_state_after_timeout = (
+                    classify(exc) == "timeout"
+                    and _any_tool_called
+                    and self.verifier is not None
+                    and (workspace_changed or verify_work_passed)
+                )
+                if verify_current_state_after_timeout:
+                    if workspace_changed:
+                        timeout_message = (
+                            "[harness:runtime] The model timed out after changing the "
+                            "workspace. Handing the current state to verification."
+                        )
+                    else:
+                        timeout_message = (
+                            "[harness:runtime] The model timed out after passing "
+                            "verify_work. Handing the current state to verification."
+                        )
+                    final = Message(
+                        role="assistant",
+                        content=timeout_message,
+                    )
+                    session.messages.append(final)
+                    session.touch()
+                    await self._emit(
+                        session,
+                        activity_kinds.REPAIR_DIRECTIVE_ISSUED,
+                        {
+                            "mode": "model_timeout_verify_current_state",
+                            "kind": classify(exc),
+                            "reason_preview": str(exc)[:300],
+                        },
+                    )
+                    yield Done(
+                        final_message=final,
+                        usage=None,
+                        structured_result=_runtime_verify_current_state_result(
+                            reason="model_timeout"
+                        ),
+                    )
                     return
-                if isinstance(event, Done):
-                    final = event.final_message
-                    usage = event.usage
-                    # Surface token + cache stats to the activity ledger
-                    # so the defense ledger can compute cache hit ratios.
-                    if usage is not None:
-                        await self._emit(
-                            session,
-                            activity_kinds.USAGE_RECORDED,
-                            {
-                                "prompt_tokens": usage.prompt_tokens,
-                                "completion_tokens": usage.completion_tokens,
-                                "cache_creation_input_tokens": usage.cache_creation_input_tokens,
-                                "cache_read_input_tokens": usage.cache_read_input_tokens,
-                            },
-                        )
-                    break
-                if isinstance(event, TextDelta):
-                    char_count += len(event.text)
-                    if char_count > self._STALL_CHAR_LIMIT:
-                        await self._emit(
-                            session,
-                            activity_kinds.AGENT_RUN_STALLED,
-                            {"chars_before_abort": char_count},
-                        )
-                        raise StallError(
-                            f"model stall: output exceeded {self._STALL_CHAR_LIMIT:,} chars "
-                            "in a single turn — possible generation loop. "
-                            "Try a smaller/different model."
-                        )
-                yield event
+                retryable_initial_timeout = (
+                    classify(exc) == "timeout"
+                    and not turn_yielded_model_output
+                    and not _any_tool_called
+                    and _model_error_retries < _max_model_error_retries
+                )
+                if not retryable_post_tool_timeout and not retryable_initial_timeout:
+                    raise
+                _model_error_retries += 1
+                if retryable_initial_timeout:
+                    retry_content = (
+                        "[harness:runtime] The previous model turn produced no output "
+                        "before any tool evidence was gathered. Try again now. If the "
+                        "task requires current facts, code inspection, file changes, or "
+                        "verification, start with the available tool that directly "
+                        "advances the objective."
+                    )
+                    retry_mode = "model_initial_timeout_retry"
+                else:
+                    retry_content = (
+                        "[harness:runtime] The previous model turn timed out after "
+                        "tool evidence was gathered before completing a valid assistant "
+                        "turn. Reuse the context already available, avoid repeating the "
+                        "same inspection-only steps, and take a concrete next action "
+                        "toward the request. If the available evidence proves you are "
+                        "blocked, state that blocker."
+                    )
+                    retry_mode = "model_timeout_retry"
+                session.messages.append(
+                    Message(
+                        role="user",
+                        content=retry_content,
+                    )
+                )
+                session.touch()
+                await self._emit(
+                    session,
+                    activity_kinds.REPAIR_DIRECTIVE_ISSUED,
+                    {
+                        "mode": retry_mode,
+                        "attempt": _model_error_retries,
+                        "kind": classify(exc),
+                        "reason_preview": str(exc)[:300],
+                    },
+                )
+                continue
 
             if final is None:
                 raise InternalError("adapter ended stream without a Done event")
+
+            final_content = (final.content or "").strip()
+            if (
+                not final.tool_calls
+                and not final_content
+                and _any_tool_called
+                and request.result_type is None
+            ):
+                workspace_changed = _changed_workspace
+                if not workspace_changed and self.verifier is not None:
+                    workspace_changed = await self._has_unverified_workspace_change(session)
+                verify_work_passed = False
+                if not workspace_changed and self.verifier is not None:
+                    verify_work_passed = (
+                        await self._has_passing_verify_work_since_last_verification(session)
+                    )
+                if self.verifier is not None and (workspace_changed or verify_work_passed):
+                    if workspace_changed:
+                        empty_final_message = (
+                            "[harness:runtime] The model returned an empty final "
+                            "response after changing the workspace. Handing the "
+                            "current state to verification."
+                        )
+                    else:
+                        empty_final_message = (
+                            "[harness:runtime] The model returned an empty final "
+                            "response after passing verify_work. Handing the "
+                            "current state to verification."
+                        )
+                    final = Message(role="assistant", content=empty_final_message)
+                    session.messages.append(final)
+                    session.touch()
+                    await self._emit(
+                        session,
+                        activity_kinds.REPAIR_DIRECTIVE_ISSUED,
+                        {
+                            "mode": "empty_final_verify_current_state",
+                            "reason": "empty_final_after_tool_evidence",
+                        },
+                    )
+                    yield Done(
+                        final_message=final,
+                        usage=usage,
+                        structured_result=_runtime_verify_current_state_result(
+                            reason="empty_final"
+                        ),
+                    )
+                    return
+                if _model_error_retries >= _max_model_error_retries:
+                    raise InternalError("adapter returned empty final response after tool evidence")
+                _model_error_retries += 1
+                if _last_tool_result_error:
+                    retry_content = (
+                        "The previous tool call failed and the final response was empty. "
+                        "Continue working with the available tools, or state a concrete "
+                        "evidence-backed blocker."
+                    )
+                    retry_mode = "empty_final_after_tool_error"
+                else:
+                    retry_content = (
+                        "The previous model turn returned an empty final response after "
+                        "tool evidence was gathered. Continue from the evidence already "
+                        "available and take the next concrete action toward the request."
+                    )
+                    retry_mode = "empty_final_after_tool_evidence"
+                session.messages.append(Message(role="user", content=retry_content))
+                session.touch()
+                await self._emit(
+                    session,
+                    activity_kinds.REPAIR_DIRECTIVE_ISSUED,
+                    {
+                        "mode": retry_mode,
+                        "attempt": _model_error_retries,
+                    },
+                )
+                continue
+
+            if final.tool_calls or final_content:
+                _model_error_retries = 0
 
             session.messages.append(final)
             session.touch()
 
             if not final.tool_calls:
+                if request.require_tool_use and not _any_tool_called and tool_schemas:
+                    session.messages.append(
+                        Message(
+                            role="user",
+                            content=(
+                                "No tool evidence was produced. Continue with the available tool "
+                                "surface or report a concrete blocker."
+                            ),
+                        )
+                    )
+                    session.touch()
+                    continue
+
+                if _last_tool_result_error and not (final.content or "").strip():
+                    session.messages.append(
+                        Message(
+                            role="user",
+                            content=(
+                                "The previous tool call failed and the final response was empty. "
+                                "Continue working with the available tools, or state a concrete "
+                                "evidence-backed blocker."
+                            ),
+                        )
+                    )
+                    session.touch()
+                    await self._emit(
+                        session,
+                        activity_kinds.REPAIR_DIRECTIVE_ISSUED,
+                        {
+                            "mode": "empty_final_after_tool_error",
+                            "kind": "tool_error",
+                        },
+                    )
+                    continue
+
                 # Structured output: validate assistant response against result_type.
                 if request.result_type is not None:
                     raw = (final.content or "").strip()
@@ -1156,6 +1706,9 @@ class Agent:
                     return
                 for ev in extra_events:
                     yield ev
+                if self._tool_result_changed_workspace(tool_call, result):
+                    _changed_workspace = True
+                _last_tool_result_error = bool(result.is_error)
                 # Tool-output preprocessing — two layers, both cheap regex:
                 #   1. Secret redaction: strip API keys / tokens / Bearer
                 #      headers / env-var assignments before the content
@@ -1210,6 +1763,35 @@ class Agent:
                             )
                         )
                         session.touch()
+
+        workspace_changed = _changed_workspace
+        if not workspace_changed and self.verifier is not None:
+            workspace_changed = await self._has_unverified_workspace_change(session)
+        if workspace_changed and self.verifier is not None:
+            final = Message(
+                role="assistant",
+                content=(
+                    "[harness:runtime] The model reached max_steps after changing the "
+                    "workspace. Handing the current state to verification."
+                ),
+            )
+            session.messages.append(final)
+            session.touch()
+            await self._emit(
+                session,
+                activity_kinds.REPAIR_DIRECTIVE_ISSUED,
+                {
+                    "mode": "model_max_steps_verify_current_state",
+                    "kind": "internal",
+                    "reason_preview": f"exceeded max_steps={request.max_steps}",
+                },
+            )
+            yield Done(
+                final_message=final,
+                usage=None,
+                structured_result=_runtime_verify_current_state_result(reason="max_steps"),
+            )
+            return
 
         raise InternalError(f"exceeded max_steps={request.max_steps} without final answer")
 
@@ -1368,7 +1950,11 @@ class Agent:
         if self._predictor is not None:
             effect_scope = getattr(tool, "effect_scope", None)
             prediction = self._predictor.predict(
-                tool_name=call.name, call=call, effect_scope=effect_scope
+                tool_name=call.name,
+                call=call,
+                effect_scope=effect_scope,
+                parameters_schema=getattr(tool, "parameters_schema", None),
+                expected_status=getattr(tool, "prediction_expected_status", None),
             )
             await self._emit(
                 session,
@@ -1400,6 +1986,13 @@ class Agent:
 
         started = time.perf_counter()
         try:
+            bind_activity_context = getattr(tool, "bind_activity_context", None)
+            if callable(bind_activity_context):
+                bind_activity_context(
+                    activity_store=self.activity_store,
+                    session_id=session.id,
+                    task_id=session.task_id,
+                )
             with span("agent.tool", tool=call.name, call_id=call.id):
                 result = await tool(call)
         except ToolRetry as exc:
@@ -1430,7 +2023,7 @@ class Agent:
                 result = ToolResult(
                     tool_call_id=call.id,
                     name=call.name,
-                    content=f"[ToolRetry] {exc.message} — please fix your input and try again.",
+                    content=f"[ToolRetry] {exc.message}",
                     is_error=True,
                 )
             await self._emit_tool_completed(session, call, result, duration_ms=duration_ms)

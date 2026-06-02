@@ -133,11 +133,13 @@ class TestApproval:
         mc = MultiCritic(critics=critics, aggregator="approval")
         assert await _run(mc) == ""
 
+    async def test_tie_silences(self) -> None:
+        critics = _critics(("A", _FixedCritic("[APPROVE] yes")), ("B", _FixedCritic("[REJECT] no")))
+        mc = MultiCritic(critics=critics, aggregator="approval")
+        assert await _run(mc) == ""
+
     async def test_no_markers_falls_back_to_concat(self) -> None:
-        critics = _critics(
-            ("A", _FixedCritic("plain text")),
-            ("B", _FixedCritic("more")),
-        )
+        critics = _critics(("A", _FixedCritic("plain text")), ("B", _FixedCritic("more")))
         mc = MultiCritic(critics=critics, aggregator="approval")
         out = await _run(mc)
         assert "plain text" in out and "more" in out

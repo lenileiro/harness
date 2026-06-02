@@ -56,6 +56,9 @@ MinimalFixVerifier = _structural.MinimalFixVerifier
 PhaseGateVerifier = _structural.PhaseGateVerifier
 TestsBeforeEditVerifier = _structural.TestsBeforeEditVerifier
 FileScopeVerifier = _structural.FileScopeVerifier
+missing_verify_work_after_last_state_change = (
+    _structural.missing_verify_work_after_last_state_change
+)
 
 MisdirectedSuggestionVerifier = _behavioral.MisdirectedSuggestionVerifier
 PromptSurfaceRevertVerifier = _behavioral.PromptSurfaceRevertVerifier
@@ -92,4 +95,5 @@ __all__ = [
     "WorkItemJudge",
     "_is_repetitive",
     "evaluate_evidence",
+    "missing_verify_work_after_last_state_change",
 ]

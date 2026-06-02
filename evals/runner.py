@@ -24,6 +24,9 @@ from evals.artifacts import (
     build_trace_events as _build_trace_events,
 )
 from evals.artifacts import (
+    check_benchmark_integrity as _check_benchmark_integrity,
+)
+from evals.artifacts import (
     compute_hard_metrics as _compute_hard_metrics,
 )
 from evals.artifacts import (
@@ -42,6 +45,24 @@ _check_scope_discipline_with_regression_test = (
 )
 _check_sustained_coherence_scope = _hard_checks.check_sustained_coherence_scope
 _check_wrong_diagnosis_scope = _hard_checks.check_wrong_diagnosis_scope
+
+_TIMEOUT_EXIT_CODE = 124
+
+
+def _timeout_output(value: str | bytes | None) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return value
+
+
+def _timeout_transcript(exc: subprocess.TimeoutExpired, *, command_label: str) -> str:
+    output = _timeout_output(exc.output)
+    stderr = _timeout_output(exc.stderr)
+    pieces = [output, stderr]
+    pieces.append(f"\n[{command_label}] timed out after {exc.timeout} seconds\n")
+    return "".join(piece for piece in pieces if piece)
 
 
 def _eval_env(*, work: Path) -> dict[str, str]:
@@ -79,6 +100,7 @@ def _agent_cmd(
     phases: list[str] | None = None,
     behavior_category: str | None = None,
     max_output_tokens: int | None = None,
+    config_path: Path | None = None,
 ) -> list[str]:
     """Return the command to invoke the agent for the given provider.
 
@@ -88,9 +110,9 @@ def _agent_cmd(
 
     `variant="bare"` uses `--profile bare` to disable the structural
     verifier chain and critic — the agent runs with model + tools only.
-    The defended arm now uses `--profile adaptive`, which picks between
-    minimal and strict from the task shape. Used by A/B mode to measure
-    harness value-add.
+    The defended arm uses `--profile adaptive`, which picks from explicit
+    runtime signals such as phases and verifier configuration. Used by A/B mode
+    to measure harness value-add.
     """
     if provider == "claude":
         claude_bin = shutil.which("claude") or "claude"
@@ -128,6 +150,8 @@ def _agent_cmd(
     cmd += ["--profile", "adaptive" if variant == "defended" else "bare"]
     if max_output_tokens is not None:
         cmd += ["--max-output-tokens", str(max_output_tokens)]
+    if config_path is not None:
+        cmd += ["--config", str(config_path)]
     if verify_command:
         # In bare mode, keep ShellVerifier (the test runner) but skip the
         # critic — bare = agent + tools + test signal, nothing else.
@@ -137,10 +161,8 @@ def _agent_cmd(
             "--verify-command",
             verify_command,
         ]
-        # Critic helps on diagnosis-heavy decomposition traps (fixture 03), but
-        # on strict minimal-fix tasks it can create extra repair-loop churn and
-        # overthinking. Keep the defended arm lighter on pure scope /
-        # verification fixtures.
+        # Keep critic selection explicit in eval metadata instead of deriving it
+        # from prompt wording. Some decomposition fixtures opt into this path.
         if variant != "bare" and (behavior_category or "").strip().lower() in {
             "decomposition",
             "diagnosis",
@@ -243,6 +265,7 @@ def run_fixture(
     variant: str = "defended",
     artifact_dir: Path | None = None,
     max_output_tokens: int | None = None,
+    config_path: Path | None = None,
 ) -> RunOutcome:
     """Run one fixture end-to-end in an isolated temp directory."""
     with tempfile.TemporaryDirectory(prefix="harness_eval_") as tmp_str:
@@ -288,6 +311,7 @@ def run_fixture(
             phases=fixture.phases,
             behavior_category=fixture.rules.behavior_category or fixture.family,
             max_output_tokens=max_output_tokens,
+            config_path=config_path,
         )
         agent_started = time.perf_counter()
         agent_env = _eval_env(work=work)
@@ -300,16 +324,22 @@ def run_fixture(
         if str(experience_root) not in existing_roots:
             existing_roots.append(str(experience_root))
         agent_env["HARNESS_EXPERIENCE_ROOTS"] = os.pathsep.join(existing_roots)
-        agent_result = subprocess.run(
-            cmd,
-            cwd=work,
-            capture_output=True,
-            text=True,
-            timeout=agent_timeout,
-            env=agent_env,
-        )
+        agent_exit_code = 0
+        try:
+            agent_result = subprocess.run(
+                cmd,
+                cwd=work,
+                capture_output=True,
+                text=True,
+                timeout=agent_timeout,
+                env=agent_env,
+            )
+            agent_exit_code = agent_result.returncode
+            transcript = agent_result.stdout + agent_result.stderr
+        except subprocess.TimeoutExpired as exc:
+            agent_exit_code = _TIMEOUT_EXIT_CODE
+            transcript = _timeout_transcript(exc, command_label="agent")
         agent_duration = time.perf_counter() - agent_started
-        transcript = agent_result.stdout + agent_result.stderr
 
         # Capture what the agent changed.
         diff_result = subprocess.run(
@@ -326,46 +356,66 @@ def run_fixture(
         # harness eval framework is language-agnostic.
         verify_started = time.perf_counter()
         verify_env = _eval_env(work=work)
-        test_result = subprocess.run(
-            fixture.verify_command,
-            cwd=work,
-            capture_output=True,
-            text=True,
-            timeout=test_timeout,
-            env=verify_env,
-            shell=True,
-        )
+        try:
+            test_result = subprocess.run(
+                fixture.verify_command,
+                cwd=work,
+                capture_output=True,
+                text=True,
+                timeout=test_timeout,
+                env=verify_env,
+                shell=True,
+            )
+            test_output = test_result.stdout + test_result.stderr
+            combined_verify_exit_code = test_result.returncode
+        except subprocess.TimeoutExpired as exc:
+            test_output = _timeout_transcript(exc, command_label="verify")
+            combined_verify_exit_code = _TIMEOUT_EXIT_CODE
         verify_duration = time.perf_counter() - verify_started
-        test_output = test_result.stdout + test_result.stderr
-        combined_verify_exit_code = test_result.returncode
-        if test_result.returncode == 0:
+        if combined_verify_exit_code == 0:
             behavioral_ok, behavioral_message = _behavioral_hard_check(fixture, work)
             if behavioral_message:
                 separator = "\n" if test_output.endswith("\n") or not test_output else "\n\n"
                 test_output = f"{test_output}{separator}{behavioral_message}\n"
             if not behavioral_ok:
                 combined_verify_exit_code = 1
+        if fixture.rules.benchmark_integrity:
+            integrity_report = _check_benchmark_integrity(
+                transcript,
+                agent_command=cmd,
+                forbidden_repo_urls=fixture.rules.forbidden_repo_urls,
+            )
+            if not integrity_report.passed:
+                details = "\n".join(f"- {item}" for item in integrity_report.violations)
+                separator = "\n" if test_output.endswith("\n") or not test_output else "\n\n"
+                test_output = (
+                    f"{test_output}{separator}benchmark integrity check failed:\n{details}\n"
+                )
+                combined_verify_exit_code = 1
         trace_events = _build_trace_events(
             transcript,
             fixture.verify_command,
-            agent_exit_code=agent_result.returncode,
+            agent_exit_code=agent_exit_code,
             verify_exit_code=combined_verify_exit_code,
         )
         hard_metrics = _compute_hard_metrics(
             transcript,
             git_diff,
             fixture.verify_command,
-            run_exit_code=agent_result.returncode,
+            run_exit_code=agent_exit_code,
             verify_exit_code=combined_verify_exit_code,
             agent_duration_seconds=agent_duration,
             verify_duration_seconds=verify_duration,
+            benchmark_integrity_enabled=fixture.rules.benchmark_integrity,
+            agent_command=cmd,
+            forbidden_repo_urls=fixture.rules.forbidden_repo_urls,
         )
         outcome = RunOutcome(
             fixture=fixture,
             transcript=transcript,
             git_diff=git_diff,
             test_output=test_output,
-            agent_exit_code=agent_result.returncode,
+            agent_exit_code=agent_exit_code,
             test_exit_code=combined_verify_exit_code,
             variant=variant,
             hard_metrics=hard_metrics,

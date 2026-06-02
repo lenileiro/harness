@@ -163,7 +163,9 @@ class InMemoryStorage(MemoryStore):
             kinds_set = set(kinds)
             items = [e for e in items if e.kind in kinds_set]
         items.sort(key=lambda e: e.timestamp)
-        return [e.model_copy(deep=True) for e in items[:limit]]
+        if limit <= 0:
+            return []
+        return [e.model_copy(deep=True) for e in items[-limit:]]
 
     # ------------------------------------------------------------------ #
     # ApprovalStore                                                       #

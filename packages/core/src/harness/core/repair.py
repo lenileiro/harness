@@ -5,11 +5,11 @@ that tells the runtime how to proceed:
 
   - continue            — success or within-budget failure, model decides next step
   - verify_before_continue — succeeded but prediction mismatch (medium+) — verify outcome
-  - escalate            — retry budget exhausted, stop and surface to user
+  - escalate            — retry budget exhausted, switch strategy before retrying
 
 Retry budgets are bounded by effect_scope (external calls get only 1 retry;
 read-only calls get 3). When the budget is exhausted the directive becomes
-"escalate" which causes the runtime to emit an ErrorEvent.
+"escalate" so callers can avoid repeating the same failed action.
 
 The orchestrator is stateful per-run (tracks consecutive failure counts per
 tool name) and should be created fresh for each Agent.run() call.
@@ -105,6 +105,20 @@ class RepairOrchestrator:
                 reason="tool succeeded",
             )
 
+        if tool_name == "shell" and str(result.content or "").lstrip().startswith("exit_code:"):
+            self._failure_counts.pop(tool_name, None)
+            return RepairDirective(
+                mode="continue",
+                tool_name=tool_name,
+                effect_scope=effect_scope,
+                consecutive_failures=0,
+                retry_budget_remaining=budget,
+                reason=(
+                    "shell command returned a non-zero exit code; treat the output as "
+                    "task evidence and continue with a different concrete action"
+                ),
+            )
+
         # Failure path: increment streak
         failures = self._failure_counts.get(tool_name, 0) + 1
         self._failure_counts[tool_name] = failures
@@ -119,7 +133,7 @@ class RepairOrchestrator:
                 retry_budget_remaining=0,
                 reason=(
                     f"repair budget exhausted for '{tool_name}' after {failures} consecutive "
-                    f"failure(s) — escalating to human review"
+                    "failure(s) — choose a different strategy or tool before retrying"
                 ),
             )
 

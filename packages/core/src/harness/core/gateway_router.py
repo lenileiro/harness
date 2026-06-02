@@ -11,6 +11,12 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from harness.core.approval import ApprovalStore
+from harness.core.dynamic_workflows import (
+    WorkflowStore,
+    create_default_workflow,
+    default_workflow_root,
+    render_workflow_mermaid,
+)
 from harness.core.extensions import LifecycleHook
 from harness.core.gateway_models import (
     GatewayMessage,
@@ -37,6 +43,29 @@ def _utcnow_text() -> str:
 
 def _tokenize(text: str) -> list[str]:
     return [part.strip() for part in text.strip().split() if part.strip()]
+
+
+def is_gateway_control_message(text: str) -> bool:
+    tokens = _tokenize(text)
+    if not tokens:
+        return True
+    lowered = [item.lower() for item in tokens]
+    command = lowered[0]
+    if command in {"status", "runs"}:
+        return True
+    if command == "mission" and len(tokens) >= 3 and lowered[1] == "start":
+        return True
+    if command == "research" and len(tokens) >= 2 and lowered[1] == "start":
+        return True
+    if command == "workflow" and len(tokens) >= 2:
+        workflow_commands = {"list", "start", "status", "resume", "report", "cancel", "events"}
+        if lowered[1] in workflow_commands:
+            return True
+        if lowered[1] == "graph":
+            return True
+    if command in {"approve", "report"} and len(tokens) >= 2:
+        return True
+    return _parse_reminder_intent(text) is not None
 
 
 def _weekday_to_cron(value: str) -> str | None:
@@ -361,6 +390,175 @@ def _dispatch_research_start(
     }, f"Started research burst: {record.result_status} ({record.result_stop_reason})."
 
 
+def _dispatch_workflow_start(
+    *,
+    cwd: Path,
+    goal: str,
+) -> tuple[dict[str, str], str]:
+    store = WorkflowStore(root=default_workflow_root(cwd))
+    title = goal.strip().splitlines()[0][:80] or "Dynamic workflow"
+    workflow_id = store.new_id(title)
+    run = create_default_workflow(workflow_id=workflow_id, title=title, goal=goal)
+    store.add_run(run)
+    store.append_event(run.id, kind="workflow.created", message="Workflow created from gateway.")
+    return {
+        "workflow_id": run.id,
+        "status": run.status,
+        "node_count": str(len(run.nodes)),
+        "workflow_dir": str(store.run_dir(run.id)),
+    }, (
+        f"Created workflow {run.id} with {len(run.nodes)} defended node(s). "
+        f"Run it with: harness workflow resume {run.id} --yes"
+    )
+
+
+def _workflow_store(cwd: Path) -> WorkflowStore:
+    return WorkflowStore(root=default_workflow_root(cwd))
+
+
+def _format_workflow_status(run_id: str, status: str, nodes: list[dict[str, str]]) -> str:
+    counts: dict[str, int] = {}
+    for node in nodes:
+        counts[node["status"]] = counts.get(node["status"], 0) + 1
+    counts_text = ", ".join(f"{key}={value}" for key, value in sorted(counts.items()))
+    return f"Workflow {run_id}: {status}. Nodes: {counts_text or 'none'}."
+
+
+def _workflow_status_payload(cwd: Path, workflow_id: str) -> tuple[dict[str, object], str]:
+    store = _workflow_store(cwd)
+    run = store.load_run(workflow_id)
+    nodes = [
+        {
+            "id": node.id,
+            "kind": node.kind,
+            "role": node.role or node.kind,
+            "status": node.status,
+            "attempts": str(node.attempts),
+        }
+        for node in run.nodes
+    ]
+    payload: dict[str, object] = {
+        "workflow_id": run.id,
+        "title": run.title,
+        "status": run.status,
+        "nodes": nodes,
+        "updated_at": run.updated_at,
+    }
+    return payload, _format_workflow_status(run.id, run.status, nodes)
+
+
+def _workflow_list_payload(cwd: Path) -> tuple[dict[str, object], str]:
+    store = _workflow_store(cwd)
+    runs = store.list_runs()
+    items = [
+        {
+            "workflow_id": run.id,
+            "title": run.title,
+            "status": run.status,
+            "updated_at": run.updated_at,
+        }
+        for run in runs[:8]
+    ]
+    if not items:
+        return {"workflows": []}, "No workflows found."
+    lines = ["Recent workflows:"]
+    for item in items:
+        lines.append(f"- {item['workflow_id']} {item['status']}: {item['title']}")
+    return {"workflows": items}, "\n".join(lines)
+
+
+def _workflow_report_payload(cwd: Path, workflow_id: str) -> tuple[dict[str, object], str]:
+    store = _workflow_store(cwd)
+    run = store.load_run(workflow_id)
+    report_path = store.run_dir(run.id) / "REPORT.md"
+    report = report_path.read_text(encoding="utf-8") if report_path.is_file() else run.final_report
+    text = report or "(no final report yet)"
+    if len(text) > 3500:
+        suffix = f"\n\nReport truncated. Full report: {report_path}"
+        text = text[: 3500 - len(suffix)].rstrip() + suffix
+    return {
+        "workflow_id": run.id,
+        "status": run.status,
+        "report_path": str(report_path) if report_path.is_file() else "",
+        "report": report,
+    }, text
+
+
+def _workflow_events_payload(
+    cwd: Path, workflow_id: str, *, limit: int = 8
+) -> tuple[dict[str, object], str]:
+    store = _workflow_store(cwd)
+    events = store.list_events(workflow_id)[-limit:]
+    payload = {"workflow_id": workflow_id, "events": [event.to_dict() for event in events]}
+    if not events:
+        return payload, "No workflow events recorded."
+    lines = ["Recent workflow events:"]
+    for event in events:
+        node = f" {event.node_id}" if event.node_id else ""
+        lines.append(f"- {event.kind}{node}: {event.message}")
+    return payload, "\n".join(lines)
+
+
+def _workflow_graph_payload(cwd: Path, workflow_id: str) -> tuple[dict[str, object], str]:
+    store = _workflow_store(cwd)
+    run = store.load_run(workflow_id)
+    graph = render_workflow_mermaid(run)
+    return {"workflow_id": run.id, "mermaid": graph}, graph
+
+
+def _workflow_cancel_payload(cwd: Path, workflow_id: str) -> tuple[dict[str, object], str]:
+    store = _workflow_store(cwd)
+    run = store.load_run(workflow_id)
+    updated = replace(run, status="cancelled", updated_at=_utcnow_text())
+    store.save_run(updated)
+    store.append_event(updated.id, kind="workflow.cancelled", message="Workflow cancelled.")
+    return {
+        "workflow_id": updated.id,
+        "status": updated.status,
+    }, f"Cancelled workflow {updated.id}."
+
+
+def _workflow_resume_payload(cwd: Path, workflow_id: str) -> tuple[dict[str, object], str]:
+    store = _workflow_store(cwd)
+    run = store.load_run(workflow_id)
+    log_path = store.run_dir(workflow_id) / "runner.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    uv_bin = shutil.which("uv") or "uv"
+    command = [
+        uv_bin,
+        "run",
+        "harness",
+        "workflow",
+        "resume",
+        workflow_id,
+        "--cwd",
+        str(cwd),
+        "--yes",
+    ]
+    with log_path.open("ab") as log:
+        process = subprocess.Popen(
+            command,
+            cwd=str(cwd),
+            stdout=log,
+            stderr=log,
+            stdin=subprocess.DEVNULL,
+            start_new_session=True,
+            env=os.environ.copy(),
+        )
+    store.append_event(
+        workflow_id,
+        kind="workflow.launch",
+        message=f"Background workflow runner started with pid {process.pid}.",
+        data={"pid": process.pid, "log_path": str(log_path)},
+    )
+    return {
+        "workflow_id": run.id,
+        "status": run.status,
+        "pid": str(process.pid),
+        "log_path": str(log_path),
+    }, f"Started workflow {run.id} in the background (pid {process.pid})."
+
+
 def _record_recent_thread(
     profile_threads: list[str], *, thread_id: str, limit: int = 8
 ) -> list[str]:
@@ -580,6 +778,106 @@ async def dispatch_gateway_message(
             text=text,
             data=payload,
         )
+    elif command == "workflow" and len(tokens) >= 3 and lowered[1] == "start":
+        goal = message.text.split(None, 2)[2].strip()
+        payload, text = _dispatch_workflow_start(cwd=cwd, goal=goal)
+        session = replace(
+            session,
+            last_run_id=payload["workflow_id"],
+            last_command="workflow start",
+            updated_at=_utcnow_text(),
+        )
+        session = _link_session_work(
+            session,
+            refs=[f"workflow:{payload['workflow_id']}"],
+            updated_at=session.updated_at,
+        )
+        session_store.save_session(session)
+        _save_shared_work(
+            session_store=session_store,
+            session=session,
+            ref=f"workflow:{payload['workflow_id']}",
+            kind="workflow",
+            title=goal[:80],
+            summary=text,
+            updated_at=session.updated_at,
+        )
+        reply = GatewayReply(
+            session_id=session.id,
+            command="workflow.start",
+            status="ok",
+            text=text,
+            data=payload,
+        )
+    elif command == "workflow" and len(tokens) >= 2 and lowered[1] == "list":
+        payload, text = _workflow_list_payload(cwd)
+        session = replace(
+            session,
+            last_command="workflow list",
+            updated_at=_utcnow_text(),
+        )
+        session_store.save_session(session)
+        reply = GatewayReply(
+            session_id=session.id,
+            command="workflow.list",
+            status="ok",
+            text=text,
+            data=payload,
+        )
+    elif (
+        command == "workflow"
+        and len(tokens) >= 3
+        and lowered[1]
+        in {
+            "status",
+            "resume",
+            "report",
+            "cancel",
+            "events",
+            "graph",
+        }
+    ):
+        workflow_id = tokens[2]
+        if lowered[1] == "status":
+            payload, text = _workflow_status_payload(cwd, workflow_id)
+        elif lowered[1] == "resume":
+            payload, text = _workflow_resume_payload(cwd, workflow_id)
+        elif lowered[1] == "report":
+            payload, text = _workflow_report_payload(cwd, workflow_id)
+        elif lowered[1] == "cancel":
+            payload, text = _workflow_cancel_payload(cwd, workflow_id)
+        elif lowered[1] == "events":
+            payload, text = _workflow_events_payload(cwd, workflow_id)
+        else:
+            payload, text = _workflow_graph_payload(cwd, workflow_id)
+        session = replace(
+            session,
+            last_run_id=workflow_id,
+            last_command=f"workflow {lowered[1]}",
+            updated_at=_utcnow_text(),
+        )
+        session = _link_session_work(
+            session,
+            refs=[f"workflow:{workflow_id}"],
+            updated_at=session.updated_at,
+        )
+        session_store.save_session(session)
+        _save_shared_work(
+            session_store=session_store,
+            session=session,
+            ref=f"workflow:{workflow_id}",
+            kind=f"workflow-{lowered[1]}",
+            title=workflow_id,
+            summary=text[:500],
+            updated_at=session.updated_at,
+        )
+        reply = GatewayReply(
+            session_id=session.id,
+            command=f"workflow.{lowered[1]}",
+            status="ok",
+            text=text,
+            data=payload,
+        )
     elif command == "approve" and len(tokens) >= 2:
         ok, text = await _resolve_approval(approval_store, tokens[1])
         session = replace(session, last_command="approve", updated_at=_utcnow_text())
@@ -673,12 +971,15 @@ async def dispatch_gateway_message(
             status="error",
             text=(
                 "Unsupported gateway command. Use one of: status, runs, "
-                "mission start <id>, research start, approve <id>, report <mission_id>."
+                "mission start <id>, research start, workflow start <goal>, "
+                "workflow status|resume|report|cancel|events|graph <id>, workflow list, "
+                "approve <id>, report <mission_id>."
             ),
         )
     if reply.command not in {
         "mission.start",
         "research.start",
+        "workflow.start",
         "approve",
         "report",
         "reminder.create",
@@ -690,4 +991,4 @@ async def dispatch_gateway_message(
     return reply, session
 
 
-__all__ = ["dispatch_gateway_message"]
+__all__ = ["dispatch_gateway_message", "is_gateway_control_message"]

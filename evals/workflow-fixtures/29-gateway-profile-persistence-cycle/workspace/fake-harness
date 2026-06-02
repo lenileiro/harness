@@ -7,7 +7,7 @@ from pathlib import Path
 
 import harness.core.gateway_router as gateway_router
 from harness.cli import __main__ as cli_main
-from harness.cli import gateway_commands
+from harness.cli import gateway_runtime
 from harness.core.gateway_sessions import GatewaySessionStore
 
 
@@ -40,7 +40,7 @@ async def _fake_run_once(**kwargs: object) -> str:
     if (
         "Shared active work for this user:" in prompt
         and "Other recent chats for this user:" in prompt
-        and "continue the Tokyo weather follow-up [reminder.once]" in prompt
+        and "continue the Tokyo weather follow-up [reminder]" in prompt
     ):
         return "shared context ok"
     return "thread summary ok"
@@ -48,7 +48,7 @@ async def _fake_run_once(**kwargs: object) -> str:
 
 GatewaySessionStore.new_id = _stable_session_id  # type: ignore[assignment]
 gateway_router.subprocess.Popen = _PopenStub  # type: ignore[assignment]
-gateway_commands._run_once_impl = _fake_run_once  # type: ignore[assignment]
+gateway_runtime._run_gateway_chat_turn = _fake_run_once  # type: ignore[assignment]
 
 if __name__ == "__main__":
     cli_main.app()

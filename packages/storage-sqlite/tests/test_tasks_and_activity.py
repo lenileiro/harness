@@ -138,6 +138,18 @@ class TestActivityStore:
         events = await storage.list_activity(task_id="t1")
         assert [e.kind for e in events] == ["task.created", "task.updated"]
 
+    async def test_list_limit_returns_latest_events_in_chronological_order(
+        self, storage: SQLiteStorage
+    ) -> None:
+        for index in range(5):
+            await storage.append_activity(
+                ActivityEvent(task_id="t1", kind=f"event.{index}", data={"index": index})
+            )
+
+        events = await storage.list_activity(task_id="t1", limit=3)
+
+        assert [event.kind for event in events] == ["event.2", "event.3", "event.4"]
+
     async def test_append_is_idempotent_on_id(self, storage: SQLiteStorage) -> None:
         event = ActivityEvent(task_id="t1", kind="task.created")
         await storage.append_activity(event)

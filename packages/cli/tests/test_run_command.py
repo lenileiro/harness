@@ -8,12 +8,14 @@ ToolRegistry + InMemoryStorage + Rich-rendering wiring.
 from __future__ import annotations
 
 import asyncio
+import json
 from collections.abc import AsyncIterator, Callable
 from io import StringIO
 from pathlib import Path
 from typing import Any, ClassVar, cast
 
 import pytest
+import typer
 from rich.console import Console
 from typer.testing import CliRunner
 
@@ -24,6 +26,7 @@ from harness.core import (
     Capabilities,
     DomainProfile,
     Done,
+    ErrorEvent,
     Event,
     Message,
     TextDelta,
@@ -66,6 +69,13 @@ class FakeAdapter:
         pass
 
 
+class OpenRouterAdapterProbe:
+    captured: ClassVar[dict[str, object]] = {}
+
+    def __init__(self, **kwargs: object) -> None:
+        type(self).captured = kwargs
+
+
 @pytest.fixture
 def patch_adapter(monkeypatch: pytest.MonkeyPatch):
     """Swap the real OllamaAdapter for FakeAdapter and let the test pre-load scripts."""
@@ -75,6 +85,17 @@ def patch_adapter(monkeypatch: pytest.MonkeyPatch):
         FakeAdapter.next_script = scripts
 
     yield configure
+
+
+def test_cli_openrouter_adapter_respects_configured_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(cli_main, "OpenRouterAdapter", OpenRouterAdapterProbe)
+    cfg = HarnessConfig(provider_settings={"openrouter": {"timeout": 23.0}})
+
+    cli_main._build_adapter("openrouter", base_url=None, config=cfg)
+
+    assert OpenRouterAdapterProbe.captured["timeout"] == 23.0
     FakeAdapter.next_script = []
 
 
@@ -221,6 +242,7 @@ class TestRunCommand:
 
         def fake_build_agent(**kwargs: object) -> FakeAgent:
             captured["system_prompt"] = kwargs["system_prompt"]
+            captured["verify_command"] = kwargs["verify_command"]
             captured["tips"] = [
                 tip.text
                 for tip in kwargs["tips_provider"].query("pytest", top_k=5)  # type: ignore[union-attr]
@@ -247,6 +269,7 @@ class TestRunCommand:
                 yes=True,
                 inbox=False,
                 verify="none",
+                verify_command="echo ok",
                 critic=None,
                 require_tools=False,
                 goal=False,
@@ -282,5 +305,261 @@ class TestRunCommand:
 
         assert final == "reviewed"
         assert captured["system_prompt"] == "PLUGIN PROMPT"
+        assert captured["verify_command"] == "echo ok"
         assert captured["include"] == {"read_file"}
         assert captured["tips"] == ["plugin guidance"]
+
+    def test_run_once_can_disable_workspace_context(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(
+            "harness.cli.plugins.load_cli_domain_profile_providers",
+            lambda cwd, *, config: [],
+        )
+        monkeypatch.setattr(
+            "harness.cli.plugins.load_cli_experience_providers",
+            lambda cwd, *, config: [],
+        )
+        harness_dir = tmp_path / ".harness"
+        harness_dir.mkdir()
+        (harness_dir / "resume.json").write_text(
+            json.dumps(
+                {
+                    "current": "checkout-migration",
+                    "features": [
+                        {
+                            "name": "checkout-migration",
+                            "description": "Migrate checkout.",
+                            "status": "in_progress",
+                        }
+                    ],
+                    "notes": [],
+                }
+            ),
+            encoding="utf-8",
+        )
+        contracts_dir = harness_dir / "contracts"
+        contracts_dir.mkdir()
+        (contracts_dir / "checkout.json").write_text(
+            json.dumps({"name": "checkout", "rules": ["Stay on checkout."], "triggers": []}),
+            encoding="utf-8",
+        )
+
+        captured: dict[str, object] = {}
+
+        class FakeAgent:
+            async def run(self, request: object) -> AsyncIterator[Event]:
+                yield Done(final_message=Message(role="assistant", content="answered"))
+
+        async def fake_resolve_task_attachment(
+            storage: object, task_ref: object, session_id: object
+        ):
+            return None, None
+
+        def fake_build_agent(**kwargs: object) -> FakeAgent:
+            captured.update(kwargs)
+            return FakeAgent()
+
+        final = asyncio.run(
+            run_mod.run_once(
+                prompt="What is the weather in Tokyo?",
+                model="test-model",
+                chain=["ollama"],
+                base_url=None,
+                cwd=tmp_path,
+                max_steps=4,
+                max_output_tokens=None,
+                session_id=None,
+                task_ref=None,
+                db=None,
+                in_memory=True,
+                yes=True,
+                inbox=False,
+                verify="none",
+                critic=None,
+                require_tools=False,
+                goal=False,
+                max_context_tokens=None,
+                predict=False,
+                auto_compact=False,
+                max_repair=1,
+                profile="minimal",
+                domain="coding",
+                phases=None,
+                loop_detect=True,
+                contracts=True,
+                tips=True,
+                include_workspace_context=False,
+                config=HarnessConfig(),
+                build_storage=lambda **kwargs: object(),
+                resolve_task_attachment=fake_resolve_task_attachment,
+                resolve_runtime_strategy=lambda **kwargs: type(
+                    "Strategy",
+                    (),
+                    {"structural_profile": "minimal", "critic_mode": "none", "rationale": "x"},
+                )(),
+                build_verifier=lambda *args, **kwargs: None,
+                build_critic=lambda *args, **kwargs: None,
+                build_adapter=lambda *args, **kwargs: None,
+                build_tools=lambda *args, **kwargs: object(),
+                build_agent=fake_build_agent,
+                print_defense_ledger=lambda *args, **kwargs: asyncio.sleep(0),
+                render=lambda event: None,
+                default_system_prompt="DEFAULT PROMPT",
+                console=Console(file=StringIO(), force_terminal=False, color_system=None),
+            )
+        )
+
+        assert final == "answered"
+        assert captured["memory_store"] is None
+        assert captured["contracts"] is None
+        assert captured["tips_provider"] is None
+        assert captured["resume"] is None
+
+    def test_run_once_uses_loop_detector_for_bare_profile(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(
+            "harness.cli.plugins.load_cli_domain_profile_providers",
+            lambda cwd, *, config: [],
+        )
+
+        captured: dict[str, object] = {}
+
+        class FakeAgent:
+            async def run(self, request: object) -> AsyncIterator[Event]:
+                yield Done(final_message=Message(role="assistant", content="answered"))
+
+        async def fake_resolve_task_attachment(
+            storage: object, task_ref: object, session_id: object
+        ):
+            return None, None
+
+        def fake_build_agent(**kwargs: object) -> FakeAgent:
+            captured.update(kwargs)
+            return FakeAgent()
+
+        final = asyncio.run(
+            run_mod.run_once(
+                prompt="write the script",
+                model="test-model",
+                chain=["ollama"],
+                base_url=None,
+                cwd=tmp_path,
+                max_steps=4,
+                max_output_tokens=None,
+                session_id=None,
+                task_ref=None,
+                db=None,
+                in_memory=True,
+                yes=True,
+                inbox=False,
+                verify="none",
+                critic=None,
+                require_tools=False,
+                goal=False,
+                max_context_tokens=None,
+                predict=False,
+                auto_compact=False,
+                max_repair=1,
+                profile="bare",
+                domain="coding",
+                phases=None,
+                loop_detect=True,
+                contracts=False,
+                tips=False,
+                include_workspace_context=False,
+                config=HarnessConfig(),
+                build_storage=lambda **kwargs: object(),
+                resolve_task_attachment=fake_resolve_task_attachment,
+                resolve_runtime_strategy=lambda **kwargs: type(
+                    "Strategy",
+                    (),
+                    {"structural_profile": "bare", "critic_mode": "none", "rationale": "x"},
+                )(),
+                build_verifier=lambda *args, **kwargs: None,
+                build_critic=lambda *args, **kwargs: None,
+                build_adapter=lambda *args, **kwargs: None,
+                build_tools=lambda *args, **kwargs: object(),
+                build_agent=fake_build_agent,
+                print_defense_ledger=lambda *args, **kwargs: asyncio.sleep(0),
+                render=lambda event: None,
+                default_system_prompt="DEFAULT PROMPT",
+                console=Console(file=StringIO(), force_terminal=False, color_system=None),
+            )
+        )
+
+        assert final == "answered"
+        assert captured["loop_detector"].__class__.__name__ == "LoopDetector"
+
+    def test_run_once_does_not_return_streamed_partials_after_error(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(
+            "harness.cli.plugins.load_cli_domain_profile_providers",
+            lambda cwd, *, config: [],
+        )
+
+        class FakeAgent:
+            async def run(self, request: object) -> AsyncIterator[Event]:
+                yield TextDelta(text="I cannot fetch weather.")
+                yield ErrorEvent(
+                    error="exceeded max_steps=3 without final answer",
+                    kind="internal",
+                    recoverable=False,
+                )
+
+        async def fake_resolve_task_attachment(
+            storage: object, task_ref: object, session_id: object
+        ):
+            return None, None
+
+        with pytest.raises(typer.Exit):
+            asyncio.run(
+                run_mod.run_once(
+                    prompt="What is the weather in Tokyo?",
+                    model="test-model",
+                    chain=["ollama"],
+                    base_url=None,
+                    cwd=tmp_path,
+                    max_steps=3,
+                    max_output_tokens=None,
+                    session_id=None,
+                    task_ref=None,
+                    db=None,
+                    in_memory=True,
+                    yes=True,
+                    inbox=False,
+                    verify="none",
+                    critic=None,
+                    require_tools=True,
+                    goal=False,
+                    max_context_tokens=None,
+                    predict=False,
+                    auto_compact=False,
+                    max_repair=1,
+                    profile="minimal",
+                    domain="coding",
+                    phases=None,
+                    loop_detect=True,
+                    contracts=False,
+                    tips=False,
+                    config=HarnessConfig(),
+                    build_storage=lambda **kwargs: object(),
+                    resolve_task_attachment=fake_resolve_task_attachment,
+                    resolve_runtime_strategy=lambda **kwargs: type(
+                        "Strategy",
+                        (),
+                        {"structural_profile": "minimal", "critic_mode": "none", "rationale": "x"},
+                    )(),
+                    build_verifier=lambda *args, **kwargs: None,
+                    build_critic=lambda *args, **kwargs: None,
+                    build_adapter=lambda *args, **kwargs: None,
+                    build_tools=lambda *args, **kwargs: object(),
+                    build_agent=lambda **kwargs: FakeAgent(),
+                    print_defense_ledger=lambda *args, **kwargs: asyncio.sleep(0),
+                    render=lambda event: None,
+                    default_system_prompt="DEFAULT PROMPT",
+                    console=Console(file=StringIO(), force_terminal=False, color_system=None),
+                )
+            )

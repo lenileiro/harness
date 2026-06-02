@@ -38,18 +38,34 @@ from harness.cli.runtime_helpers import (
     resolve_runtime_strategy as _resolve_runtime_strategy,
 )
 from harness.core import (
+    DEFAULT_RESUME_PATH,
+    EnvironmentContract,
+    FeatureItem,
+    MemoryEntry,
+    Milestone,
     Mission,
+    MissionFeature,
     MissionLoopStep,
     MissionStore,
     MissionSummaryReport,
+    ResumeContract,
+    SchedulerStore,
+    Tip,
+    TipLibrary,
+    ValidationAssertion,
+    ValidationContract,
     build_mission_summary_report,
     complete_mission_feature,
+    create_scheduler_job,
     default_mission_root,
+    default_scheduler_root,
     execute_mission_burst,
     execute_mission_milestone,
     execute_next_mission_feature,
     list_mission_reports,
     load_mission_report,
+    parse_schedule_spec,
+    run_scheduler_job,
     validate_mission_milestone,
     write_mission_scheduled_run_record,
     write_mission_summary_report,
@@ -64,12 +80,35 @@ from harness.core.mission_planner import (
 from harness.core.opportunities import Opportunity
 from harness.core.promotion_candidates import PromotionCandidate
 from harness.core.research_store import ResearchStore, default_research_root
+from harness.core.tips_models import keywords_from_text
+from harness.storage.sqlite import SQLiteStorage
+from harness.tasks import ActivityEvent, Task
+from harness.tasks import activity as task_activity
 
 mission_app = typer.Typer(
     name="mission",
     help="Plan and track multi-step autonomous missions.",
     no_args_is_help=True,
 )
+
+
+def _workflow_slug(value: str) -> str:
+    return (
+        "-".join(
+            part for part in "".join(ch.lower() if ch.isalnum() else " " for ch in value).split()
+        )
+        or "workflow"
+    )
+
+
+def _ensure_workspace_db(cwd: Path) -> Path:
+    harness_dir = cwd / ".harness"
+    harness_dir.mkdir(parents=True, exist_ok=True)
+    db_path = harness_dir / "harness.db"
+    if not db_path.exists():
+        db_path.touch()
+    return db_path
+
 
 _MISSION_PLANNER_SYSTEM_PROMPT = (
     "You are a mission planning agent. Turn a high-level software mission goal into a "
@@ -287,6 +326,315 @@ def mission_create_command(
     )
     target = store.add_mission(mission)
     console.print(f"[green]Created mission {mission.id}[/green] at {target}")
+
+
+@mission_app.command("launch")
+def mission_launch_command(
+    *,
+    title: str = typer.Option(..., "--title"),
+    goal: str = typer.Option(..., "--goal"),
+    feature: str = typer.Option("", "--feature", help="Human-facing resume feature name."),
+    description: str = typer.Option("", "--description", help="Optional task/resume description."),
+    phases: str = typer.Option(
+        "plan,act,verify", "--phases", help="Comma-separated phase plan for the resume contract."
+    ),
+    every: str | None = typer.Option(
+        "30m", "--every", help="Recurring scheduler interval (default: 30m)."
+    ),
+    at: str | None = typer.Option(None, "--at", help="Run once at a specific ISO8601 time."),
+    cron: str | None = typer.Option(
+        None, "--cron", help="Cron schedule: minute hour day month weekday."
+    ),
+    memory: str | None = typer.Option(
+        None, "--memory", help="Optional workspace memory note to seed."
+    ),
+    max_steps: int = typer.Option(20, "--max-steps"),
+    budget_tokens: int | None = typer.Option(None, "--budget-tokens"),
+    budget_runtime_minutes: int | None = typer.Option(None, "--budget-runtime-minutes"),
+    run_now: bool = typer.Option(
+        False, "--run-now", help="Trigger the first scheduler run immediately after launch."
+    ),
+    cwd: Path | None = typer.Option(None, "--cwd"),
+) -> None:
+    working_dir = (cwd or Path.cwd()).resolve()
+    db_path = _ensure_workspace_db(working_dir)
+    phase_list = [item.strip() for item in phases.split(",") if item.strip()]
+    if not phase_list:
+        console.print("[red]--phases must contain at least one phase.[/red]")
+        raise typer.Exit(2)
+
+    selected_schedule = parse_schedule_spec(
+        at=at,
+        every=None if (at or cron) else every,
+        cron=cron,
+    )
+
+    async def _go() -> dict[str, str]:
+        storage = SQLiteStorage(path=db_path)
+        try:
+            task = await storage.create_task(
+                Task(
+                    ref="",
+                    title=title.strip(),
+                    description=(description or goal).strip() or None,
+                    status="in_progress",
+                    cwd=working_dir,
+                    metadata={"workflow_kind": "long_running"},
+                )
+            )
+            await storage.append_activity(
+                ActivityEvent(
+                    task_id=task.id,
+                    kind=task_activity.TASK_CREATED,
+                    data={"ref": task.ref, "title": task.title},
+                )
+            )
+
+            mission_store = MissionStore(root=default_mission_root(working_dir))
+            mission = Mission(
+                id=mission_store.new_id("mission", title),
+                title=title.strip(),
+                goal=goal.strip(),
+                status="approved",
+                created_by="launch",
+                budget_tokens=budget_tokens,
+                budget_runtime_minutes=budget_runtime_minutes,
+            )
+            milestone = Milestone(
+                id=mission_store.new_id("milestone", f"{title}-initial-loop"),
+                mission_id=mission.id,
+                title="Initial execution loop",
+                summary="Drive the mission goal forward through recurring worker bursts.",
+                status="active",
+                order=1,
+            )
+            mission = Mission(
+                **{
+                    **mission.to_dict(),
+                    "current_milestone_id": milestone.id,
+                    "updated_at": milestone.updated_at,
+                }
+            )
+            mission_feature = MissionFeature(
+                id=mission_store.new_id("feature", title),
+                mission_id=mission.id,
+                milestone_id=milestone.id,
+                title=(feature.strip() or title.strip()),
+                summary=(description.strip() or goal.strip()) if description else goal.strip(),
+                status="pending",
+                assigned_role="worker",
+            )
+            assertion = ValidationAssertion(
+                id=mission_store.new_id("assertion", title),
+                contract_id="",
+                title="Maintain forward progress",
+                description=goal.strip(),
+                kind="contract",
+                verification_method=(
+                    "Review mission runs, changed files, and verification output before "
+                    "marking the milestone validated."
+                ),
+                covered_by_features=(mission_feature.id,),
+            )
+            contract = ValidationContract(
+                id=mission_store.new_id("contract", title),
+                mission_id=mission.id,
+                summary=(
+                    "This long-running workflow should preserve evidence-backed progress "
+                    "toward the mission goal across repeated scheduled bursts."
+                ),
+                assertions=(
+                    ValidationAssertion(
+                        id=assertion.id,
+                        contract_id="",
+                        title=assertion.title,
+                        description=assertion.description,
+                        kind=assertion.kind,
+                        verification_method=assertion.verification_method,
+                        covered_by_features=assertion.covered_by_features,
+                    ),
+                ),
+            )
+            contract = ValidationContract(
+                id=contract.id,
+                mission_id=contract.mission_id,
+                summary=contract.summary,
+                assertions=(
+                    ValidationAssertion(
+                        id=assertion.id,
+                        contract_id=contract.id,
+                        title=assertion.title,
+                        description=assertion.description,
+                        kind=assertion.kind,
+                        verification_method=assertion.verification_method,
+                        covered_by_features=assertion.covered_by_features,
+                    ),
+                ),
+            )
+
+            mission_store.add_mission(mission)
+            mission_store.add_milestone(milestone)
+            mission_store.add_feature(mission_feature)
+            mission_store.add_contract(contract)
+
+            resume_path = working_dir / DEFAULT_RESUME_PATH
+            resume = ResumeContract.load(resume_path) or ResumeContract()
+            resume_name = feature.strip() or _workflow_slug(title)
+            existing = [item for item in resume.features if item.name != resume_name]
+            existing.append(
+                FeatureItem(
+                    name=resume_name,
+                    description=(description or goal).strip(),
+                    status="in_progress",
+                    phases=phase_list,
+                    notes=[
+                        f"task_ref={task.ref}",
+                        f"mission_id={mission.id}",
+                        f"milestone_id={milestone.id}",
+                        f"feature_id={mission_feature.id}",
+                    ],
+                )
+            )
+            resume.features = existing
+            resume.current = resume_name
+            resume.save(resume_path)
+
+            memory_text = (
+                memory.strip()
+                if isinstance(memory, str) and memory.strip()
+                else (
+                    f"Long-running workflow {mission.id} tracks task {task.ref}, "
+                    f"resume feature {resume_name}, and the goal: {goal.strip()}"
+                )
+            )
+            saved_memory = await storage.save_memory(
+                MemoryEntry(kind="project_context", text=memory_text)
+            )
+
+            contracts_dir = working_dir / ".harness" / "contracts"
+            contracts_dir.mkdir(parents=True, exist_ok=True)
+            contract_file = contracts_dir / f"{_workflow_slug(title)}.json"
+            workflow_contract = EnvironmentContract(
+                name=f"workflow-{_workflow_slug(title)}",
+                rules=(
+                    f"Stay focused on the long-running workflow for mission {mission.id}.",
+                    f"Treat task {task.ref} and resume feature {resume_name} as the durable source of truth.",
+                    "Record evidence-backed progress in the mission, task, and scheduler artifacts before ending a burst.",
+                ),
+                triggers=tuple(keywords_from_text(f"{title} {goal} {resume_name}", max_keywords=5)),
+                priority=50,
+                source=str(contract_file),
+            )
+            contract_file.write_text(
+                json.dumps(
+                    {
+                        "name": workflow_contract.name,
+                        "rules": list(workflow_contract.rules),
+                        "triggers": list(workflow_contract.triggers),
+                        "priority": workflow_contract.priority,
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            tip_library = TipLibrary.load([working_dir / ".harness" / "tips.jsonl"])
+            tip_library.add(
+                Tip(
+                    text=(
+                        f"For workflow {resume_name}, keep each burst bounded, update task {task.ref}, "
+                        "and leave a concrete handoff when you cannot finish the current slice."
+                    ),
+                    triggers=tuple(
+                        keywords_from_text(f"{title} {goal} {resume_name}", max_keywords=5)
+                    ),
+                    weight=2.0,
+                ),
+                persist=True,
+            )
+
+            scheduler_store = SchedulerStore(root=default_scheduler_root(working_dir))
+            job = create_scheduler_job(
+                store=scheduler_store,
+                kind="mission.schedule_once",
+                cwd=working_dir,
+                schedule=selected_schedule,
+                payload={"mission_id": mission.id, "max_steps": max_steps, "auto_complete": False},
+                title=mission.id,
+            )
+            scheduler_store.add_job(job)
+
+            updated_task = task.model_copy(
+                update={
+                    "metadata": {
+                        **task.metadata,
+                        "mission_id": mission.id,
+                        "milestone_id": milestone.id,
+                        "feature_id": mission_feature.id,
+                        "scheduler_job_id": job.id,
+                        "resume_feature": resume_name,
+                        "memory_id": saved_memory.id,
+                        "env_contract": str(contract_file.relative_to(working_dir)),
+                        "tips_path": ".harness/tips.jsonl",
+                        "phase_plan": phase_list,
+                    }
+                }
+            )
+            updated_task.touch()
+            await storage.update_task(updated_task)
+            await storage.append_activity(
+                ActivityEvent(
+                    task_id=updated_task.id,
+                    kind=task_activity.TASK_UPDATED,
+                    data={
+                        "ref": updated_task.ref,
+                        "mission_id": mission.id,
+                        "scheduler_job_id": job.id,
+                        "resume_feature": resume_name,
+                    },
+                )
+            )
+
+            result = {
+                "task_ref": updated_task.ref,
+                "mission_id": mission.id,
+                "milestone_id": milestone.id,
+                "feature_id": mission_feature.id,
+                "contract_id": contract.id,
+                "scheduler_job_id": job.id,
+                "memory_id": saved_memory.id,
+                "resume_feature": resume_name,
+                "schedule": f"{selected_schedule.kind}:{selected_schedule.value}",
+                "env_contract": str(contract_file.relative_to(working_dir)),
+                "tips_path": ".harness/tips.jsonl",
+            }
+            if run_now:
+                record = run_scheduler_job(store=scheduler_store, job_id=job.id, trigger="launch")
+                result["scheduler_run_id"] = record.id
+                result["scheduler_run_status"] = record.result_status
+            return result
+        finally:
+            await storage.close()
+
+    payload = _run_async(_go())
+    console.print("[green]Launched long-running workflow[/green]")
+    for key in (
+        "task_ref",
+        "mission_id",
+        "milestone_id",
+        "feature_id",
+        "contract_id",
+        "scheduler_job_id",
+        "memory_id",
+        "resume_feature",
+        "schedule",
+        "scheduler_run_id",
+        "scheduler_run_status",
+    ):
+        value = payload.get(key)
+        if value:
+            console.print(f"{key}={value}")
 
 
 @mission_app.command("show")

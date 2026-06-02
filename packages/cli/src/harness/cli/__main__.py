@@ -9,15 +9,16 @@ Phase 4 surface:
 - `harness version`              — print the installed CLI version
 
 Providers: ollama, codex, openai, openrouter.
-Tools: read_file, write_file, edit_file, list_dir, glob, shell, fetch_url.
+Tools: read_file, write_file, edit_file, list_dir, glob, shell, web_search, fetch_url.
 
 Config: `$XDG_CONFIG_HOME/harness/config.toml` (or ~/.config/harness/config.toml)
 provides defaults for provider, model, per-provider settings, and per-tool
 approval levels. CLI flags override the config.
 
-Tool approvals default to `prompt` for any tool that mutates state or makes
-network calls; the CLI shows a Rich prompt. Pass `--yes` to auto-approve
-everything (handy for non-interactive use), or set approvals in config.
+Tool approvals default to `prompt` for tools that mutate state or execute shell
+commands. Read-only filesystem and web tools default to `auto`. Pass `--yes` to
+auto-approve everything (handy for non-interactive use), or set approvals in
+config.
 """
 
 from __future__ import annotations
@@ -186,6 +187,7 @@ from harness.cli.tune_commands import tune_list_command as _tune_list_command
 from harness.cli.tune_commands import tune_propose_command as _tune_propose_command
 from harness.cli.tune_commands import tune_rollback_command as _tune_rollback_command
 from harness.cli.tune_commands import tune_show_command as _tune_show_command
+from harness.cli.workflow_commands import workflow_app
 from harness.cli.workspace_commands import (
     init_workspace as _init_workspace,
 )
@@ -253,6 +255,7 @@ app.add_typer(mission_app, name="mission")
 app.add_typer(scheduler_app, name="scheduler")
 app.add_typer(vision_app, name="vision")
 app.add_typer(research_app, name="research")
+app.add_typer(workflow_app, name="workflow")
 
 tasks_app = typer.Typer(
     name="tasks", help="Create, list, and update durable tasks.", no_args_is_help=True
@@ -478,10 +481,12 @@ def _build_adapter(provider: str, *, base_url: str | None, config: HarnessConfig
             else OllamaAdapter(timeout=timeout)
         )
     if provider == "openrouter":
+        timeout = float(settings.get("timeout", 120.0))
         return OpenRouterAdapter(
             base_url=effective_base_url,
             http_referer=settings.get("http_referer"),
             x_title=settings.get("x_title"),
+            timeout=timeout,
         )
     if provider == "codex":
         timeout = float(settings.get("timeout", 600.0))
@@ -524,12 +529,15 @@ def _build_agent(
     compactor: Any | None = None,
     max_repair_attempts: int = 3,
     profile: str = "minimal",
+    verify_command: str | None = None,
     phases_enabled: bool = False,
     loop_detector: Any | None = None,
     contracts: Any | None = None,
     tips_provider: Any | None = None,
     resume: Any | None = None,
     build_tools: Any = _build_tools,
+    memory_tools_enabled: bool = True,
+    auxiliary_tools_enabled: bool = True,
 ) -> Agent:
     return _build_agent_impl(
         chain=chain,
@@ -558,11 +566,14 @@ def _build_agent(
         compactor=compactor,
         max_repair_attempts=max_repair_attempts,
         profile=profile,
+        verify_command=verify_command,
         phases_enabled=phases_enabled,
         loop_detector=loop_detector,
         contracts=contracts,
         tips_provider=tips_provider,
         resume=resume,
+        memory_tools_enabled=memory_tools_enabled,
+        auxiliary_tools_enabled=auxiliary_tools_enabled,
     )
 
 
@@ -709,7 +720,7 @@ def run(
             "--critic",
             help=(
                 "Critic mode: llm (challenge agent hypothesis after each failed repair) | "
-                "llm+search (same + Tavily web research, requires TAVILY_API_KEY) | none."
+                "llm+search (same + web research, API key optional) | none."
             ),
         ),
     ] = None,
@@ -758,8 +769,9 @@ def run(
             "--profile",
             help=(
                 "Structural defense level. 'bare' = no chain, no critic "
-                "(model + tools only). 'adaptive' (default) chooses minimal "
-                "or stricter paths from the task shape. 'diagnostic' = "
+                "(model + tools only). 'adaptive' (default) chooses from explicit "
+                "runtime signals: phases -> strict, verify command -> diagnostic, "
+                "otherwise minimal. 'diagnostic' = "
                 "verify + diagnosis-alignment + misdirected-suggestion + prompt-surface revert. "
                 "'minimal' = only the tests-before-done check. 'strict' = full chain (file scope, "
                 "minimal fix, tests-first, verify-before-done, diagnosis "

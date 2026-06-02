@@ -108,6 +108,12 @@ class ToolRegistry:
         self._tools[tool.name] = tool
         self._generation += 1
 
+    def unregister(self, name: str) -> None:
+        if name not in self._tools:
+            return
+        del self._tools[name]
+        self._generation += 1
+
     def register_spec(self, spec: ToolSpec) -> None:
         if spec.name in self._specs:
             raise ValueError(f"tool spec {spec.name!r} already registered")

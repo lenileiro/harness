@@ -84,6 +84,25 @@ async def test_no_tools_llm_judge_can_pass() -> None:
 
 
 @pytest.mark.asyncio
+async def test_empty_assistant_response_fails_before_llm_judge() -> None:
+    router = VerifierRouter(
+        rule=RuleVerifier(),
+        llm=LLMJudgeVerifier(adapter=AlwaysPassLLMAdapter(), model="m"),  # type: ignore[arg-type]
+    )
+    session = _make_session()
+    session.messages = [
+        Message(role="user", content="Good morning"),
+        Message(role="assistant", content=None),
+    ]
+
+    result = await router.verify(session=session, activity=[])
+
+    assert result.can_finish is False
+    assert result.reason == "assistant final answer is empty"
+    assert result.verifier_name == "router"
+
+
+@pytest.mark.asyncio
 async def test_readonly_tools_routes_to_rule() -> None:
     router = VerifierRouter(
         rule=RuleVerifier(),
@@ -144,6 +163,153 @@ async def test_llm_failure_surfaced_through_router() -> None:
     result = await router.verify(session=session, activity=activity)
     assert result.can_finish is False
     assert result.verifier_name == "router"
+
+
+@pytest.mark.asyncio
+async def test_exact_file_task_uses_deterministic_evidence_not_llm_judge() -> None:
+    router = VerifierRouter(
+        rule=RuleVerifier(),
+        llm=LLMJudgeVerifier(adapter=AlwaysFailLLMAdapter(), model="m"),  # type: ignore[arg-type]
+    )
+    session = Session(
+        provider="ollama",
+        model="llama3.2",
+        cwd=Path("/tmp"),
+        messages=[
+            Message(
+                role="user",
+                content="Create result.txt containing exactly shelltruth with no trailing newline.",
+            ),
+            Message(role="assistant", content="Done."),
+        ],
+    )
+    activity = [
+        ActivityEvent(
+            kind="tool_call.completed",
+            data={
+                "name": "write_file",
+                "is_error": False,
+                "arguments": {"path": "result.txt", "content": "shelltruth"},
+            },
+        ),
+        ActivityEvent(
+            kind="tool_call.completed",
+            data={
+                "name": "verify_work",
+                "is_error": True,
+                "arguments": {"command": "cat result.txt"},
+            },
+        ),
+        ActivityEvent(
+            kind="tool_call.completed",
+            data={
+                "name": "verify_work",
+                "is_error": False,
+                "arguments": {"command": 'test "$(cat result.txt)" = "shelltruth"'},
+            },
+        ),
+        ActivityEvent(
+            kind="tool_call.completed",
+            data={
+                "name": "verify_work",
+                "is_error": False,
+                "arguments": {"command": "test $(wc -c < result.txt) -eq 10"},
+            },
+        ),
+    ]
+
+    result = await router.verify(session=session, activity=activity)
+
+    assert result.can_finish is True
+    assert result.verifier_name == "router"
+    assert "deterministic task verification passed" in result.reason
+
+
+@pytest.mark.asyncio
+async def test_exact_stdout_task_uses_deterministic_evidence_not_llm_judge() -> None:
+    router = VerifierRouter(
+        rule=RuleVerifier(),
+        llm=LLMJudgeVerifier(adapter=AlwaysFailLLMAdapter(), model="m"),  # type: ignore[arg-type]
+    )
+    session = Session(
+        provider="ollama",
+        model="llama3.2",
+        cwd=Path("/tmp"),
+        messages=[
+            Message(role="user", content="Create hello.py that prints exactly harness-ok."),
+            Message(role="assistant", content="Done."),
+        ],
+    )
+    activity = [
+        ActivityEvent(
+            kind="tool_call.completed",
+            data={
+                "name": "write_file",
+                "is_error": False,
+                "arguments": {"path": "hello.py", "content": "print('harness-ok')"},
+            },
+        ),
+        ActivityEvent(
+            kind="tool_call.completed",
+            data={
+                "name": "verify_work",
+                "is_error": False,
+                "arguments": {"command": "python3 hello.py"},
+                "content_preview": "PASSED\n\nharness-ok",
+            },
+        ),
+    ]
+
+    result = await router.verify(session=session, activity=activity)
+
+    assert result.can_finish is True
+    assert result.verifier_name == "router"
+    assert "deterministic task verification passed" in result.reason
+
+
+@pytest.mark.asyncio
+async def test_named_exact_stdout_task_uses_deterministic_evidence_not_llm_judge() -> None:
+    router = VerifierRouter(
+        rule=RuleVerifier(),
+        llm=LLMJudgeVerifier(adapter=AlwaysFailLLMAdapter(), model="m"),  # type: ignore[arg-type]
+    )
+    session = Session(
+        provider="ollama",
+        model="llama3.2",
+        cwd=Path("/tmp"),
+        messages=[
+            Message(
+                role="user",
+                content="Create a Python script named hello.py that prints exactly harness-ok.",
+            ),
+            Message(role="assistant", content="Done."),
+        ],
+    )
+    activity = [
+        ActivityEvent(
+            kind="tool_call.completed",
+            data={
+                "name": "write_file",
+                "is_error": False,
+                "arguments": {"path": "hello.py", "content": "print('harness-ok')"},
+            },
+        ),
+        ActivityEvent(
+            kind="tool_call.completed",
+            data={
+                "name": "verify_work",
+                "is_error": False,
+                "arguments": {"command": "python3 hello.py"},
+                "content_preview": "PASSED\n\nharness-ok",
+            },
+        ),
+    ]
+
+    result = await router.verify(session=session, activity=activity)
+
+    assert result.can_finish is True
+    assert result.verifier_name == "router"
+    assert "deterministic task verification passed" in result.reason
 
 
 @pytest.mark.asyncio

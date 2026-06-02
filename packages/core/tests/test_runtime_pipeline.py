@@ -91,6 +91,7 @@ class TestPredictorPipeline:
             adapters={"mock": adapter},
             tools=[tool],
             predictor=ConsequencePredictor(),
+            approval_policy=ApprovalPolicy(per_tool={"shell": "auto"}),
             default_cwd=str(tmp_path),
         )
 
@@ -113,6 +114,7 @@ class TestPredictorPipeline:
             adapters={"mock": adapter},
             tools=[tool],
             predictor=ConsequencePredictor(),
+            approval_policy=ApprovalPolicy(default="auto"),
             default_cwd=str(tmp_path),
         )
 
@@ -154,6 +156,7 @@ class TestPredictorPipeline:
             adapters={"mock": adapter},
             tools=[tool],
             predictor=ConsequencePredictor(),
+            approval_policy=ApprovalPolicy(default="auto"),
             default_cwd=str(tmp_path),
         )
 
@@ -161,6 +164,33 @@ class TestPredictorPipeline:
         mismatch_events = [e for e in events if isinstance(e, PredictionMismatchEvent)]
         assert len(mismatch_events) == 1
         assert not mismatch_events[0].outcome.matched
+
+    async def test_tool_prediction_expected_status_override_allows_error(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        adapter = MockAdapter(
+            "mock",
+            scripts=[
+                tool_call_turn(call_id="c1", name="shell", arguments={"text": "go test ./..."}),
+                text_turn("ok"),
+            ],
+        )
+        tool = MockTool(name="shell", responder=lambda **_: ValueError("tests failed"))
+        tool.effect_scope = "workspace_durable"  # type: ignore[attr-defined]
+        tool.prediction_expected_status = "ok_or_error"  # type: ignore[attr-defined]
+        agent = make_agent(
+            adapters={"mock": adapter},
+            tools=[tool],
+            predictor=ConsequencePredictor(),
+            approval_policy=ApprovalPolicy(per_tool={"shell": "auto"}),
+            default_cwd=str(tmp_path),
+        )
+
+        events = await collect(agent.run(RunRequest(prompt="go")))
+        pred = next(e for e in events if isinstance(e, PredictionEvent))
+        assert pred.prediction.expected_status == "ok_or_error"
+        assert not any(isinstance(e, PredictionMismatchEvent) for e in events)
 
 
 # ---------------------------------------------------------------------------

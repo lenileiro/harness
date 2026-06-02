@@ -57,13 +57,28 @@ _BUILTIN_ALIASES: dict[str, str] = {
     "execute": "shell",
     "run_command": "shell",
     "run_shell": "shell",
+    "run_shell_command": "shell",
+    "shell_command": "shell",
     "verify": "verify_work",
     "done": "verify_work",
     "finish": "verify_work",
     "web": "web_search",
     "search": "web_search",
     "google": "web_search",
+    "google_search": "web_search",
 }
+
+
+def _collapse_repeated_name_tokens(name: str) -> str:
+    parts = [part for part in name.split("_") if part]
+    if not parts:
+        return name
+    collapsed: list[str] = []
+    for part in parts:
+        if collapsed and collapsed[-1] == part:
+            continue
+        collapsed.append(part)
+    return "_".join(collapsed)
 
 
 @dataclass(frozen=True)
@@ -122,6 +137,17 @@ def canonicalize_tool_name(
     case_hits = [k for k in known_set if k.lower() == lower]
     if case_hits:
         return CanonicalizationResult(name, case_hits[0], "case_insensitive_match", 0.98)
+
+    collapsed = _collapse_repeated_name_tokens(lower)
+    if collapsed != lower:
+        collapsed_hits = [k for k in known_set if k.lower() == collapsed]
+        if collapsed_hits:
+            return CanonicalizationResult(
+                name,
+                collapsed_hits[0],
+                f"repeated_token_collapse:{lower}->{collapsed}",
+                0.94,
+            )
 
     table = aliases if aliases is not None else _BUILTIN_ALIASES
     target = table.get(lower)

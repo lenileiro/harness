@@ -85,10 +85,12 @@ def _build_adapter(provider: str, *, base_url: str | None, config: HarnessConfig
             else OllamaAdapter(timeout=timeout)
         )
     if provider == "openrouter":
+        timeout = float(settings.get("timeout", 120.0))
         return OpenRouterAdapter(
             base_url=effective_base_url,
             http_referer=settings.get("http_referer"),
             x_title=settings.get("x_title"),
+            timeout=timeout,
         )
     if provider == "codex":
         timeout = float(settings.get("timeout", 600.0))
@@ -108,11 +110,12 @@ def _build_tools(
     *,
     config: HarnessConfig | None = None,
     include: set[str] | None = None,
+    extras: dict[str, Any] | None = None,
 ) -> ToolRegistry:
     registry = ToolRegistry()
     for provider in load_cli_tool_providers(cwd, config=config):
         registry.register_provider(provider)
-    built = registry.materialize_specs(cwd=cwd)
+    built = registry.materialize_specs(cwd=cwd, extras=extras)
     if include is None:
         return built
     filtered = ToolRegistry()

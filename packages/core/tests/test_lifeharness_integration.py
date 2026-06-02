@@ -48,7 +48,9 @@ class InMemoryActivitySink(ActivityStore):
             items = [e for e in items if e.session_id == session_id]
         if kinds is not None:
             items = [e for e in items if e.kind in kinds]
-        return items[:limit]
+        if limit <= 0:
+            return []
+        return items[-limit:]
 
 
 def _make_agent(

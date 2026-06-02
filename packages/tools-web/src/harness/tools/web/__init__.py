@@ -1,19 +1,23 @@
-"""Web tools for Harness agents: HTTP fetch and Tavily search.
+"""Web tools for Harness agents: HTTP fetch and web search.
 
 Tools:
 - ``FetchUrlTool`` — GET-only HTTP fetch, capped + allow-listed.
-- ``TavilySearchTool`` — Web search via the Tavily API.
+- ``WebSearchTool`` — Web search with an API-free public fallback.
 
 FetchUrlTool defences:
 - Only ``http://`` and ``https://`` schemes are accepted.
 - Response body is capped at ``max_bytes``.
+- Returned text is capped at ``max_output_chars`` with explicit truncation
+  metadata, so large public pages do not flood the agent context.
 - Content-Type must match the allow-list.
 - Configurable timeout, hard-capped by ``max_timeout``.
-- Approval default is ``prompt``.
+- Approval default is ``auto`` because the tool is read-only; URL safety is
+  enforced by scheme, MIME, size, and SSRF checks.
 
-TavilySearchTool notes:
-- Requires ``TAVILY_API_KEY`` environment variable (or pass ``api_key`` directly).
-- Returns titles, snippets, and URLs from Tavily's search index.
+WebSearchTool notes:
+- Uses Tavily when ``TAVILY_API_KEY`` is available, otherwise uses a public
+  HTML search fallback that requires no purchase, support request, or API key.
+- Returns titles, snippets, and URLs from the search backend.
 - Approval default is ``auto`` — search is read-only.
 """
 
@@ -22,8 +26,9 @@ from __future__ import annotations
 import ipaddress
 import os
 import socket
+from html.parser import HTMLParser
 from typing import Any, Literal
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 import httpx
 
@@ -149,19 +154,22 @@ class FetchUrlTool:
         "non-http(s) schemes, non-allowlisted MIME types, oversized bodies, "
         "and non-2xx responses."
     )
-    approval: ApprovalDecision = "prompt"
+    approval: ApprovalDecision = "auto"
+    effect_scope = "read_only"
     phases: tuple[str, ...] = ("*",)
 
     def __init__(
         self,
         *,
         max_bytes: int = 1024 * 1024,
+        max_output_chars: int = 32_000,
         default_timeout: float = 15.0,
         max_timeout: float = 60.0,
         allowed_mime_prefixes: tuple[str, ...] = DEFAULT_ALLOWED_MIME_PREFIXES,
         client: httpx.AsyncClient | None = None,
     ) -> None:
         self.max_bytes = max_bytes
+        self.max_output_chars = max(1, max_output_chars)
         self.default_timeout = default_timeout
         self.max_timeout = max_timeout
         self.allowed_mime_prefixes = allowed_mime_prefixes
@@ -230,15 +238,28 @@ class FetchUrlTool:
             )
 
         text = body.decode(response.encoding or "utf-8", errors="replace")
+        truncated = len(text) > self.max_output_chars
+        visible_text = text
+        if truncated:
+            visible_text = text[: self.max_output_chars].rstrip()
+            visible_text = (
+                f"{visible_text}\n\n"
+                f"[truncated: showing first {self.max_output_chars} of {len(text)} "
+                "characters from this response. Use a narrower URL, web_search, "
+                "or another source if the missing suffix matters.]"
+            )
         return ToolResult(
             tool_call_id=call.id,
             name=self.name,
-            content=f"status: {response.status_code}\ncontent-type: {content_type}\n\n{text}",
+            content=f"status: {response.status_code}\ncontent-type: {content_type}\n\n{visible_text}",
             metadata={
                 "url": url,
                 "status_code": response.status_code,
                 "content_type": content_type,
                 "bytes": len(body),
+                "characters": len(text),
+                "returned_characters": min(len(text), self.max_output_chars),
+                "truncated": truncated,
             },
         )
 
@@ -259,16 +280,73 @@ _TAVILY_SEARCH_SCHEMA: dict[str, Any] = {
 }
 
 
-class TavilySearchTool:
-    """Search the web via Tavily. Requires TAVILY_API_KEY environment variable."""
+class _DuckDuckGoHTMLParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.results: list[dict[str, str]] = []
+        self._active: Literal["title", "content", ""] = ""
+        self._text_parts: list[str] = []
+        self._current_url = ""
+        self._snippet_index = 0
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        attr_map = {name: value or "" for name, value in attrs}
+        class_names = attr_map.get("class", "")
+        if tag == "a" and "result__a" in class_names:
+            self._active = "title"
+            self._text_parts = []
+            self._current_url = _clean_duckduckgo_url(attr_map.get("href", ""))
+            return
+        if "result__snippet" in class_names:
+            self._active = "content"
+            self._text_parts = []
+
+    def handle_data(self, data: str) -> None:
+        if self._active:
+            self._text_parts.append(data)
+
+    def handle_endtag(self, tag: str) -> None:
+        if self._active == "title" and tag == "a":
+            title = _collapse_ws("".join(self._text_parts))
+            if title:
+                self.results.append({"title": title, "content": "", "url": self._current_url})
+            self._active = ""
+            self._text_parts = []
+            self._current_url = ""
+            return
+        if self._active == "content" and tag in {"a", "div"}:
+            snippet = _collapse_ws("".join(self._text_parts))
+            if snippet and self._snippet_index < len(self.results):
+                self.results[self._snippet_index]["content"] = snippet
+                self._snippet_index += 1
+            self._active = ""
+            self._text_parts = []
+
+
+def _collapse_ws(value: str) -> str:
+    return " ".join(value.split())
+
+
+def _clean_duckduckgo_url(url: str) -> str:
+    parsed = urlparse(url)
+    if parsed.query:
+        uddg = parse_qs(parsed.query).get("uddg")
+        if uddg:
+            return unquote(uddg[0])
+    return url
+
+
+class WebSearchTool:
+    """Search the web without requiring an API key; Tavily is optional."""
 
     name = "web_search"
     description = (
-        "Search the internet using Tavily. Returns titles, snippets, and URLs "
-        "for the most relevant results. Use this to research topics, find current "
-        "information, or look up documentation."
+        "Search the internet. Returns titles, snippets, and URLs for relevant "
+        "results. Use this to research topics, find current information, or look "
+        "up documentation."
     )
     approval: ApprovalDecision = "auto"
+    effect_scope = "read_only"
     phases: tuple[str, ...] = ("*",)
 
     def __init__(
@@ -277,10 +355,14 @@ class TavilySearchTool:
         api_key: str | None = None,
         default_max_results: int = 5,
         search_depth: Literal["basic", "advanced", "fast", "ultra-fast"] = "basic",
+        client: httpx.AsyncClient | None = None,
+        fallback_url: str = "https://duckduckgo.com/html/",
     ) -> None:
         self._api_key = api_key
         self._default_max_results = min(default_max_results, 20)
         self._search_depth: Literal["basic", "advanced", "fast", "ultra-fast"] = search_depth
+        self._injected_client = client
+        self._fallback_url = fallback_url
         self.parameters_schema: dict[str, Any] = _TAVILY_SEARCH_SCHEMA
 
     def _resolve_key(self) -> str | None:
@@ -296,33 +378,40 @@ class TavilySearchTool:
                 is_error=True,
             )
 
-        api_key = self._resolve_key()
-        if not api_key:
-            return ToolResult(
-                tool_call_id=call.id,
-                name=self.name,
-                content=(
-                    "TAVILY_API_KEY is not set. "
-                    "Export it before running: export TAVILY_API_KEY=<your-key>"
-                ),
-                is_error=True,
-            )
-
         max_results_arg = call.arguments.get("max_results", self._default_max_results)
         try:
             max_results = max(1, min(int(max_results_arg), 20))
         except (TypeError, ValueError):
             max_results = self._default_max_results
 
+        api_key = self._resolve_key()
+        backend = "duckduckgo"
+        tavily_error = ""
         try:
-            results = await self._search(query.strip(), api_key, max_results)
+            if api_key:
+                results = await self._search(query.strip(), api_key, max_results)
+                backend = "tavily"
+            else:
+                results = await self._search_public(query.strip(), max_results)
         except Exception as exc:
-            return ToolResult(
-                tool_call_id=call.id,
-                name=self.name,
-                content=f"search failed: {exc}",
-                is_error=True,
-            )
+            if not api_key:
+                return ToolResult(
+                    tool_call_id=call.id,
+                    name=self.name,
+                    content=f"search failed: {exc}",
+                    is_error=True,
+                )
+            tavily_error = str(exc)
+            try:
+                results = await self._search_public(query.strip(), max_results)
+                backend = "duckduckgo"
+            except Exception as fallback_exc:
+                return ToolResult(
+                    tool_call_id=call.id,
+                    name=self.name,
+                    content=f"search failed: {tavily_error}; fallback search failed: {fallback_exc}",
+                    is_error=True,
+                )
 
         if not results:
             return ToolResult(
@@ -349,11 +438,15 @@ class TavilySearchTool:
             metadata={
                 "query": query,
                 "result_count": len(results),
-                "backend": "tavily",
+                "backend": backend,
+                "results": results,
+                **({"primary_backend_error": tavily_error} if tavily_error else {}),
             },
         )
 
-    async def _search(self, query: str, api_key: str, max_results: int) -> list[dict[str, str]]:
+    async def _search_tavily(
+        self, query: str, api_key: str, max_results: int
+    ) -> list[dict[str, str]]:
         import asyncio
 
         from tavily import TavilyClient
@@ -367,10 +460,34 @@ class TavilySearchTool:
         )
         return response.get("results", [])
 
+    async def _search(self, query: str, api_key: str, max_results: int) -> list[dict[str, str]]:
+        return await self._search_tavily(query, api_key, max_results)
+
+    async def _search_public(self, query: str, max_results: int) -> list[dict[str, str]]:
+        owns_client = self._injected_client is None
+        client = self._injected_client or httpx.AsyncClient(timeout=15.0, follow_redirects=True)
+        try:
+            response = await client.get(
+                self._fallback_url,
+                params={"q": query},
+                headers={"user-agent": "harness-web-search/0.1"},
+                follow_redirects=True,
+            )
+        finally:
+            if owns_client:
+                await client.aclose()
+        response.raise_for_status()
+        parser = _DuckDuckGoHTMLParser()
+        parser.feed(response.text)
+        return parser.results[:max_results]
+
+
+TavilySearchTool = WebSearchTool
 
 __all__ = [
     "DEFAULT_ALLOWED_MIME_PREFIXES",
     "FetchUrlTool",
     "TavilySearchTool",
+    "WebSearchTool",
     "__version__",
 ]

@@ -142,6 +142,14 @@ def _sorted_features(
     )
 
 
+def _feature_dispatch_priority(feature: MissionFeature) -> int:
+    if "mission-validator:corrective" in feature.research_refs:
+        return 0
+    if feature.title.startswith("Corrective:"):
+        return 0
+    return 1
+
+
 def _utcnow() -> str:
     return datetime.now(UTC).isoformat(timespec="seconds")
 
@@ -215,7 +223,11 @@ def execute_next_mission_feature(*, store: MissionStore, mission_id: str) -> Mis
     features_by_id = {item.id: item for item in features}
     ready_feature: MissionFeature | None = None
     blocked_messages: list[str] = []
-    for feature in features:
+    dispatch_candidates = sorted(
+        features,
+        key=lambda item: (_feature_dispatch_priority(item), item.created_at, item.id),
+    )
+    for feature in dispatch_candidates:
         if feature.status in _DONE_FEATURE_STATUSES:
             continue
         unmet = [

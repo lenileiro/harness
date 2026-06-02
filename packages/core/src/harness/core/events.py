@@ -170,6 +170,22 @@ class ModelRequestEvent(_EventBase):
     messages: list[Message]
 
 
+class ModelSelectedEvent(_EventBase):
+    """Emitted when an adapter has selected the concrete model for a turn.
+
+    Some providers can retry a requested model through provider-local fallbacks.
+    This event lets downstream logs and eval reports distinguish the requested
+    model from the effective model that actually produced the stream.
+    """
+
+    type: Literal["model_selected"] = "model_selected"
+    provider: str
+    requested_model: str
+    model: str
+    fallback: bool = False
+    attempt: int = 0
+
+
 class GuardrailTrippedEvent(_EventBase):
     """A guardrail fired and the model response was cancelled.
 
@@ -209,6 +225,7 @@ Event = Annotated[
     | PredictionEvent
     | PredictionMismatchEvent
     | ModelRequestEvent
+    | ModelSelectedEvent
     | GuardrailTrippedEvent
     | HandoffEvent,
     Field(discriminator="type"),
@@ -223,6 +240,7 @@ __all__ = [
     "GuardrailTrippedEvent",
     "HandoffEvent",
     "ModelRequestEvent",
+    "ModelSelectedEvent",
     "PhaseCompletedEvent",
     "PhaseStartedEvent",
     "PredictionEvent",

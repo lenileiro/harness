@@ -1718,6 +1718,7 @@ def eval_run(
                             max_output_tokens=max_output_tokens,
                             variant=variant,
                             artifact_dir=run_artifact_dir,
+                            config_path=config_path,
                         )
                     except Exception as exc:
                         console.print(f"  [red]run failed{run_label}:[/red] {exc}")

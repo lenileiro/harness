@@ -18,3 +18,9 @@ Key routing rules:
 - Architecture review → invoke plan-eng-review
 - Save progress, checkpoint, resume → invoke checkpoint
 - Code quality, health check → invoke health
+
+## Implementation rules
+
+- Do not route behavior with brittle user-text prefix or keyword heuristics when the choice affects runtime mode, tool scope, or safety posture.
+- For behavior/mode selection, prefer explicit user controls or a dedicated classifier over ad-hoc string matching.
+- Do not introduce `_MARKERS`-style keyword tuples for intent routing. If a behavior needs routing, model it as explicit state, an explicit command, or a dedicated classifier with tests.

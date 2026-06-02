@@ -1,8 +1,7 @@
 """Shell execution tool for Harness agents.
 
-Runs commands via the user's `/bin/sh` (or default shell) inside the session's
-cwd. Default approval is `prompt` because shell access is the highest-risk
-capability we expose.
+Runs commands via a shell inside the session's cwd. Default approval is
+`prompt` because shell access is the highest-risk capability we expose.
 
 Output is captured in full and surfaced to the agent as the ToolResult
 content. Each stream (stdout + stderr) is truncated to `max_output_bytes` to
@@ -13,12 +12,21 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import os
 import time
 from pathlib import Path
 from typing import Any
 
 from harness.core import ApprovalDecision, ToolCall, ToolResult
+from harness.core import activity as activity_kinds
+from harness.core.activity import ActivityEvent, ActivityStore
+from harness.core.command_env import clean_command_env
+from harness.core.shell_feedback import shell_failure_hint
 from harness.core.shell_safety import check_dangerous_command
+from harness.core.tools_verification import (
+    _failure_branch_masks_exit_status,
+    _successful_shell_stderr_reports_failure,
+)
 
 __version__ = "0.0.0"
 
@@ -59,11 +67,12 @@ class ShellTool:
     name = "shell"
     description = (
         "Execute a shell command in the session's working directory. Returns "
-        "the exit code, stdout, and stderr. Has a strict timeout — long-running "
-        "commands should be avoided."
+        "the exit code, stdout, and stderr. Has a strict timeout to avoid "
+        "hanging forever; callers may pass a shorter timeout explicitly."
     )
     approval: ApprovalDecision = "prompt"
     effect_scope = "workspace_durable"
+    prediction_expected_status = "ok_or_error"
     # Mutating side effects — restricted to the `act` phase.
     phases: tuple[str, ...] = ("act",)
 
@@ -77,18 +86,62 @@ class ShellTool:
         self,
         *,
         cwd: Path | str,
-        default_timeout: float = 30.0,
+        default_timeout: float = 120.0,
         max_timeout: float = 300.0,
         max_output_bytes: int = 64 * 1024,
+        clean_env: bool = False,
+        pipefail: bool = False,
     ) -> None:
         self.cwd = Path(cwd).resolve()
         self.default_timeout = default_timeout
         self.max_timeout = max_timeout
         self.max_output_bytes = max_output_bytes
+        self.clean_env = clean_env
+        self.pipefail = pipefail
         self.parameters_schema: dict[str, Any] = _SHELL_SCHEMA
         # Tracks consecutive refusals so the agent doesn't loop forever on
         # an action category we'll never allow. Reset by any successful call.
         self._consecutive_denials = 0
+        self._activity_store: ActivityStore | None = None
+        self._activity_session_id: str | None = None
+        self._activity_task_id: str | None = None
+
+    def bind_activity_context(
+        self,
+        *,
+        activity_store: ActivityStore | None,
+        session_id: str | None,
+        task_id: str | None,
+    ) -> None:
+        self._activity_store = activity_store
+        self._activity_session_id = session_id
+        self._activity_task_id = task_id
+
+    async def _emit_running(
+        self,
+        *,
+        call: ToolCall,
+        command: str,
+        timeout_s: float,
+        pid: int | None,
+    ) -> None:
+        if self._activity_store is None:
+            return
+        event = ActivityEvent(
+            task_id=self._activity_task_id,
+            session_id=self._activity_session_id,
+            kind=activity_kinds.TOOL_CALL_RUNNING,
+            data={
+                "tool_call_id": call.id,
+                "name": self.name,
+                "pid": pid,
+                "command": command,
+                "cwd": str(self.cwd),
+                "timeout_s": timeout_s,
+            },
+        )
+        with contextlib.suppress(Exception):
+            await self._activity_store.append_activity(event)
 
     def _denial_note(self) -> str:
         """Extra prose appended when the agent is repeatedly hitting denials."""
@@ -107,6 +160,20 @@ class ShellTool:
                 f"escalating denials will trigger a hard pause."
             )
         return ""
+
+    def _subprocess_env(self) -> dict[str, str]:
+        if self.clean_env:
+            return clean_command_env(self.cwd)
+        env = dict(os.environ)
+        venv_dir = self.cwd / ".venv"
+        venv_bin = venv_dir / ("Scripts" if os.name == "nt" else "bin")
+        if venv_bin.is_dir():
+            current_path = env.get("PATH", "")
+            env["PATH"] = (
+                str(venv_bin) if not current_path else f"{venv_bin}{os.pathsep}{current_path}"
+            )
+            env["VIRTUAL_ENV"] = str(venv_dir)
+        return env
 
     async def __call__(self, call: ToolCall) -> ToolResult:
         # Auto-pause: if the agent has stacked too many denials, refuse all
@@ -184,11 +251,22 @@ class ShellTool:
         proc: asyncio.subprocess.Process | None = None
         started = time.perf_counter()
         try:
+            executable = "/bin/bash" if self.pipefail else None
+            run_command = f"set -o pipefail; {command}" if self.pipefail else command
             proc = await asyncio.create_subprocess_shell(
-                command,
+                run_command,
                 cwd=str(self.cwd),
+                env=self._subprocess_env(),
+                executable=executable,
+                stdin=asyncio.subprocess.DEVNULL,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+            )
+            await self._emit_running(
+                call=call,
+                command=command,
+                timeout_s=timeout,
+                pid=proc.pid,
             )
             try:
                 stdout_b, stderr_b = await asyncio.wait_for(proc.communicate(), timeout=timeout)
@@ -207,8 +285,15 @@ class ShellTool:
                         "duration_ms": int((time.perf_counter() - started) * 1000),
                         "timed_out": True,
                         "timeout_s": timeout,
+                        "pid": proc.pid,
                     },
                 )
+            except asyncio.CancelledError:
+                with contextlib.suppress(ProcessLookupError):
+                    proc.kill()
+                with contextlib.suppress(Exception):
+                    await proc.communicate()
+                raise
         except FileNotFoundError as exc:
             return ToolResult(
                 tool_call_id=call.id,
@@ -243,12 +328,42 @@ class ShellTool:
             parts.append(f"stderr:\n{stderr_text}{suffix}")
         if not stdout_text and not stderr_text:
             parts.append("(no output)")
+        masked_failure_exit_status = proc.returncode == 0 and _failure_branch_masks_exit_status(
+            command
+        )
+        stderr_failure_exit_status = _successful_shell_stderr_reports_failure(
+            exit_code=proc.returncode or 0,
+            stderr=stderr_text,
+        )
+        if masked_failure_exit_status:
+            parts.append(
+                "[unreliable result] This shell command can hide a failed command "
+                "behind a successful fallback. Re-run the check so the failing "
+                "operation reports its real exit status."
+            )
+        if stderr_failure_exit_status:
+            parts.append(
+                "[unreliable result] The command exited 0, but stderr contains "
+                "a shell/runtime failure. Re-run with a command form that preserves "
+                "the failing operation's exit status."
+            )
+        if proc.returncode != 0:
+            hint = shell_failure_hint(
+                command,
+                exit_code=proc.returncode,
+                stdout=stdout_text,
+                stderr=stderr_text,
+            )
+            if hint:
+                parts.append(hint)
 
         return ToolResult(
             tool_call_id=call.id,
             name=self.name,
             content="\n\n".join(parts),
-            is_error=proc.returncode != 0,
+            is_error=(
+                proc.returncode != 0 or masked_failure_exit_status or stderr_failure_exit_status
+            ),
             metadata={
                 "exit_code": proc.returncode,
                 "stdout_bytes": len(stdout_raw),
@@ -257,6 +372,11 @@ class ShellTool:
                 "stderr_truncated": stderr_trunc,
                 "duration_ms": duration_ms,
                 "timed_out": False,
+                "pid": proc.pid,
+                "clean_env": self.clean_env,
+                "pipefail": self.pipefail,
+                "masked_failure_exit_status": masked_failure_exit_status,
+                "stderr_failure_exit_status": stderr_failure_exit_status,
             },
         )
 

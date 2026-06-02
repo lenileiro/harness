@@ -460,7 +460,7 @@ class SQLiteStorage(Storage, TaskStore, ActivityStore, ApprovalStore, MemoryStor
             params.extend(kinds)
         if clauses:
             sql += " WHERE " + " AND ".join(clauses)
-        sql += " ORDER BY timestamp ASC LIMIT ?"
+        sql = f"SELECT * FROM ({sql} ORDER BY timestamp DESC LIMIT ?) ORDER BY timestamp ASC"
         params.append(limit)
         async with db.execute(sql, params) as cursor:
             rows = await cursor.fetchall()

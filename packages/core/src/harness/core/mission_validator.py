@@ -107,6 +107,7 @@ def _create_corrective_feature(
         depends_on=(feature.id,),
         assigned_role="worker",
         target_files=feature.target_files,
+        research_refs=("mission-validator:corrective", f"source-feature:{feature.id}"),
     )
     store.add_feature(corrective)
     return corrective.id

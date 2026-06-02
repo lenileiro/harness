@@ -64,7 +64,7 @@ class ActivityStore(Protocol):
         kinds: tuple[str, ...] | None = None,
         limit: int = 200,
     ) -> list[ActivityEvent]:
-        """Load events ordered by timestamp ascending; AND filters."""
+        """Load the latest matching events ordered by timestamp ascending; AND filters."""
         ...
 
 
@@ -84,6 +84,12 @@ STEP_COMPLETED = "step.completed"
 
 # Tool execution
 TOOL_CALL_DISPATCHED = "tool_call.dispatched"
+TOOL_CALL_RUNNING = "tool_call.running"
+"""Emitted after a long-running tool has actually started executing.
+
+For shell commands this includes the subprocess PID so operators can observe
+or inspect it while the command is still active.
+"""
 TOOL_CALL_COMPLETED = "tool_call.completed"
 
 # Approval flow
@@ -254,6 +260,7 @@ __all__ = [
     "TOOL_CALL_DISPATCHED",
     "TOOL_CALL_PREDICTED",
     "TOOL_CALL_PREDICTION_ERROR",
+    "TOOL_CALL_RUNNING",
     "TRAJECTORY_REGULATED",
     "USAGE_RECORDED",
     "VERIFICATION_COMPLETED",

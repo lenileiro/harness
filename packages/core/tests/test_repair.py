@@ -74,6 +74,39 @@ class TestRepairOrchestrator:
         assert directive.mode == "escalate"
         assert directive.consecutive_failures == 2
         assert directive.retry_budget_remaining == 0
+        assert "human" not in directive.reason
+
+    def test_shell_nonzero_exit_is_task_evidence_not_human_escalation(self) -> None:
+        repair = RepairOrchestrator()
+        first = repair.assess(
+            tool_name="shell",
+            effect_scope="workspace_durable",
+            result=ToolResult(
+                tool_call_id="call_001",
+                name="shell",
+                content="exit_code: 1\n\nstdout:\nFAILED tests/test_app.py",
+                is_error=True,
+            ),
+            outcome=None,
+        )
+        second = repair.assess(
+            tool_name="shell",
+            effect_scope="workspace_durable",
+            result=ToolResult(
+                tool_call_id="call_002",
+                name="shell",
+                content="exit_code: 2\n\nstderr:\ncommand not found: pytest",
+                is_error=True,
+            ),
+            outcome=None,
+        )
+
+        assert first.mode == "continue"
+        assert first.consecutive_failures == 0
+        assert "task evidence" in first.reason
+        assert second.mode == "continue"
+        assert second.consecutive_failures == 0
+        assert "human" not in second.reason
 
     def test_external_side_effect_one_retry_then_escalate(self) -> None:
         repair = RepairOrchestrator()

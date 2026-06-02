@@ -54,3 +54,5 @@ Thumbs.db
 *.db-shm
 .gstack/
 .harness/
+evals/results/
+evals/runs/

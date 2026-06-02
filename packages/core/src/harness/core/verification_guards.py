@@ -19,6 +19,10 @@ from harness.core.verification_judges import (
     _first_user_message,
     _last_assistant_text,
 )
+from harness.core.verification_structural import (
+    tool_event_changes_state,
+    verify_work_event_changes_state,
+)
 
 EvidenceCheckKind = Literal[
     "command_evidence",
@@ -45,6 +49,19 @@ class EvidenceContractResult(BaseModel):
 
 
 _PREDICTION_ERROR_SEVERITIES = frozenset({"medium", "high", "critical"})
+_STATE_WRITE_TOOL_NAMES = frozenset(
+    {
+        "write_file",
+        "edit_file",
+        "apply_patch",
+        "write",
+        "replace",
+        "shell",
+        "bash",
+        "run_command",
+        "execute",
+    }
+)
 
 
 def evaluate_evidence(
@@ -159,6 +176,7 @@ _COUNT_CLAIM_RE = re.compile(
     r"(?:\s+(?:were|was|found|counted|detected|identified))?",
     re.IGNORECASE,
 )
+_NUMBER_CLAIM_RE = re.compile(r"(?<![A-Za-z0-9_])[-+]?\d+(?:\.\d+)?(?![A-Za-z0-9_])")
 
 _WRITE_CLAIM_RE = re.compile(
     r"(?:wrote|saved|created|written|stored|saving)\s+(?:to\s+)?"
@@ -186,7 +204,16 @@ class ClaimGroundingVerifier:
             )
 
         final_text = _last_assistant_text(session)
-        corpus = " ".join(str(e.data.get("content_preview") or "") for e in completed)
+        corpus_parts: list[str] = []
+        for event in completed:
+            corpus_parts.append(str(event.data.get("content_preview") or ""))
+            metadata = event.data.get("metadata")
+            if isinstance(metadata, dict) and metadata:
+                try:
+                    corpus_parts.append(json.dumps(metadata, sort_keys=True, ensure_ascii=False))
+                except (TypeError, ValueError):
+                    corpus_parts.append(str(metadata))
+        corpus = " ".join(corpus_parts)
 
         write_paths: set[str] = set()
         for e in completed:
@@ -197,6 +224,13 @@ class ClaimGroundingVerifier:
                     write_paths.add(Path(path).name)
 
         ungrounded: list[str] = []
+
+        for m in _NUMBER_CLAIM_RE.finditer(final_text):
+            number = m.group(0)
+            if number not in corpus:
+                ungrounded.append(f"numeric claim '{number}' (number not found in tool output)")
+                if len(ungrounded) >= 3:
+                    break
 
         for m in _COUNT_CLAIM_RE.finditer(final_text):
             number = m.group(1)
@@ -250,6 +284,17 @@ def _first_numeric_token(text: str) -> str | None:
     return m.group(1) if m else None
 
 
+def _shell_stdout_from_preview(text: str) -> str:
+    marker = re.search(r"(?im)^stdout:\s*$", text)
+    if marker is None:
+        return text
+    stdout_text = text[marker.end() :]
+    stderr_marker = re.search(r"(?im)^stderr:\s*$", stdout_text)
+    if stderr_marker is not None:
+        stdout_text = stdout_text[: stderr_marker.start()]
+    return stdout_text.strip()
+
+
 class StateVerifier:
     name = "state"
 
@@ -260,11 +305,13 @@ class StateVerifier:
         self, *, session: Session, activity: list[ActivityEvent]
     ) -> VerificationResult:
         completed = [
-            e for e in activity if e.kind == "tool_call.completed" and not e.data.get("is_error")
+            (index, e)
+            for index, e in enumerate(activity)
+            if e.kind == "tool_call.completed" and not e.data.get("is_error")
         ]
 
-        write_events = [e for e in completed if e.data.get("name") == "write_file"]
-        shell_events = [e for e in completed if e.data.get("name") == "shell"]
+        write_events = [e for _, e in completed if e.data.get("name") == "write_file"]
+        shell_events = [(index, e) for index, e in completed if e.data.get("name") == "shell"]
 
         if not write_events and not shell_events:
             return VerificationResult(
@@ -284,16 +331,26 @@ class StateVerifier:
             if not p.exists():
                 issues.append(f"write_file claimed to write {raw_path!r} but file does not exist")
 
+        last_state_change_index = max(
+            (
+                index
+                for index, event in completed
+                if tool_event_changes_state(event, _STATE_WRITE_TOOL_NAMES)
+                or verify_work_event_changes_state(event)
+            ),
+            default=-1,
+        )
         safe_to_check = [
             e
-            for e in shell_events
+            for index, e in shell_events
+            if index > last_state_change_index
             if _is_safe_command(e.data.get("arguments", {}).get("command", ""))
         ][:3]
 
         for e in safe_to_check:
             cmd = e.data.get("arguments", {}).get("command", "")
             original_preview: str = e.data.get("content_preview") or ""
-            original_num = _first_numeric_token(original_preview)
+            original_num = _first_numeric_token(_shell_stdout_from_preview(original_preview))
             if original_num is None:
                 continue
 

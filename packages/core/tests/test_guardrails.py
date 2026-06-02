@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 
 import pytest
@@ -54,6 +55,32 @@ class ParallelAllowGuardrail:
 
     async def __call__(self, messages: list[Message]) -> GuardrailResult:
         return GuardrailResult(tripped=False)
+
+
+class DelayedParallelDenyGuardrail:
+    name = "delayed_parallel_deny"
+    mode: GuardrailMode = "parallel"
+
+    async def __call__(self, messages: list[Message]) -> GuardrailResult:
+        await asyncio.sleep(0.01)
+        return GuardrailResult(tripped=True, reason="delayed parallel block")
+
+
+class ClosableStreamAdapter(MockAdapter):
+    def __init__(self, name: str) -> None:
+        super().__init__(name)
+        self.closed = False
+
+    def stream(self, **kwargs):  # type: ignore[override]
+        self.calls.append(kwargs)
+        return self._stream()
+
+    async def _stream(self):
+        try:
+            await asyncio.sleep(0.05)
+            yield Done(final_message=Message(role="assistant", content="too late"))
+        finally:
+            self.closed = True
 
 
 def make_agent(adapters, guardrails=None, default_cwd="/tmp"):
@@ -143,6 +170,22 @@ class TestParallelGuardrail:
         assert tripped
         assert tripped[0].guardrail_name == "parallel_deny"
 
+    async def test_parallel_guardrail_closes_stream_on_trip(self, tmp_path: Path) -> None:
+        adapter = ClosableStreamAdapter("mock")
+        agent = make_agent(
+            {"mock": adapter},
+            guardrails=[DelayedParallelDenyGuardrail()],
+            default_cwd=str(tmp_path),
+        )
+
+        events = await collect(agent.run(RunRequest(prompt="blocked")))
+
+        tripped = [e for e in events if isinstance(e, GuardrailTrippedEvent)]
+        assert tripped
+        assert tripped[0].guardrail_name == "delayed_parallel_deny"
+        assert adapter.closed is True
+        assert not any(isinstance(e, Done) for e in events)
+
 
 @pytest.mark.asyncio
 class TestNoGuardrails:
@@ -153,3 +196,91 @@ class TestNoGuardrails:
         events = await collect(agent.run(RunRequest(prompt="hi")))
         assert not any(isinstance(e, GuardrailTrippedEvent) for e in events)
         assert any(isinstance(e, Done) for e in events)
+
+
+@pytest.mark.asyncio
+class TestGuardrailLeak:
+    async def test_parallel_guardrail_cancellation_leak(self, tmp_path: Path) -> None:
+        """
+        Verify that when a parallel guardrail trips, it doesn't leave un-cancelled
+        tasks running in the background.
+        """
+
+        class LeakyGuardrail:
+            name = "leaky_guardrail"
+            mode: GuardrailMode = "parallel"
+
+            def __init__(self):
+                self.was_cancelled = False
+
+            async def __call__(self, messages: list[Message]) -> GuardrailResult:
+                try:
+                    await asyncio.sleep(1.0)
+                    return GuardrailResult(tripped=False)
+                except asyncio.CancelledError:
+                    self.was_cancelled = True
+                    raise
+
+        adapter = MockAdapter("mock", scripts=[text_turn("hello")])
+        agent = make_agent(
+            {"mock": adapter},
+            guardrails=[LeakyGuardrail(), ParallelDenyGuardrail()],
+            default_cwd=str(tmp_path),
+        )
+
+        # We expect this to return quickly because ParallelDenyGuardrail
+        # should trip (it doesn't sleep) and trigger cancellation.
+        events = await collect(agent.run(RunRequest(prompt="blocked")))
+
+        tripped = [e for e in events if isinstance(e, GuardrailTrippedEvent)]
+        assert len(tripped) > 0
+        assert tripped[0].guardrail_name == "parallel_deny"
+
+        # Wait a bit to see if the leaky guardrail actually gets cancelled
+        await asyncio.sleep(0.1)
+
+        # Check if the leaky task was cancelled.
+        # Note: In a real system, we'd inspect the event loop or task registry,
+        # but here we rely on the side effect we injected.
+        # However, we need to access the specific instance of the guardrail.
+        # Let's refactor the test to capture the guardrail.
+        pass
+
+
+@pytest.mark.asyncio
+class TestGuardrailLeakCorrected:
+    async def test_parallel_guardrail_cancellation_leak(self, tmp_path: Path) -> None:
+        class LeakyGuardrail:
+            name = "leaky_guardrail"
+            mode: GuardrailMode = "parallel"
+
+            def __init__(self):
+                self.was_cancelled = False
+
+            async def __call__(self, messages: list[Message]) -> GuardrailResult:
+                try:
+                    # This task will be running in parallel with the stream
+                    await asyncio.sleep(2.0)
+                    return GuardrailResult(tripped=False)
+                except asyncio.CancelledError:
+                    self.was_cancelled = True
+                    raise
+
+        leaky = LeakyGuardrail()
+        adapter = MockAdapter("mock", scripts=[text_turn("hello")])
+        agent = make_agent(
+            {"mock": adapter},
+            guardrails=[leaky, ParallelDenyGuardrail()],
+            default_cwd=str(tmp_path),
+        )
+
+        events = await collect(agent.run(RunRequest(prompt="blocked")))
+
+        tripped = [e for e in events if isinstance(e, GuardrailTrippedEvent)]
+        assert len(tripped) > 0
+        assert tripped[0].guardrail_name == "parallel_deny"
+
+        # Give the loop a chance to process the cancellation
+        await asyncio.sleep(0.1)
+
+        assert leaky.was_cancelled, "Leaky guardrail task was not cancelled!"

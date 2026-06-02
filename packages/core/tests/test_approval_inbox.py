@@ -17,7 +17,9 @@ from harness.core import (
     ToolRegistry,
     ToolResultEvent,
 )
-from harness.core import activity as activity_kinds
+from harness.core import (
+    activity as activity_kinds,
+)
 from harness.core.activity import ActivityEvent, ActivityStore
 from harness.core.approval import ApprovalStatus
 
@@ -110,6 +112,18 @@ class InMemoryActivitySink(ActivityStore):
 async def _drain(it):
     async for _ in it:
         pass
+
+
+class FailingReplaySaveStorage(MockStorage):
+    def __init__(self) -> None:
+        super().__init__()
+        self.fail_next_save = False
+
+    async def save(self, session) -> None:  # type: ignore[override]
+        if self.fail_next_save:
+            self.fail_next_save = False
+            raise RuntimeError("save failed")
+        await super().save(session)
 
 
 def _build_agent(
@@ -259,8 +273,49 @@ class TestReplayFlow:
         adapter.scripts = [text_turn("done")]
         await _drain(agent.resume("s1", prompt="continue"))
 
-        # Tool still hasn't run.
-        assert tool.calls == []
+    async def test_replay_does_not_mark_replayed_when_save_fails(self, tmp_path: Path) -> None:
+        adapter = MockAdapter(
+            "mock",
+            scripts=[
+                tool_call_turn(call_id="c1", name="echo", arguments={"text": "ping"}),
+                text_turn("queued, awaiting approval"),
+            ],
+        )
+        tool = MockTool(
+            name="echo",
+            approval="prompt",
+            responder=lambda **kw: f"REAL: {kw.get('text')}",
+        )
+        approvals = InMemoryApprovalStore()
+        storage = FailingReplaySaveStorage()
+        agent, sess_store = _build_agent(
+            adapter=adapter,
+            tool=tool,
+            approval_store=approvals,
+            storage=storage,
+        )
+
+        await _drain(agent.run(RunRequest(prompt="echo", session_id="s1", model="m")))
+        [pending] = await approvals.list_approvals()
+        await approvals.resolve_approval(pending.id, status="granted", resolved_by="test")
+        storage.fail_next_save = True
+        adapter.scripts = [text_turn("ok now")]
+
+        with pytest.raises(RuntimeError, match="save failed"):
+            await _drain(agent.resume("s1", prompt="continue"))
+
+        replayed = await approvals.get_approval(pending.id)
+        assert replayed is not None
+        assert replayed.replayed_at is None
+
+        stored = await sess_store.get("s1")
+        assert stored is not None
+        tool_msg = next(m for m in stored.messages if m.role == "tool" and m.tool_call_id == "c1")
+        assert "queued for approval" in str(tool_msg.content)
+
+        # The tool may already have executed, but the replay bookkeeping must
+        # stay unreplayed so the operation can be retried safely.
+        assert tool.calls == [{"text": "ping"}]
         # Approval was not replayed.
         denied = await approvals.get_approval(pending.id)
         assert denied is not None

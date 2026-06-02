@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -111,13 +110,11 @@ def build_verifier(
 
 
 def build_search_fn() -> Any:
-    if not os.environ.get("TAVILY_API_KEY"):
-        return None
     try:
         from harness.core import ToolCall
-        from harness.tools.web import TavilySearchTool
+        from harness.tools.web import WebSearchTool
 
-        searcher = TavilySearchTool()
+        searcher = WebSearchTool()
 
         async def _search(query: str) -> str:
             call = ToolCall(id=f"s_{query[:8]}", name="web_search", arguments={"query": query})
@@ -166,59 +163,6 @@ def build_critic(
     )
 
 
-def normalize_task_header(prompt: str) -> str:
-    for line in prompt.splitlines():
-        stripped = line.strip().lstrip("#").strip()
-        if stripped:
-            return stripped.lower()
-    return ""
-
-
-def is_feature_task(prompt: str) -> bool:
-    header = normalize_task_header(prompt)
-    feature_verbs = ("add ", "implement ", "create ", "support ", "introduce ")
-    bug_verbs = ("fix ", "debug ", "handle ", "resolve ", "repair ", "patch ")
-    return any(header.startswith(v) for v in feature_verbs) and not any(
-        header.startswith(v) for v in bug_verbs
-    )
-
-
-def looks_scope_sensitive(prompt: str, phases: str | None) -> bool:
-    lower = prompt.lower()
-    if phases:
-        return True
-    markers = (
-        "do not touch",
-        "do not fix",
-        "stay focused",
-        "nothing else should change",
-        "only modify",
-        "minimal fix",
-        "just fix",
-        "while i'm here",
-        "scope creep",
-    )
-    return any(marker in lower for marker in markers)
-
-
-def looks_diagnosis_heavy(prompt: str, verify_command: str | None) -> bool:
-    lower = prompt.lower()
-    markers = (
-        "likely",
-        "downstream",
-        "root cause",
-        "timeout",
-        "concurrent",
-        "deduplic",
-        "flaky",
-        "real bug",
-        "wrong layer",
-    )
-    if any(marker in lower for marker in markers):
-        return True
-    return bool(verify_command and ("pytest" in verify_command or "test" in verify_command))
-
-
 def resolve_runtime_strategy(
     *,
     prompt: str,
@@ -234,31 +178,23 @@ def resolve_runtime_strategy(
             rationale=f"explicit profile={requested_profile}",
         )
 
-    feature_task = is_feature_task(prompt)
-    scope_sensitive = looks_scope_sensitive(prompt, phases)
-    diagnosis_heavy = looks_diagnosis_heavy(prompt, verify_command)
-
     structural_profile = "minimal"
-    if scope_sensitive:
+    if phases:
         structural_profile = "strict"
-    elif feature_task or diagnosis_heavy:
-        structural_profile = "diagnostic" if diagnosis_heavy and not feature_task else "minimal"
+    elif verify_command:
+        structural_profile = "diagnostic"
 
     critic_mode = requested_critic
-    if requested_critic is None and diagnosis_heavy and not feature_task:
-        critic_mode = "llm"
 
     reasons: list[str] = []
-    if scope_sensitive:
-        reasons.append("scope-sensitive prompt -> strict structural checks")
-    elif feature_task:
-        reasons.append("feature task -> keep structure light")
-    elif diagnosis_heavy:
-        reasons.append("diagnosis-heavy bugfix -> diagnostic structure + critic")
+    if phases:
+        reasons.append("explicit phases -> strict structural checks")
+    elif verify_command:
+        reasons.append("explicit verifier command -> diagnostic structural checks")
     else:
-        reasons.append("default adaptive path -> minimal structure")
-    if critic_mode and requested_critic is None:
-        reasons.append(f"implicit critic={critic_mode}")
+        reasons.append("no explicit verifier/phases -> minimal structural checks")
+    if critic_mode:
+        reasons.append(f"critic={critic_mode}")
     return RuntimeStrategy(
         structural_profile=structural_profile,
         critic_mode=critic_mode,

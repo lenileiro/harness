@@ -26,6 +26,8 @@ class FixtureRules:
     expected_first_step: str = ""
     allowed_paths: list[str] = field(default_factory=list)
     disallowed_paths: list[str] = field(default_factory=list)
+    benchmark_integrity: bool = False
+    forbidden_repo_urls: list[str] = field(default_factory=list)
     required_verification: str = ""
     trap: str = ""
     correct_fix: str = ""
@@ -85,6 +87,17 @@ class HardMetrics:
     redundant_tool_calls: int = 0
     retry_loops: int = 0
     verification_after_failure: bool = False
+    benchmark_integrity_passed: bool = True
+    benchmark_integrity_violations: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return _serialize(self)
+
+
+@dataclass(slots=True)
+class BenchmarkIntegrityReport:
+    passed: bool
+    violations: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return _serialize(self)

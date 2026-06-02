@@ -23,6 +23,25 @@ from harness.core import ApprovalDecision, ToolCall, ToolResult
 
 __version__ = "0.0.0"
 
+_DEFAULT_IGNORED_DIR_NAMES = frozenset(
+    {
+        ".git",
+        ".harness",
+        ".hg",
+        ".mypy_cache",
+        ".nox",
+        ".pytest_cache",
+        ".ruff_cache",
+        ".svn",
+        ".tox",
+        ".venv",
+        "__pycache__",
+        "env",
+        "node_modules",
+        "venv",
+    }
+)
+
 
 # ---------------------------------------------------------------------------
 # Shared helpers
@@ -42,6 +61,10 @@ def _resolve_in_cwd(cwd: Path, path_arg: str) -> Path | None:
     except ValueError:
         return None
     return target
+
+
+def _is_default_ignored_path(path: Path) -> bool:
+    return any(part in _DEFAULT_IGNORED_DIR_NAMES for part in path.parts)
 
 
 def _check_python(path: str, content: str) -> str | None:
@@ -471,14 +494,18 @@ class ListDirTool:
         except OSError as exc:
             return _error(call, self.name, f"could not list {path_arg}: {exc}")
 
-        lines = [f"{p.name}/" if p.is_dir() else p.name for p in entries]
+        visible_entries = [
+            entry for entry in entries if entry.name not in _DEFAULT_IGNORED_DIR_NAMES
+        ]
+        lines = [f"{p.name}/" if p.is_dir() else p.name for p in visible_entries]
         return ToolResult(
             tool_call_id=call.id,
             name=self.name,
             content="\n".join(lines) if lines else "(empty)",
             metadata={
                 "path": path_arg,
-                "entries": len(entries),
+                "entries": len(visible_entries),
+                "ignored_entries": len(entries) - len(visible_entries),
             },
         )
 
@@ -529,14 +556,34 @@ class GlobTool:
                     rel = path.resolve().relative_to(self.cwd)
                 except ValueError:
                     continue
+                if _is_default_ignored_path(rel):
+                    continue
                 if fnmatch.fnmatch(str(rel), pattern) or path.is_dir() or path.is_file():
                     results.append(str(rel))
                 if len(results) >= self.max_results:
                     break
             return sorted(results)
 
+        def _do_fnmatch_glob() -> list[str]:
+            results: list[str] = []
+            for path in self.cwd.rglob("*"):
+                try:
+                    rel = path.resolve().relative_to(self.cwd)
+                except ValueError:
+                    continue
+                if _is_default_ignored_path(rel):
+                    continue
+                rel_text = rel.as_posix()
+                if fnmatch.fnmatch(rel_text, pattern):
+                    results.append(rel_text)
+                if len(results) >= self.max_results:
+                    break
+            return sorted(results)
+
         try:
             matches = await asyncio.to_thread(_do_glob)
+        except ValueError:
+            matches = await asyncio.to_thread(_do_fnmatch_glob)
         except OSError as exc:
             return _error(call, self.name, f"glob failed: {exc}")
 

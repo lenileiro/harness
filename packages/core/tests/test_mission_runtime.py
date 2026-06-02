@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 from harness.core.mission_models import Mission
@@ -255,6 +256,26 @@ def test_validate_mission_milestone_creates_findings_and_corrective_features(
     assert completed.status == "recorded"
 
     follow_up = execute_next_mission_feature(store=store, mission_id=mission_id)
+    assert follow_up.status == "dispatched"
+    assert follow_up.feature_id == corrective.id
+
+
+def test_corrective_feature_dispatch_wins_over_later_regular_work(tmp_path: Path) -> None:
+    store, mission_id = _seed_approved_mission(tmp_path)
+
+    first_dispatch = execute_next_mission_feature(store=store, mission_id=mission_id)
+    validation = validate_mission_milestone(store=store, mission_id=mission_id)
+    corrective = store.load_feature(validation.corrective_feature_ids[0])
+    store.update_feature(replace(corrective, created_at="9999-01-01T00:00:00+00:00"))
+    complete_mission_feature(
+        store=store,
+        mission_id=mission_id,
+        feature_id=first_dispatch.feature_id,
+        completed_work="Implemented the original feature after validator feedback.",
+    )
+
+    follow_up = execute_next_mission_feature(store=store, mission_id=mission_id)
+
     assert follow_up.status == "dispatched"
     assert follow_up.feature_id == corrective.id
 

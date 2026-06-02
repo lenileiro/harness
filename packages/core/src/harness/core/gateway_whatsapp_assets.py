@@ -19,7 +19,7 @@ WHATSAPP_BRIDGE_PACKAGE_JSON = """{
 WHATSAPP_BRIDGE_JS = r"""#!/usr/bin/env node
 import express from 'express';
 import { spawn } from 'child_process';
-import { existsSync, mkdirSync, readFileSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import path from 'path';
 import qrcode from 'qrcode-terminal';
 import pino from 'pino';
@@ -48,15 +48,22 @@ const UV_BIN = process.env.HARNESS_WHATSAPP_UV_BIN || 'uv';
 const ENV_FILE = process.env.HARNESS_WHATSAPP_ENV_FILE || '';
 const MAX_GATEWAY_CONCURRENCY = Math.max(1, Number.parseInt(process.env.HARNESS_WHATSAPP_MAX_CONCURRENCY || '1', 10) || 1);
 const MAX_GATEWAY_QUEUE = Math.max(0, Number.parseInt(process.env.HARNESS_WHATSAPP_MAX_QUEUE || '3', 10) || 0);
-const GATEWAY_CHILD_TIMEOUT_MS = Math.max(5000, Number.parseInt(process.env.HARNESS_WHATSAPP_CHILD_TIMEOUT_MS || '120000', 10) || 120000);
+const GATEWAY_CHILD_TIMEOUT_MS = Math.max(5000, Number.parseInt(process.env.HARNESS_WHATSAPP_CHILD_TIMEOUT_MS || '600000', 10) || 600000);
 const GATEWAY_OUTPUT_LIMIT_BYTES = Math.max(65536, Number.parseInt(process.env.HARNESS_WHATSAPP_OUTPUT_LIMIT_BYTES || '262144', 10) || 262144);
 const BRIDGE_STARTED_AT_MS = Date.now();
+const STARTUP_REPLAY_GRACE_MS_RAW = Number.parseInt(process.env.HARNESS_WHATSAPP_STARTUP_REPLAY_GRACE_MS || '10000', 10);
+const STARTUP_REPLAY_GRACE_MS = Number.isFinite(STARTUP_REPLAY_GRACE_MS_RAW) ? Math.max(0, STARTUP_REPLAY_GRACE_MS_RAW) : 10000;
+const MAX_PROCESSED_MESSAGE_IDS = Math.max(50, Number.parseInt(process.env.HARNESS_WHATSAPP_PROCESSED_MESSAGE_CACHE || '500', 10) || 500);
+const PROCESSED_MESSAGES_PATH = path.join(SESSION_DIR, 'processed-messages.json');
+const ACTIVE_BRIDGE_PATH = path.join(SESSION_DIR, 'active-bridge.json');
+const BRIDGE_INSTANCE_ID = `${process.pid}-${BRIDGE_STARTED_AT_MS}-${Math.random().toString(16).slice(2)}`;
 const ALLOWED_USERS = (process.env.HARNESS_WHATSAPP_ALLOWED_USERS || '')
   .split(',')
   .map((value) => value.trim().replace(/[^\d*]/g, ''))
   .filter(Boolean);
 
 mkdirSync(SESSION_DIR, { recursive: true });
+markActiveBridgeInstance();
 
 const logger = pino({ level: 'warn' });
 const app = express();
@@ -64,9 +71,89 @@ app.use(express.json({ limit: '2mb' }));
 
 let sock = null;
 let connectionState = 'disconnected';
-const processedMessageIds = new Set();
+let connectionOpenedAtMs = 0;
+const processedMessageIds = loadProcessedMessageIds();
+const latestInboundTokenByChat = new Map();
 let activeGatewayTasks = 0;
 const pendingGatewayTasks = [];
+
+function markActiveBridgeInstance() {
+  try {
+    mkdirSync(path.dirname(ACTIVE_BRIDGE_PATH), { recursive: true });
+    writeFileSync(
+      ACTIVE_BRIDGE_PATH,
+      JSON.stringify({
+        instance_id: BRIDGE_INSTANCE_ID,
+        pid: process.pid,
+        started_at_ms: BRIDGE_STARTED_AT_MS,
+      }),
+      'utf8',
+    );
+  } catch (error) {
+    console.error('⚠️ Failed to mark active WhatsApp bridge instance:', error);
+  }
+}
+
+function isActiveBridgeInstance() {
+  try {
+    if (!existsSync(ACTIVE_BRIDGE_PATH)) {
+      return true;
+    }
+    const payload = JSON.parse(readFileSync(ACTIVE_BRIDGE_PATH, 'utf8'));
+    return String(payload?.instance_id || '') === BRIDGE_INSTANCE_ID;
+  } catch (error) {
+    console.error('⚠️ Failed to read active WhatsApp bridge instance:', error);
+    return true;
+  }
+}
+
+function loadProcessedMessageIds() {
+  try {
+    if (!existsSync(PROCESSED_MESSAGES_PATH)) {
+      return new Set();
+    }
+    const payload = JSON.parse(readFileSync(PROCESSED_MESSAGES_PATH, 'utf8'));
+    const ids = Array.isArray(payload?.ids) ? payload.ids : Array.isArray(payload) ? payload : [];
+    return new Set(
+      ids
+        .map((value) => String(value || '').trim())
+        .filter(Boolean)
+        .slice(-MAX_PROCESSED_MESSAGE_IDS),
+    );
+  } catch (error) {
+    console.error('⚠️ Failed to load processed WhatsApp message cache:', error);
+    return new Set();
+  }
+}
+
+function persistProcessedMessageIds() {
+  try {
+    mkdirSync(path.dirname(PROCESSED_MESSAGES_PATH), { recursive: true });
+    writeFileSync(
+      PROCESSED_MESSAGES_PATH,
+      JSON.stringify({ ids: Array.from(processedMessageIds).slice(-MAX_PROCESSED_MESSAGE_IDS) }),
+      'utf8',
+    );
+  } catch (error) {
+    console.error('⚠️ Failed to persist processed WhatsApp message cache:', error);
+  }
+}
+
+function rememberProcessedMessageId(messageId) {
+  const id = String(messageId || '').trim();
+  if (!id) return;
+  processedMessageIds.add(id);
+  while (processedMessageIds.size > MAX_PROCESSED_MESSAGE_IDS) {
+    const oldest = processedMessageIds.values().next().value;
+    if (!oldest) break;
+    processedMessageIds.delete(oldest);
+  }
+  persistProcessedMessageIds();
+}
+
+function rememberInboundNode(node) {
+  rememberProcessedMessageId(node?.key?.id);
+}
 
 function normalizeChatId(value) {
   const raw = String(value || '').trim();
@@ -80,6 +167,22 @@ function formatMessage(message) {
   if (MODE !== 'self-chat') return String(message || '');
   if (!REPLY_PREFIX) return String(message || '');
   return `${REPLY_PREFIX}${String(message || '')}`;
+}
+
+function normalizedReplyText(value) {
+  return String(value || '').normalize('NFKC').replace(/\r\n/g, '\n').trim();
+}
+
+function isHarnessReplyText(text) {
+  const trimmed = normalizedReplyText(text);
+  if (!trimmed) return false;
+  const prefix = normalizedReplyText(REPLY_PREFIX);
+  if (prefix && trimmed.startsWith(prefix)) {
+    return true;
+  }
+  const prefixTitle = prefix ? prefix.split('\n', 1)[0].trim() : '';
+  const firstLine = trimmed.split('\n', 1)[0].trim();
+  return Boolean(prefixTitle && firstLine === prefixTitle);
 }
 
 function digitsOnly(value) {
@@ -168,9 +271,32 @@ function inboundUserId(chatId, key) {
 function messageTimestampMs(node) {
   const raw = node?.messageTimestamp;
   if (raw == null) return 0;
-  const numeric = Number(raw);
+  let numeric = Number(raw);
+  if ((!Number.isFinite(numeric) || numeric <= 0) && typeof raw?.toNumber === 'function') {
+    numeric = Number(raw.toNumber());
+  }
+  if ((!Number.isFinite(numeric) || numeric <= 0) && typeof raw?.toString === 'function') {
+    const text = String(raw.toString()).trim();
+    if (/^\d+$/.test(text)) {
+      numeric = Number(text);
+    }
+  }
   if (!Number.isFinite(numeric) || numeric <= 0) return 0;
   return numeric < 1000000000000 ? numeric * 1000 : numeric;
+}
+
+function startupReplayCutoffMs() {
+  return Math.max(BRIDGE_STARTED_AT_MS, connectionOpenedAtMs || 0);
+}
+
+function isStartupReplayWindow() {
+  return Date.now() - startupReplayCutoffMs() <= STARTUP_REPLAY_GRACE_MS;
+}
+
+function inboundMessageToken(node, text) {
+  const messageId = String(node?.key?.id || '').trim();
+  if (messageId) return messageId;
+  return `${messageTimestampMs(node)}:${normalizedReplyText(text)}`;
 }
 
 function shouldIgnoreInbound(node, text) {
@@ -178,19 +304,34 @@ function shouldIgnoreInbound(node, text) {
   if (!chatId || chatId === 'status@broadcast') {
     return true;
   }
+  const trimmed = String(text || '').trim();
+  if (!trimmed) {
+    rememberInboundNode(node);
+    return true;
+  }
+  if (isHarnessReplyText(trimmed)) {
+    rememberInboundNode(node);
+    return true;
+  }
   const messageId = String(node?.key?.id || '').trim();
   if (messageId && processedMessageIds.has(messageId)) {
     return true;
   }
   const timestamp = messageTimestampMs(node);
-  if (timestamp && timestamp < BRIDGE_STARTED_AT_MS - 5000) {
+  if (node?.key?.fromMe && !timestamp) {
+    rememberInboundNode(node);
     return true;
   }
-  const trimmed = String(text || '').trim();
-  if (!trimmed) {
+  if (node?.key?.fromMe && isStartupReplayWindow()) {
+    rememberInboundNode(node);
     return true;
   }
-  if (REPLY_PREFIX && trimmed.startsWith(REPLY_PREFIX.trim())) {
+  if (timestamp && timestamp <= startupReplayCutoffMs()) {
+    rememberInboundNode(node);
+    return true;
+  }
+  if (!timestamp && isStartupReplayWindow()) {
+    rememberInboundNode(node);
     return true;
   }
   return false;
@@ -227,24 +368,40 @@ function startTypingTicker(chatId) {
   };
 }
 
-function dotenvKeysToPrefer() {
+function parseDotenvValue(raw) {
+  const value = String(raw || '').trim();
+  if (
+    (value.startsWith('"') && value.endsWith('"')) ||
+    (value.startsWith("'") && value.endsWith("'"))
+  ) {
+    return value.slice(1, -1);
+  }
+  return value;
+}
+
+function shouldImportDotenvKey(key) {
+  return (
+    key.startsWith('HARNESS_') ||
+    key === 'OPENROUTER_API_KEY' ||
+    key === 'OPENAI_API_KEY' ||
+    key === 'ANTHROPIC_API_KEY' ||
+    key === 'TAVILY_API_KEY'
+  );
+}
+
+function dotenvValuesToPrefer() {
   if (!ENV_FILE || !existsSync(ENV_FILE)) {
-    return [];
+    return {};
   }
   const text = readFileSync(ENV_FILE, 'utf8');
-  const preferred = [];
+  const preferred = {};
   for (const line of text.split(/\r?\n/)) {
-    const match = line.match(/^\s*([A-Z0-9_]+)\s*=/);
+    const match = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
     if (!match) continue;
     const key = String(match[1] || '').trim();
     if (!key) continue;
-    if (
-      key === 'OPENROUTER_API_KEY' ||
-      key === 'OPENAI_API_KEY' ||
-      key === 'ANTHROPIC_API_KEY' ||
-      key === 'TAVILY_API_KEY'
-    ) {
-      preferred.push(key);
+    if (shouldImportDotenvKey(key)) {
+      preferred[key] = parseDotenvValue(match[2] || '');
     }
   }
   return preferred;
@@ -256,6 +413,96 @@ function appendLimited(current, chunk) {
     return combined;
   }
   return combined.slice(combined.length - GATEWAY_OUTPUT_LIMIT_BYTES);
+}
+
+function looksLikeGatewayPayload(value) {
+  return Boolean(
+    value &&
+      typeof value === 'object' &&
+      !Array.isArray(value) &&
+      value.reply &&
+      typeof value.reply === 'object' &&
+      value.session &&
+      typeof value.session === 'object',
+  );
+}
+
+function extractBalancedJsonObject(source, start) {
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let idx = start; idx < source.length; idx += 1) {
+    const ch = source[idx];
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (ch === '\\') {
+        escaped = true;
+      } else if (ch === '"') {
+        inString = false;
+      }
+      continue;
+    }
+    if (ch === '"') {
+      inString = true;
+      continue;
+    }
+    if (ch === '{') {
+      depth += 1;
+    } else if (ch === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        return source.slice(start, idx + 1);
+      }
+    }
+  }
+  return '';
+}
+
+function lineObjectStarts(source) {
+  const starts = [];
+  let atLineStart = true;
+  for (let idx = 0; idx < source.length; idx += 1) {
+    if (atLineStart) {
+      let start = idx;
+      while (source[start] === ' ' || source[start] === '\t') {
+        start += 1;
+      }
+      if (source[start] === '{') {
+        starts.push(start);
+      }
+      atLineStart = false;
+    }
+    if (source[idx] === '\n' || source[idx] === '\r') {
+      atLineStart = true;
+    }
+  }
+  return starts;
+}
+
+function parseGatewayJsonOutput(stdout) {
+  const raw = String(stdout || '').trim();
+  if (!raw) {
+    throw new Error('gateway command produced no stdout');
+  }
+  try {
+    return JSON.parse(raw);
+  } catch (firstError) {
+    const starts = lineObjectStarts(raw);
+    for (let idx = starts.length - 1; idx >= 0; idx -= 1) {
+      const candidate = extractBalancedJsonObject(raw, starts[idx]);
+      if (!candidate) continue;
+      try {
+        const payload = JSON.parse(candidate);
+        if (looksLikeGatewayPayload(payload)) {
+          return payload;
+        }
+      } catch (_) {
+        // Keep looking for the final gateway payload after noisy log lines.
+      }
+    }
+    throw firstError;
+  }
 }
 
 function drainGatewayQueue() {
@@ -277,8 +524,7 @@ function enqueueGatewayTask(run) {
   if (activeGatewayTasks + pendingGatewayTasks.length >= MAX_GATEWAY_CONCURRENCY + MAX_GATEWAY_QUEUE) {
     return Promise.resolve({
       ok: false,
-      busy: true,
-      replyText: 'Harness is still working through earlier WhatsApp messages. Try again shortly.',
+      error: 'gateway queue full',
     });
   }
   return new Promise((resolve) => {
@@ -287,29 +533,12 @@ function enqueueGatewayTask(run) {
   });
 }
 
-async function dispatchInboundCommand({ chatId, userId, text, messageId }) {
-  const dispatchArgs = [
+async function dispatchInboundCommand({ chatId, userId, text, messageId, messageToken }) {
+  const receiveArgs = [
     'run',
     'harness',
     'gateway',
-    'dispatch',
-    '--cwd',
-    WORKSPACE_CWD,
-    '--message',
-    text,
-    '--transport',
-    'whatsapp',
-    '--user',
-    userId,
-    '--thread',
-    chatId,
-    '--json',
-  ];
-  const converseArgs = [
-    'run',
-    'harness',
-    'gateway',
-    'converse',
+    'receive',
     '--cwd',
     WORKSPACE_CWD,
     '--message',
@@ -325,8 +554,9 @@ async function dispatchInboundCommand({ chatId, userId, text, messageId }) {
   async function runGateway(args) {
     console.log('🚀 gateway child', JSON.stringify({ cmd: UV_BIN, args }));
     const childEnv = { ...process.env };
-    for (const key of dotenvKeysToPrefer()) {
-      delete childEnv[key];
+    const dotenvValues = dotenvValuesToPrefer();
+    for (const [key, value] of Object.entries(dotenvValues)) {
+      childEnv[key] = value;
     }
     return await new Promise((resolve) => {
       const child = spawn(UV_BIN, args, {
@@ -367,8 +597,8 @@ async function dispatchInboundCommand({ chatId, userId, text, messageId }) {
           '🧾 gateway child exit',
           JSON.stringify({
             code,
-            stdout,
-            stderr,
+            stdoutBytes: stdout.length,
+            stderr: stderr ? stderr.slice(-2000) : '',
           }),
         );
         if (code !== 0) {
@@ -377,38 +607,38 @@ async function dispatchInboundCommand({ chatId, userId, text, messageId }) {
           return;
         }
         try {
-          const payload = JSON.parse(stdout);
+          const payload = parseGatewayJsonOutput(stdout);
           resolve({ ok: true, payload });
         } catch (error) {
-          console.error('❌ Failed to parse gateway command output:', stdout);
+          console.error('❌ Failed to parse gateway command output:', stdout.slice(-4000));
           resolve({ ok: false, error: String(error) });
         }
       });
     });
   }
-  const dispatched = await runGateway(dispatchArgs);
-  console.log('📬 dispatch result', JSON.stringify(dispatched));
-  if (dispatched?.ok && dispatched?.payload?.reply?.command !== 'unknown') {
-    return {
-      ok: true,
-      replyText: dispatched.payload?.reply?.text ? String(dispatched.payload.reply.text) : '',
-      sessionId: dispatched.payload?.session?.id || '',
-      messageId,
-    };
-  }
-  console.log('💬 falling back to converse');
-  const conversational = await runGateway(converseArgs);
-  console.log('🗨️ converse result', JSON.stringify(conversational));
-  if (!conversational?.ok) {
-    return conversational;
+  const result = await runGateway(receiveArgs);
+  console.log(
+    '🗨️ gateway result',
+    JSON.stringify({
+      ok: Boolean(result?.ok),
+      error: result?.error ? String(result.error).slice(0, 500) : '',
+      command: result?.payload?.reply?.command || '',
+      status: result?.payload?.reply?.status || '',
+      textBytes: result?.payload?.reply?.text ? String(result.payload.reply.text).length : 0,
+      sessionId: result?.payload?.session?.id || '',
+    }),
+  );
+  if (!result?.ok) {
+    return result;
   }
   return {
     ok: true,
-    replyText: conversational.payload?.reply?.text
-      ? String(conversational.payload.reply.text)
+    replyText: result.payload?.reply?.text
+      ? String(result.payload.reply.text)
       : '',
-    sessionId: conversational.payload?.session?.id || '',
+    sessionId: result.payload?.session?.id || '',
     messageId,
+    messageToken,
   };
 }
 
@@ -423,6 +653,7 @@ async function startSocket() {
     printQRInTerminal: false,
     browser: ['Harness', 'Chrome', '120.0'],
     syncFullHistory: false,
+    fireInitQueries: false,
     markOnlineOnConnect: false,
     getMessage: async () => ({ conversation: '' }),
   });
@@ -439,6 +670,7 @@ async function startSocket() {
 
     if (connection === 'open') {
       connectionState = 'connected';
+      connectionOpenedAtMs = Date.now();
       console.log('✅ WhatsApp connected');
       if (PAIR_ONLY) {
         setTimeout(() => process.exit(0), 1500);
@@ -458,7 +690,12 @@ async function startSocket() {
       setTimeout(startSocket, delay);
     }
   });
-  sock.ev.on('messages.upsert', async ({ messages }) => {
+  sock.ev.on('messages.upsert', async ({ messages, type }) => {
+    const upsertType = String(type || '').trim();
+    if (upsertType && upsertType !== 'notify') {
+      console.log('SKIP non-notify upsert', JSON.stringify({ type: upsertType, count: (messages || []).length }));
+      return;
+    }
     for (const node of messages || []) {
       const chatId = String(node?.key?.remoteJid || '');
       const text = extractMessageText(node);
@@ -491,16 +728,10 @@ async function startSocket() {
         continue;
       }
       const messageId = String(node?.key?.id || '').trim();
-      if (messageId) {
-        processedMessageIds.add(messageId);
-        if (processedMessageIds.size > 200) {
-          const oldest = processedMessageIds.values().next().value;
-          if (oldest) {
-            processedMessageIds.delete(oldest);
-          }
-        }
-      }
+      rememberProcessedMessageId(messageId);
       const userId = inboundUserId(chatId, node?.key);
+      const messageToken = inboundMessageToken(node, text);
+      latestInboundTokenByChat.set(chatId, messageToken);
       console.log('ENTER dispatch', JSON.stringify({ chatId, userId, text: String(text || '').trim() }));
       try {
         const result = await enqueueGatewayTask(async () => {
@@ -511,12 +742,25 @@ async function startSocket() {
               userId,
               text: String(text || '').trim(),
               messageId: node?.key?.id || '',
+              messageToken,
             });
           } finally {
             stopTyping();
           }
         });
-        if (!result?.ok || !result.replyText) {
+        if (!result?.ok) {
+          console.log('SKIP gateway task', JSON.stringify({ chatId, messageId, error: String(result?.error || '') }));
+          continue;
+        }
+        if (!result.replyText) {
+          continue;
+        }
+        if (result.messageToken && latestInboundTokenByChat.get(chatId) !== result.messageToken) {
+          console.log('SKIP stale reply', JSON.stringify({ chatId, messageId: result.messageId }));
+          continue;
+        }
+        if (!isActiveBridgeInstance()) {
+          console.log('SKIP inactive bridge reply', JSON.stringify({ chatId, messageId: result.messageId }));
           continue;
         }
         await sock.sendMessage(chatId, { text: formatMessage(result.replyText) });
@@ -540,6 +784,7 @@ app.get('/health', (_req, res) => {
     max_gateway_concurrency: MAX_GATEWAY_CONCURRENCY,
     max_gateway_queue: MAX_GATEWAY_QUEUE,
     gateway_child_timeout_ms: GATEWAY_CHILD_TIMEOUT_MS,
+    startup_replay_grace_ms: STARTUP_REPLAY_GRACE_MS,
   });
 });
 
@@ -553,6 +798,10 @@ app.post('/send', async (req, res) => {
   const message = String(req.body?.message || '').trim();
   if (!chatId || !message) {
     res.status(400).json({ error: 'chatId and message are required' });
+    return;
+  }
+  if (!isActiveBridgeInstance()) {
+    res.status(409).json({ error: 'whatsapp bridge instance is no longer active' });
     return;
   }
 

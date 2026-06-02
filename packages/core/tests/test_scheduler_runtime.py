@@ -39,6 +39,15 @@ def test_compute_next_run_at_supports_interval_and_cron() -> None:
     assert cron_next == datetime(2026, 5, 26, 12, 15, tzinfo=UTC)
 
 
+def test_compute_next_run_at_keeps_exact_due_cron_minute() -> None:
+    now = datetime(2026, 5, 26, 12, 15, 0, tzinfo=UTC)
+    cron = parse_schedule_spec(cron="15 12 * * *")
+
+    cron_next = parse_datetime_text(compute_next_run_at(schedule=cron, now=now))
+
+    assert cron_next == datetime(2026, 5, 26, 12, 15, 0, tzinfo=UTC)
+
+
 def test_run_scheduler_job_emits_hooks(tmp_path: Path, monkeypatch) -> None:
     class RecordingHook:
         def __init__(self) -> None:
@@ -89,3 +98,27 @@ def test_run_scheduler_job_emits_hooks(tmp_path: Path, monkeypatch) -> None:
     assert record.result_status == "completed"
     assert hook.events[0] == ("started", job.id)
     assert hook.events[1] == ("completed", record.id)
+
+
+def test_run_scheduler_job_skips_if_job_lock_is_already_held(tmp_path: Path) -> None:
+    store = SchedulerStore(root=tmp_path / ".harness" / "scheduler")
+    job = SchedulerJob(
+        id="sched-demo-locked",
+        kind="research.schedule_once",
+        cwd=str(tmp_path),
+        status="active",
+        schedule=ScheduleSpec(kind="at", value="2026-05-26T12:00:00+00:00"),
+        next_run_at="2026-05-26T12:00:00+00:00",
+        payload={},
+        created_at="2026-05-26T11:59:00+00:00",
+        updated_at="2026-05-26T11:59:00+00:00",
+    )
+    store.add_job(job)
+    assert store.acquire_job_lock(job.id) is True
+
+    record = run_scheduler_job(store=store, job_id=job.id)
+
+    assert record.status == "skipped"
+    assert record.result_status == "skipped"
+    assert record.result_stop_reason == "already_running"
+    store.release_job_lock(job.id)

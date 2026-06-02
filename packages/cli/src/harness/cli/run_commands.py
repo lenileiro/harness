@@ -13,6 +13,7 @@ from harness.core import (
     ContextBudget,
     ContextCompactor,
     Done,
+    ErrorEvent,
     LLMPlanner,
     Planner,
     RepairOrchestrator,
@@ -157,6 +158,7 @@ async def run_once(
     loop_detect: bool = True,
     contracts: bool = True,
     tips: bool = True,
+    include_workspace_context: bool = True,
     silent: bool = False,
     config: HarnessConfig,
     build_storage: Any,
@@ -236,11 +238,9 @@ async def run_once(
             load_default_experience_provider as _load_default_experience_provider,
         )
 
-        loop_detector_obj = (
-            _LoopDetector() if (loop_detect and strategy.structural_profile != "bare") else None
-        )
+        loop_detector_obj = _LoopDetector() if loop_detect else None
         contracts_obj = None
-        if contracts and strategy.structural_profile != "bare":
+        if include_workspace_context and contracts and strategy.structural_profile != "bare":
             registry = _ContractRegistry.from_paths(
                 [
                     cwd / ".harness" / "contracts",
@@ -250,7 +250,7 @@ async def run_once(
             if registry:
                 contracts_obj = registry
         tips_obj = None
-        if tips and strategy.structural_profile != "bare":
+        if include_workspace_context and tips and strategy.structural_profile != "bare":
             extra_experience = _load_cli_experience_providers(cwd, config=config)
             tips_obj = _load_default_experience_provider(cwd=cwd)
             if extra_experience:
@@ -259,7 +259,9 @@ async def run_once(
                     extra_providers=extra_experience,
                 )
 
-        resume_obj = _ResumeContract.load(cwd / _DEFAULT_RESUME_PATH)
+        resume_obj = (
+            _ResumeContract.load(cwd / _DEFAULT_RESUME_PATH) if include_workspace_context else None
+        )
 
         allowed_tools = set(domain_profile.allowed_tools) if domain_profile.allowed_tools else None
 
@@ -286,7 +288,7 @@ async def run_once(
             verifier=verifier,
             critic=critic_obj,
             budget=budget,
-            memory_store=storage,  # type: ignore[arg-type]
+            memory_store=storage if include_workspace_context else None,  # type: ignore[arg-type]
             planner=planner,
             predictor=ConsequencePredictor() if predict else None,
             repair=RepairOrchestrator() if predict else None,
@@ -294,6 +296,7 @@ async def run_once(
             compactor=compactor,
             max_repair_attempts=max_repair,
             profile=strategy.structural_profile,
+            verify_command=verify_command,
             phases_enabled=bool(phases),
             loop_detector=loop_detector_obj,
             contracts=contracts_obj,
@@ -324,12 +327,15 @@ async def run_once(
         last_verification: Verification | None = None
         final_text: str | None = None
         streamed_parts: list[str] = []
+        run_error: ErrorEvent | None = None
         try:
             async for event in agent.run(request):
                 if not silent:
                     render(event)
                 if isinstance(event, TextDelta):
                     streamed_parts.append(event.text)
+                elif isinstance(event, ErrorEvent):
+                    run_error = event
                 elif (
                     isinstance(event, Done)
                     and event.final_message is not None
@@ -348,6 +354,10 @@ async def run_once(
         if isinstance(storage, SQLiteStorage):
             await storage.close()
 
+    if run_error is not None:
+        if not silent:
+            console.print(f"\n[red]Run failed:[/red] {run_error.error}")
+        raise typer.Exit(1)
     if last_verification is not None and not last_verification.result.can_finish:
         raise typer.Exit(2)
     return final_text or ("".join(streamed_parts).strip() or None)

@@ -51,7 +51,10 @@ def _make_session(final_text: str) -> Session:
 
 
 def _completed_event(
-    name: str, content_preview: str = "", arguments: dict | None = None
+    name: str,
+    content_preview: str = "",
+    arguments: dict | None = None,
+    metadata: dict | None = None,
 ) -> ActivityEvent:
     return _make_event(
         "tool_call.completed",
@@ -60,6 +63,7 @@ def _completed_event(
             "is_error": False,
             "content_preview": content_preview,
             "arguments": arguments or {},
+            "metadata": metadata or {},
         },
     )
 
@@ -85,6 +89,23 @@ class TestClaimGroundingVerifier:
         assert result.can_finish is False
         assert result.confidence == pytest.approx(0.75)
         assert "42" in result.reason
+
+    async def test_grounding_uses_tool_metadata_when_preview_is_truncated(self) -> None:
+        event = _completed_event(
+            "web_search",
+            content_preview="Results for: current weather in Tokyo",
+            metadata={
+                "results": [
+                    {
+                        "title": "Weather in Tokyo",
+                        "content": "{'current': {'temp_c': 22.0, 'condition': 'Clear'}}",
+                    }
+                ]
+            },
+        )
+        session = _make_session("The current temperature in Tokyo is 22°C.")
+        result = await ClaimGroundingVerifier().verify(session=session, activity=[event])
+        assert result.can_finish is True
 
     async def test_grounding_passes_no_tool_events(self) -> None:
         session = _make_session("There are 42 Python files in the project.")
@@ -149,6 +170,73 @@ class TestStateVerifier:
         result = await StateVerifier().verify(session=session, activity=[])
         assert result.can_finish is True
         assert result.confidence == pytest.approx(0.5)
+
+    async def test_state_shell_numeric_check_uses_stdout_not_exit_code(
+        self, tmp_path: Path
+    ) -> None:
+        target = tmp_path / "result.txt"
+        target.write_text("shelltruth", encoding="utf-8")
+        event = _completed_event(
+            "shell",
+            content_preview="exit_code: 0\n\nstdout:\n      10 result.txt\n  (0.0s)",
+            arguments={"command": "wc -c result.txt"},
+        )
+        session = _make_session("Done.")
+
+        result = await StateVerifier(cwd=tmp_path).verify(session=session, activity=[event])
+
+        assert result.can_finish is True
+        assert result.reason == "all state checks passed"
+
+    async def test_state_ignores_shell_numeric_check_before_later_state_change(
+        self, tmp_path: Path
+    ) -> None:
+        target = tmp_path / "result.txt"
+        target.write_text("shelltruth", encoding="utf-8")
+        stale_shell = _completed_event(
+            "shell",
+            content_preview="exit_code: 0\n\nstdout:\n      11\n  (0.0s)",
+            arguments={"command": "wc -c < result.txt"},
+        )
+        later_edit = _completed_event(
+            "edit_file",
+            content_preview="replaced 1 occurrence",
+            arguments={"path": str(target), "old": "shelltruth\n", "new": "shelltruth"},
+        )
+        session = _make_session("Done.")
+
+        result = await StateVerifier(cwd=tmp_path).verify(
+            session=session,
+            activity=[stale_shell, later_edit],
+        )
+
+        assert result.can_finish is True
+        assert result.reason == "all state checks passed"
+
+    async def test_state_rechecks_shell_numeric_check_after_last_state_change(
+        self, tmp_path: Path
+    ) -> None:
+        target = tmp_path / "result.txt"
+        target.write_text("shelltruth", encoding="utf-8")
+        edit = _completed_event(
+            "edit_file",
+            content_preview="replaced 1 occurrence",
+            arguments={"path": str(target), "old": "shelltruth\n", "new": "shelltruth"},
+        )
+        stale_shell = _completed_event(
+            "shell",
+            content_preview="exit_code: 0\n\nstdout:\n      11\n  (0.0s)",
+            arguments={"command": "wc -c < result.txt"},
+        )
+        session = _make_session("Done.")
+
+        result = await StateVerifier(cwd=tmp_path).verify(
+            session=session,
+            activity=[edit, stale_shell],
+        )
+
+        assert result.can_finish is False
+        assert "originally returned leading number '11' but re-run returned '10'" in result.reason
 
 
 # ---------------------------------------------------------------------------

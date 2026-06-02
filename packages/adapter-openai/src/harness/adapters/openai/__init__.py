@@ -124,6 +124,7 @@ class OpenAIAdapter:
             tools=tools,
             temperature=temperature,
             max_tokens=max_tokens,
+            tool_choice=kwargs.get("tool_choice"),
             response_format=kwargs.get("response_format"),
             seed=kwargs.get("seed"),
         )
@@ -142,6 +143,7 @@ class OpenAIAdapter:
         tools: list[dict[str, Any]] | None,
         temperature: float | None,
         max_tokens: int | None,
+        tool_choice: str | None = None,
         response_format: dict[str, Any] | str | None = None,
         seed: int | None = None,
     ) -> AsyncIterator[Event]:
@@ -152,6 +154,8 @@ class OpenAIAdapter:
         }
         if tools:
             payload["tools"] = tools
+            if tool_choice:
+                payload["tool_choice"] = tool_choice
         if temperature is not None:
             payload["temperature"] = temperature
         if max_tokens is not None:

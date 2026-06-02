@@ -149,7 +149,9 @@ def compute_next_run_at(*, schedule: ScheduleSpec, now: datetime | None = None) 
         return (current + timedelta(seconds=int(schedule.value))).isoformat(timespec="seconds")
     if schedule.kind != "cron":
         raise ValueError(f"unsupported schedule kind: {schedule.kind}")
-    candidate = current.astimezone(UTC).replace(second=0, microsecond=0) + timedelta(minutes=1)
+    candidate = current.astimezone(UTC).replace(second=0, microsecond=0)
+    if candidate < current.astimezone(UTC):
+        candidate += timedelta(minutes=1)
     for _ in range(366 * 24 * 60):
         if _matches_cron(schedule.value, candidate):
             return candidate.isoformat(timespec="seconds")
@@ -235,13 +237,7 @@ def run_scheduler_job(
     started = now or _utcnow()
     started_text = started.isoformat(timespec="seconds")
     job_cwd = Path(job.cwd)
-    for hook in hooks:
-        hook.on_job_started(cwd=job_cwd, job=job, trigger=trigger, started_at=started)
-    try:
-        result_status, stop_reason, record_dir = _dispatch_job(job)
-        status = "completed"
-        summary = f"{job.kind} -> {result_status} ({stop_reason})"
-    except Exception as exc:
+    if not store.acquire_job_lock(job_id):
         finished_text = _utcnow().isoformat(timespec="seconds")
         record = SchedulerRunRecord(
             id=store.new_id("schedrun", job.kind),
@@ -249,69 +245,96 @@ def run_scheduler_job(
             kind=job.kind,
             cwd=job.cwd,
             trigger=trigger,
-            status="failed",
-            result_status="failed",
-            result_stop_reason="error",
+            status="skipped",
+            result_status="skipped",
+            result_stop_reason="already_running",
             started_at=started_text,
             finished_at=finished_text,
             record_dir="",
-            summary=str(exc),
+            summary=f"{job.kind} skipped because another scheduler process is already running it",
+        )
+        store.add_run_record(record)
+        return record
+    for hook in hooks:
+        hook.on_job_started(cwd=job_cwd, job=job, trigger=trigger, started_at=started)
+    try:
+        try:
+            result_status, stop_reason, record_dir = _dispatch_job(job)
+            status = "completed"
+            summary = f"{job.kind} -> {result_status} ({stop_reason})"
+        except Exception as exc:
+            finished_text = _utcnow().isoformat(timespec="seconds")
+            record = SchedulerRunRecord(
+                id=store.new_id("schedrun", job.kind),
+                job_id=job.id,
+                kind=job.kind,
+                cwd=job.cwd,
+                trigger=trigger,
+                status="failed",
+                result_status="failed",
+                result_stop_reason="error",
+                started_at=started_text,
+                finished_at=finished_text,
+                record_dir="",
+                summary=str(exc),
+            )
+            store.add_run_record(record)
+            next_run_at = ""
+            status = "failed" if job.schedule.kind == "at" else "active"
+            if job.schedule.kind != "at":
+                next_run_at = compute_next_run_at(schedule=job.schedule, now=_utcnow())
+            store.update_job(
+                replace(
+                    job,
+                    status=status,
+                    next_run_at=next_run_at,
+                    updated_at=finished_text,
+                    last_run_at=finished_text,
+                    last_status="failed",
+                    last_error=str(exc),
+                    last_record_dir="",
+                )
+            )
+            for hook in hooks:
+                hook.on_job_completed(cwd=job_cwd, job=job, trigger=trigger, record=record)
+            return record
+        finished_text = _utcnow().isoformat(timespec="seconds")
+        record = SchedulerRunRecord(
+            id=store.new_id("schedrun", job.kind),
+            job_id=job.id,
+            kind=job.kind,
+            cwd=job.cwd,
+            trigger=trigger,
+            status=status,
+            result_status=result_status,
+            result_stop_reason=stop_reason,
+            started_at=started_text,
+            finished_at=finished_text,
+            record_dir=record_dir,
+            summary=summary,
         )
         store.add_run_record(record)
         next_run_at = ""
-        status = "failed" if job.schedule.kind == "at" else "active"
+        job_status = "completed" if job.schedule.kind == "at" else job.status
         if job.schedule.kind != "at":
             next_run_at = compute_next_run_at(schedule=job.schedule, now=_utcnow())
         store.update_job(
             replace(
                 job,
-                status=status,
+                status=job_status,
                 next_run_at=next_run_at,
                 updated_at=finished_text,
                 last_run_at=finished_text,
-                last_status="failed",
-                last_error=str(exc),
-                last_record_dir="",
+                last_status=result_status,
+                last_error="",
+                last_record_dir=record_dir,
             )
         )
         for hook in hooks:
             hook.on_job_completed(cwd=job_cwd, job=job, trigger=trigger, record=record)
         return record
-    finished_text = _utcnow().isoformat(timespec="seconds")
-    record = SchedulerRunRecord(
-        id=store.new_id("schedrun", job.kind),
-        job_id=job.id,
-        kind=job.kind,
-        cwd=job.cwd,
-        trigger=trigger,
-        status=status,
-        result_status=result_status,
-        result_stop_reason=stop_reason,
-        started_at=started_text,
-        finished_at=finished_text,
-        record_dir=record_dir,
-        summary=summary,
-    )
-    store.add_run_record(record)
-    next_run_at = ""
-    job_status = "completed" if job.schedule.kind == "at" else job.status
-    if job.schedule.kind != "at":
-        next_run_at = compute_next_run_at(schedule=job.schedule, now=_utcnow())
-    store.update_job(
-        replace(
-            job,
-            status=job_status,
-            next_run_at=next_run_at,
-            updated_at=finished_text,
-            last_run_at=finished_text,
-            last_status=result_status,
-            last_error="",
-            last_record_dir=record_dir,
-        )
-    )
-    for hook in hooks:
-        hook.on_job_completed(cwd=job_cwd, job=job, trigger=trigger, record=record)
-    return record
+    finally:
+        store.release_job_lock(job_id)
 
 
 def run_due_scheduler_jobs(

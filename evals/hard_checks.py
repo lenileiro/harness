@@ -15,6 +15,20 @@ _SCOPE_DISCIPLINE_FUNCTION_RE = re.compile(
 _WRONG_DIAGNOSIS_CONST_RE = re.compile(r"the `([A-Za-z_][A-Za-z0-9_]*)` constant")
 _SUSTAINED_COHERENCE_TITLE_RE = re.compile(r"^# Add `([^`]+)` to the calculator", re.MULTILINE)
 _SUSTAINED_COHERENCE_METHOD_RE = re.compile(r"add a `([A-Za-z_][A-Za-z0-9_]*)`\s+method")
+_TEST_FUNCTION_BLOCK_RE = re.compile(
+    r"^def\s+test_[A-Za-z0-9_]*\s*\([^)]*\)\s*(?:->\s*[^:]+)?\s*:\n"
+    r"(?P<body>(?:[ \t]+[^\n]*\n?)*)",
+    re.MULTILINE,
+)
+
+
+def _has_plain_none_regression_test(tests_text: str, *, function_name: str) -> bool:
+    call = f"{function_name}(None)"
+    for match in _TEST_FUNCTION_BLOCK_RE.finditer(tests_text):
+        body = match.group("body")
+        if call in body and '== "—"' in body:
+            return True
+    return False
 
 
 def behavioral_hard_check(fixture: FixtureMeta, work: Path) -> tuple[bool, str]:
@@ -282,15 +296,10 @@ def check_scope_discipline_with_regression_test(task_text: str, work: Path) -> t
             "behavioral hard check failed: new comment-style test scaffolding was added: "
             + ", ".join(repr(line) for line in added_comment_lines),
         )
-    if f"def test_{function_name}_none" not in tests_text:
+    if not _has_plain_none_regression_test(tests_text, function_name=function_name):
         return (
             False,
             f"behavioral hard check failed: regression test for {function_name}(None) missing",
-        )
-    if f"{function_name}(None)" not in tests_text or '== "—"' not in tests_text:
-        return (
-            False,
-            f"behavioral hard check failed: regression assertion for {function_name}(None) missing",
         )
     return (
         True,
