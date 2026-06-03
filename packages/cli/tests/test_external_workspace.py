@@ -4535,9 +4535,66 @@ async def test_external_workspace_coverage_verifier_rejects_weak_ini_lookup_test
 
     assert result.can_finish is False
     assert "# and ; full-line comment cases" in result.reason
+    assert "indented full-line comment" in result.reason
     assert "section header with surrounding whitespace" in result.reason
+    assert "leading whitespace before the key" in result.reason
     assert "value containing an additional `=`" in result.reason
     assert "missing-key behavior" in result.reason
+    assert adapter.calls == []
+
+
+@pytest.mark.asyncio
+async def test_external_workspace_coverage_verifier_rejects_ini_lookup_missing_indented_cases(
+    tmp_path: Path,
+) -> None:
+    env, structural = await _accepted_ini_lookup_workspace(
+        tmp_path,
+        test_body=(
+            "#!/usr/bin/env bash\n"
+            "set -euo pipefail\n"
+            'tmp="$(mktemp)"\n'
+            "trap 'rm -f \"$tmp\"' EXIT\n"
+            "assert_failure_no_output() {\n"
+            "  local out rc\n"
+            '  out="$($* 2>/dev/null)"; rc=$?\n'
+            '  [ "$rc" -ne 0 ] && [ -z "$out" ]\n'
+            "}\n"
+            "cat > \"$tmp\" <<'INI'\n"
+            "# hash comment\n"
+            "; semicolon comment\n"
+            "[ server ]\n"
+            "port = 8080\n"
+            "token = abc=def=ghi\n"
+            "[client]\n"
+            "port = 9090\n"
+            "INI\n"
+            '[ "$(./bin/ini_get server port "$tmp")" = "8080" ]\n'
+            '[ "$(./bin/ini_get server token "$tmp")" = "abc=def=ghi" ]\n'
+            '[ "$(./bin/ini_get client port "$tmp")" = "9090" ]\n'
+            'assert_failure_no_output ./bin/ini_get server missing "$tmp"\n'
+        ),
+    )
+    adapter = CoverageReviewAdapter({"can_finish": True, "reason": "looks good", "confidence": 0.9})
+    verifier = ExternalWorkspaceCoverageVerifier(
+        environment=env,
+        workdir=str(tmp_path),
+        instruction=(
+            "Fix the INI lookup CLI. It should ignore blank lines and full-line "
+            "comments beginning with # or ;, trim surrounding whitespace around "
+            "section names, keys, and values, preserve equals signs inside values, "
+            "keep section scoping correct, and exit non-zero with no output when "
+            "the key is missing."
+        ),
+        adapter=adapter,
+        model="judge",
+        structural_verifier=structural,
+    )
+
+    result = await verifier.verify(session=SimpleNamespace(messages=[]), activity=[])
+
+    assert result.can_finish is False
+    assert "indented full-line comment" in result.reason
+    assert "leading whitespace before the key" in result.reason
     assert adapter.calls == []
 
 
@@ -4644,6 +4701,7 @@ async def test_external_workspace_coverage_verifier_allows_url_join_clean_bounda
             'assert.equal(joinUrl("https://example.com/", "/api/"), "https://example.com/api");\n'
             'assert.equal(joinUrl("https://example.com", "", null, "api"), "https://example.com/api");\n'
             'assert.equal(joinUrl("/api", "v1"), "/api/v1");\n'
+            'assert.equal(joinUrl("https://example.com", "/"), "https://example.com");\n'
         ),
     )
     adapter = CoverageReviewAdapter(
@@ -4776,6 +4834,43 @@ async def test_external_workspace_coverage_verifier_rejects_url_join_missing_abs
 
     assert result.can_finish is False
     assert "keeps the leading slash" in result.reason
+    assert adapter.calls == []
+
+
+@pytest.mark.asyncio
+async def test_external_workspace_coverage_verifier_rejects_url_join_missing_origin_root_trim_case(
+    tmp_path: Path,
+) -> None:
+    env, structural = await _accepted_url_join_workspace(
+        tmp_path,
+        test_body=(
+            'const assert = require("node:assert/strict");\n'
+            'const { joinUrl } = require("../src/urlJoin");\n'
+            'assert.equal(joinUrl("https://example.com", "api"), "https://example.com/api");\n'
+            'assert.equal(joinUrl("https://example.com/", "/api/"), "https://example.com/api");\n'
+            'assert.equal(joinUrl("https://example.com", "", null, "api"), "https://example.com/api");\n'
+            'assert.equal(joinUrl("/api", "v1"), "/api/v1");\n'
+        ),
+    )
+    adapter = CoverageReviewAdapter({"can_finish": True, "reason": "looks good", "confidence": 0.9})
+    verifier = ExternalWorkspaceCoverageVerifier(
+        environment=env,
+        workdir=str(tmp_path),
+        instruction=(
+            "Fix URL joining. joinUrl should preserve a URL scheme and host, ignore "
+            "nullish or empty segments, collapse duplicate slashes between path "
+            "segments, keep a leading slash for absolute paths, and trim trailing "
+            "slashes except for the root URL."
+        ),
+        adapter=adapter,
+        model="judge",
+        structural_verifier=structural,
+    )
+
+    result = await verifier.verify(session=SimpleNamespace(messages=[]), activity=[])
+
+    assert result.can_finish is False
+    assert "slash-only root path" in result.reason
     assert adapter.calls == []
 
 

@@ -27,6 +27,7 @@ from uuid import uuid4
 from evals.external_scenario_checks import (
     announce_scenario_start,
     command_output_text,
+    git_diff_with_untracked,
     independent_check_failure,
     load_dotenv,
     untracked_scratch_paths,
@@ -241,15 +242,10 @@ def independent_check(workspace: Path, run_root: Path) -> dict[str, object]:
         or (path.startswith("tests/test_current_python") and path.endswith(".py"))
     }
     diff_paths = ["current_python.py", "tests"]
-    diff_result = subprocess.run(
-        ["git", "diff", "--", *diff_paths],
-        cwd=workspace,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        capture_output=True,
-        check=False,
-        timeout=30,
+    diff_text = git_diff_with_untracked(
+        workspace,
+        diff_paths,
+        status_text=status_result.stdout,
     )
     leftover_scratch_paths = untracked_scratch_paths(
         status_result.stdout,
@@ -267,7 +263,7 @@ def independent_check(workspace: Path, run_root: Path) -> dict[str, object]:
         "pytest_return_code": pytest_result.returncode,
         "pytest_stdout": pytest_result.stdout[-1000:],
         "pytest_stderr": pytest_result.stderr[-1000:],
-        "diff": diff_result.stdout,
+        "diff": diff_text,
         "status": status_result.stdout,
         "changed_source": "current_python.py" in status_result.stdout,
         "changed_tests": bool(focused_test_paths),

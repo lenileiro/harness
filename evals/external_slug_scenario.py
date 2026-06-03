@@ -23,6 +23,7 @@ from uuid import uuid4
 from evals.external_scenario_checks import (
     announce_scenario_start,
     command_output_text,
+    git_diff_with_untracked,
     independent_check_failure,
     load_dotenv,
     untracked_scratch_paths,
@@ -171,16 +172,6 @@ for raw, expected in cases.items():
         check=False,
         timeout=30,
     )
-    diff_result = subprocess.run(
-        ["git", "diff", "--", "slugify.py", "tests/test_slugify.py"],
-        cwd=workspace,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        capture_output=True,
-        check=False,
-        timeout=30,
-    )
     status_result = subprocess.run(
         ["git", "status", "--porcelain", "--untracked-files=all"],
         cwd=workspace,
@@ -192,6 +183,11 @@ for raw, expected in cases.items():
         timeout=30,
     )
     status_text = status_result.stdout
+    diff_text = git_diff_with_untracked(
+        workspace,
+        ["slugify.py", "tests"],
+        status_text=status_text,
+    )
     leftover_scratch_paths = untracked_scratch_paths(status_text)
     return {
         "pytest_return_code": pytest_result.returncode,
@@ -200,7 +196,7 @@ for raw, expected in cases.items():
         "behavior_return_code": behavior_result.returncode,
         "behavior_stdout": behavior_result.stdout[-1000:],
         "behavior_stderr": behavior_result.stderr[-1000:],
-        "diff": diff_result.stdout,
+        "diff": diff_text,
         "status": status_text,
         "changed_slug_source": "slugify.py" in status_text,
         "changed_slug_tests": "tests/test_slugify.py" in status_text,

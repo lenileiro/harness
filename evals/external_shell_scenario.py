@@ -23,6 +23,7 @@ from uuid import uuid4
 from evals.external_scenario_checks import (
     announce_scenario_start,
     command_output_text,
+    git_diff_with_untracked,
     independent_check_failure,
     load_dotenv,
     untracked_scratch_paths,
@@ -242,16 +243,6 @@ port = 9090
             }
         )
     hidden_ini.unlink(missing_ok=True)
-    diff_result = subprocess.run(
-        ["git", "diff", "--", "bin/ini_get", "tests/run.sh"],
-        cwd=workspace,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        capture_output=True,
-        check=False,
-        timeout=30,
-    )
     status_result = subprocess.run(
         ["git", "status", "--porcelain", "--untracked-files=all"],
         cwd=workspace,
@@ -275,13 +266,18 @@ port = 9090
         status_text,
         allowed_untracked=set(changed_test_paths),
     )
+    diff_text = git_diff_with_untracked(
+        workspace,
+        ["bin/ini_get", "tests"],
+        status_text=status_text,
+    )
     return {
         "make_test_return_code": make_result.returncode,
         "make_test_stdout": make_result.stdout[-1000:],
         "make_test_stderr": make_result.stderr[-1000:],
         "behavior_passed": behavior_passed,
         "behavior": behavior,
-        "diff": diff_result.stdout,
+        "diff": diff_text,
         "status": status_text,
         "changed_source": "bin/ini_get" in status_result.stdout,
         "changed_tests": bool(changed_test_paths),

@@ -23,6 +23,7 @@ from uuid import uuid4
 from evals.external_scenario_checks import (
     announce_scenario_start,
     command_output_text,
+    git_diff_with_untracked,
     independent_check_failure,
     load_dotenv,
     untracked_scratch_paths,
@@ -179,16 +180,6 @@ for (const [input, expected] of cases) {
         check=False,
         timeout=30,
     )
-    diff_result = subprocess.run(
-        ["git", "diff", "--", "src/urlJoin.js", "test/urlJoin.test.js"],
-        cwd=workspace,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        capture_output=True,
-        check=False,
-        timeout=30,
-    )
     status_result = subprocess.run(
         ["git", "status", "--porcelain", "--untracked-files=all"],
         cwd=workspace,
@@ -215,6 +206,11 @@ for (const [input, expected] of cases) {
         status_text,
         allowed_untracked=set(changed_test_paths),
     )
+    diff_text = git_diff_with_untracked(
+        workspace,
+        ["src/urlJoin.js", "test"],
+        status_text=status_text,
+    )
     return {
         "npm_test_return_code": npm_result.returncode,
         "npm_test_stdout": npm_result.stdout[-1000:],
@@ -222,7 +218,7 @@ for (const [input, expected] of cases) {
         "behavior_return_code": behavior_result.returncode,
         "behavior_stdout": behavior_result.stdout[-1000:],
         "behavior_stderr": behavior_result.stderr[-1000:],
-        "diff": diff_result.stdout,
+        "diff": diff_text,
         "status": status_text,
         "changed_source": "src/urlJoin.js" in status_text,
         "changed_tests": bool(changed_test_paths),

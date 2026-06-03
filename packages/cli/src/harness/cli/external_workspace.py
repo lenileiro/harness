@@ -4814,6 +4814,10 @@ _URL_JOIN_CALL_RE = re.compile(r"\bjoinUrl\((?P<args>[^)]{0,1200})\)", flags=re.
 _JS_NULLISH_ARG_RE = re.compile(r"(?<![A-Za-z0-9_$])(?:null|undefined)(?![A-Za-z0-9_$])")
 _INI_SECTION_WITH_SPACES_RE = re.compile(r"(?m)^\s*\[\s+[A-Za-z0-9_.:-]+\s+\]\s*$")
 _INI_KEY_VALUE_WHITESPACE_RE = re.compile(r"(?m)^\s*[^#;\s=\[]+\s+=\s+[^=\n]+")
+_INI_INDENTED_KEY_RE = re.compile(r"(?m)^\s+[^#;\s=\[]+\s*=\s*[^#;\n]*")
+_INI_HASH_FULL_LINE_COMMENT_RE = re.compile(r"(?m)^\s*#")
+_INI_SEMICOLON_FULL_LINE_COMMENT_RE = re.compile(r"(?m)^\s*;")
+_INI_INDENTED_FULL_LINE_COMMENT_RE = re.compile(r"(?m)^\s+[;#]")
 _INI_EQUALS_VALUE_RE = re.compile(r"(?m)^\s*[^#;\s=\[]+\s*=\s*[^#;\n]*=[^#;\n]*")
 _SLUG_SAFE_EXPECTED_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)+$")
 _SLUG_SEPARATOR_EDGE_RE = re.compile(r"(^[^A-Za-z0-9]+|[^A-Za-z0-9]+$|[-_\s!.,]{2,})")
@@ -4828,6 +4832,29 @@ def _quoted_string_values(text: str) -> list[str]:
         if value is not None:
             values.append(value)
     return values
+
+
+def _shell_heredoc_bodies(text: str) -> list[str]:
+    lines = text.splitlines()
+    bodies: list[str] = []
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        match = _HEREDOC_RE.search(line)
+        if match is None:
+            index += 1
+            continue
+        delimiter = match.group("delimiter")
+        body: list[str] = []
+        index += 1
+        while index < len(lines) and lines[index].strip() != delimiter:
+            body.append(lines[index])
+            index += 1
+        if body:
+            bodies.append("\n".join(body))
+        if index < len(lines):
+            index += 1
+    return bodies
 
 
 def _command_output_text(value: object) -> str:
@@ -5004,6 +5031,18 @@ def _url_join_boundary_coverage_reason(
                 '`joinUrl("/api", "v1")` expecting `"/api/v1"`. Without that case, '
                 "a path joiner can accidentally turn absolute paths into relative ones."
             )
+        if (
+            "root" in lowered
+            and "trailing slash" in lowered
+            and not _url_join_tests_cover_origin_root_slash_trim(test_content)
+        ):
+            return (
+                "URL joining tests must include a scheme+host input joined with a "
+                "slash-only root path whose result trims back to the bare origin, "
+                'for example `joinUrl("https://example.com", "/")` expecting '
+                '`"https://example.com"`. Without that case, a URL joiner can '
+                "preserve hosts while still leaving an unwanted trailing slash."
+            )
         return None
     return (
         "URL joining tests must include the boundary where a clean scheme+host "
@@ -5027,13 +5066,21 @@ def _ini_lookup_coverage_reason(*, instruction: str, test_content: str) -> str |
         return None
 
     missing: list[str] = []
-    if "#" not in test_content or ";" not in test_content:
+    ini_content = "\n".join(_shell_heredoc_bodies(test_content)) or test_content
+    if not (
+        _INI_HASH_FULL_LINE_COMMENT_RE.search(ini_content)
+        and _INI_SEMICOLON_FULL_LINE_COMMENT_RE.search(ini_content)
+    ):
         missing.append("both # and ; full-line comment cases")
-    if not _INI_SECTION_WITH_SPACES_RE.search(test_content):
+    if not _INI_INDENTED_FULL_LINE_COMMENT_RE.search(ini_content):
+        missing.append("an indented full-line comment case")
+    if not _INI_SECTION_WITH_SPACES_RE.search(ini_content):
         missing.append("a section header with surrounding whitespace, such as `[ server ]`")
-    if not _INI_KEY_VALUE_WHITESPACE_RE.search(test_content):
+    if not _INI_KEY_VALUE_WHITESPACE_RE.search(ini_content):
         missing.append("a key/value line with whitespace around `=`")
-    if not _INI_EQUALS_VALUE_RE.search(test_content):
+    if not _INI_INDENTED_KEY_RE.search(ini_content):
+        missing.append("a key/value line with leading whitespace before the key")
+    if not _INI_EQUALS_VALUE_RE.search(ini_content):
         missing.append("a value containing an additional `=` after the first separator")
     lowered_tests = test_content.lower()
     if "missing" not in lowered_tests or not (
@@ -5103,6 +5150,14 @@ def _slugify_coverage_reason(*, instruction: str, test_content: str) -> str | No
     )
 
 
+def _quoted_string_values_after_js_call(test_content: str, call_end: int) -> list[str]:
+    tail = test_content[call_end : call_end + 500]
+    statement_end = tail.find(";")
+    if statement_end >= 0:
+        tail = tail[:statement_end]
+    return _quoted_string_values(tail)
+
+
 def _url_join_tests_cover_clean_origin_path_boundary(test_content: str) -> bool:
     for match in _URL_JOIN_ORIGIN_LITERAL_RE.finditer(test_content):
         origin = match.group("origin")
@@ -5138,8 +5193,7 @@ def _url_join_tests_cover_origin_duplicate_slash_boundary(test_content: str) -> 
         )
         if not slashy_segment:
             continue
-        expected_window = test_content[call.end() : call.end() + 500]
-        for expected in _quoted_string_values(expected_window):
+        for expected in _quoted_string_values_after_js_call(test_content, call.end()):
             if not expected.startswith(f"{origin}/"):
                 continue
             suffix = expected[len(origin) :]
@@ -5156,7 +5210,7 @@ def _url_join_tests_cover_ignored_empty_segments(test_content: str) -> bool:
         candidates = _url_join_literal_expected_candidates(_quoted_string_values(args_text))
         if not candidates:
             continue
-        expected_values = _quoted_string_values(test_content[call.end() : call.end() + 500])
+        expected_values = _quoted_string_values_after_js_call(test_content, call.end())
         if any(
             candidate in expected_values and candidate.startswith(("http://", "https://"))
             for candidate in candidates
@@ -5177,8 +5231,27 @@ def _url_join_tests_cover_absolute_path_leading_slash(test_content: str) -> bool
         ]
         if not candidates:
             continue
-        expected_values = _quoted_string_values(test_content[call.end() : call.end() + 500])
+        expected_values = _quoted_string_values_after_js_call(test_content, call.end())
         if any(candidate in expected_values for candidate in candidates):
+            return True
+    return False
+
+
+def _url_join_tests_cover_origin_root_slash_trim(test_content: str) -> bool:
+    for call in _URL_JOIN_CALL_RE.finditer(test_content):
+        values = _quoted_string_values(call.group("args"))
+        if not values:
+            continue
+        origin_match = re.match(r"^(?P<origin>https?://[^/]+)(?:/+)?$", values[0])
+        if origin_match is None:
+            continue
+        has_root_slash_input = values[0].endswith("/") or any(
+            value and set(value) <= {"/"} for value in values[1:]
+        )
+        if not has_root_slash_input:
+            continue
+        expected_values = _quoted_string_values_after_js_call(test_content, call.end())
+        if origin_match.group("origin") in expected_values:
             return True
     return False
 

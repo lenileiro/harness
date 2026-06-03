@@ -165,6 +165,10 @@ def test_release_value():
 
     assert check["changed_tests"] is True
     assert check["changed_test_paths"] == ["tests/test_current_python_release_value.py"]
+    diff = check["diff"]
+    assert isinstance(diff, str)
+    assert "diff --git a/tests/test_current_python_release_value.py" in diff
+    assert "+def test_release_value():" in diff
     assert check["leftover_scratch_paths"] == []
 
 
@@ -217,6 +221,10 @@ test("preserves origin while ignoring empty segments", () => {
     assert check["changed_source"] is True
     assert check["changed_tests"] is True
     assert check["changed_test_paths"] == ["test/urlJoin.regression.test.js"]
+    diff = check["diff"]
+    assert isinstance(diff, str)
+    assert "diff --git a/test/urlJoin.regression.test.js" in diff
+    assert '+test("preserves origin while ignoring empty segments"' in diff
     assert check["leftover_scratch_paths"] == []
 
 
@@ -239,6 +247,10 @@ def test_shell_scenario_accepts_named_regression_script(tmp_path: Path) -> None:
         "tests/run.sh",
         "tests/ini_get_regression.sh",
     ]
+    diff = check["diff"]
+    assert isinstance(diff, str)
+    assert "diff --git a/tests/ini_get_regression.sh" in diff
+    assert "+echo ok" in diff
     assert check["runner_wired_new_regression"] is True
     assert check["leftover_scratch_paths"] == []
 
