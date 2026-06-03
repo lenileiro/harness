@@ -13,7 +13,6 @@ independent of the approval policy. The set:
 
 from __future__ import annotations
 
-import ast
 import asyncio
 import fnmatch
 from pathlib import Path
@@ -67,16 +66,6 @@ def _is_default_ignored_path(path: Path) -> bool:
     return any(part in _DEFAULT_IGNORED_DIR_NAMES for part in path.parts)
 
 
-def _check_python(path: str, content: str) -> str | None:
-    try:
-        ast.parse(content)
-    except SyntaxError as exc:
-        line = exc.lineno or 0
-        col = exc.offset or 0
-        return f"Python syntax error in {path} at line {line}, col {col}: {exc.msg}"
-    return None
-
-
 def _check_json(path: str, content: str) -> str | None:
     import json as _json
 
@@ -92,13 +81,12 @@ SyntaxChecker = "Callable[[str, str], str | None]"
 
 
 SYNTAX_CHECKERS: dict[str, Any] = {
-    ".py": _check_python,
     ".json": _check_json,
 }
 """Extension → checker registry. Callers can extend at runtime by mutating
 this dict (e.g. ``SYNTAX_CHECKERS['.ts'] = my_tsc_check``). The harness ships
-with Python and JSON because both are stdlib; other languages are an opt-in
-each project wires up itself."""
+without built-in source-language syntax gates; project-specific language checks
+must be explicitly registered instead of being hard-coded into Harness."""
 
 
 def _check_syntax(path: str, content: str) -> str | None:
@@ -106,8 +94,8 @@ def _check_syntax(path: str, content: str) -> str | None:
 
     Returns an error string if a checker is registered and the parse failed,
     or None if no checker is registered (most extensions) or parse succeeded.
-    Keeping this language-agnostic at the core: the harness doesn't assume
-    Python — that's just one entry in the registry.
+    Keeping this language-agnostic at the core: source-language checks are
+    opt-in registry entries, not Harness defaults.
     """
     for ext, checker in SYNTAX_CHECKERS.items():
         if path.endswith(ext):
@@ -306,10 +294,9 @@ class WriteFileTool:
             except Exception:
                 pass
 
-        # Pre-write syntax check: reject syntactically-broken Python before
-        # the write happens so the file on disk never enters a broken state.
-        # Catches the failure mode where a small model writes incomplete edits
-        # that look right but break imports on the next pytest run.
+        # Pre-write syntax check for explicitly registered formats. Source
+        # languages are not registered by default; verification should prove
+        # whether source edits are valid for the project.
         syntax_err = _check_syntax(path_arg, content)
         if syntax_err is not None:
             return _error(
@@ -415,8 +402,9 @@ class EditFileTool:
 
         updated = original.replace(old, new, 1)
 
-        # Pre-write syntax check for Python files — same rationale as
-        # WriteFileTool: don't leave a broken .py on disk after an edit.
+        # Pre-write syntax check for explicitly registered formats. Source
+        # languages are not registered by default; verification should prove
+        # whether source edits are valid for the project.
         syntax_err = _check_syntax(path_arg, updated)
         if syntax_err is not None:
             return _error(

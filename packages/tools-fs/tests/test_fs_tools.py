@@ -11,7 +11,13 @@ from pathlib import Path
 import pytest
 
 from harness.core import ToolCall
-from harness.tools.fs import EditFileTool, GlobTool, ListDirTool, WriteFileTool
+from harness.tools.fs import (
+    SYNTAX_CHECKERS,
+    EditFileTool,
+    GlobTool,
+    ListDirTool,
+    WriteFileTool,
+)
 
 
 def _call(name: str, **arguments: object) -> ToolCall:
@@ -59,6 +65,14 @@ class TestWriteFile:
         tool = WriteFileTool(cwd=Path.cwd())
         assert tool.approval == "prompt"
 
+    async def test_does_not_special_case_python_syntax_by_default(self, tmp_path: Path) -> None:
+        assert ".py" not in SYNTAX_CHECKERS
+        tool = WriteFileTool(cwd=tmp_path)
+        result = await tool(_call("write_file", path="src.py", content="def broken(:\n"))
+
+        assert result.is_error is False
+        assert (tmp_path / "src.py").read_text(encoding="utf-8") == "def broken(:\n"
+
 
 # ---------------------------------------------------------------------------
 # EditFileTool
@@ -98,6 +112,16 @@ class TestEditFile:
         result = await tool(_call("edit_file", path="ghost.txt", old="a", new="b"))
         assert result.is_error is True
         assert "regular file" in result.content
+
+    async def test_does_not_special_case_python_syntax_by_default(self, tmp_path: Path) -> None:
+        assert ".py" not in SYNTAX_CHECKERS
+        (tmp_path / "src.py").write_text("def ok():\n    return 1\n", encoding="utf-8")
+        tool = EditFileTool(cwd=tmp_path)
+
+        result = await tool(_call("edit_file", path="src.py", old="def ok():", new="def broken(:"))
+
+        assert result.is_error is False
+        assert (tmp_path / "src.py").read_text(encoding="utf-8").startswith("def broken(:")
 
 
 # ---------------------------------------------------------------------------
