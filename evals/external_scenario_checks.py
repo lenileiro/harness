@@ -7,6 +7,14 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 
+def command_output_text(value: object) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return str(value)
+
+
 def load_dotenv(path: Path) -> None:
     if not path.exists():
         return

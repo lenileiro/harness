@@ -22,6 +22,7 @@ from uuid import uuid4
 
 from evals.external_scenario_checks import (
     announce_scenario_start,
+    command_output_text,
     independent_check_failure,
     load_dotenv,
     untracked_scratch_paths,
@@ -66,8 +67,10 @@ class LocalEnvironment:
             completed = await asyncio.to_thread(run)
         except subprocess.TimeoutExpired as exc:
             return LocalCommandResult(
-                stdout=exc.stdout or "",
-                stderr=(exc.stderr or "") + f"\ncommand timed out after {timeout_sec}s",
+                stdout=command_output_text(exc.stdout),
+                stderr=(
+                    command_output_text(exc.stderr) + f"\ncommand timed out after {timeout_sec}s"
+                ),
                 return_code=124,
             )
         return LocalCommandResult(
