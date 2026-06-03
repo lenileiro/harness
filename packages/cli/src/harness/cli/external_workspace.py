@@ -2173,6 +2173,8 @@ def _test_path_reference_candidates(path: str) -> set[str]:
                 else suffix
             )
             candidates.add(suffix_without_ext)
+            if "/" in suffix_without_ext:
+                candidates.add(suffix_without_ext.replace("/", "."))
     return {candidate for candidate in candidates if candidate and candidate != "."}
 
 

@@ -384,6 +384,16 @@ def test_verification_command_must_cover_changed_tests() -> None:
         ["tests/test_slugify.py"],
         runner_wires_changed_tests=True,
     )
+    assert _verification_command_covers_test_changes(
+        "stestr run tests.unit.cli.test_incremental_cache_cli",
+        ["repo/bandit/tests/unit/cli/test_incremental_cache_cli.py"],
+    )
+    assert _verification_command_covers_test_changes(
+        "cd repo/bandit && docker run --network none --rm -v $(pwd):/app/bandit "
+        "-w /app/bandit public.example/task:latest "
+        "stestr run tests.unit.cli.test_incremental_cache_cli",
+        ["repo/bandit/tests/unit/cli/test_incremental_cache_cli.py"],
+    )
     assert not _verification_command_covers_test_changes("pytest -k unrelated", changed)
     assert not _verification_command_covers_test_changes("pytest -m slow", changed)
     assert not _verification_command_covers_test_changes(
