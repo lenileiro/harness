@@ -1897,42 +1897,93 @@ def _command_path_tokens(command: str) -> list[str]:
     return list(dict.fromkeys(paths))
 
 
+def _command_verification_path_tokens(command: str) -> list[str]:
+    paths: list[str] = []
+    for variant, prefix in _command_variants_with_prefix(command):
+        words = _shell_words(_command_without_heredoc_bodies(variant))
+        current_prefix = prefix
+        for segment in _shell_command_segments(words):
+            segment = _shell_words_after_env(segment)
+            if not segment:
+                continue
+            executable = PurePosixPath(segment[0]).name.lower()
+            if executable == "cd":
+                if len(segment) >= 2:
+                    joined = _join_command_prefix(current_prefix, segment[1])
+                    if joined is not None:
+                        current_prefix = "" if joined == "." else joined
+                continue
+            if executable == "docker":
+                inner_command = _docker_run_inner_command(segment)
+                if inner_command:
+                    paths.extend(_command_verification_path_tokens(inner_command))
+                continue
+            if _segment_is_inspection_probe(segment):
+                continue
+            paths.extend(_command_segment_path_tokens(segment, current_prefix))
+    return list(dict.fromkeys(paths))
+
+
+def _segment_is_inspection_probe(segment: list[str]) -> bool:
+    if not segment:
+        return True
+    executable = PurePosixPath(segment[0]).name.lower()
+    if executable in _SHELL_INSPECTION_COMMANDS | {"echo", "printf", "test", "[", "[["}:
+        return True
+    if executable == "git" and len(segment) > 1:
+        return segment[1].lower() in _GIT_INSPECTION_COMMANDS
+    for body in _shell_body_commands(segment):
+        if not body:
+            continue
+        body_words = _shell_words(_command_without_heredoc_bodies(body))
+        body_segments = [
+            _shell_words_after_env(raw_segment)
+            for raw_segment in _shell_command_segments(body_words)
+        ]
+        if body_segments and all(
+            _segment_is_inspection_probe(body_segment)
+            for body_segment in body_segments
+            if body_segment
+        ):
+            return True
+    return False
+
+
 def _is_broad_test_command(command: str) -> bool:
     return any(_test_segment_is_broad(segment) for segment, _raw in _command_test_segments(command))
 
 
-def _test_segment_is_broad(segment: list[str]) -> bool:
-    words = [PurePosixPath(word).name.lower() for word in segment]
-    joined = " ".join(words)
-    if any(
-        pattern in joined
-        for pattern in (
-            "go test",
-            "cargo test",
-            "npm test",
-            "pnpm test",
-            "yarn test",
-            "bun test",
-            "node --test",
-            "make test",
-            "mix test",
-            "python -m pytest",
-            "python3 -m pytest",
-            "uv run pytest",
-        )
-    ):
+def _word_looks_like_test_action(word: str, *, executable: bool = False) -> bool:
+    raw = word.strip().strip("'\"").lower()
+    if not raw:
+        return False
+    name = PurePosixPath(raw).name
+    if not name:
+        return False
+    if executable and name in {"test", "[", "[["}:
+        return False
+    if not executable and ("/" in raw or PurePosixPath(name).suffix):
+        return False
+    if name in {"test", "tests", "spec", "specs"}:
         return True
-    test_runners = {
-        "pytest",
-        "tox",
-        "nox",
-        "vitest",
-        "jest",
-        "mocha",
-        "rspec",
-        "rebar3",
-    }
-    return any(word in test_runners for word in words)
+    if name.startswith(("--test", "-test")):
+        return True
+    return (
+        name.startswith(("test", "spec"))
+        or name.endswith(("test", "tests", "spec", "specs"))
+        or re.search(r"(?:^|[-_.:])(test|tests|spec|specs)(?:$|[-_.:])", name) is not None
+    )
+
+
+def _test_segment_is_broad(segment: list[str]) -> bool:
+    if not segment:
+        return False
+    executable = PurePosixPath(segment[0]).name.lower()
+    if executable in {"test", "[", "[["}:
+        return False
+    if _word_looks_like_test_action(segment[0], executable=True):
+        return True
+    return any(_word_looks_like_test_action(word) for word in segment[1:])
 
 
 def _command_test_segments(command: str) -> list[tuple[list[str], list[str]]]:
@@ -2007,11 +2058,11 @@ def _command_uses_test_selector(command: str) -> bool:
                 continue
             lowered = lowered.strip("'\"")
             if "::" in lowered:
-                node_path = lowered.split("::", 1)[0]
-                if "/" in node_path or _path_is_test_only(node_path):
+                selected_path = lowered.split("::", 1)[0]
+                if "/" in selected_path or _path_is_test_only(selected_path):
                     return True
                 continue
-            if lowered == "-m" and _is_module_invocation_flag(words, index):
+            if lowered == "-m" and _selector_flag_is_module_invocation(words, index):
                 continue
             if lowered in selector_flags:
                 return True
@@ -2029,23 +2080,14 @@ def _command_uses_test_selector(command: str) -> bool:
     return False
 
 
-def _is_module_invocation_flag(words: list[str], index: int) -> bool:
-    if index <= 0 or index + 1 >= len(words):
+def _selector_flag_is_module_invocation(words: list[str], index: int) -> bool:
+    if index + 1 >= len(words):
         return False
-    executable = PurePosixPath(words[index - 1]).name.lower()
-    module = words[index + 1].lower()
-    if module not in {"pytest", "unittest", "nose", "nose2"}:
-        return False
-    return executable == "python" or executable.startswith("python")
+    return _word_looks_like_test_action(words[index + 1], executable=True)
 
 
 def _command_invokes_opaque_test_wrapper(command: str) -> bool:
-    words = [
-        PurePosixPath(word).name.lower()
-        for word in _shell_words(_command_without_heredoc_bodies(command))
-    ]
-    joined = " ".join(words)
-    return "make test" in joined
+    return _is_broad_test_command(command) and not _command_path_tokens(command)
 
 
 def _command_local_script_paths(command: str | None) -> list[str]:
@@ -2065,10 +2107,8 @@ def _command_local_script_paths(command: str | None) -> list[str]:
                 paths.append(_normal_path(candidate))
                 break
             continue
-        if word.startswith("./") or "/" in word:
-            suffix = PurePosixPath(word).suffix.lower()
-            if suffix in {".sh", ".bash", ".zsh", ".py", ".js", ".mjs", ".cjs", ".ts"}:
-                paths.append(_normal_path(word))
+        if word.startswith("./"):
+            paths.append(_normal_path(word))
     return list(dict.fromkeys(path for path in paths if path))
 
 
@@ -2173,9 +2213,10 @@ def _verification_command_covers_test_changes(
                 and _is_broad_test_command(command)
             )
         return _is_broad_test_command(command)
+    verification_targets = set(_command_verification_path_tokens(command))
     for target in targets:
         if target in {".", "./"}:
-            return _is_broad_test_command(command)
+            return target in verification_targets or _is_broad_test_command(command)
         for path in changed:
             changed_candidates = _test_path_reference_candidates(path)
             if (
@@ -2187,7 +2228,7 @@ def _verification_command_covers_test_changes(
                     for candidate in changed_candidates
                 )
             ):
-                return _is_broad_test_command(command)
+                return target in verification_targets or _is_broad_test_command(command)
     return False
 
 

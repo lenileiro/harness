@@ -166,6 +166,11 @@ def test_external_workspace_gates_do_not_reintroduce_python_specific_policy() ->
     setup_detector = source[
         source.index("def _shell_command_requests_setup") : source.index("def _porcelain_paths")
     ]
+    coverage_gate = source[
+        source.index("def _is_broad_test_command") : source.index(
+            "def _diff_references_untracked_test_paths"
+        )
+    ]
     language_specific_gate_terms = (
         "python",
         "python3",
@@ -182,6 +187,7 @@ def test_external_workspace_gates_do_not_reintroduce_python_specific_policy() ->
     for fragment in language_specific_gate_terms:
         assert fragment not in clone_gate.lower()
         assert fragment not in setup_detector.lower()
+        assert fragment not in coverage_gate.lower()
 
 
 class FlakyVerifyEnvironment:
@@ -299,6 +305,10 @@ def test_verification_command_must_cover_changed_tests() -> None:
     assert _verification_command_covers_test_changes(
         "node --test test/urlJoin.test.js",
         ["test/urlJoin.test.js"],
+    )
+    assert _verification_command_covers_test_changes(
+        "project-check tests/test_feature.js",
+        ["tests/test_feature.js"],
     )
     assert not _verification_command_covers_test_changes(
         "go test ./...",
@@ -423,6 +433,8 @@ def test_verification_command_must_cover_changed_tests() -> None:
         changed,
     )
     assert not _verification_command_covers_test_changes("test -f " + changed[0], changed)
+    assert not _verification_command_covers_test_changes("echo " + changed[0], changed)
+    assert not _verification_command_covers_test_changes("rg case " + changed[0], changed)
     assert not _verification_command_covers_test_changes("cat " + changed[0], changed)
     assert not _verification_command_covers_test_changes(
         "python -c \"open('t/unit/transport/virtual/test_sac_priority.py').read()\"",
