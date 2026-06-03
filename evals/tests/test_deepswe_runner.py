@@ -582,6 +582,26 @@ def test_public_offline_verification_replays_inner_declared_docker_command(
     )
 
 
+def test_public_offline_verification_replays_inner_workspace_mount_command(
+    tmp_path: Path,
+) -> None:
+    run_root = tmp_path / "run"
+    target_repo = run_root / "agent-workspace" / ".aiomonitor_repo"
+    target_repo.parent.mkdir(parents=True)
+    (run_root / "target_repo.txt").write_text(str(target_repo) + "\n", encoding="utf-8")
+    image = "public.ecr.aws/d3j8x8q7/swe-bench-202605:kh75rc2q0zhmsqwk7wewfwwtrx830v2n"
+    command = (
+        'docker run --rm --network none -v "$PWD":/workspace -w /workspace '
+        f"{image} bash -lc "
+        "'ls -la && cd .aiomonitor_repo && PYTHONPATH=$PWD python -m pytest -q'"
+    )
+
+    original, replay = _offline_verification_command(run_root, command, image=image)
+
+    assert original == command
+    assert replay == "PYTHONPATH=$PWD python -m pytest -q"
+
+
 def test_public_offline_verification_command_fails_on_patch_apply_error() -> None:
     command = _public_offline_verification_command("cargo test")
 

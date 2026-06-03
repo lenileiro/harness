@@ -67,7 +67,7 @@ class DockerRunReplay:
     image: str
     command_words: tuple[str, ...]
     no_network: bool
-    mounts_app: bool
+    has_bind_mount: bool
 
 
 def _load_dotenv(path: Path) -> None:
@@ -260,14 +260,8 @@ _DOCKER_RUN_OPTIONS_WITH_VALUES = {
 _DOCKER_RUN_SHORT_OPTIONS_WITH_VALUES = {"-e", "-h", "-l", "-m", "-p", "-u", "-v", "-w"}
 
 
-def _docker_run_mounts_app(value: str) -> bool:
-    return (
-        value == "/app"
-        or ":/app" in value
-        or "target=/app" in value
-        or "dst=/app" in value
-        or "destination=/app" in value
-    )
+def _docker_run_has_bind_mount(value: str) -> bool:
+    return bool(value.strip())
 
 
 def _docker_run_replay(words: list[str]) -> DockerRunReplay | None:
@@ -275,7 +269,7 @@ def _docker_run_replay(words: list[str]) -> DockerRunReplay | None:
         return None
     index = 2
     no_network = False
-    mounts_app = False
+    has_bind_mount = False
     while index < len(words):
         word = words[index]
         if word == "--":
@@ -286,16 +280,16 @@ def _docker_run_replay(words: list[str]) -> DockerRunReplay | None:
             if has_value:
                 if option in {"--network", "--net"} and value == "none":
                     no_network = True
-                if option in {"--volume", "--mount"} and _docker_run_mounts_app(value):
-                    mounts_app = True
+                if option in {"--volume", "--mount"} and _docker_run_has_bind_mount(value):
+                    has_bind_mount = True
                 index += 1
                 continue
             if option in _DOCKER_RUN_OPTIONS_WITH_VALUES:
                 value = words[index + 1] if index + 1 < len(words) else ""
                 if option in {"--network", "--net"} and value == "none":
                     no_network = True
-                if option in {"--volume", "--mount"} and _docker_run_mounts_app(value):
-                    mounts_app = True
+                if option in {"--volume", "--mount"} and _docker_run_has_bind_mount(value):
+                    has_bind_mount = True
                 index += 2
                 continue
             index += 1
@@ -304,14 +298,14 @@ def _docker_run_replay(words: list[str]) -> DockerRunReplay | None:
             option = word[:2]
             if option in _DOCKER_RUN_SHORT_OPTIONS_WITH_VALUES and len(word) > 2:
                 value = word[2:]
-                if option == "-v" and _docker_run_mounts_app(value):
-                    mounts_app = True
+                if option == "-v" and _docker_run_has_bind_mount(value):
+                    has_bind_mount = True
                 index += 1
                 continue
             if word in _DOCKER_RUN_OPTIONS_WITH_VALUES:
                 value = words[index + 1] if index + 1 < len(words) else ""
-                if word == "-v" and _docker_run_mounts_app(value):
-                    mounts_app = True
+                if word == "-v" and _docker_run_has_bind_mount(value):
+                    has_bind_mount = True
                 index += 2
                 continue
             index += 1
@@ -323,7 +317,7 @@ def _docker_run_replay(words: list[str]) -> DockerRunReplay | None:
         image=words[index],
         command_words=tuple(words[index + 1 :]),
         no_network=no_network,
-        mounts_app=mounts_app,
+        has_bind_mount=has_bind_mount,
     )
 
 
@@ -341,7 +335,7 @@ def _docker_verify_inner_command(command: str, *, image: str | None) -> str | No
         replay = _docker_run_replay(words[index:])
         if replay is None:
             continue
-        if replay.image != required_image or not replay.no_network or not replay.mounts_app:
+        if replay.image != required_image or not replay.no_network or not replay.has_bind_mount:
             continue
         inner_words = list(replay.command_words)
         if not inner_words:
@@ -357,6 +351,17 @@ def _docker_verify_inner_command(command: str, *, image: str | None) -> str | No
     return None
 
 
+def _strip_target_repo_cd(command: str, variants: set[str]) -> str:
+    stripped_command = command.strip()
+    safe_prefix = r"(?:(?:pwd|true|ls(?:\s+-[A-Za-z0-9]+)?)\s*(?:&&|;)\s*)*"
+    for variant in sorted(variants, key=len, reverse=True):
+        pattern = rf"^\s*{safe_prefix}cd\s+{re.escape(variant)}\s*(?:&&|;)\s*"
+        stripped = re.sub(pattern, "", stripped_command, count=1)
+        if stripped != stripped_command:
+            return stripped.strip()
+    return stripped_command
+
+
 def _offline_verification_command(
     run_root: Path,
     command: str,
@@ -369,8 +374,8 @@ def _offline_verification_command(
     into a subdirectory such as `repo/`. The task image already has that target
     repo at `/app`, so a leading `cd repo && ...` must be removed before replay.
     If the accepted verify command is itself a no-network Docker run of the
-    declared task image with the checkout mounted at `/app`, replay the command
-    from inside that container instead of nesting Docker inside Docker.
+    declared task image with a bind-mounted checkout, replay the inner command
+    from inside the task image instead of nesting Docker inside Docker.
     """
 
     normalized = command.strip()
@@ -393,13 +398,11 @@ def _offline_verification_command(
         f'"{target_rel}"',
         f"'{target_rel}'",
     }
-    for variant in sorted(variants, key=len, reverse=True):
-        pattern = rf"^\s*cd\s+{re.escape(variant)}\s*(?:&&|;)\s*"
-        stripped = re.sub(pattern, "", normalized, count=1)
-        if stripped != normalized:
-            replay = stripped.strip()
-            return command, _docker_verify_inner_command(replay, image=image) or replay
-    return command, _docker_verify_inner_command(normalized, image=image) or normalized
+    replay = _strip_target_repo_cd(normalized, variants)
+    inner_replay = _docker_verify_inner_command(replay, image=image)
+    if inner_replay:
+        return command, _strip_target_repo_cd(inner_replay, variants)
+    return command, replay
 
 
 def _public_offline_verification_command(command: str) -> str:
