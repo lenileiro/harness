@@ -2042,25 +2042,6 @@ def _command_invokes_opaque_test_wrapper(command: str) -> bool:
     return "make test" in joined
 
 
-def _pytest_executable_failure_hint(command: str, stdout: str, stderr: str) -> str:
-    words = _shell_words(_command_without_heredoc_bodies(command))
-    if not words or PurePosixPath(words[0]).name.lower() != "pytest":
-        return ""
-    output = f"{stdout}\n{stderr}"
-    if (
-        "pytestconfigwarning" not in output.lower()
-        and "unknown config option" not in output.lower()
-        and "internalerror>" not in output.lower()
-    ):
-        return ""
-    return (
-        "[verification hint] The bare `pytest` executable failed during pytest startup. "
-        "Inspect the project test setup and try an equivalent in-workspace command such "
-        "as `python -m pytest ...` or a repository-provided test runner that executes "
-        "the changed tests."
-    )
-
-
 def _command_local_script_paths(command: str | None) -> list[str]:
     if not command:
         return []
@@ -3178,9 +3159,6 @@ class RemoteShellTool(_RemoteToolBase):
                 "Retry by cloning the project into a new subdirectory, then run later "
                 "project commands from that subdirectory."
             )
-        pytest_hint = _pytest_executable_failure_hint(command, stdout, stderr)
-        if result.return_code != 0 and pytest_hint:
-            content += f"\n\n{pytest_hint}"
         hint = shell_failure_hint(
             command,
             exit_code=result.return_code,
@@ -3548,9 +3526,6 @@ class RemoteVerifyWorkTool(RemoteShellTool):
             else f"FAILED (exit {result.return_code})"
         )
         content = f"{verdict}\n\nstdout:\n{stdout}\n\nstderr:\n{stderr}"
-        pytest_hint = _pytest_executable_failure_hint(command, stdout, stderr)
-        if not passed and pytest_hint:
-            content += f"\n\n{pytest_hint}"
         setup_hint = shell_failure_hint(
             command,
             exit_code=result.return_code,

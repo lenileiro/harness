@@ -142,6 +142,23 @@ class FixedExitEnvironment:
         return ExecResult(stdout="", stderr="", return_code=self.return_code)
 
 
+def test_external_workspace_gates_do_not_reintroduce_python_specific_policy() -> None:
+    source = (
+        Path(__file__).resolve().parents[1] / "src" / "harness" / "cli" / "external_workspace.py"
+    ).read_text(encoding="utf-8")
+
+    forbidden_policy_fragments = (
+        "non_canonical_" + "python_urls",
+        "current_" + "python",
+        "python" + ".org",
+        "_py" + "test_executable_failure_hint",
+        "bare `" + "pytest" + "` executable",
+        "Python" + " syntax",
+    )
+    for fragment in forbidden_policy_fragments:
+        assert fragment not in source
+
+
 class FlakyVerifyEnvironment:
     def __init__(self) -> None:
         self.calls: list[dict[str, object]] = []
@@ -2150,43 +2167,6 @@ async def test_remote_shell_setup_unblocks_failed_verification_retry(
 
 
 @pytest.mark.asyncio
-async def test_shell_hints_when_bare_pytest_executable_fails_at_startup(
-    tmp_path: Path,
-) -> None:
-    class PytestStartupFailureEnvironment:
-        async def exec(
-            self,
-            command: str,
-            *,
-            cwd: str | None = None,
-            timeout_sec: int | None = None,
-        ) -> ExecResult:
-            if command == _GIT_WORKSPACE_FINGERPRINT_COMMAND:
-                return ExecResult(stdout="constant\n", stderr="", return_code=0)
-            if command.startswith("bash -lc ") and "pytest -q" in command:
-                return ExecResult(
-                    stdout=(
-                        "INTERNALERROR> pytest.PytestConfigWarning: "
-                        "Unknown config option: asyncio_mode\n"
-                    ),
-                    stderr="",
-                    return_code=3,
-                )
-            return ExecResult(stdout="", stderr="", return_code=0)
-
-    shell = RemoteShellTool(
-        PytestStartupFailureEnvironment(),
-        workdir=str(tmp_path),
-    )
-
-    result = await shell(_call("shell", command="pytest -q"))
-
-    assert result.is_error is True
-    assert "bare `pytest` executable failed" in result.content
-    assert "python -m pytest" in result.content
-
-
-@pytest.mark.asyncio
 async def test_shell_decodes_bytes_output_from_environment(tmp_path: Path) -> None:
     class BytesOutputEnvironment:
         async def exec(
@@ -2212,43 +2192,6 @@ async def test_shell_decodes_bytes_output_from_environment(tmp_path: Path) -> No
     assert "binary stdout" in result.content
     assert "binary stderr" in result.content
     assert "b'binary" not in result.content
-
-
-@pytest.mark.asyncio
-async def test_verify_work_hints_when_bare_pytest_executable_fails_at_startup(
-    tmp_path: Path,
-) -> None:
-    class PytestStartupFailureEnvironment:
-        async def exec(
-            self,
-            command: str,
-            *,
-            cwd: str | None = None,
-            timeout_sec: int | None = None,
-        ) -> ExecResult:
-            if command.startswith("git diff --binary --no-ext-diff"):
-                return ExecResult(stdout="constant\n", stderr="", return_code=0)
-            if "pytest -q" in command:
-                return ExecResult(
-                    stdout=(
-                        "INTERNALERROR> pytest.PytestConfigWarning: "
-                        "Unknown config option: asyncio_mode\n"
-                    ),
-                    stderr="",
-                    return_code=3,
-                )
-            return ExecResult(stdout="", stderr="", return_code=0)
-
-    verify = RemoteVerifyWorkTool(
-        PytestStartupFailureEnvironment(),
-        workdir=str(tmp_path),
-    )
-
-    result = await verify(_call("verify_work", command="pytest -q"))
-
-    assert result.is_error is True
-    assert "bare `pytest` executable failed" in result.content
-    assert "python -m pytest" in result.content
 
 
 @pytest.mark.asyncio
