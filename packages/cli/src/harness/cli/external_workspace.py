@@ -4806,6 +4806,9 @@ _LABEL_PREFIXED_VERSION_RE = re.compile(
 )
 _SOURCE_URL_TASK_RE = re.compile(r"\bsource\s+url\b|\burl\b.*\bsource\b", flags=re.IGNORECASE)
 _BARE_VERSION_RE = re.compile(r"(?<![0-9A-Za-z])\d+\.\d+\.\d+(?![0-9A-Za-z])")
+_CURRENT_RELEASE_HELPER_RE = re.compile(
+    r"\b(?:current_python_release|CURRENT_PYTHON_RELEASE|source_url|SOURCE_URL)\b"
+)
 _URL_JOIN_ORIGIN_LITERAL_RE = re.compile(r"(?P<quote>['\"])(?P<origin>https?://[^/'\"]+)(?P=quote)")
 _CLEAN_PATH_SEGMENT_LITERAL_RE = re.compile(
     r"(?P<quote>['\"])(?!https?://)(?P<segment>[^/'\"\s][^/'\"]*)(?P=quote)"
@@ -4902,7 +4905,10 @@ def _current_release_value_format_reason(
         return None
     if _LABELLED_RELEASE_ALLOWED_RE.search(instruction):
         return None
-    if not (_RELEASE_VALUE_RE.search(test_content) and _RELEASE_VALUE_RE.search(source_content)):
+    if not (
+        _current_release_artifact_mentions_value(test_content)
+        and _current_release_artifact_mentions_value(source_content)
+    ):
         return None
 
     combined_content = f"{source_content}\n{test_content}"
@@ -4933,6 +4939,10 @@ def _current_release_value_format_reason(
     return None
 
 
+def _current_release_artifact_mentions_value(content: str) -> bool:
+    return bool(_RELEASE_VALUE_RE.search(content) or _CURRENT_RELEASE_HELPER_RE.search(content))
+
+
 def _current_release_source_url_coverage_reason(
     *,
     instruction: str,
@@ -4950,6 +4960,19 @@ def _current_release_source_url_coverage_reason(
         value for value in _quoted_string_values(source_content) if value.startswith("https://")
     ]
     official_source_urls = [value for value in source_urls if "python.org/" in value]
+    non_canonical_python_urls = [
+        value
+        for value in official_source_urls
+        if not re.search(r"https://www\.python\.org/downloads/release/python-\d+/?$", value)
+    ]
+    if non_canonical_python_urls:
+        return (
+            "changed source must store the canonical official Python release page "
+            "URL, such as `https://www.python.org/downloads/release/python-3145/`, "
+            "not a downloads index, source tarball, or FTP artifact URL. Exact "
+            "tests against a non-canonical URL can still pass while the helper "
+            "returns the wrong source page."
+        )
     if official_source_urls and not any(value in test_content for value in official_source_urls):
         return (
             "changed tests must assert the exact official source URL from the "

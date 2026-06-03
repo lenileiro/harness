@@ -4180,6 +4180,7 @@ async def _accepted_current_release_workspace(
     tmp_path: Path,
     *,
     release_value: str,
+    source_url: str = "https://www.python.org/downloads/release/python-3145/",
     test_body: str | None = None,
 ) -> tuple[LocalEnvironment, ExternalWorkspaceVerifier]:
     env = LocalEnvironment(tmp_path)
@@ -4205,7 +4206,7 @@ async def _accepted_current_release_workspace(
     await env.exec("git -c user.name=test -c user.email=test@example.com commit -m baseline")
     (tmp_path / "current_python.py").write_text(
         f'CURRENT_PYTHON_RELEASE = "{release_value}"\n'
-        'SOURCE_URL = "https://www.python.org/downloads/release/python-3145/"\n\n'
+        f'SOURCE_URL = "{source_url}"\n\n'
         "def current_python_release():\n"
         "    return CURRENT_PYTHON_RELEASE\n\n"
         "def source_url():\n"
@@ -4219,7 +4220,7 @@ async def _accepted_current_release_workspace(
         "    assert isinstance(current_python.source_url(), str)\n\n"
         "def test_latest_python_release_and_source_url():\n"
         f'    assert current_python.current_python_release() == "{release_value}"\n'
-        '    assert current_python.source_url() == "https://www.python.org/downloads/release/python-3145/"\n'
+        f'    assert current_python.source_url() == "{source_url}"\n'
     )
     (tmp_path / "tests" / "test_current_python.py").write_text(
         test_body if test_body is not None else default_test_body,
@@ -5008,6 +5009,40 @@ async def test_external_workspace_coverage_verifier_rejects_current_release_with
 
     assert result.can_finish is False
     assert "exact official source URL" in result.reason
+    assert adapter.calls == []
+
+
+@pytest.mark.asyncio
+async def test_external_workspace_coverage_verifier_rejects_current_release_tarball_source_url(
+    tmp_path: Path,
+) -> None:
+    tarball_url = "https://www.python.org/ftp/python/3.14.5/Python-3.14.5.tgz"
+    env, structural = await _accepted_current_release_workspace(
+        tmp_path,
+        release_value="3.14.5",
+        source_url=tarball_url,
+    )
+    adapter = CoverageReviewAdapter(
+        {"can_finish": True, "reason": "tests assert the exact tarball URL", "confidence": 0.9}
+    )
+    verifier = ExternalWorkspaceCoverageVerifier(
+        environment=env,
+        workdir=str(tmp_path),
+        instruction=(
+            "Update current_python.py with the latest stable Python 3 release "
+            "from official public web sources. Add a focused project test for "
+            "the release value and source URL."
+        ),
+        adapter=adapter,
+        model="judge",
+        structural_verifier=structural,
+    )
+
+    result = await verifier.verify(session=SimpleNamespace(messages=[]), activity=[])
+
+    assert result.can_finish is False
+    assert "canonical official Python release page URL" in result.reason
+    assert "source tarball" in result.reason
     assert adapter.calls == []
 
 
