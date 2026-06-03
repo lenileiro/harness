@@ -1367,6 +1367,26 @@ def test_workflow_node_prompt_does_not_embed_exact_output_shortcuts() -> None:
     assert "raw stdout proves" not in prompt
 
 
+def test_workflow_auto_verify_policy_does_not_infer_languages() -> None:
+    source = Path(workflow_commands.__file__).read_text(encoding="utf-8")
+    section = source[
+        source.index("def _declared_executable_command") : source.index("def _goal_mentions_path")
+    ]
+
+    forbidden = (
+        r"\.py\b",
+        r"\bpython\d?\b",
+        r"\bpytest\b",
+        r"\bnode\b",
+        r"\bnpm\b",
+        r"\bcargo\b",
+        r"\brust\b",
+        r"\bgo\b",
+    )
+    for pattern in forbidden:
+        assert re.search(pattern, section, flags=re.IGNORECASE) is None
+
+
 def test_workflow_node_prompt_includes_tool_catalog_and_prediction_instruction() -> None:
     node = WorkflowNode(
         id="research",
@@ -2265,7 +2285,7 @@ def test_workflow_verify_does_not_replace_pseudo_tool_text_without_tool_evidence
     assert "tool_call" in replaced.result
 
 
-def test_workflow_auto_verifies_created_python_script(
+def test_workflow_auto_verifies_declared_executable_script(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -2273,13 +2293,8 @@ def test_workflow_auto_verifies_created_python_script(
         "product,price,quantity\nWidget A,10.00,5\nWidget B,20.00,3\n",
         encoding="utf-8",
     )
-    (tmp_path / "sales_report.py").write_text(
-        "import csv\n"
-        "total = 0\n"
-        "with open('sales.csv', newline='') as handle:\n"
-        "    for row in csv.DictReader(handle):\n"
-        "        total += float(row['price']) * int(row['quantity'])\n"
-        "print(f'Total Revenue: ${total:.2f}')\n",
+    (tmp_path / "sales_report").write_text(
+        "#!/bin/sh\n" "printf '%s\\n' 'Total Revenue: $110.00'\n",
         encoding="utf-8",
     )
     node = WorkflowNode(
@@ -2299,7 +2314,7 @@ def test_workflow_auto_verifies_created_python_script(
     run = WorkflowRun(
         id="workflow-test",
         title="Workflow Test",
-        goal="Create sales_report.py that reads sales.csv and verifies it runs.",
+        goal="Create sales_report that reads sales.csv and verifies it runs.",
         nodes=(node,),
     )
     activity = [
@@ -2319,8 +2334,8 @@ def test_workflow_auto_verifies_created_python_script(
             data={
                 "name": "write_file",
                 "is_error": False,
-                "arguments": {"path": "sales_report.py"},
-                "content_preview": "wrote 200 bytes to sales_report.py",
+                "arguments": {"path": "sales_report"},
+                "content_preview": "wrote sales_report",
             },
         ),
     ]
@@ -2358,24 +2373,16 @@ def test_workflow_auto_verifies_created_python_script(
     )
 
 
-def test_workflow_auto_verify_prefers_test_file_over_interactive_script(
+def test_workflow_auto_verify_prefers_declared_test_command_over_plain_script(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    (tmp_path / "inventory_checker.py").write_text(
-        "def check_stock(item):\n"
-        "    return {'apple': 3}.get(item, 0)\n"
-        "\n"
-        "if __name__ == '__main__':\n"
-        "    item = input('item: ')\n"
-        "    print(check_stock(item))\n",
+    (tmp_path / "inventory_checker").write_text(
+        "requires interactive input\n",
         encoding="utf-8",
     )
-    (tmp_path / "test_inventory.py").write_text(
-        "from inventory_checker import check_stock\n"
-        "\n"
-        "def test_check_stock():\n"
-        "    assert check_stock('apple') == 3\n",
+    (tmp_path / "test_inventory").write_text(
+        "#!/bin/sh\n" "printf '%s\\n' 'PASSED inventory check'\n",
         encoding="utf-8",
     )
     node = WorkflowNode(
@@ -2405,8 +2412,8 @@ def test_workflow_auto_verify_prefers_test_file_over_interactive_script(
             data={
                 "name": "write_file",
                 "is_error": False,
-                "arguments": {"path": "inventory_checker.py"},
-                "content_preview": "wrote inventory_checker.py",
+                "arguments": {"path": "inventory_checker"},
+                "content_preview": "wrote inventory_checker",
             },
         ),
         ActivityEvent(
@@ -2415,8 +2422,8 @@ def test_workflow_auto_verify_prefers_test_file_over_interactive_script(
             data={
                 "name": "write_file",
                 "is_error": False,
-                "arguments": {"path": "test_inventory.py"},
-                "content_preview": "wrote test_inventory.py",
+                "arguments": {"path": "test_inventory"},
+                "content_preview": "wrote test_inventory",
             },
         ),
     ]
@@ -2446,9 +2453,8 @@ def test_workflow_auto_verify_prefers_test_file_over_interactive_script(
 
     assert finished.status == "completed"
     assert "verify_work passed" in finished.result
-    assert "test_inventory.py" in finished.result
-    assert "PASSED 0 unittest case(s), 1 test function(s)" in finished.result
-    assert "EOFError" not in finished.result
+    assert "test_inventory" in finished.result
+    assert "PASSED inventory check" in finished.result
 
 
 def test_workflow_auto_verify_exact_file_asserts_content_and_size(tmp_path: Path) -> None:
@@ -2510,7 +2516,7 @@ def test_workflow_auto_verify_exact_file_asserts_content_and_size(tmp_path: Path
 
 
 def test_workflow_auto_verify_infers_runnable_script_command(tmp_path: Path) -> None:
-    (tmp_path / "get_weather.py").write_text("print('ok')\n", encoding="utf-8")
+    (tmp_path / "get_weather").write_text("#!/bin/sh\nprintf '%s\\n' ok\n", encoding="utf-8")
     node = WorkflowNode(
         id="work",
         title="Work",
@@ -2523,7 +2529,7 @@ def test_workflow_auto_verify_infers_runnable_script_command(tmp_path: Path) -> 
     run = WorkflowRun(
         id="workflow-test",
         title="Workflow Test",
-        goal="Create get_weather.py and verify it runs.",
+        goal="Create get_weather and verify it runs.",
         nodes=(node,),
     )
     write_event = ActivityEvent(
@@ -2532,8 +2538,8 @@ def test_workflow_auto_verify_infers_runnable_script_command(tmp_path: Path) -> 
         data={
             "name": "write_file",
             "is_error": False,
-            "arguments": {"path": "get_weather.py"},
-            "content_preview": "wrote get_weather.py",
+            "arguments": {"path": "get_weather"},
+            "content_preview": "wrote get_weather",
         },
     )
 
@@ -2544,7 +2550,7 @@ def test_workflow_auto_verify_infers_runnable_script_command(tmp_path: Path) -> 
         activity=[write_event],
     )
 
-    assert command == "python3 get_weather.py"
+    assert command == "/bin/sh ./get_weather"
 
 
 def test_workflow_auto_verify_skips_source_artifact_handoff(tmp_path: Path) -> None:

@@ -3,9 +3,11 @@ from __future__ import annotations
 import asyncio
 import collections
 import glob
+import os
 import re
 import shlex
 import subprocess
+import sys
 import time
 from collections.abc import Iterable
 from dataclasses import dataclass, replace
@@ -443,51 +445,57 @@ def _exact_file_compare_command(path: str, content: str) -> str:
     )
 
 
-def _python_exact_stdout_command(path: str, content: str) -> str:
-    code = (
-        "import subprocess, sys; "
-        f"expected={content.encode('utf-8')!r}; "
-        f"out=subprocess.check_output([sys.executable, {path!r}]); "
-        "assert out == expected, repr(out)"
-    )
-    return "python3 -c " + shlex.quote(code)
+def _host_interpreter_command(code: str) -> str:
+    return f"{shlex.quote(sys.executable)} -c {shlex.quote(code)}"
 
 
-def _python_test_files_command(paths: list[Path]) -> str:
-    path_values = [str(path) for path in paths]
-    code = (
-        "import importlib.util, inspect, pathlib, sys, unittest; "
-        f"paths={path_values!r}; "
-        "called=0; cases=0; ok=True; "
-        "\nfor i,p in enumerate(paths):\n"
-        "    path=pathlib.Path(p)\n"
-        "    spec=importlib.util.spec_from_file_location(f'_harness_test_{i}', path)\n"
-        "    if spec is None or spec.loader is None:\n"
-        "        raise RuntimeError(f'cannot load {p}')\n"
-        "    module=importlib.util.module_from_spec(spec)\n"
-        "    sys.modules[spec.name]=module\n"
-        "    spec.loader.exec_module(module)\n"
-        "    suite=unittest.defaultTestLoader.loadTestsFromModule(module)\n"
-        "    cases += suite.countTestCases()\n"
-        "    if cases:\n"
-        "        result=unittest.TextTestRunner(verbosity=2).run(suite)\n"
-        "        ok = ok and result.wasSuccessful()\n"
-        "    for name,obj in sorted(vars(module).items()):\n"
-        "        if not name.startswith('test_') or not callable(obj):\n"
-        "            continue\n"
-        "        sig=inspect.signature(obj)\n"
-        "        required=[p for p in sig.parameters.values() if p.default is p.empty and p.kind in (p.POSITIONAL_ONLY,p.POSITIONAL_OR_KEYWORD,p.KEYWORD_ONLY)]\n"
-        "        if required:\n"
-        "            continue\n"
-        "        obj()\n"
-        "        called += 1\n"
-        "if not ok:\n"
-        "    raise SystemExit(1)\n"
-        "if cases == 0 and called == 0:\n"
-        "    raise SystemExit('no runnable tests found')\n"
-        "print(f'PASSED {cases} unittest case(s), {called} test function(s)')"
+def _relative_command_path(path: Path) -> str:
+    raw = str(path)
+    if "/" in raw:
+        return shlex.quote(raw)
+    return "./" + shlex.quote(raw)
+
+
+def _declared_executable_command(cwd: Path, path: Path) -> str:
+    if path.is_absolute() or any(part == ".harness" for part in path.parts):
+        return ""
+    target = cwd / path
+    if not target.is_file():
+        return ""
+    command_path = _relative_command_path(path)
+    if os.access(target, os.X_OK):
+        return command_path
+    try:
+        with target.open("r", encoding="utf-8", errors="ignore") as handle:
+            first_line = handle.readline(512)
+    except OSError:
+        return ""
+    if not first_line.startswith("#!"):
+        return ""
+    try:
+        interpreter = shlex.split(first_line[2:].strip())
+    except ValueError:
+        return ""
+    if not interpreter:
+        return ""
+    return " ".join(shlex.quote(part) for part in interpreter) + " " + command_path
+
+
+def _exact_stdout_command(cwd: Path, path: str, content: str) -> str:
+    runner = _declared_executable_command(cwd, Path(path))
+    if not runner:
+        return ""
+    return (
+        "tmp=$(mktemp) || exit 1; "
+        f'{runner} > "$tmp"; '
+        "status=$?; "
+        'if [ "$status" -eq 0 ]; then '
+        f'printf %s {shlex.quote(content)} | cmp -s - "$tmp"; '
+        "status=$?; "
+        "fi; "
+        'rm -f "$tmp"; '
+        'exit "$status"'
     )
-    return "python3 -c " + shlex.quote(code)
 
 
 def _goal_mentions_path(goal: str, path: Path) -> bool:
@@ -509,33 +517,24 @@ def _infer_auto_verify_command(
     for path, content in file_requests:
         commands.append(_exact_file_compare_command(path, content))
     for path, content in stdout_requests:
-        commands.append(_python_exact_stdout_command(path, content))
+        command = _exact_stdout_command(cwd, path, content)
+        if not command:
+            return ""
+        commands.append(command)
     if commands:
         return " && ".join(commands)
 
     changed_paths = _changed_file_paths(activity)
-    test_python = [
-        path
-        for path in changed_paths
-        if path.suffix == ".py" and path.name.startswith("test_") and (cwd / path).is_file()
-    ]
-    if test_python:
-        return _python_test_files_command(test_python)
-
-    runnable_python = [
-        path
-        for path in changed_paths
-        if path.suffix == ".py" and (cwd / path).is_file() and not path.name.startswith("test_")
-    ]
-    if not runnable_python:
+    runnable_paths = [path for path in changed_paths if _declared_executable_command(cwd, path)]
+    if not runnable_paths:
         return _source_artifact_handoff_command(
             cwd=cwd,
             changed_paths=changed_paths,
             source_paths=_source_paths_for_auto_verify(activity),
         )
-    mentioned = [path for path in runnable_python if _goal_mentions_path(run.goal, path)]
+    mentioned = [path for path in runnable_paths if _goal_mentions_path(run.goal, path)]
     selected = (
-        mentioned[0] if mentioned else runnable_python[0] if len(runnable_python) == 1 else None
+        mentioned[0] if mentioned else runnable_paths[0] if len(runnable_paths) == 1 else None
     )
     if selected is None:
         return _source_artifact_handoff_command(
@@ -543,7 +542,7 @@ def _infer_auto_verify_command(
             changed_paths=changed_paths,
             source_paths=_source_paths_for_auto_verify(activity),
         )
-    return "python3 " + shlex.quote(str(selected))
+    return _declared_executable_command(cwd, selected)
 
 
 def _source_artifact_handoff_command(
@@ -646,7 +645,7 @@ def _source_artifact_handoff_command(
         "require(checks, 'no source-derived artifact facts were checked')\n"
         "print('PASSED source-artifact checks: ' + ', '.join(checks))\n"
     )
-    return "python3 -c " + shlex.quote(code)
+    return _host_interpreter_command(code)
 
 
 def _source_artifact_has_generic_check(
