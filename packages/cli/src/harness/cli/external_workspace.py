@@ -4804,6 +4804,8 @@ _LABEL_PREFIXED_VERSION_RE = re.compile(
     r"^(?P<label>[A-Za-z][A-Za-z0-9_.+-]*(?:[ -][A-Za-z][A-Za-z0-9_.+-]*){0,3})\s+"
     r"(?P<version>v?\d+(?:[._]\d+){1,}(?:[-+][0-9A-Za-z_.-]+)?)$"
 )
+_SOURCE_URL_TASK_RE = re.compile(r"\bsource\s+url\b|\burl\b.*\bsource\b", flags=re.IGNORECASE)
+_BARE_VERSION_RE = re.compile(r"(?<![0-9A-Za-z])\d+\.\d+\.\d+(?![0-9A-Za-z])")
 _URL_JOIN_ORIGIN_LITERAL_RE = re.compile(r"(?P<quote>['\"])(?P<origin>https?://[^/'\"]+)(?P=quote)")
 _CLEAN_PATH_SEGMENT_LITERAL_RE = re.compile(
     r"(?P<quote>['\"])(?!https?://)(?P<segment>[^/'\"\s][^/'\"]*)(?P=quote)"
@@ -4895,6 +4897,59 @@ def _current_release_value_format_reason(
             "display title."
         )
     return None
+
+
+def _current_release_source_url_coverage_reason(
+    *,
+    instruction: str,
+    source_content: str,
+    test_content: str,
+) -> str | None:
+    if not (
+        _CURRENT_RELEASE_TASK_RE.search(instruction)
+        and _RELEASE_VALUE_RE.search(instruction)
+        and _SOURCE_URL_TASK_RE.search(instruction)
+    ):
+        return None
+
+    source_urls = [
+        value for value in _quoted_string_values(source_content) if value.startswith("https://")
+    ]
+    official_source_urls = [value for value in source_urls if "python.org/" in value]
+    if official_source_urls and not any(value in test_content for value in official_source_urls):
+        return (
+            "changed tests must assert the exact official source URL from the "
+            "updated source. A prefix check or a test that derives the expected "
+            "URL from production code can pass while the stored release source "
+            "URL is wrong."
+        )
+
+    source_versions = sorted(set(_BARE_VERSION_RE.findall(source_content)))
+    if source_versions and not _test_asserts_current_release_value(
+        test_content,
+        versions=source_versions,
+    ):
+        return (
+            "changed tests must assert the concrete current/latest release value "
+            "from the updated source. Tests that only check helper types, parser "
+            "plumbing, or derived constants can pass even when the stored release "
+            "value is stale or hallucinated."
+        )
+    return None
+
+
+def _test_asserts_current_release_value(test_content: str, *, versions: list[str]) -> bool:
+    for name in ("current_python_release", "CURRENT_PYTHON_RELEASE"):
+        start = 0
+        while True:
+            index = test_content.find(name, start)
+            if index < 0:
+                break
+            window = test_content[index : index + 240]
+            if any(version in window for version in versions):
+                return True
+            start = index + len(name)
+    return False
 
 
 def _url_join_boundary_coverage_reason(
@@ -5039,6 +5094,18 @@ class ExternalWorkspaceCoverageVerifier:
                 can_finish=False,
                 reason=f"Regression coverage is too weak: {format_reason}",
                 confidence=0.92,
+                verifier_name=self.name,
+            )
+        source_url_reason = _current_release_source_url_coverage_reason(
+            instruction=self.instruction,
+            source_content=source_content,
+            test_content=test_content,
+        )
+        if source_url_reason is not None:
+            return VerificationResult(
+                can_finish=False,
+                reason=f"Regression coverage is too weak: {source_url_reason}",
+                confidence=0.9,
                 verifier_name=self.name,
             )
         url_join_reason = _url_join_boundary_coverage_reason(

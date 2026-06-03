@@ -4175,6 +4175,7 @@ async def _accepted_current_release_workspace(
     tmp_path: Path,
     *,
     release_value: str,
+    test_body: str | None = None,
 ) -> tuple[LocalEnvironment, ExternalWorkspaceVerifier]:
     env = LocalEnvironment(tmp_path)
     (tmp_path / "tests").mkdir()
@@ -4206,14 +4207,17 @@ async def _accepted_current_release_workspace(
         "    return SOURCE_URL\n",
         encoding="utf-8",
     )
-    (tmp_path / "tests" / "test_current_python.py").write_text(
+    default_test_body = (
         "import current_python\n\n"
         "def test_exports_release_helpers():\n"
         "    assert isinstance(current_python.current_python_release(), str)\n"
         "    assert isinstance(current_python.source_url(), str)\n\n"
         "def test_latest_python_release_and_source_url():\n"
         f'    assert current_python.current_python_release() == "{release_value}"\n'
-        '    assert current_python.source_url() == "https://www.python.org/downloads/release/python-3145/"\n',
+        '    assert current_python.source_url() == "https://www.python.org/downloads/release/python-3145/"\n'
+    )
+    (tmp_path / "tests" / "test_current_python.py").write_text(
+        test_body if test_body is not None else default_test_body,
         encoding="utf-8",
     )
     structural = ExternalWorkspaceVerifier(env, workdir=str(tmp_path))
@@ -4463,6 +4467,83 @@ async def test_external_workspace_coverage_verifier_rejects_labelled_current_rel
     assert result.can_finish is False
     assert "label prefix" in result.reason
     assert "3.14.5" in result.reason
+    assert adapter.calls == []
+
+
+@pytest.mark.asyncio
+async def test_external_workspace_coverage_verifier_rejects_current_release_without_exact_source_url(
+    tmp_path: Path,
+) -> None:
+    env, structural = await _accepted_current_release_workspace(
+        tmp_path,
+        release_value="3.14.5",
+        test_body=(
+            "import current_python\n\n"
+            "def test_latest_python_release_and_source_url():\n"
+            '    assert current_python.current_python_release() == "3.14.5"\n'
+            '    assert current_python.source_url().startswith("https://www.python.org/")\n'
+        ),
+    )
+    adapter = CoverageReviewAdapter(
+        {"can_finish": True, "reason": "tests check the source URL", "confidence": 0.9}
+    )
+    verifier = ExternalWorkspaceCoverageVerifier(
+        environment=env,
+        workdir=str(tmp_path),
+        instruction=(
+            "Update current_python.py with the latest stable Python 3 release "
+            "from official public web sources. Add a focused project test for "
+            "the release value and source URL."
+        ),
+        adapter=adapter,
+        model="judge",
+        structural_verifier=structural,
+    )
+
+    result = await verifier.verify(session=SimpleNamespace(messages=[]), activity=[])
+
+    assert result.can_finish is False
+    assert "exact official source URL" in result.reason
+    assert adapter.calls == []
+
+
+@pytest.mark.asyncio
+async def test_external_workspace_coverage_verifier_rejects_current_release_without_exact_value(
+    tmp_path: Path,
+) -> None:
+    env, structural = await _accepted_current_release_workspace(
+        tmp_path,
+        release_value="3.14.5",
+        test_body=(
+            "import current_python\n\n"
+            "def test_latest_python_source_url():\n"
+            "    assert isinstance(current_python.current_python_release(), str)\n"
+            "    assert (\n"
+            "        current_python.source_url()\n"
+            '        == "https://www.python.org/downloads/release/python-3145/"\n'
+            "    )\n"
+        ),
+    )
+    adapter = CoverageReviewAdapter(
+        {"can_finish": True, "reason": "tests check the source URL", "confidence": 0.9}
+    )
+    verifier = ExternalWorkspaceCoverageVerifier(
+        environment=env,
+        workdir=str(tmp_path),
+        instruction=(
+            "Update current_python.py with the latest stable Python 3 release "
+            "from official public web sources. Add a focused project test for "
+            "the release value and source URL."
+        ),
+        adapter=adapter,
+        model="judge",
+        structural_verifier=structural,
+    )
+
+    result = await verifier.verify(session=SimpleNamespace(messages=[]), activity=[])
+
+    assert result.can_finish is False
+    assert "concrete current/latest release value" in result.reason
     assert adapter.calls == []
 
 
