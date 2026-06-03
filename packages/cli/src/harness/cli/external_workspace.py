@@ -862,14 +862,29 @@ def _activity_event_checks_docker_runtime(event: ActivityEvent) -> bool:
     if str(event.data.get("name") or "") not in {"shell", "verify_work"}:
         return False
     command = _activity_event_command(event).lower()
-    if not command:
+    content = _activity_event_content(event).lower()
+    evidence = "\n".join(part for part in (command, content) if part)
+    if not evidence:
         return False
     if re.search(r"\b(?:command\s+-v|which|type)\s+docker\b", command):
         return True
+    if re.search(
+        r"\bdocker\s+(?:--version|version|info|run|build|pull|images?|compose)\b",
+        command,
+    ):
+        return True
     return bool(
         re.search(
-            r"\bdocker\s+(?:--version|version|info|run|build|pull|images?|compose)\b",
-            command,
+            r"(?:"
+            r"\bdocker version\s+\d|"
+            r"\bsending build context to docker daemon\b|"
+            r"^docker_(?:ok|missing)\s*$|"
+            r"^/.*/docker\s*$|"
+            r"\bdocker:\s+command not found\b|"
+            r"\bcannot connect to the docker daemon\b"
+            r")",
+            evidence,
+            re.MULTILINE,
         )
     )
 

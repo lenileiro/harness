@@ -3803,7 +3803,7 @@ async def test_external_workspace_verifier_rejects_language_specific_test_parent
         tmp_path,
         statuses=[],
         baseline_status=(
-            " M src/app.py\n" "?? pkg/test_default_args.py\n" "?? vm/default_args_test.go\n"
+            " M src/app.py\n?? pkg/test_default_args.py\n?? vm/default_args_test.go\n"
         ),
         tracked_paths={
             "src/app.py",
@@ -5756,6 +5756,50 @@ async def test_external_workspace_verifier_accepts_missing_tool_exploration_afte
                 metadata={"command": "go test ./...", "exit_code": 127},
                 content_preview=(
                     "FAILED (exit 127)\n\nstderr:\nbash: line 1: go: command not found\n"
+                ),
+            ),
+        ],
+    )
+
+    assert result.can_finish is False
+    assert "declares a Dockerfile or container image" not in result.reason
+    assert "latest verify_work after the final workspace mutation did not pass" in result.reason
+
+
+@pytest.mark.asyncio
+async def test_external_workspace_verifier_accepts_commandless_docker_output(
+    tmp_path: Path,
+) -> None:
+    env = await _prepare_repo_with_declared_docker_runtime(tmp_path)
+    verifier = ExternalWorkspaceVerifier(
+        env,
+        workdir=str(tmp_path),
+        require_regression_test_change=False,
+    )
+
+    result = await verifier.verify(
+        session=SimpleNamespace(),
+        activity=[
+            _completed("edit_file", metadata={"path": "parser/parser.go"}),
+            _completed(
+                "shell",
+                metadata={"exit_code": 0},
+                content_preview="exit_code: 0\n\nstdout:\nDocker version 29.4.0, build 9d7ad9f\n",
+            ),
+            _completed(
+                "shell",
+                metadata={"exit_code": 0},
+                content_preview=(
+                    "exit_code: 0\n\nstdout:\nSending build context to Docker daemon  68.13MB\n"
+                ),
+            ),
+            _completed(
+                "verify_work",
+                is_error=True,
+                metadata={"exit_code": 127},
+                content_preview=(
+                    "FAILED (exit 127)\n\n"
+                    "stderr:\n./scripts/check: line 13: project-check: command not found\n"
                 ),
             ),
         ],
