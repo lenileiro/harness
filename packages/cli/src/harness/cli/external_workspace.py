@@ -3098,8 +3098,12 @@ class RemoteShellTool(_RemoteToolBase):
         )
         if workspace_changed:
             self._mark_workspace_changed()
-        stdout, stdout_truncated = self._truncate(self.policy.redact_output(result.stdout))
-        stderr, stderr_truncated = self._truncate(self.policy.redact_output(result.stderr))
+        stdout, stdout_truncated = self._truncate(
+            self.policy.redact_output(_command_output_text(result.stdout))
+        )
+        stderr, stderr_truncated = self._truncate(
+            self.policy.redact_output(_command_output_text(result.stderr))
+        )
         raw_masked_failure_exit_status = (
             result.return_code == 0 and _failure_branch_masks_exit_status(command)
         )
@@ -3467,7 +3471,14 @@ class RemoteVerifyWorkTool(RemoteShellTool):
         if workspace_changed:
             self._mark_workspace_changed()
         output_failure = result.return_code == 0 and _output_reports_failure(
-            "\n".join(part for part in (result.stdout or "", result.stderr or "") if part)
+            "\n".join(
+                part
+                for part in (
+                    _command_output_text(result.stdout),
+                    _command_output_text(result.stderr),
+                )
+                if part
+            )
         )
         passed = result.return_code == 0 and not output_failure and not workspace_changed
         rerun_required = (
@@ -3495,20 +3506,23 @@ class RemoteVerifyWorkTool(RemoteShellTool):
             )
             rerun_output_failure = rerun_result.return_code == 0 and _output_reports_failure(
                 "\n".join(
-                    part for part in (rerun_result.stdout or "", rerun_result.stderr or "") if part
+                    part
+                    for part in (
+                        _command_output_text(rerun_result.stdout),
+                        _command_output_text(rerun_result.stderr),
+                    )
+                    if part
                 )
             )
             if rerun_result.return_code != 0 or rerun_output_failure or rerun_workspace_changed:
                 passed = False
-        stdout_text = result.stdout or ""
-        stderr_text = result.stderr or ""
+        stdout_text = _command_output_text(result.stdout)
+        stderr_text = _command_output_text(result.stderr)
         if rerun_result is not None:
-            stdout_text = (
-                f"[first run]\n{stdout_text}\n[immediate rerun]\n{rerun_result.stdout or ''}"
-            )
-            stderr_text = (
-                f"[first run]\n{stderr_text}\n[immediate rerun]\n{rerun_result.stderr or ''}"
-            )
+            rerun_stdout_text = _command_output_text(rerun_result.stdout)
+            rerun_stderr_text = _command_output_text(rerun_result.stderr)
+            stdout_text = f"[first run]\n{stdout_text}\n[immediate rerun]\n{rerun_stdout_text}"
+            stderr_text = f"[first run]\n{stderr_text}\n[immediate rerun]\n{rerun_stderr_text}"
         stdout, stdout_truncated = self._truncate(self.policy.redact_output(stdout_text))
         stderr, stderr_truncated = self._truncate(self.policy.redact_output(stderr_text))
         workspace_changed = workspace_changed or rerun_workspace_changed
@@ -4746,7 +4760,13 @@ _COVERAGE_REVIEW_SYSTEM_PROMPT = (
     "URLs/slugs; fail if tests merely assert a copied page label such as "
     "'Product 1.2.3' when the project helper/source appears to require the "
     "canonical bare version '1.2.3', unless the task explicitly asks for a "
-    "display title or label prefix.\n\n"
+    "display title or label prefix. Do not fail because the final answer "
+    "mentions a transient setup or verification command failure, a tool/runtime "
+    "mismatch, or an alternate runner used to verify the work. Changed tests do "
+    "not need to encode the Harness/tooling environment unless the task or "
+    "source changes explicitly modify that environment. Judge tests for the "
+    "requested product behavior and changed source claims, not for proving every "
+    "command the agent tried.\n\n"
     "Before approving, actively try to name one simple counterexample that satisfies "
     "the task but could pass the changed tests. Treat words such as normalize, "
     "sanitize, safe, valid, parse, canonical, escape, trim, collapse, preserve, "
@@ -4795,6 +4815,14 @@ def _quoted_string_values(text: str) -> list[str]:
         if value is not None:
             values.append(value)
     return values
+
+
+def _command_output_text(value: object) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return str(value)
 
 
 def _has_version_evidence_outside_labelled_literal(

@@ -2183,6 +2183,34 @@ async def test_shell_hints_when_bare_pytest_executable_fails_at_startup(
 
 
 @pytest.mark.asyncio
+async def test_shell_decodes_bytes_output_from_environment(tmp_path: Path) -> None:
+    class BytesOutputEnvironment:
+        async def exec(
+            self,
+            command: str,
+            *,
+            cwd: str | None = None,
+            timeout_sec: int | None = None,
+        ) -> object:
+            if command == _GIT_WORKSPACE_FINGERPRINT_COMMAND:
+                return ExecResult(stdout="constant\n", stderr="", return_code=0)
+            return SimpleNamespace(
+                stdout=b"binary stdout\n",
+                stderr=b"binary stderr\n",
+                return_code=124,
+            )
+
+    shell = RemoteShellTool(BytesOutputEnvironment(), workdir=str(tmp_path))
+
+    result = await shell(_call("shell", command="python -m pytest -q"))
+
+    assert result.is_error is True
+    assert "binary stdout" in result.content
+    assert "binary stderr" in result.content
+    assert "b'binary" not in result.content
+
+
+@pytest.mark.asyncio
 async def test_verify_work_hints_when_bare_pytest_executable_fails_at_startup(
     tmp_path: Path,
 ) -> None:
@@ -2217,6 +2245,34 @@ async def test_verify_work_hints_when_bare_pytest_executable_fails_at_startup(
     assert result.is_error is True
     assert "bare `pytest` executable failed" in result.content
     assert "python -m pytest" in result.content
+
+
+@pytest.mark.asyncio
+async def test_verify_work_decodes_bytes_output_from_environment(tmp_path: Path) -> None:
+    class BytesOutputEnvironment:
+        async def exec(
+            self,
+            command: str,
+            *,
+            cwd: str | None = None,
+            timeout_sec: int | None = None,
+        ) -> object:
+            if command == _GIT_WORKSPACE_FINGERPRINT_COMMAND:
+                return ExecResult(stdout="constant\n", stderr="", return_code=0)
+            return SimpleNamespace(
+                stdout=b"verify stdout\n",
+                stderr=b"verify stderr\n",
+                return_code=1,
+            )
+
+    verify = RemoteVerifyWorkTool(BytesOutputEnvironment(), workdir=str(tmp_path))
+
+    result = await verify(_call("verify_work", command="python -m pytest -q"))
+
+    assert result.is_error is True
+    assert "verify stdout" in result.content
+    assert "verify stderr" in result.content
+    assert "b'verify" not in result.content
 
 
 @pytest.mark.asyncio
@@ -4206,6 +4262,9 @@ async def test_external_workspace_coverage_verifier_rejects_weak_regression_test
     assert "should not break when present" in system_prompt
     assert "boundary words" in system_prompt
     assert "interior separator" in system_prompt
+    assert "transient setup or verification command failure" in system_prompt
+    assert "Harness/tooling environment" in system_prompt
+    assert "command the agent tried" in system_prompt
 
 
 @pytest.mark.asyncio
