@@ -2146,6 +2146,43 @@ async def test_remote_shell_setup_unblocks_failed_verification_retry(
 
 
 @pytest.mark.asyncio
+async def test_shell_hints_when_bare_pytest_executable_fails_at_startup(
+    tmp_path: Path,
+) -> None:
+    class PytestStartupFailureEnvironment:
+        async def exec(
+            self,
+            command: str,
+            *,
+            cwd: str | None = None,
+            timeout_sec: int | None = None,
+        ) -> ExecResult:
+            if command == _GIT_WORKSPACE_FINGERPRINT_COMMAND:
+                return ExecResult(stdout="constant\n", stderr="", return_code=0)
+            if command.startswith("bash -lc ") and "pytest -q" in command:
+                return ExecResult(
+                    stdout=(
+                        "INTERNALERROR> pytest.PytestConfigWarning: "
+                        "Unknown config option: asyncio_mode\n"
+                    ),
+                    stderr="",
+                    return_code=3,
+                )
+            return ExecResult(stdout="", stderr="", return_code=0)
+
+    shell = RemoteShellTool(
+        PytestStartupFailureEnvironment(),
+        workdir=str(tmp_path),
+    )
+
+    result = await shell(_call("shell", command="pytest -q"))
+
+    assert result.is_error is True
+    assert "bare `pytest` executable failed" in result.content
+    assert "python -m pytest" in result.content
+
+
+@pytest.mark.asyncio
 async def test_verify_work_hints_when_bare_pytest_executable_fails_at_startup(
     tmp_path: Path,
 ) -> None:

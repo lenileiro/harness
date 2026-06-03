@@ -3166,6 +3166,9 @@ class RemoteShellTool(_RemoteToolBase):
                 "Retry by cloning the project into a new subdirectory, then run later "
                 "project commands from that subdirectory."
             )
+        pytest_hint = _pytest_executable_failure_hint(command, stdout, stderr)
+        if result.return_code != 0 and pytest_hint:
+            content += f"\n\n{pytest_hint}"
         hint = shell_failure_hint(
             command,
             exit_code=result.return_code,
