@@ -44,7 +44,7 @@ class FixtureMeta:
     path: Path
     task_text: str
     eval_md: str
-    verify_command: str = "pytest tests/ -v --tb=short --no-header"
+    verify_command: str = ""
     phases: list[str] | None = None
     family: str = ""
     holdout: bool = False

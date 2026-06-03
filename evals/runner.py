@@ -376,21 +376,28 @@ def run_fixture(
         # harness eval framework is language-agnostic.
         verify_started = time.perf_counter()
         verify_env = _eval_env(work=work)
-        try:
-            test_result = subprocess.run(
-                fixture.verify_command,
-                cwd=work,
-                capture_output=True,
-                text=True,
-                timeout=test_timeout,
-                env=verify_env,
-                shell=True,
+        if not fixture.verify_command.strip():
+            test_output = (
+                "fixture verification command missing: declare verify_command or "
+                "required_verification in fixture.yaml\n"
             )
-            test_output = test_result.stdout + test_result.stderr
-            combined_verify_exit_code = test_result.returncode
-        except subprocess.TimeoutExpired as exc:
-            test_output = _timeout_transcript(exc, command_label="verify")
-            combined_verify_exit_code = _TIMEOUT_EXIT_CODE
+            combined_verify_exit_code = 1
+        else:
+            try:
+                test_result = subprocess.run(
+                    fixture.verify_command,
+                    cwd=work,
+                    capture_output=True,
+                    text=True,
+                    timeout=test_timeout,
+                    env=verify_env,
+                    shell=True,
+                )
+                test_output = test_result.stdout + test_result.stderr
+                combined_verify_exit_code = test_result.returncode
+            except subprocess.TimeoutExpired as exc:
+                test_output = _timeout_transcript(exc, command_label="verify")
+                combined_verify_exit_code = _TIMEOUT_EXIT_CODE
         verify_duration = time.perf_counter() - verify_started
         if combined_verify_exit_code == 0:
             behavioral_ok, behavioral_message = _behavioral_hard_check(fixture, work)

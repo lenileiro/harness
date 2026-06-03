@@ -192,6 +192,29 @@ class TestRunFixture:
         assert outcome.hard_metrics.benchmark_integrity_passed is False
         assert "forbidden source repo lookup" in outcome.test_output
 
+    def test_missing_fixture_verification_command_fails_without_language_default(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _write_fixture(tmp_path, "06-missing-verifier")
+        fixture = runner.discover_fixtures(tmp_path / "evals")[0]
+
+        def fake_agent_cmd(*_args, **_kwargs) -> list[str]:
+            return ["/bin/sh", "-c", "printf 'done\\n'"]
+
+        monkeypatch.setattr(runner, "_agent_cmd", fake_agent_cmd)
+
+        outcome = runner.run_fixture(
+            fixture,
+            provider="ollama",
+            model="test",
+            artifact_dir=tmp_path / "artifacts",
+        )
+
+        assert outcome.test_exit_code == 1
+        assert outcome.hard_metrics is not None
+        assert outcome.hard_metrics.verify_passed is False
+        assert "fixture verification command missing" in outcome.test_output
+
 
 def test_defended_eval_arm_uses_adaptive_profile(tmp_path: Path) -> None:
     fixture = _write_fixture(tmp_path, "01-demo")

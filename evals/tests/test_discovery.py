@@ -47,6 +47,27 @@ class TestDiscoverFixtures:
         assert fixture.rules.expected_first_step == "run tests"
         assert fixture.rules.disallowed_paths == ["src/other.py"]
 
+    def test_required_verification_supplies_verify_command_without_language_default(
+        self, tmp_path: Path
+    ) -> None:
+        _write_fixture(
+            tmp_path,
+            "01-demo",
+            metadata='required_verification: sh -c "echo ok"\n',
+        )
+
+        fixture = runner.discover_fixtures(tmp_path / "evals")[0]
+
+        assert fixture.verify_command == 'sh -c "echo ok"'
+        assert fixture.rules.required_verification == 'sh -c "echo ok"'
+
+    def test_missing_verification_metadata_stays_empty(self, tmp_path: Path) -> None:
+        _write_fixture(tmp_path, "01-demo")
+
+        fixture = runner.discover_fixtures(tmp_path / "evals")[0]
+
+        assert fixture.verify_command == ""
+
     def test_holdout_fixtures_are_excluded_by_default(self, tmp_path: Path) -> None:
         _write_fixture(tmp_path, "01-demo", metadata="holdout: true\n")
 

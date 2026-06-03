@@ -127,14 +127,14 @@ def test_web_research_scenario_accepts_added_focused_test(
     from evals import external_web_research_scenario as scenario
 
     workspace = scenario.create_workspace(tmp_path)
-    (workspace / "current_python.py").write_text(
+    (workspace / "current_release.py").write_text(
         """
-CURRENT_PYTHON_RELEASE = "3.14.5"
-SOURCE_URL = "https://www.python.org/downloads/release/python-3145/"
+CURRENT_RELEASE = "8.16.0"
+SOURCE_URL = "https://github.com/curl/curl/releases/tag/curl-8_16_0"
 
 
-def current_python_release():
-    return CURRENT_PYTHON_RELEASE
+def current_release():
+    return CURRENT_RELEASE
 
 
 def source_url():
@@ -142,14 +142,14 @@ def source_url():
 """.lstrip(),
         encoding="utf-8",
     )
-    (workspace / "tests" / "test_current_python_release_value.py").write_text(
+    (workspace / "tests" / "test_current_release_value.py").write_text(
         """
-import current_python
+import current_release
 
 
 def test_release_value():
-    assert current_python.current_python_release() == "3.14.5"
-    assert current_python.source_url().startswith("https://www.python.org/")
+    assert current_release.current_release() == "8.16.0"
+    assert current_release.source_url().startswith("https://github.com/curl/curl/")
 """.lstrip(),
         encoding="utf-8",
     )
@@ -166,15 +166,15 @@ def test_release_value():
         + "\n",
         encoding="utf-8",
     )
-    monkeypatch.setattr(scenario, "latest_python_release", lambda: "3.14.5")
+    monkeypatch.setattr(scenario, "latest_project_release", lambda: "8.16.0")
 
     check = scenario.independent_check(workspace, run_root)
 
     assert check["changed_tests"] is True
-    assert check["changed_test_paths"] == ["tests/test_current_python_release_value.py"]
+    assert check["changed_test_paths"] == ["tests/test_current_release_value.py"]
     diff = check["diff"]
     assert isinstance(diff, str)
-    assert "diff --git a/tests/test_current_python_release_value.py" in diff
+    assert "diff --git a/tests/test_current_release_value.py" in diff
     assert "+def test_release_value():" in diff
     assert check["leftover_scratch_paths"] == []
 

@@ -523,10 +523,12 @@ class TestRegularTurns:
         shell_section = prompt[
             prompt.index("Shell hygiene rules") : prompt.index("For long-running or durable work")
         ]
+        source_reading_section = prompt[prompt.index("When a task requires reading source files") :]
 
         assert "dependency directories" in shell_section
         assert "cache directories" in shell_section
         assert "git ls-files" in shell_section
+        assert "git ls-files <path>" in source_reading_section
         for legacy_term in (
             ".v" + "env",
             "__py" + "cache__",
@@ -534,6 +536,7 @@ class TestRegularTurns:
             "'*." + "py'",
         ):
             assert legacy_term not in shell_section
+            assert legacy_term not in source_reading_section
 
     def test_workflow_turn_policy_prompt_enforces_exact_harness_bootstrap_order(self) -> None:
         prompt = chat_commands._WORKFLOW_BOOTSTRAP_SYSTEM_PROMPT

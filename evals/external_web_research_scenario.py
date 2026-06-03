@@ -34,7 +34,8 @@ from evals.external_scenario_checks import (
 )
 from harness.cli.external_workspace import run_harness_on_external_environment
 
-PYTHON_DOWNLOADS_URL = "https://www.python.org/downloads/"
+PROJECT_RELEASE_API_URL = "https://api.github.com/repos/curl/curl/releases/latest"
+OFFICIAL_SOURCE_PREFIXES = ("https://curl.se/", "https://github.com/curl/curl/")
 
 
 @dataclass(frozen=True)
@@ -101,14 +102,14 @@ def create_workspace(root: Path) -> Path:
     workspace.mkdir(parents=True)
 
     _write(
-        workspace / "current_python.py",
+        workspace / "current_release.py",
         """
-CURRENT_PYTHON_RELEASE = "unknown"
+CURRENT_RELEASE = "unknown"
 SOURCE_URL = ""
 
 
-def current_python_release():
-    return CURRENT_PYTHON_RELEASE
+def current_release():
+    return CURRENT_RELEASE
 
 
 def source_url():
@@ -116,22 +117,22 @@ def source_url():
 """.lstrip(),
     )
     _write(
-        workspace / "tests" / "test_current_python.py",
+        workspace / "tests" / "test_current_release.py",
         """
-import current_python
+import current_release
 
 
 def test_exports_release_helpers():
-    assert isinstance(current_python.current_python_release(), str)
-    assert isinstance(current_python.source_url(), str)
+    assert isinstance(current_release.current_release(), str)
+    assert isinstance(current_release.source_url(), str)
 """.lstrip(),
     )
     _write(
         workspace / "README.md",
         """
-# Current Python Fixture
+# Current Release Fixture
 
-Keep `current_python.py` aligned with the latest stable Python release from
+Keep `current_release.py` aligned with the latest stable cURL release from
 official public web sources.
 """.lstrip(),
     )
@@ -146,28 +147,32 @@ official public web sources.
     return workspace
 
 
-def latest_python_release() -> str:
-    req = Request(PYTHON_DOWNLOADS_URL, headers={"User-Agent": "harness-eval/0.1"})
+def latest_project_release() -> str:
+    req = Request(PROJECT_RELEASE_API_URL, headers={"User-Agent": "harness-eval/0.1"})
     with urlopen(req, timeout=30) as response:
         body = response.read()
         if response.headers.get("content-encoding") == "gzip":
             body = gzip.decompress(body)
         text = body.decode("utf-8", errors="replace")
-    for pattern in (
-        r"Download Python ([0-9]+\.[0-9]+\.[0-9]+)",
-        r"Python ([0-9]+\.[0-9]+\.[0-9]+)",
-    ):
-        match = re.search(pattern, text)
-        if match:
-            return match.group(1)
-    raise RuntimeError("could not parse latest Python release from python.org")
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError("could not parse latest release metadata") from exc
+    release_label = str(payload.get("tag_name") or payload.get("name") or "")
+    match = re.search(
+        r"(?<!\d)(\d+(?:[._]\d+){1,}(?:[-+][0-9A-Za-z_.-]+)?)(?!\d)",
+        release_label,
+    )
+    if match:
+        return match.group(1).replace("_", ".")
+    raise RuntimeError("could not parse latest release from project metadata")
 
 
-def import_current_python(workspace: Path):
-    module_path = workspace / "current_python.py"
-    spec = importlib.util.spec_from_file_location("current_python_eval", module_path)
+def import_current_release(workspace: Path):
+    module_path = workspace / "current_release.py"
+    spec = importlib.util.spec_from_file_location("current_release_eval", module_path)
     if spec is None or spec.loader is None:
-        raise RuntimeError("could not load current_python.py")
+        raise RuntimeError("could not load current_release.py")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -196,7 +201,7 @@ def independent_check(workspace: Path, run_root: Path) -> dict[str, object]:
     expected_error = ""
     expected = ""
     try:
-        expected = latest_python_release()
+        expected = latest_project_release()
     except Exception as exc:
         expected_error = f"{type(exc).__name__}: {exc}"
 
@@ -204,8 +209,8 @@ def independent_check(workspace: Path, run_root: Path) -> dict[str, object]:
     actual = ""
     source = ""
     try:
-        module = import_current_python(workspace)
-        actual = str(module.current_python_release())
+        module = import_current_release(workspace)
+        actual = str(module.current_release())
         source = str(module.source_url())
     except Exception as exc:
         module_error = f"{type(exc).__name__}: {exc}"
@@ -238,10 +243,10 @@ def independent_check(workspace: Path, run_root: Path) -> dict[str, object]:
     focused_test_paths = {
         path
         for path in status_paths
-        if path == "tests/test_current_python.py"
-        or (path.startswith("tests/test_current_python") and path.endswith(".py"))
+        if path == "tests/test_current_release.py"
+        or (path.startswith("tests/test_current_release") and path.endswith(".py"))
     }
-    diff_paths = ["current_python.py", "tests"]
+    diff_paths = ["current_release.py", "tests"]
     diff_text = git_diff_with_untracked(
         workspace,
         diff_paths,
@@ -258,14 +263,14 @@ def independent_check(workspace: Path, run_root: Path) -> dict[str, object]:
         "source_url": source,
         "module_error": module_error,
         "release_matches": bool(expected) and actual == expected,
-        "source_is_official": source.startswith("https://www.python.org/"),
+        "source_is_official": source.startswith(OFFICIAL_SOURCE_PREFIXES),
         "used_successful_web_tool": event_log_has_successful_web_tool(run_root),
         "pytest_return_code": pytest_result.returncode,
         "pytest_stdout": pytest_result.stdout[-1000:],
         "pytest_stderr": pytest_result.stderr[-1000:],
         "diff": diff_text,
         "status": status_result.stdout,
-        "changed_source": "current_python.py" in status_result.stdout,
+        "changed_source": "current_release.py" in status_result.stdout,
         "changed_tests": bool(focused_test_paths),
         "changed_test_paths": sorted(focused_test_paths),
         "leftover_scratch_paths": leftover_scratch_paths,
@@ -274,7 +279,7 @@ def independent_check(workspace: Path, run_root: Path) -> dict[str, object]:
 
 async def run(args: argparse.Namespace) -> int:
     load_dotenv(Path(args.env_file))
-    run_root = Path(args.results_root) / f"external-web-python-{uuid4().hex[:8]}"
+    run_root = Path(args.results_root) / f"external-web-release-{uuid4().hex[:8]}"
     run_root.mkdir(parents=True, exist_ok=True)
     workspace = create_workspace(run_root)
     announce_scenario_start(run_root=run_root, workspace=workspace)
@@ -284,7 +289,7 @@ async def run(args: argparse.Namespace) -> int:
     try:
         await run_harness_on_external_environment(
             instruction=(
-                "Update current_python.py with the latest stable Python 3 release from "
+                "Update current_release.py with the latest stable cURL release from "
                 "official public web sources. Add or update a focused project test for "
                 "the release value and source URL, then verify the work."
             ),

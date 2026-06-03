@@ -8,8 +8,6 @@ from typing import cast
 
 from evals.types import FixtureMeta, FixtureRules
 
-_DEFAULT_VERIFY_COMMAND = "pytest tests/ -v --tb=short --no-header"
-
 
 def find_evals_root() -> Path:
     """Walk CWD upward to find evals/fixtures/."""
@@ -52,12 +50,15 @@ def discover_fixtures(
             phases = parse_phases(eval_md)
         family = str(metadata.get("family") or entry.name.split("-", 1)[-1])
         rules = rules_from_metadata(eval_md, metadata)
+        verify_command = str(
+            metadata.get("verify_command") or metadata.get("required_verification") or ""
+        )
         fixture = FixtureMeta(
             name=entry.name,
             path=entry,
             task_text=task_path.read_text(encoding="utf-8"),
             eval_md=eval_md,
-            verify_command=str(metadata.get("verify_command") or _DEFAULT_VERIFY_COMMAND),
+            verify_command=verify_command,
             phases=phases,
             family=family,
             holdout=bool(metadata.get("holdout", False)),
