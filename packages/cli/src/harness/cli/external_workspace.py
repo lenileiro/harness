@@ -1597,16 +1597,18 @@ def _path_is_test_only(path: str) -> bool:
     parts = [part for part in path.strip("/").split("/") if part]
     if not parts:
         return False
-    first = parts[0].lower()
-    name = parts[-1].lower()
-    test_prefix_suffixes = {".py", ".go", ".rs", ".ts", ".tsx", ".js", ".jsx"}
-    return (
-        first in _TEST_DIR_NAMES
-        or bool(_TEST_DIR_NAMES.intersection({part.lower() for part in parts}))
-        or (name.startswith("test_") and PurePosixPath(name).suffix in test_prefix_suffixes)
-        or name.endswith(("_test.py", "_test.go", "_test.rs", ".test.ts", ".test.js"))
-        or ".spec." in name
-    )
+    return _path_is_in_test_structure(path) or _path_name_looks_like_test(path)
+
+
+def _path_is_in_test_structure(path: str) -> bool:
+    parts = [part.lower() for part in path.strip("/").split("/") if part]
+    return bool(_TEST_DIR_NAMES.intersection(parts))
+
+
+def _path_name_looks_like_test(path: str) -> bool:
+    name = PurePosixPath(path.strip("/")).name.lower()
+    tokens = [token for token in re.split(r"[^a-z0-9]+", name) if token]
+    return bool({"test", "tests", "spec", "specs"}.intersection(tokens))
 
 
 def _path_is_test_fixture(path: str) -> bool:
@@ -2236,40 +2238,28 @@ def _tracked_test_parents(tracked_paths: set[str] | None) -> set[str]:
     return parents
 
 
-def _has_tracked_go_source_sibling(path: str, tracked_paths: set[str] | None) -> bool:
-    if not PurePosixPath(path).name.lower().endswith("_test.go"):
-        return False
-    parent = PurePosixPath(_normal_path(path)).parent.as_posix()
-    for tracked_path in tracked_paths or set():
-        normalized = _normal_path(tracked_path)
-        if _path_is_test_only(normalized):
-            continue
-        if PurePosixPath(normalized).suffix.lower() != ".go":
-            continue
-        tracked_parent = PurePosixPath(normalized).parent.as_posix()
-        if tracked_parent == parent:
-            return True
-    return False
-
-
 def _path_counts_as_test_change(
     path: object,
     *,
     status_code: str | None = None,
     tracked_paths: set[str] | None = None,
 ) -> bool:
-    if not isinstance(path, str) or not _path_is_test_only(path):
+    if not isinstance(path, str):
         return False
     if status_code is not None and any(code in status_code for code in ("D", "R")):
         return False
-    if status_code != "??" or not tracked_paths:
+    if _path_is_in_test_structure(path):
         return True
+    if not _path_name_looks_like_test(path):
+        return False
+    if status_code != "??":
+        return True
+    if not tracked_paths:
+        return False
     parents = _tracked_test_parents(tracked_paths)
     if not parents:
-        return True
+        return False
     normalized = _normal_path(path)
-    if _has_tracked_go_source_sibling(normalized, tracked_paths):
-        return True
     parent = PurePosixPath(normalized).parent.as_posix()
     if parent == ".":
         return "." in parents

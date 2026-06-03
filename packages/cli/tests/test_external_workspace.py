@@ -3314,26 +3314,61 @@ def test_workspace_source_change_status_separates_scratch_from_source() -> None:
     ) == ["t/unit/test_sac_logic.py"]
 
     assert _workspace_test_change_paths(
-        "?? test_root_feature.py\n",
-        tracked_paths={"test_existing.py", "setup.py"},
-    ) == ["test_root_feature.py"]
+        "?? test_root_feature.case\n",
+        tracked_paths={"test_existing.case", "setup.cfg"},
+    ) == ["test_root_feature.case"]
 
-    go_status = " M anko/ast/expr.go\n?? vm/default_args_test.go\n"
-    go_tracked_paths = {
+    language_named_status = (
+        " M src/app.py\n"
+        "?? pkg/test_default_args.py\n"
+        "?? vm/default_args_test.go\n"
+        "?? web/urlJoin.regression.test.ts\n"
+    )
+    language_named_tracked_paths = {
+        "src/app.py",
+        "tests/test_app.py",
+        "vm/vm.go",
+        "web/urlJoin.ts",
+    }
+    passed, source_paths, scratch_paths = _workspace_source_change_status(
+        language_named_status,
+        tracked_paths=language_named_tracked_paths,
+    )
+    assert passed is True
+    assert source_paths == ["src/app.py"]
+    assert scratch_paths == [
+        "pkg/test_default_args.py",
+        "vm/default_args_test.go",
+        "web/urlJoin.regression.test.ts",
+    ]
+    assert (
+        _workspace_test_change_paths(
+            language_named_status,
+            tracked_paths=language_named_tracked_paths,
+        )
+        == []
+    )
+
+    package_local_test_status = " M anko/ast/expr.go\n?? vm/default_args_test.go\n"
+    package_local_tracked_paths = {
         "anko/ast/expr.go",
         "anko_test.go",
         "vm/vm.go",
     }
     passed, source_paths, scratch_paths = _workspace_source_change_status(
-        go_status,
-        tracked_paths=go_tracked_paths,
+        package_local_test_status,
+        tracked_paths=package_local_tracked_paths,
     )
     assert passed is True
     assert source_paths == ["anko/ast/expr.go"]
-    assert scratch_paths == []
-    assert _workspace_test_change_paths(go_status, tracked_paths=go_tracked_paths) == [
-        "vm/default_args_test.go"
-    ]
+    assert scratch_paths == ["vm/default_args_test.go"]
+    assert (
+        _workspace_test_change_paths(
+            package_local_test_status,
+            tracked_paths=package_local_tracked_paths,
+        )
+        == []
+    )
 
 
 def test_tool_result_counts_root_overwrite_as_possible_source_change() -> None:
@@ -3818,16 +3853,18 @@ async def test_external_workspace_verifier_accepts_source_test_and_later_verify(
 
 
 @pytest.mark.asyncio
-async def test_external_workspace_verifier_accepts_untracked_go_package_test(
+async def test_external_workspace_verifier_rejects_language_specific_test_parent_inference(
     tmp_path: Path,
 ) -> None:
     env = StaticStatusEnvironment(
         tmp_path,
         statuses=[],
-        baseline_status=" M anko/ast/expr.go\n?? vm/default_args_test.go\n",
+        baseline_status=(
+            " M src/app.py\n" "?? pkg/test_default_args.py\n" "?? vm/default_args_test.go\n"
+        ),
         tracked_paths={
-            "anko/ast/expr.go",
-            "anko_test.go",
+            "src/app.py",
+            "tests/test_app.py",
             "vm/vm.go",
         },
     )
@@ -3836,17 +3873,21 @@ async def test_external_workspace_verifier_accepts_untracked_go_package_test(
     result = await verifier.verify(
         session=SimpleNamespace(),
         activity=[
-            _completed("write_file", metadata={"path": "anko/ast/expr.go"}),
+            _completed("write_file", metadata={"path": "src/app.py"}),
+            _completed("write_file", metadata={"path": "pkg/test_default_args.py"}),
             _completed("write_file", metadata={"path": "vm/default_args_test.go"}),
-            _completed("verify_work", metadata={"command": "go test ./..."}),
+            _completed("verify_work", metadata={"command": "pytest tests && go test ./..."}),
         ],
     )
 
-    assert result.can_finish is True
-    assert verifier.latest.source_change_paths == ["anko/ast/expr.go"]
-    assert verifier.latest.test_change_paths == ["vm/default_args_test.go"]
-    assert verifier.latest.scratch_paths == []
-    assert verifier.latest.verification_passed_after_source_change is True
+    assert result.can_finish is False
+    assert verifier.latest.source_change_paths == ["src/app.py"]
+    assert verifier.latest.test_change_paths == []
+    assert verifier.latest.scratch_paths == [
+        "pkg/test_default_args.py",
+        "vm/default_args_test.go",
+    ]
+    assert "no in-repository regression test changes" in result.reason
 
 
 @pytest.mark.asyncio
