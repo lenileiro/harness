@@ -1021,7 +1021,9 @@ def _shell_command_is_allowed_git_clone(
             saw_allowed_git_operation = True
             continue
         if "fetch" in lowered:
-            if not policy.references_allowed_git_clone_material(" ".join(segment)):
+            if not policy.references_allowed_git_clone_material(" ".join(segment)) and not (
+                saw_allowed_git_operation and _git_fetch_segment_uses_named_remote(segment)
+            ):
                 return False
             saw_allowed_git_operation = True
             continue
@@ -1032,6 +1034,47 @@ def _shell_command_is_allowed_git_clone(
             continue
         return False
     return saw_allowed_git_operation
+
+
+def _git_fetch_segment_uses_named_remote(segment: list[str]) -> bool:
+    lowered = [part.lower() for part in segment]
+    try:
+        fetch_index = lowered.index("fetch")
+    except ValueError:
+        return False
+
+    options_with_values = {
+        "--depth",
+        "--deepen",
+        "--shallow-since",
+        "--shallow-exclude",
+        "--jobs",
+        "-j",
+        "--upload-pack",
+        "--server-option",
+        "-o",
+    }
+    skip_next = False
+    for raw_arg in segment[fetch_index + 1 :]:
+        arg = raw_arg.strip()
+        if not arg:
+            continue
+        if skip_next:
+            skip_next = False
+            continue
+        if arg == "--":
+            continue
+        if arg.startswith("--"):
+            option = arg.split("=", 1)[0].lower()
+            if option in options_with_values and "=" not in arg:
+                skip_next = True
+            continue
+        if arg.startswith("-"):
+            if arg.lower() in options_with_values:
+                skip_next = True
+            continue
+        return bool(re.fullmatch(r"[A-Za-z0-9._-]+", arg))
+    return True
 
 
 def _docker_run_inner_command(words: list[str]) -> str:

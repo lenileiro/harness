@@ -1543,6 +1543,17 @@ async def test_repository_policy_allows_task_repo_clone_but_blocks_repo_searches
             ),
         )
     )
+    clone_fetch_origin_result = await shell(
+        _call(
+            "shell",
+            command=(
+                "git clone --depth 1 https://github.com/python-attrs/cattrs repo3 && "
+                "cd repo3 && "
+                "git fetch --depth 1 origin 6bc4708fb9b2ac52d9a18997e923da6a58916102 && "
+                "git checkout 6bc4708fb9b2ac52d9a18997e923da6a58916102"
+            ),
+        )
+    )
     cleanup_clone_result = await shell(
         _call(
             "shell",
@@ -1620,6 +1631,7 @@ async def test_repository_policy_allows_task_repo_clone_but_blocks_repo_searches
     assert clone_inspect_result.is_error is False
     assert ls_remote_result.is_error is False
     assert fetch_commit_result.is_error is False
+    assert clone_fetch_origin_result.is_error is False
     assert cleanup_clone_result.is_error is False
     assert cleanup_contents_clone_result.is_error is False
     assert docker_clone_result.is_error is False
