@@ -4056,6 +4056,64 @@ async def _accepted_slug_workspace(
     return env, structural
 
 
+async def _accepted_current_release_workspace(
+    tmp_path: Path,
+    *,
+    release_value: str,
+) -> tuple[LocalEnvironment, ExternalWorkspaceVerifier]:
+    env = LocalEnvironment(tmp_path)
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "current_python.py").write_text(
+        'CURRENT_PYTHON_RELEASE = "unknown"\n'
+        'SOURCE_URL = ""\n\n'
+        "def current_python_release():\n"
+        "    return CURRENT_PYTHON_RELEASE\n\n"
+        "def source_url():\n"
+        "    return SOURCE_URL\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "tests" / "test_current_python.py").write_text(
+        "import current_python\n\n"
+        "def test_exports_release_helpers():\n"
+        "    assert isinstance(current_python.current_python_release(), str)\n"
+        "    assert isinstance(current_python.source_url(), str)\n",
+        encoding="utf-8",
+    )
+    await env.exec("git init")
+    await env.exec("git add current_python.py tests/test_current_python.py")
+    await env.exec("git -c user.name=test -c user.email=test@example.com commit -m baseline")
+    (tmp_path / "current_python.py").write_text(
+        f'CURRENT_PYTHON_RELEASE = "{release_value}"\n'
+        'SOURCE_URL = "https://www.python.org/downloads/release/python-3145/"\n\n'
+        "def current_python_release():\n"
+        "    return CURRENT_PYTHON_RELEASE\n\n"
+        "def source_url():\n"
+        "    return SOURCE_URL\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "tests" / "test_current_python.py").write_text(
+        "import current_python\n\n"
+        "def test_exports_release_helpers():\n"
+        "    assert isinstance(current_python.current_python_release(), str)\n"
+        "    assert isinstance(current_python.source_url(), str)\n\n"
+        "def test_latest_python_release_and_source_url():\n"
+        f'    assert current_python.current_python_release() == "{release_value}"\n'
+        '    assert current_python.source_url() == "https://www.python.org/downloads/release/python-3145/"\n',
+        encoding="utf-8",
+    )
+    structural = ExternalWorkspaceVerifier(env, workdir=str(tmp_path))
+    result = await structural.verify(
+        session=SimpleNamespace(),
+        activity=[
+            _completed("write_file", metadata={"path": "current_python.py"}),
+            _completed("write_file", metadata={"path": "tests/test_current_python.py"}),
+            _completed("verify_work", metadata={"command": "python -m pytest -q"}),
+        ],
+    )
+    assert result.can_finish is True
+    return env, structural
+
+
 @pytest.mark.asyncio
 async def test_external_workspace_coverage_verifier_rejects_weak_regression_tests(
     tmp_path: Path,
@@ -4111,6 +4169,67 @@ async def test_external_workspace_coverage_verifier_rejects_weak_regression_test
     assert "should not break when present" in system_prompt
     assert "boundary words" in system_prompt
     assert "interior separator" in system_prompt
+
+
+@pytest.mark.asyncio
+async def test_external_workspace_coverage_verifier_rejects_labelled_current_release_value(
+    tmp_path: Path,
+) -> None:
+    env, structural = await _accepted_current_release_workspace(
+        tmp_path,
+        release_value="Python 3.14.5",
+    )
+    adapter = CoverageReviewAdapter(
+        {"can_finish": True, "reason": "tests assert the exact release", "confidence": 0.9}
+    )
+    verifier = ExternalWorkspaceCoverageVerifier(
+        environment=env,
+        workdir=str(tmp_path),
+        instruction=(
+            "Update current_python.py with the latest stable Python 3 release "
+            "from official public web sources. Add/update focused project tests."
+        ),
+        adapter=adapter,
+        model="judge",
+        structural_verifier=structural,
+    )
+
+    result = await verifier.verify(session=SimpleNamespace(messages=[]), activity=[])
+
+    assert result.can_finish is False
+    assert "label prefix" in result.reason
+    assert "3.14.5" in result.reason
+    assert adapter.calls == []
+
+
+@pytest.mark.asyncio
+async def test_external_workspace_coverage_verifier_allows_labelled_release_title_when_requested(
+    tmp_path: Path,
+) -> None:
+    env, structural = await _accepted_current_release_workspace(
+        tmp_path,
+        release_value="Python 3.14.5",
+    )
+    adapter = CoverageReviewAdapter(
+        {"can_finish": True, "reason": "tests cover the display title", "confidence": 0.9}
+    )
+    verifier = ExternalWorkspaceCoverageVerifier(
+        environment=env,
+        workdir=str(tmp_path),
+        instruction=(
+            "Update current_python.py with the latest stable Python 3 release "
+            "display title including the Python name from official public web sources."
+        ),
+        adapter=adapter,
+        model="judge",
+        structural_verifier=structural,
+    )
+
+    result = await verifier.verify(session=SimpleNamespace(messages=[]), activity=[])
+
+    assert result.can_finish is True
+    assert "coverage review passed" in result.reason
+    assert len(adapter.calls) == 1
 
 
 @pytest.mark.asyncio

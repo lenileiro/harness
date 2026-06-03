@@ -4737,7 +4737,13 @@ _COVERAGE_REVIEW_SYSTEM_PROMPT = (
     "leading, trailing, first, last, root, prefix, or suffix, compare tests "
     "against the boundary of the whole relevant input/result. Do not let tests "
     "redefine an interior separator or later segment as a leading/trailing "
-    "property unless the task explicitly says any segment can do that.\n\n"
+    "property unless the task explicitly says any segment can do that. For "
+    "latest/current release or version tasks grounded in public sources, check "
+    "the expected value format from the task contract, helper names, and source "
+    "URLs/slugs; fail if tests merely assert a copied page label such as "
+    "'Product 1.2.3' when the project helper/source appears to require the "
+    "canonical bare version '1.2.3', unless the task explicitly asks for a "
+    "display title or label prefix.\n\n"
     "Before approving, actively try to name one simple counterexample that satisfies "
     "the task but could pass the changed tests. Treat words such as normalize, "
     "sanitize, safe, valid, parse, canonical, escape, trim, collapse, preserve, "
@@ -4754,6 +4760,105 @@ _COVERAGE_REVIEW_SYSTEM_PROMPT = (
     '{"can_finish": true|false, "reason": "<short actionable reason>", '
     '"confidence": 0.0..1.0}'
 )
+
+
+_CURRENT_RELEASE_TASK_RE = re.compile(
+    r"\b(?:latest|current|newest|up-to-date|stable)\b", flags=re.IGNORECASE
+)
+_RELEASE_VALUE_RE = re.compile(r"\b(?:release|version)\b", flags=re.IGNORECASE)
+_LABELLED_RELEASE_ALLOWED_RE = re.compile(
+    r"\b(?:release title|full title|display title|display label|"
+    r"human-readable|label(?:ed|led)?|"
+    r"include(?:s|ing)?\s+(?:the\s+)?(?:[A-Za-z0-9_.+-]+\s+)?name|"
+    r"with\s+(?:the\s+)?(?:product|project|package|language|tool|runtime|name)"
+    r")\b",
+    flags=re.IGNORECASE,
+)
+_QUOTED_STRING_LITERAL_RE = re.compile(
+    r'"(?P<double>(?:\\.|[^"\\]){1,200})"|' r"'(?P<single>(?:\\.|[^'\\]){1,200})'"
+)
+_LABEL_PREFIXED_VERSION_RE = re.compile(
+    r"^(?P<label>[A-Za-z][A-Za-z0-9_.+-]*(?:[ -][A-Za-z][A-Za-z0-9_.+-]*){0,3})\s+"
+    r"(?P<version>v?\d+(?:[._]\d+){1,}(?:[-+][0-9A-Za-z_.-]+)?)$"
+)
+
+
+def _quoted_string_values(text: str) -> list[str]:
+    values: list[str] = []
+    for match in _QUOTED_STRING_LITERAL_RE.finditer(text):
+        value = match.group("double")
+        if value is None:
+            value = match.group("single")
+        if value is not None:
+            values.append(value)
+    return values
+
+
+def _has_version_evidence_outside_labelled_literal(
+    text: str, *, literal: str, version: str
+) -> bool:
+    evidence = text.replace(literal, "")
+    bare_version = version[1:] if version[:1].lower() == "v" else version
+    if re.search(
+        rf"(?<![0-9A-Za-z]){re.escape(bare_version)}(?![0-9A-Za-z])",
+        evidence,
+    ):
+        return True
+    compact_version = re.sub(r"[^0-9]", "", bare_version)
+    if len(compact_version) >= 3 and re.search(
+        rf"(?<!\d){re.escape(compact_version)}(?!\d)",
+        evidence,
+    ):
+        return True
+    hyphen_version = re.sub(r"[._]", "-", bare_version)
+    return bool(
+        hyphen_version != bare_version
+        and re.search(
+            rf"(?<![0-9A-Za-z]){re.escape(hyphen_version)}(?![0-9A-Za-z])",
+            evidence,
+        )
+    )
+
+
+def _current_release_value_format_reason(
+    *,
+    instruction: str,
+    source_content: str,
+    test_content: str,
+) -> str | None:
+    if not (_CURRENT_RELEASE_TASK_RE.search(instruction) and _RELEASE_VALUE_RE.search(instruction)):
+        return None
+    if _LABELLED_RELEASE_ALLOWED_RE.search(instruction):
+        return None
+    if not (_RELEASE_VALUE_RE.search(test_content) and _RELEASE_VALUE_RE.search(source_content)):
+        return None
+
+    combined_content = f"{source_content}\n{test_content}"
+    for literal in _quoted_string_values(test_content):
+        value = literal.strip()
+        match = _LABEL_PREFIXED_VERSION_RE.match(value)
+        if match is None:
+            continue
+        label = match.group("label")
+        version = match.group("version")
+        if not re.search(r"[A-Za-z]", label):
+            continue
+        if not _has_version_evidence_outside_labelled_literal(
+            combined_content,
+            literal=value,
+            version=version,
+        ):
+            continue
+        bare_version = version[1:] if version[:1].lower() == "v" else version
+        return (
+            "changed tests assert the current/latest release/version value as "
+            f"{value!r}, which includes a label prefix; nearby source evidence "
+            f"points to canonical version {bare_version!r}. Require the tests "
+            "and source to use the task's normalized value format, or make the "
+            "task contract explicit that the helper should return a labelled "
+            "display title."
+        )
+    return None
 
 
 class ExternalWorkspaceCoverageVerifier:
@@ -4808,6 +4913,18 @@ class ExternalWorkspaceCoverageVerifier:
 
         source_content = await self._read_changed_paths(snapshot.source_change_paths or [])
         test_content = await self._read_changed_paths(snapshot.test_change_paths or [])
+        format_reason = _current_release_value_format_reason(
+            instruction=self.instruction,
+            source_content=source_content,
+            test_content=test_content,
+        )
+        if format_reason is not None:
+            return VerificationResult(
+                can_finish=False,
+                reason=f"Regression coverage is too weak: {format_reason}",
+                confidence=0.92,
+                verifier_name=self.name,
+            )
         final_answer = ""
         for message in reversed(getattr(session, "messages", []) or []):
             if getattr(message, "role", "") == "assistant" and getattr(message, "content", ""):
