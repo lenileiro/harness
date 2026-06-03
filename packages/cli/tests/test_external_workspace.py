@@ -2505,6 +2505,26 @@ async def test_remote_shell_tool_allows_zero_exit_go_output_with_some_no_test_pa
 
 
 @pytest.mark.asyncio
+async def test_remote_shell_tool_allows_zero_exit_go_output_with_some_no_matching_tests(
+    tmp_path: Path,
+) -> None:
+    env = LocalEnvironment(tmp_path)
+    shell = RemoteShellTool(env, workdir=str(tmp_path))
+    command = (
+        "cat <<'EOF'\n"
+        "ok  \tgithub.com/go-git/go-git/v6\t0.012s\n"
+        "ok  \tgithub.com/go-git/go-git/v6/backend/http\t0.003s [no tests to run]\n"
+        "?   \tgithub.com/go-git/go-git/v6/internal/pathutil\t[no test files]\n"
+        "EOF"
+    )
+
+    result = await shell(_call("shell", command="echo go test ./...; " + command))
+
+    assert result.is_error is False
+    assert result.metadata["stdout_failure_exit_status"] is False
+
+
+@pytest.mark.asyncio
 async def test_remote_shell_tool_uses_pipefail_for_masked_pipeline(
     tmp_path: Path,
 ) -> None:
@@ -2946,6 +2966,47 @@ async def test_remote_verify_work_tool_allows_go_package_sweep_with_some_no_test
     assert result.content.startswith("PASSED")
     assert result.metadata["exit_code"] == 0
     assert result.metadata["output_reports_failure"] is False
+
+
+@pytest.mark.asyncio
+async def test_remote_verify_work_tool_allows_go_sweep_with_some_no_matching_tests(
+    tmp_path: Path,
+) -> None:
+    env = LocalEnvironment(tmp_path)
+    verify = RemoteVerifyWorkTool(env, workdir=str(tmp_path))
+    output = (
+        "ok  github.com/go-git/go-git/v6 0.012s\n"
+        "ok  github.com/go-git/go-git/v6/backend/http 0.003s [no tests to run]\n"
+        "?   \tgithub.com/go-git/go-git/v6/internal/pathutil\t[no test files]\n"
+        "ok  github.com/go-git/go-git/v6/config 0.004s [no tests to run]\n"
+    )
+
+    result = await verify(_call("verify_work", command=f"printf {output!r}"))
+
+    assert result.is_error is False
+    assert result.content.startswith("PASSED")
+    assert result.metadata["exit_code"] == 0
+    assert result.metadata["output_reports_failure"] is False
+
+
+@pytest.mark.asyncio
+async def test_remote_verify_work_tool_rejects_go_sweep_with_only_no_matching_tests(
+    tmp_path: Path,
+) -> None:
+    env = LocalEnvironment(tmp_path)
+    verify = RemoteVerifyWorkTool(env, workdir=str(tmp_path))
+    output = (
+        "ok  github.com/go-git/go-git/v6 0.012s [no tests to run]\n"
+        "ok  github.com/go-git/go-git/v6/config 0.004s [no tests to run]\n"
+        "?   \tgithub.com/go-git/go-git/v6/internal/pathutil\t[no test files]\n"
+    )
+
+    result = await verify(_call("verify_work", command=f"printf {output!r}"))
+
+    assert result.is_error is True
+    assert result.content.startswith("FAILED (output reports failure)")
+    assert result.metadata["exit_code"] == 0
+    assert result.metadata["output_reports_failure"] is True
 
 
 @pytest.mark.asyncio

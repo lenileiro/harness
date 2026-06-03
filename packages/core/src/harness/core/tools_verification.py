@@ -527,20 +527,29 @@ def _case_default_branch_exits_nonzero(body: str) -> bool:
     return False
 
 
-def _normalize_successful_go_package_sweep_output(output: str) -> str:
-    """Remove Go no-test package rows when a package sweep has real passes too."""
-    has_passing_package = any(re.match(r"^\s*ok\s+\S+", line) for line in output.splitlines())
-    if not has_passing_package:
+def _normalize_successful_package_sweep_output(output: str) -> str:
+    """Remove no-test package rows when a package sweep has real passes too."""
+    real_passing_package = any(
+        re.match(r"^\s*ok\s+\S+", line)
+        and not re.search(r"\[no\s+tests?\s+to\s+run\]", line, re.IGNORECASE)
+        for line in output.splitlines()
+    )
+    if not real_passing_package:
         return output
     return "\n".join(
         line
         for line in output.splitlines()
         if not re.match(r"^\s*\?\s+\S+\s+\[no\s+test\s+files?\]\s*$", line, re.IGNORECASE)
+        and not re.match(
+            r"^\s*ok\s+\S+\s+.*\s+\[no\s+tests?\s+to\s+run\]\s*$",
+            line,
+            re.IGNORECASE,
+        )
     )
 
 
 def _output_reports_failure(output: str) -> bool:
-    normalized = _normalize_successful_go_package_sweep_output(output).lower()
+    normalized = _normalize_successful_package_sweep_output(output).lower()
     if not normalized.strip():
         return False
     if re.search(

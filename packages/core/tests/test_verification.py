@@ -1491,6 +1491,59 @@ async def test_verify_work_allows_go_package_sweep_with_some_no_test_packages(
 
 
 @pytest.mark.asyncio
+async def test_verify_work_allows_go_package_sweep_with_some_no_matching_tests(
+    tmp_path: Path,
+) -> None:
+    tool = VerifyWorkTool(cwd=tmp_path)
+    output = (
+        "ok  github.com/go-git/go-git/v6 0.012s\n"
+        "ok  github.com/go-git/go-git/v6/backend/http 0.003s [no tests to run]\n"
+        "?   \tgithub.com/go-git/go-git/v6/internal/pathutil\t[no test files]\n"
+        "ok  github.com/go-git/go-git/v6/config 0.004s [no tests to run]\n"
+    )
+
+    result = await tool(
+        ToolCall(
+            id="v1",
+            name="verify_work",
+            arguments={"command": "cat <<'EOF'\n" + output + "\nEOF"},
+        )
+    )
+
+    assert result.is_error is False
+    assert result.content.startswith("PASSED")
+    assert result.metadata is not None
+    assert result.metadata["exit_code"] == 0
+    assert result.metadata["output_reports_failure"] is False
+
+
+@pytest.mark.asyncio
+async def test_verify_work_rejects_go_package_sweep_with_only_no_matching_tests(
+    tmp_path: Path,
+) -> None:
+    tool = VerifyWorkTool(cwd=tmp_path)
+    output = (
+        "ok  github.com/go-git/go-git/v6 0.012s [no tests to run]\n"
+        "ok  github.com/go-git/go-git/v6/config 0.004s [no tests to run]\n"
+        "?   \tgithub.com/go-git/go-git/v6/internal/pathutil\t[no test files]\n"
+    )
+
+    result = await tool(
+        ToolCall(
+            id="v1",
+            name="verify_work",
+            arguments={"command": "cat <<'EOF'\n" + output + "\nEOF"},
+        )
+    )
+
+    assert result.is_error is True
+    assert result.content.startswith("FAILED (output reports failure)")
+    assert result.metadata is not None
+    assert result.metadata["exit_code"] == 0
+    assert result.metadata["output_reports_failure"] is True
+
+
+@pytest.mark.asyncio
 async def test_verify_work_rejects_successful_go_output_with_failures(tmp_path: Path) -> None:
     tool = VerifyWorkTool(cwd=tmp_path)
     output = (
