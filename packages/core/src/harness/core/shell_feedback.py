@@ -6,6 +6,16 @@ import shlex
 
 _AVAILABILITY_CHECKS = {"which", "type"}
 _SEARCH_COMMANDS = {"ack", "ag", "grep", "rg"}
+_ERREXIT_TRACE_RE = re.compile(r"(?m)^\+\s+set\s+(?:-[A-Za-z]*e[A-Za-z]*\b|.*\berrexit\b)")
+_EXPECTED_FAILURE_WORD_RE = re.compile(
+    r"(?i)\b(?:missing|does[_ -]?not[_ -]?exist|not[_ -]?found|absent|no such)\b"
+)
+_TRACE_NON_COMMAND_PREFIX_RE = re.compile(
+    r"^(?:\[|test\b|echo\b|printf\b|rm\b|trap\b|cat\b|mktemp\b|"
+    r"set\b|true\b|false\b|local\b|out=|rc=|: )"
+)
+_TRACE_SAFE_STATUS_FOLLOWUP_RE = re.compile(r"^\+(?!\+)\s+(?:rc|status|exit_code|code)=")
+_TRACE_CLEANUP_FOLLOWUP_RE = re.compile(r"^\+(?!\+)\s+(?:rm\b|trap\b|cleanup\b|exit\b)")
 
 
 def _tokenize_shell_command(command: str) -> list[str]:
@@ -120,6 +130,14 @@ def shell_failure_hint(
             "test command. Confirm the setup by importing the project package or "
             "running a focused test before continuing implementation work."
         )
+    if exit_code and exit_code != 0 and _looks_like_errexit_expected_failure_trace(output):
+        return (
+            "[diagnostic hint] The trace looks like an expected-failing command ran "
+            "bare while `set -e` / `errexit` was active, so the script exited before "
+            "later status assertions could run. Capture expected non-zero behavior "
+            "inside `if command; then exit 1; fi`, `! command`, or `command || rc=$?`, "
+            "then assert the captured status and output explicitly."
+        )
     if exit_code and exit_code != 0 and _looks_like_terse_test_failure(output):
         return (
             "[diagnostic hint] The command failed but only reported a terse test "
@@ -136,6 +154,32 @@ def shell_failure_hint(
             "inputs, and variable values are visible before editing more code."
         )
     return shell_empty_failure_hint(command, exit_code=exit_code, stdout=stdout, stderr=stderr)
+
+
+def _looks_like_errexit_expected_failure_trace(output: str) -> bool:
+    if not _ERREXIT_TRACE_RE.search(output):
+        return False
+    lines = [line.rstrip() for line in output.splitlines() if line.strip()]
+    for index, line in enumerate(lines):
+        if not line.startswith("+") or line.startswith("++"):
+            continue
+        traced_command = line[1:].strip()
+        if _TRACE_NON_COMMAND_PREFIX_RE.match(traced_command):
+            continue
+        if not _EXPECTED_FAILURE_WORD_RE.search(traced_command):
+            continue
+        following = [
+            later
+            for later in lines[index + 1 :]
+            if later.startswith("+") and not later.startswith("++")
+        ][:3]
+        if not following:
+            return True
+        if _TRACE_SAFE_STATUS_FOLLOWUP_RE.match(following[0]):
+            continue
+        if _TRACE_CLEANUP_FOLLOWUP_RE.match(following[0]):
+            return True
+    return False
 
 
 def _looks_like_terse_test_failure(output: str) -> bool:

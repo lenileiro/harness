@@ -4329,8 +4329,9 @@ async def _accepted_ini_lookup_workspace(
         'key="${2:-}"\n'
         'file="${3:-}"\n'
         'current=""\n'
-        'trim() { local s="$1"; s="${s#${s%%[![:space:]]*}}"; '
-        's="${s%${s##*[![:space:]]}}"; printf \'%s\' "$s"; }\n'
+        "found=0\n"
+        'found_value=""\n'
+        "trim() { printf '%s' \"$1\" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//'; }\n"
         'section="$(trim "$section")"\n'
         'key="$(trim "$key")"\n'
         'while IFS= read -r line || [ -n "$line" ]; do\n'
@@ -4342,8 +4343,9 @@ async def _accepted_ini_lookup_workspace(
         '  if [[ "$stripped" == *"="* ]]; then k="${stripped%%=*}"; '
         'v="${stripped#*=}"; k="$(trim "$k")"; v="$(trim "$v")"; '
         'if [ "$current" = "$section" ] && [ "$k" = "$key" ]; then '
-        "printf '%s\\n' \"$v\"; exit 0; fi; fi\n"
+        'found=1; found_value="$v"; fi; fi\n'
         'done < "$file"\n'
+        'if [ "$found" -eq 1 ]; then printf \'%s\\n\' "$found_value"; exit 0; fi\n'
         "exit 1\n",
         encoding="utf-8",
     )
@@ -4575,6 +4577,8 @@ async def test_external_workspace_coverage_verifier_rejects_weak_ini_lookup_test
     assert "section header with surrounding whitespace" in result.reason
     assert "leading whitespace before the key" in result.reason
     assert "value containing an additional `=`" in result.reason
+    assert "value with surrounding whitespace" in result.reason
+    assert "repeated key in the same section" in result.reason
     assert "missing-key behavior" in result.reason
     assert adapter.calls == []
 
@@ -4635,7 +4639,7 @@ async def test_external_workspace_coverage_verifier_rejects_ini_lookup_missing_i
 
 
 @pytest.mark.asyncio
-async def test_external_workspace_coverage_verifier_accepts_representative_ini_lookup_tests(
+async def test_external_workspace_coverage_verifier_rejects_ini_lookup_missing_value_trim_assertion(
     tmp_path: Path,
 ) -> None:
     env, structural = await _accepted_ini_lookup_workspace(
@@ -4656,11 +4660,125 @@ async def test_external_workspace_coverage_verifier_accepts_representative_ini_l
             "[ server ]\n"
             "  port = 8080\n"
             "token = abc=def=ghi\n"
+            "retry = first\n"
+            "retry = second\n"
             "[client]\n"
             "port = 9090\n"
             "INI\n"
             '[ "$(./bin/ini_get server port "$tmp")" = "8080" ]\n'
             '[ "$(./bin/ini_get server token "$tmp")" = "abc=def=ghi" ]\n'
+            '[ "$(./bin/ini_get server retry "$tmp")" = "second" ]\n'
+            '[ "$(./bin/ini_get client port "$tmp")" = "9090" ]\n'
+            'assert_failure_no_output ./bin/ini_get server missing "$tmp"\n'
+        ),
+    )
+    adapter = CoverageReviewAdapter({"can_finish": True, "reason": "looks good", "confidence": 0.9})
+    verifier = ExternalWorkspaceCoverageVerifier(
+        environment=env,
+        workdir=str(tmp_path),
+        instruction=(
+            "Fix the INI lookup CLI. It should ignore blank lines and full-line "
+            "comments beginning with # or ;, trim surrounding whitespace around "
+            "section names, keys, and values, preserve equals signs inside values, "
+            "keep section scoping correct, and exit non-zero with no output when "
+            "the key is missing."
+        ),
+        adapter=adapter,
+        model="judge",
+        structural_verifier=structural,
+    )
+
+    result = await verifier.verify(session=SimpleNamespace(messages=[]), activity=[])
+
+    assert result.can_finish is False
+    assert "value with surrounding whitespace" in result.reason
+    assert adapter.calls == []
+
+
+@pytest.mark.asyncio
+async def test_external_workspace_coverage_verifier_rejects_ini_lookup_missing_repeated_key_case(
+    tmp_path: Path,
+) -> None:
+    env, structural = await _accepted_ini_lookup_workspace(
+        tmp_path,
+        test_body=(
+            "#!/usr/bin/env bash\n"
+            "set -euo pipefail\n"
+            'tmp="$(mktemp)"\n'
+            "trap 'rm -f \"$tmp\"' EXIT\n"
+            "assert_failure_no_output() {\n"
+            "  local out rc\n"
+            '  out="$($* 2>/dev/null)"; rc=$?\n'
+            '  [ "$rc" -ne 0 ] && [ -z "$out" ]\n'
+            "}\n"
+            "cat > \"$tmp\" <<'INI'\n"
+            "# hash comment\n"
+            "  ; semicolon comment\n"
+            "[ server ]\n"
+            "  port = 8080\n"
+            "token =   abc=def=ghi   \n"
+            "[client]\n"
+            "port = 9090\n"
+            "INI\n"
+            '[ "$(./bin/ini_get server port "$tmp")" = "8080" ]\n'
+            '[ "$(./bin/ini_get server token "$tmp")" = "abc=def=ghi" ]\n'
+            '[ "$(./bin/ini_get client port "$tmp")" = "9090" ]\n'
+            'assert_failure_no_output ./bin/ini_get server missing "$tmp"\n'
+        ),
+    )
+    adapter = CoverageReviewAdapter({"can_finish": True, "reason": "looks good", "confidence": 0.9})
+    verifier = ExternalWorkspaceCoverageVerifier(
+        environment=env,
+        workdir=str(tmp_path),
+        instruction=(
+            "Fix the INI lookup CLI. It should ignore blank lines and full-line "
+            "comments beginning with # or ;, trim surrounding whitespace around "
+            "section names, keys, and values, preserve equals signs inside values, "
+            "keep section scoping correct, and exit non-zero with no output when "
+            "the key is missing."
+        ),
+        adapter=adapter,
+        model="judge",
+        structural_verifier=structural,
+    )
+
+    result = await verifier.verify(session=SimpleNamespace(messages=[]), activity=[])
+
+    assert result.can_finish is False
+    assert "repeated key in the same section" in result.reason
+    assert adapter.calls == []
+
+
+@pytest.mark.asyncio
+async def test_external_workspace_coverage_verifier_accepts_representative_ini_lookup_tests(
+    tmp_path: Path,
+) -> None:
+    env, structural = await _accepted_ini_lookup_workspace(
+        tmp_path,
+        test_body=(
+            "#!/usr/bin/env bash\n"
+            "set -euo pipefail\n"
+            'tmp="$(mktemp)"\n'
+            "trap 'rm -f \"$tmp\"' EXIT\n"
+            "assert_failure_no_output() {\n"
+            "  local out rc\n"
+            '  out="$($* 2>/dev/null)"; rc=$?\n'
+            '  [ "$rc" -ne 0 ] && [ -z "$out" ]\n'
+            "}\n"
+            "cat > \"$tmp\" <<'INI'\n"
+            "# hash comment\n"
+            "  ; semicolon comment\n"
+            "[ server ]\n"
+            "  port = 8080\n"
+            "token =   abc=def=ghi   \n"
+            "retry = first\n"
+            "retry = second\n"
+            "[client]\n"
+            "port = 9090\n"
+            "INI\n"
+            '[ "$(./bin/ini_get server port "$tmp")" = "8080" ]\n'
+            '[ "$(./bin/ini_get server token "$tmp")" = "abc=def=ghi" ]\n'
+            '[ "$(./bin/ini_get server retry "$tmp")" = "second" ]\n'
             '[ "$(./bin/ini_get client port "$tmp")" = "9090" ]\n'
             'assert_failure_no_output ./bin/ini_get server missing "$tmp"\n'
         ),

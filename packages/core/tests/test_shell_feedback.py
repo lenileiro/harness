@@ -68,6 +68,45 @@ def test_shell_failure_hint_suggests_tracing_make_invoked_script() -> None:
     assert "bash -x ./tests/run.sh" in hint
 
 
+def test_shell_failure_hint_explains_errexit_expected_failure_trace() -> None:
+    hint = shell_failure_hint(
+        "bash -x tests/run.sh",
+        exit_code=1,
+        stdout=(
+            "+ set -euo pipefail\n"
+            "+ '[' second = second ']'\n"
+            "++ ./bin/ini_get server does_not_exist /tmp/tmp.ini\n"
+            "++ true\n"
+            "+ out=\n"
+            "+ ./bin/ini_get server does_not_exist /tmp/tmp.ini\n"
+            "+ rm -f /tmp/tmp.ini\n"
+        ),
+        stderr="",
+    )
+
+    assert "expected-failing command ran bare" in hint
+    assert "set -e" in hint
+    assert "command || rc=$?" in hint
+
+
+def test_shell_failure_hint_does_not_flag_captured_errexit_expected_failure() -> None:
+    hint = shell_failure_hint(
+        "bash -x tests/run.sh",
+        exit_code=1,
+        stdout=(
+            "+ set -euo pipefail\n"
+            "+ ./bin/ini_get server does_not_exist fixture.ini\n"
+            "+ rc=1\n"
+            "+ '[' 1 -ne 0 ']'\n"
+            "+ '[' -z '' ']'\n"
+            "+ false\n"
+        ),
+        stderr="",
+    )
+
+    assert "expected-failing command ran bare" not in hint
+
+
 def test_shell_failure_hint_suggests_discovered_container_executable_path() -> None:
     hint = shell_failure_hint(
         "project-test-command",

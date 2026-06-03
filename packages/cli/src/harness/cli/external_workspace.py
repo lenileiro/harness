@@ -4822,6 +4822,8 @@ _INI_HASH_FULL_LINE_COMMENT_RE = re.compile(r"(?m)^\s*#")
 _INI_SEMICOLON_FULL_LINE_COMMENT_RE = re.compile(r"(?m)^\s*;")
 _INI_INDENTED_FULL_LINE_COMMENT_RE = re.compile(r"(?m)^\s+[;#]")
 _INI_EQUALS_VALUE_RE = re.compile(r"(?m)^\s*[^#;\s=\[]+\s*=\s*[^#;\n]*=[^#;\n]*")
+_INI_SECTION_LINE_RE = re.compile(r"^\s*\[\s*(?P<section>[^\]]+?)\s*\]\s*$")
+_INI_KEY_VALUE_LINE_RE = re.compile(r"^\s*(?P<key>[^#;\s=\[][^=]*)=(?P<value>.*)$")
 _SLUGIFY_CALL_RE = re.compile(r"\bslugify\((?P<args>[^)]{0,500})\)")
 _SLUG_SAFE_EXPECTED_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)+$")
 _SLUG_SEPARATOR_EDGE_RE = re.compile(r"(^[^A-Za-z0-9]+|[^A-Za-z0-9]+$|[-_\s!.,]{2,})")
@@ -5129,6 +5131,16 @@ def _ini_lookup_coverage_reason(*, instruction: str, test_content: str) -> str |
         missing.append("a key/value line with leading whitespace before the key")
     if not _INI_EQUALS_VALUE_RE.search(ini_content):
         missing.append("a value containing an additional `=` after the first separator")
+    if not _ini_tests_cover_trimmed_value_assertion(
+        ini_content=ini_content,
+        test_content=test_content,
+    ):
+        missing.append("a value with surrounding whitespace that is asserted trimmed")
+    if not _ini_tests_cover_repeated_key_same_section_assertion(
+        ini_content=ini_content,
+        test_content=test_content,
+    ):
+        missing.append("a repeated key in the same section with the later value asserted")
     lowered_tests = test_content.lower()
     if "missing" not in lowered_tests or not (
         "no output" in lowered_tests
@@ -5147,6 +5159,61 @@ def _ini_lookup_coverage_reason(*, instruction: str, test_content: str) -> str |
         + ". Otherwise a parser can pass happy-path tests while still accepting "
         "comments, whitespace, values, or missing keys incorrectly."
     )
+
+
+def _ini_tests_cover_trimmed_value_assertion(
+    *,
+    ini_content: str,
+    test_content: str,
+) -> bool:
+    expected_values = set(_quoted_string_values(test_content))
+    for line in ini_content.splitlines():
+        match = _INI_KEY_VALUE_LINE_RE.match(line)
+        if match is None:
+            continue
+        raw_value = match.group("value")
+        trimmed_value = raw_value.strip()
+        if not trimmed_value:
+            continue
+        has_extra_value_padding = (
+            raw_value.startswith(("  ", "\t")) or raw_value.rstrip() != raw_value
+        )
+        if has_extra_value_padding and trimmed_value in expected_values:
+            return True
+    return False
+
+
+def _ini_tests_cover_repeated_key_same_section_assertion(
+    *,
+    ini_content: str,
+    test_content: str,
+) -> bool:
+    expected_values = set(_quoted_string_values(test_content))
+    current_section = ""
+    values_by_key: dict[tuple[str, str], list[str]] = {}
+    for line in ini_content.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith(("#", ";")):
+            continue
+        section_match = _INI_SECTION_LINE_RE.match(line)
+        if section_match is not None:
+            current_section = section_match.group("section").strip()
+            continue
+        value_match = _INI_KEY_VALUE_LINE_RE.match(line)
+        if value_match is None or not current_section:
+            continue
+        key = value_match.group("key").strip()
+        value = value_match.group("value").strip()
+        if not key:
+            continue
+        values_by_key.setdefault((current_section, key), []).append(value)
+
+    for values in values_by_key.values():
+        if len(values) < 2 or len(set(values)) < 2:
+            continue
+        if values[-1] in expected_values:
+            return True
+    return False
 
 
 def _slugify_coverage_reason(*, instruction: str, test_content: str) -> str | None:
