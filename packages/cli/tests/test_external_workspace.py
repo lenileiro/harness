@@ -3318,6 +3318,23 @@ def test_workspace_source_change_status_separates_scratch_from_source() -> None:
         tracked_paths={"test_existing.py", "setup.py"},
     ) == ["test_root_feature.py"]
 
+    go_status = " M anko/ast/expr.go\n?? vm/default_args_test.go\n"
+    go_tracked_paths = {
+        "anko/ast/expr.go",
+        "anko_test.go",
+        "vm/vm.go",
+    }
+    passed, source_paths, scratch_paths = _workspace_source_change_status(
+        go_status,
+        tracked_paths=go_tracked_paths,
+    )
+    assert passed is True
+    assert source_paths == ["anko/ast/expr.go"]
+    assert scratch_paths == []
+    assert _workspace_test_change_paths(go_status, tracked_paths=go_tracked_paths) == [
+        "vm/default_args_test.go"
+    ]
+
 
 def test_tool_result_counts_root_overwrite_as_possible_source_change() -> None:
     assert _tool_result_counts_as_source_change(
@@ -3797,6 +3814,38 @@ async def test_external_workspace_verifier_accepts_source_test_and_later_verify(
     assert result.can_finish is True
     assert verifier.latest.source_change_paths == ["ast/expr.go"]
     assert verifier.latest.test_change_paths == ["tests/test_expr.py"]
+    assert verifier.latest.verification_passed_after_source_change is True
+
+
+@pytest.mark.asyncio
+async def test_external_workspace_verifier_accepts_untracked_go_package_test(
+    tmp_path: Path,
+) -> None:
+    env = StaticStatusEnvironment(
+        tmp_path,
+        statuses=[],
+        baseline_status=" M anko/ast/expr.go\n?? vm/default_args_test.go\n",
+        tracked_paths={
+            "anko/ast/expr.go",
+            "anko_test.go",
+            "vm/vm.go",
+        },
+    )
+    verifier = ExternalWorkspaceVerifier(env, workdir=str(tmp_path))
+
+    result = await verifier.verify(
+        session=SimpleNamespace(),
+        activity=[
+            _completed("write_file", metadata={"path": "anko/ast/expr.go"}),
+            _completed("write_file", metadata={"path": "vm/default_args_test.go"}),
+            _completed("verify_work", metadata={"command": "go test ./..."}),
+        ],
+    )
+
+    assert result.can_finish is True
+    assert verifier.latest.source_change_paths == ["anko/ast/expr.go"]
+    assert verifier.latest.test_change_paths == ["vm/default_args_test.go"]
+    assert verifier.latest.scratch_paths == []
     assert verifier.latest.verification_passed_after_source_change is True
 
 

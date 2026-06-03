@@ -2236,6 +2236,22 @@ def _tracked_test_parents(tracked_paths: set[str] | None) -> set[str]:
     return parents
 
 
+def _has_tracked_go_source_sibling(path: str, tracked_paths: set[str] | None) -> bool:
+    if not PurePosixPath(path).name.lower().endswith("_test.go"):
+        return False
+    parent = PurePosixPath(_normal_path(path)).parent.as_posix()
+    for tracked_path in tracked_paths or set():
+        normalized = _normal_path(tracked_path)
+        if _path_is_test_only(normalized):
+            continue
+        if PurePosixPath(normalized).suffix.lower() != ".go":
+            continue
+        tracked_parent = PurePosixPath(normalized).parent.as_posix()
+        if tracked_parent == parent:
+            return True
+    return False
+
+
 def _path_counts_as_test_change(
     path: object,
     *,
@@ -2252,6 +2268,8 @@ def _path_counts_as_test_change(
     if not parents:
         return True
     normalized = _normal_path(path)
+    if _has_tracked_go_source_sibling(normalized, tracked_paths):
+        return True
     parent = PurePosixPath(normalized).parent.as_posix()
     if parent == ".":
         return "." in parents
