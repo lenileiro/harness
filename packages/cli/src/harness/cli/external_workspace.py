@@ -5056,6 +5056,29 @@ def _url_join_boundary_coverage_reason(
                 "a path joiner can accidentally turn absolute paths into relative ones."
             )
         if (
+            "leading slash" in lowered
+            and "absolute path" in lowered
+            and not _url_join_tests_cover_later_absolute_segment_not_resetting_relative_path(
+                test_content
+            )
+        ):
+            return (
+                "URL joining tests must include a relative first segment followed "
+                "by an absolute-looking later segment whose result stays relative, "
+                'for example `joinUrl("api", "/v1")` expecting `"api/v1"`. '
+                "Without that case, a path joiner can incorrectly let a later "
+                "leading slash reset a relative path to an absolute one."
+            )
+        if not _url_join_tests_cover_relative_duplicate_slash_segment(test_content):
+            return (
+                "URL joining tests must include a relative first segment followed "
+                "by a later segment with duplicate slashes whose result stays "
+                "relative and collapsed, for example "
+                '`joinUrl("api", "//v1//users")` expecting `"api/v1/users"`. '
+                "Without that case, a path joiner can pass simpler slash tests "
+                "while still mishandling duplicate slashes in relative paths."
+            )
+        if (
             "root" in lowered
             and "trailing slash" in lowered
             and not _url_join_tests_cover_origin_root_slash_trim(test_content)
@@ -5276,6 +5299,54 @@ def _url_join_tests_cover_absolute_path_leading_slash(test_content: str) -> bool
             candidate
             for candidate in _url_join_literal_expected_candidates(values)
             if candidate.startswith("/")
+        ]
+        if not candidates:
+            continue
+        expected_values = _quoted_string_values_after_js_call(test_content, call.end())
+        if any(candidate in expected_values for candidate in candidates):
+            return True
+    return False
+
+
+def _url_join_tests_cover_later_absolute_segment_not_resetting_relative_path(
+    test_content: str,
+) -> bool:
+    for call in _URL_JOIN_CALL_RE.finditer(test_content):
+        values = _quoted_string_values(call.group("args"))
+        if len(values) < 2:
+            continue
+        first = values[0]
+        if first.startswith(("/", "http://", "https://")) or not first.strip("/"):
+            continue
+        if not any(value.startswith("/") and value.strip("/") for value in values[1:]):
+            continue
+        candidates = [
+            candidate
+            for candidate in _url_join_literal_expected_candidates(values)
+            if not candidate.startswith("/")
+        ]
+        if not candidates:
+            continue
+        expected_values = _quoted_string_values_after_js_call(test_content, call.end())
+        if any(candidate in expected_values for candidate in candidates):
+            return True
+    return False
+
+
+def _url_join_tests_cover_relative_duplicate_slash_segment(test_content: str) -> bool:
+    for call in _URL_JOIN_CALL_RE.finditer(test_content):
+        values = _quoted_string_values(call.group("args"))
+        if len(values) < 2:
+            continue
+        first = values[0]
+        if first.startswith(("/", "http://", "https://")) or not first.strip("/"):
+            continue
+        if not any("//" in value and value.strip("/") for value in values[1:]):
+            continue
+        candidates = [
+            candidate
+            for candidate in _url_join_literal_expected_candidates(values)
+            if not candidate.startswith("/") and "//" not in candidate
         ]
         if not candidates:
             continue

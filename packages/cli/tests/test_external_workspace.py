@@ -4737,6 +4737,8 @@ async def test_external_workspace_coverage_verifier_allows_url_join_clean_bounda
             'assert.equal(joinUrl("https://example.com/", "/api/"), "https://example.com/api");\n'
             'assert.equal(joinUrl("https://example.com", "", null, "api"), "https://example.com/api");\n'
             'assert.equal(joinUrl("/api", "v1"), "/api/v1");\n'
+            'assert.equal(joinUrl("api", "/v1"), "api/v1");\n'
+            'assert.equal(joinUrl("api", "//v1//users"), "api/v1/users");\n'
             'assert.equal(joinUrl("https://example.com", "/"), "https://example.com");\n'
         ),
     )
@@ -4886,6 +4888,8 @@ async def test_external_workspace_coverage_verifier_rejects_url_join_missing_ori
             'assert.equal(joinUrl("https://example.com/", "/api/"), "https://example.com/api");\n'
             'assert.equal(joinUrl("https://example.com", "", null, "api"), "https://example.com/api");\n'
             'assert.equal(joinUrl("/api", "v1"), "/api/v1");\n'
+            'assert.equal(joinUrl("api", "/v1"), "api/v1");\n'
+            'assert.equal(joinUrl("api", "//v1//users"), "api/v1/users");\n'
         ),
     )
     adapter = CoverageReviewAdapter({"can_finish": True, "reason": "looks good", "confidence": 0.9})
@@ -4907,6 +4911,87 @@ async def test_external_workspace_coverage_verifier_rejects_url_join_missing_ori
 
     assert result.can_finish is False
     assert "slash-only root path" in result.reason
+    assert adapter.calls == []
+
+
+@pytest.mark.asyncio
+async def test_external_workspace_coverage_verifier_rejects_url_join_later_absolute_segment_reset(
+    tmp_path: Path,
+) -> None:
+    env, structural = await _accepted_url_join_workspace(
+        tmp_path,
+        test_body=(
+            'const assert = require("node:assert/strict");\n'
+            'const { joinUrl } = require("../src/urlJoin");\n'
+            'assert.equal(joinUrl("https://example.com", "api"), "https://example.com/api");\n'
+            'assert.equal(joinUrl("https://example.com/", "/api/"), "https://example.com/api");\n'
+            'assert.equal(joinUrl("https://example.com", "", null, "api"), "https://example.com/api");\n'
+            'assert.equal(joinUrl("/api", "v1"), "/api/v1");\n'
+            'assert.equal(joinUrl("api", "/v1"), "/api/v1");\n'
+            'assert.equal(joinUrl("https://example.com", "/"), "https://example.com");\n'
+        ),
+    )
+    adapter = CoverageReviewAdapter({"can_finish": True, "reason": "looks good", "confidence": 0.9})
+    verifier = ExternalWorkspaceCoverageVerifier(
+        environment=env,
+        workdir=str(tmp_path),
+        instruction=(
+            "Fix URL joining. joinUrl should preserve a URL scheme and host, ignore "
+            "nullish or empty segments, collapse duplicate slashes between path "
+            "segments, keep a leading slash for absolute paths, and trim trailing "
+            "slashes except for the root URL."
+        ),
+        adapter=adapter,
+        model="judge",
+        structural_verifier=structural,
+    )
+
+    result = await verifier.verify(session=SimpleNamespace(messages=[]), activity=[])
+
+    assert result.can_finish is False
+    assert "stays relative" in result.reason
+    assert 'joinUrl("api", "/v1")' in result.reason
+    assert adapter.calls == []
+
+
+@pytest.mark.asyncio
+async def test_external_workspace_coverage_verifier_rejects_url_join_relative_duplicate_slash_reset(
+    tmp_path: Path,
+) -> None:
+    env, structural = await _accepted_url_join_workspace(
+        tmp_path,
+        test_body=(
+            'const assert = require("node:assert/strict");\n'
+            'const { joinUrl } = require("../src/urlJoin");\n'
+            'assert.equal(joinUrl("https://example.com", "api"), "https://example.com/api");\n'
+            'assert.equal(joinUrl("https://example.com/", "/api/"), "https://example.com/api");\n'
+            'assert.equal(joinUrl("https://example.com", "", null, "api"), "https://example.com/api");\n'
+            'assert.equal(joinUrl("/api", "v1"), "/api/v1");\n'
+            'assert.equal(joinUrl("api", "/v1"), "api/v1");\n'
+            'assert.equal(joinUrl("api", "//v1//users"), "/api/v1/users");\n'
+            'assert.equal(joinUrl("https://example.com", "/"), "https://example.com");\n'
+        ),
+    )
+    adapter = CoverageReviewAdapter({"can_finish": True, "reason": "looks good", "confidence": 0.9})
+    verifier = ExternalWorkspaceCoverageVerifier(
+        environment=env,
+        workdir=str(tmp_path),
+        instruction=(
+            "Fix URL joining. joinUrl should preserve a URL scheme and host, ignore "
+            "nullish or empty segments, collapse duplicate slashes between path "
+            "segments, keep a leading slash for absolute paths, and trim trailing "
+            "slashes except for the root URL."
+        ),
+        adapter=adapter,
+        model="judge",
+        structural_verifier=structural,
+    )
+
+    result = await verifier.verify(session=SimpleNamespace(messages=[]), activity=[])
+
+    assert result.can_finish is False
+    assert "duplicate slashes in relative paths" in result.reason
+    assert 'joinUrl("api", "//v1//users")' in result.reason
     assert adapter.calls == []
 
 
