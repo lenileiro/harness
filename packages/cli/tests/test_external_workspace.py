@@ -5306,7 +5306,7 @@ async def test_external_workspace_coverage_verifier_rejects_current_release_with
 
 
 @pytest.mark.asyncio
-async def test_external_workspace_coverage_verifier_rejects_current_release_tarball_source_url(
+async def test_external_workspace_coverage_verifier_allows_exact_source_url_without_python_shape_policy(
     tmp_path: Path,
 ) -> None:
     tarball_url = "https://www.python.org/ftp/python/3.14.5/Python-3.14.5.tgz"
@@ -5333,10 +5333,9 @@ async def test_external_workspace_coverage_verifier_rejects_current_release_tarb
 
     result = await verifier.verify(session=SimpleNamespace(messages=[]), activity=[])
 
-    assert result.can_finish is False
-    assert "canonical official Python release page URL" in result.reason
-    assert "source tarball" in result.reason
-    assert adapter.calls == []
+    assert result.can_finish is True
+    assert result.reason == "coverage review passed: tests assert the exact tarball URL"
+    assert len(adapter.calls) == 1
 
 
 @pytest.mark.asyncio

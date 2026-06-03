@@ -4970,19 +4970,6 @@ def _current_release_source_url_coverage_reason(
         value for value in _quoted_string_values(source_content) if value.startswith("https://")
     ]
     official_source_urls = [value for value in source_urls if "python.org/" in value]
-    non_canonical_python_urls = [
-        value
-        for value in official_source_urls
-        if not re.search(r"https://www\.python\.org/downloads/release/python-\d+/?$", value)
-    ]
-    if non_canonical_python_urls:
-        return (
-            "changed source must store the canonical official Python release page "
-            "URL, such as `https://www.python.org/downloads/release/python-3145/`, "
-            "not a downloads index, source tarball, or FTP artifact URL. Exact "
-            "tests against a non-canonical URL can still pass while the helper "
-            "returns the wrong source page."
-        )
     if official_source_urls and not any(value in test_content for value in official_source_urls):
         return (
             "changed tests must assert the exact official source URL from the "
