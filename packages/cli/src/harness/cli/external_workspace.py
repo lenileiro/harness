@@ -5297,7 +5297,7 @@ def _quoted_string_values_after_line_call(test_content: str, call_end: int) -> l
     return _quoted_string_values(tail)
 
 
-def _quoted_string_values_after_js_call(test_content: str, call_end: int) -> list[str]:
+def _quoted_string_values_after_call_statement(test_content: str, call_end: int) -> list[str]:
     tail = test_content[call_end : call_end + 500]
     statement_end = tail.find(";")
     if statement_end >= 0:
@@ -5340,7 +5340,7 @@ def _url_join_tests_cover_origin_duplicate_slash_boundary(test_content: str) -> 
         )
         if not slashy_segment:
             continue
-        for expected in _quoted_string_values_after_js_call(test_content, call.end()):
+        for expected in _quoted_string_values_after_call_statement(test_content, call.end()):
             if not expected.startswith(f"{origin}/"):
                 continue
             suffix = expected[len(origin) :]
@@ -5357,7 +5357,7 @@ def _url_join_tests_cover_ignored_empty_segments(test_content: str) -> bool:
         candidates = _url_join_literal_expected_candidates(_quoted_string_values(args_text))
         if not candidates:
             continue
-        expected_values = _quoted_string_values_after_js_call(test_content, call.end())
+        expected_values = _quoted_string_values_after_call_statement(test_content, call.end())
         if any(
             candidate in expected_values and candidate.startswith(("http://", "https://"))
             for candidate in candidates
@@ -5378,7 +5378,7 @@ def _url_join_tests_cover_absolute_path_leading_slash(test_content: str) -> bool
         ]
         if not candidates:
             continue
-        expected_values = _quoted_string_values_after_js_call(test_content, call.end())
+        expected_values = _quoted_string_values_after_call_statement(test_content, call.end())
         if any(candidate in expected_values for candidate in candidates):
             return True
     return False
@@ -5403,7 +5403,7 @@ def _url_join_tests_cover_later_absolute_segment_not_resetting_relative_path(
         ]
         if not candidates:
             continue
-        expected_values = _quoted_string_values_after_js_call(test_content, call.end())
+        expected_values = _quoted_string_values_after_call_statement(test_content, call.end())
         if any(candidate in expected_values for candidate in candidates):
             return True
     return False
@@ -5426,7 +5426,7 @@ def _url_join_tests_cover_relative_duplicate_slash_segment(test_content: str) ->
         ]
         if not candidates:
             continue
-        expected_values = _quoted_string_values_after_js_call(test_content, call.end())
+        expected_values = _quoted_string_values_after_call_statement(test_content, call.end())
         if any(candidate in expected_values for candidate in candidates):
             return True
     return False
@@ -5445,7 +5445,7 @@ def _url_join_tests_cover_origin_root_slash_trim(test_content: str) -> bool:
         )
         if not has_root_slash_input:
             continue
-        expected_values = _quoted_string_values_after_js_call(test_content, call.end())
+        expected_values = _quoted_string_values_after_call_statement(test_content, call.end())
         if origin_match.group("origin") in expected_values:
             return True
     return False

@@ -161,6 +161,11 @@ def test_external_workspace_gates_do_not_reintroduce_language_specific_policy() 
             "def _diff_references_untracked_test_paths"
         )
     ]
+    semantic_coverage_gate = source[
+        source.index("def _release_value_format_reason") : source.index(
+            "class ExternalWorkspaceCoverageVerifier"
+        )
+    ]
     generated_artifact_filter = (
         source[
             source.index("_GIT_WORKSPACE_FINGERPRINT_COMMAND") : source.index(
@@ -188,9 +193,19 @@ def test_external_workspace_gates_do_not_reintroduce_language_specific_policy() 
             "cargo",
             "go",
             "rust",
+            "javascript",
+            "js",
+            "typescript",
+            "ts",
         }
     )
-    for section in (clone_gate, setup_detector, coverage_gate, generated_artifact_filter):
+    for section in (
+        clone_gate,
+        setup_detector,
+        coverage_gate,
+        semantic_coverage_gate,
+        generated_artifact_filter,
+    ):
         words = set(re.findall(r"[a-z0-9_+.-]+", section.lower()))
         assert words.isdisjoint(language_specific_gate_terms)
 
