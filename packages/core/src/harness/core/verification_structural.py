@@ -98,6 +98,7 @@ _TEST_COMMAND_HINTS: tuple[str, ...] = (
     "pnpm test",
     "yarn test",
     "bun test",
+    "node --test",
     "cargo test",
     "go test",
     "jest",
@@ -131,6 +132,7 @@ _DIRECT_VERIFY_COMMANDS = frozenset(
         "pnpm",
         "yarn",
         "bun",
+        "node",
     }
 )
 _PACKAGE_VERIFY_SCRIPTS = (
@@ -684,6 +686,8 @@ def _verify_command_segment_is_broad_check(segment: str) -> bool:
         "tsc",
     }:
         return True
+    if executable == "node":
+        return len(lowered) >= 2 and lowered[1] == "--test"
     if executable == "cargo":
         return len(lowered) >= 2 and lowered[1] in {"test", "check", "clippy", "build"}
     if executable == "go":

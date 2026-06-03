@@ -251,6 +251,10 @@ def test_verification_command_must_cover_changed_tests() -> None:
     assert _verification_command_covers_test_changes("uv run pytest", changed)
     assert _verification_command_covers_test_changes("npm test", ["tests/test_feature.js"])
     assert _verification_command_covers_test_changes(
+        "node --test",
+        ["test/urlJoin.test.js"],
+    )
+    assert _verification_command_covers_test_changes(
         "node --test test/urlJoin.test.js",
         ["test/urlJoin.test.js"],
     )

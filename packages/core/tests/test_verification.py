@@ -1831,6 +1831,36 @@ class TestVerifyBeforeDoneVerifier:
         result = await verifier.verify(session=_session(), activity=activity)
         assert result.can_finish is True
 
+    async def test_write_then_node_builtin_test_runner_passes(self) -> None:
+        verifier = VerifyBeforeDoneVerifier()
+        activity = [
+            self._activity(
+                kind="tool_call.completed",
+                name="write_file",
+                is_error=False,
+                arguments={"path": "src/urlJoin.js"},
+            ),
+            self._activity(
+                kind="tool_call.completed",
+                name="write_file",
+                is_error=False,
+                arguments={"path": "test/urlJoin.test.js"},
+            ),
+            self._activity(
+                kind="tool_call.completed",
+                name="verify_work",
+                is_error=False,
+                arguments={"command": "node --test"},
+                content_preview="PASSED\n\nok joins URLs\n# tests 16\n# pass 16",
+                metadata={
+                    "exit_code": 0,
+                    "stdout": "ok joins URLs\n# tests 16\n# pass 16\n",
+                },
+            ),
+        ]
+        result = await verifier.verify(session=_session(), activity=activity)
+        assert result.can_finish is True
+
     async def test_write_then_verify_without_command_or_default_blocks(self) -> None:
         verifier = VerifyBeforeDoneVerifier()
         activity = [

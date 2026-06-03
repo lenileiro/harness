@@ -609,6 +609,7 @@ def _output_reports_failure(output: str) -> bool:
     if re.search(r"\b(?:failed|failures?)\s*[:=]\s*[1-9]\d*\b", normalized):
         return True
     line_failure_patterns = (
+        r"(?m)^\s*verification\s+failed\b",
         r"(?m)^\s*(?:failed|failure)\s*$",
         r"(?m)^\s*failed(?:\s|$)",
         r"(?m)^\s*failed\s+(?:tests?|specs?|checks?|examples?)\b",
