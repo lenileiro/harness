@@ -4798,7 +4798,7 @@ _LABELLED_RELEASE_ALLOWED_RE = re.compile(
     flags=re.IGNORECASE,
 )
 _QUOTED_STRING_LITERAL_RE = re.compile(
-    r'"(?P<double>(?:\\.|[^"\\]){1,200})"|' r"'(?P<single>(?:\\.|[^'\\]){1,200})'"
+    r'"(?P<double>(?:\\.|[^"\\]){0,200})"|' r"'(?P<single>(?:\\.|[^'\\]){0,200})'"
 )
 _LABEL_PREFIXED_VERSION_RE = re.compile(
     r"^(?P<label>[A-Za-z][A-Za-z0-9_.+-]*(?:[ -][A-Za-z][A-Za-z0-9_.+-]*){0,3})\s+"
@@ -4811,6 +4811,7 @@ _CLEAN_PATH_SEGMENT_LITERAL_RE = re.compile(
     r"(?P<quote>['\"])(?!https?://)(?P<segment>[^/'\"\s][^/'\"]*)(?P=quote)"
 )
 _URL_JOIN_CALL_RE = re.compile(r"\bjoinUrl\((?P<args>[^)]{0,1200})\)", flags=re.DOTALL)
+_JS_NULLISH_ARG_RE = re.compile(r"(?<![A-Za-z0-9_$])(?:null|undefined)(?![A-Za-z0-9_$])")
 _INI_SECTION_WITH_SPACES_RE = re.compile(r"(?m)^\s*\[\s+[A-Za-z0-9_.:-]+\s+\]\s*$")
 _INI_KEY_VALUE_WHITESPACE_RE = re.compile(r"(?m)^\s*[^#;\s=\[]+\s+=\s+[^=\n]+")
 _INI_EQUALS_VALUE_RE = re.compile(r"(?m)^\s*[^#;\s=\[]+\s*=\s*[^#;\n]*=[^#;\n]*")
@@ -4972,16 +4973,38 @@ def _url_join_boundary_coverage_reason(
     ):
         return None
     if _url_join_tests_cover_clean_origin_path_boundary(test_content):
-        if _url_join_tests_cover_origin_duplicate_slash_boundary(test_content):
-            return None
-        return (
-            "URL joining tests must include duplicate-slash collapse across the "
-            "scheme+host/path boundary, for example "
-            '`joinUrl("https://example.com/", "/api/")` expecting '
-            '`"https://example.com/api"`. Tests that cover slash normalization '
-            "only on relative paths can miss implementations that preserve the "
-            "origin but mishandle slashes once a host is present."
-        )
+        if not _url_join_tests_cover_origin_duplicate_slash_boundary(test_content):
+            return (
+                "URL joining tests must include duplicate-slash collapse across the "
+                "scheme+host/path boundary, for example "
+                '`joinUrl("https://example.com/", "/api/")` expecting '
+                '`"https://example.com/api"`. Tests that cover slash normalization '
+                "only on relative paths can miss implementations that preserve the "
+                "origin but mishandle slashes once a host is present."
+            )
+        if (
+            "nullish" in lowered or "empty segment" in lowered or "empty segments" in lowered
+        ) and not _url_join_tests_cover_ignored_empty_segments(test_content):
+            return (
+                "URL joining tests must include ignored nullish/empty segments while "
+                "preserving a scheme+host, for example "
+                '`joinUrl("https://example.com", "", null, "api")` expecting '
+                '`"https://example.com/api"`. Without that case, an implementation '
+                "can preserve hosts and slashes while still letting empty segments "
+                "change the result."
+            )
+        if (
+            "leading slash" in lowered
+            and "absolute path" in lowered
+            and not _url_join_tests_cover_absolute_path_leading_slash(test_content)
+        ):
+            return (
+                "URL joining tests must include an absolute-path input whose result "
+                "keeps the leading slash, for example "
+                '`joinUrl("/api", "v1")` expecting `"/api/v1"`. Without that case, '
+                "a path joiner can accidentally turn absolute paths into relative ones."
+            )
+        return None
     return (
         "URL joining tests must include the boundary where a clean scheme+host "
         "segment is followed by a clean path segment with no slash already present "
@@ -5123,6 +5146,65 @@ def _url_join_tests_cover_origin_duplicate_slash_boundary(test_content: str) -> 
             if suffix != "/" and not suffix.endswith("/") and "//" not in suffix:
                 return True
     return False
+
+
+def _url_join_tests_cover_ignored_empty_segments(test_content: str) -> bool:
+    for call in _URL_JOIN_CALL_RE.finditer(test_content):
+        args_text = call.group("args")
+        if not (_JS_NULLISH_ARG_RE.search(args_text) or '""' in args_text or "''" in args_text):
+            continue
+        candidates = _url_join_literal_expected_candidates(_quoted_string_values(args_text))
+        if not candidates:
+            continue
+        expected_values = _quoted_string_values(test_content[call.end() : call.end() + 500])
+        if any(
+            candidate in expected_values and candidate.startswith(("http://", "https://"))
+            for candidate in candidates
+        ):
+            return True
+    return False
+
+
+def _url_join_tests_cover_absolute_path_leading_slash(test_content: str) -> bool:
+    for call in _URL_JOIN_CALL_RE.finditer(test_content):
+        values = _quoted_string_values(call.group("args"))
+        if not values or not values[0].startswith("/") or values[0].startswith("//"):
+            continue
+        candidates = [
+            candidate
+            for candidate in _url_join_literal_expected_candidates(values)
+            if candidate.startswith("/")
+        ]
+        if not candidates:
+            continue
+        expected_values = _quoted_string_values(test_content[call.end() : call.end() + 500])
+        if any(candidate in expected_values for candidate in candidates):
+            return True
+    return False
+
+
+def _url_join_literal_expected_candidates(values: list[str]) -> list[str]:
+    parts = [value for value in values if value]
+    if len(parts) < 2:
+        return []
+    first = parts[0]
+    rest = [part.strip("/") for part in parts[1:] if part.strip("/")]
+    if not rest:
+        return []
+    origin_match = re.match(r"^(?P<origin>https?://[^/]+)(?P<path>/.*)?$", first)
+    if origin_match is not None:
+        base_parts = [part for part in (origin_match.group("path") or "").split("/") if part]
+        suffix = "/".join([*base_parts, *rest])
+        if not suffix:
+            return [origin_match.group("origin") + "/"]
+        return [origin_match.group("origin") + "/" + suffix]
+
+    leading = first.startswith("/")
+    path_parts = [part for value in parts for part in value.split("/") if part]
+    if not path_parts:
+        return []
+    joined = "/".join(path_parts)
+    return ["/" + joined if leading else joined]
 
 
 class ExternalWorkspaceCoverageVerifier:

@@ -168,6 +168,58 @@ def test_release_value():
     assert check["leftover_scratch_paths"] == []
 
 
+def test_js_scenario_accepts_added_focused_test(tmp_path: Path) -> None:
+    from evals import external_js_scenario as scenario
+
+    workspace = scenario.create_workspace(tmp_path)
+    (workspace / "src" / "urlJoin.js").write_text(
+        """
+function joinUrl(...segments) {
+  const cleaned = segments
+    .filter((segment) => segment !== null && segment !== undefined && segment !== "")
+    .map(String);
+  if (cleaned.length === 0) return "";
+
+  const origin = cleaned[0].match(/^(https?:\\/\\/[^/]+)(.*)$/);
+  const pathSegments = origin ? [origin[2], ...cleaned.slice(1)] : cleaned;
+  let path = pathSegments.join("/").replace(/\\/{2,}/g, "/");
+  const isAbsolutePath = path.startsWith("/");
+  if (path.length > 1) path = path.replace(/\\/+$/, "");
+  if (path === "" && isAbsolutePath) path = "/";
+
+  if (!origin) return path;
+  if (path === "") return origin[1];
+  if (path === "/") return `${origin[1]}/`;
+  return origin[1] + (path.startsWith("/") ? path : `/${path}`);
+}
+
+module.exports = { joinUrl };
+""".lstrip(),
+        encoding="utf-8",
+    )
+    (workspace / "test" / "urlJoin.regression.test.js").write_text(
+        """
+const assert = require("node:assert/strict");
+const test = require("node:test");
+const { joinUrl } = require("../src/urlJoin");
+
+test("preserves origin while ignoring empty segments", () => {
+  assert.equal(joinUrl("https://example.com", "", null, "api"), "https://example.com/api");
+});
+""".lstrip(),
+        encoding="utf-8",
+    )
+
+    check = scenario.independent_check(workspace)
+
+    assert check["npm_test_return_code"] == 0
+    assert check["behavior_return_code"] == 0
+    assert check["changed_source"] is True
+    assert check["changed_tests"] is True
+    assert check["changed_test_paths"] == ["test/urlJoin.regression.test.js"]
+    assert check["leftover_scratch_paths"] == []
+
+
 def test_shell_scenario_accepts_named_regression_script(tmp_path: Path) -> None:
     from evals import external_shell_scenario as scenario
 
@@ -239,8 +291,14 @@ exit 1
 
     check = scenario.independent_check(workspace)
 
-    description_case = next(item for item in check["behavior"] if item["key"] == "description")
+    behavior = check["behavior"]
+    assert isinstance(behavior, list)
+    description_case = next(
+        item for item in behavior if isinstance(item, dict) and item.get("key") == "description"
+    )
+    stdout = description_case["stdout"]
+    assert isinstance(stdout, str)
     assert description_case["expected_stdout"] == "value with spaces"
-    assert description_case["stdout"].strip() == "value"
+    assert stdout.strip() == "value"
     assert description_case["passed"] is False
     assert check["behavior_passed"] is False

@@ -4642,6 +4642,8 @@ async def test_external_workspace_coverage_verifier_allows_url_join_clean_bounda
             'const { joinUrl } = require("../src/urlJoin");\n'
             'assert.equal(joinUrl("https://example.com", "api"), "https://example.com/api");\n'
             'assert.equal(joinUrl("https://example.com/", "/api/"), "https://example.com/api");\n'
+            'assert.equal(joinUrl("https://example.com", "", null, "api"), "https://example.com/api");\n'
+            'assert.equal(joinUrl("/api", "v1"), "/api/v1");\n'
         ),
     )
     adapter = CoverageReviewAdapter(
@@ -4651,8 +4653,10 @@ async def test_external_workspace_coverage_verifier_allows_url_join_clean_bounda
         environment=env,
         workdir=str(tmp_path),
         instruction=(
-            "Fix URL joining. joinUrl should preserve a URL scheme and host, collapse "
-            "duplicate slashes between path segments, and trim trailing slashes."
+            "Fix URL joining. joinUrl should preserve a URL scheme and host, ignore "
+            "nullish or empty segments, collapse duplicate slashes between path "
+            "segments, keep a leading slash for absolute paths, and trim trailing "
+            "slashes."
         ),
         adapter=adapter,
         model="judge",
@@ -4664,6 +4668,115 @@ async def test_external_workspace_coverage_verifier_allows_url_join_clean_bounda
     assert result.can_finish is True
     assert "coverage review passed" in result.reason
     assert len(adapter.calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_external_workspace_coverage_verifier_rejects_url_join_missing_empty_segment_case(
+    tmp_path: Path,
+) -> None:
+    env, structural = await _accepted_url_join_workspace(
+        tmp_path,
+        test_body=(
+            'const assert = require("node:assert/strict");\n'
+            'const { joinUrl } = require("../src/urlJoin");\n'
+            'assert.equal(joinUrl("https://example.com", "api"), "https://example.com/api");\n'
+            'assert.equal(joinUrl("https://example.com/", "/api/"), "https://example.com/api");\n'
+            'assert.equal(joinUrl("/api", "v1"), "/api/v1");\n'
+        ),
+    )
+    adapter = CoverageReviewAdapter({"can_finish": True, "reason": "looks good", "confidence": 0.9})
+    verifier = ExternalWorkspaceCoverageVerifier(
+        environment=env,
+        workdir=str(tmp_path),
+        instruction=(
+            "Fix URL joining. joinUrl should preserve a URL scheme and host, ignore "
+            "nullish or empty segments, collapse duplicate slashes between path "
+            "segments, keep a leading slash for absolute paths, and trim trailing "
+            "slashes."
+        ),
+        adapter=adapter,
+        model="judge",
+        structural_verifier=structural,
+    )
+
+    result = await verifier.verify(session=SimpleNamespace(messages=[]), activity=[])
+
+    assert result.can_finish is False
+    assert "ignored nullish/empty segments" in result.reason
+    assert adapter.calls == []
+
+
+@pytest.mark.asyncio
+async def test_external_workspace_coverage_verifier_rejects_url_join_relative_only_empty_segment_case(
+    tmp_path: Path,
+) -> None:
+    env, structural = await _accepted_url_join_workspace(
+        tmp_path,
+        test_body=(
+            'const assert = require("node:assert/strict");\n'
+            'const { joinUrl } = require("../src/urlJoin");\n'
+            'assert.equal(joinUrl("https://example.com", "api"), "https://example.com/api");\n'
+            'assert.equal(joinUrl("https://example.com/", "/api/"), "https://example.com/api");\n'
+            'assert.equal(joinUrl("api", null, "", undefined, "users"), "api/users");\n'
+            'assert.equal(joinUrl("/api", "v1"), "/api/v1");\n'
+        ),
+    )
+    adapter = CoverageReviewAdapter({"can_finish": True, "reason": "looks good", "confidence": 0.9})
+    verifier = ExternalWorkspaceCoverageVerifier(
+        environment=env,
+        workdir=str(tmp_path),
+        instruction=(
+            "Fix URL joining. joinUrl should preserve a URL scheme and host, ignore "
+            "nullish or empty segments, collapse duplicate slashes between path "
+            "segments, keep a leading slash for absolute paths, and trim trailing "
+            "slashes."
+        ),
+        adapter=adapter,
+        model="judge",
+        structural_verifier=structural,
+    )
+
+    result = await verifier.verify(session=SimpleNamespace(messages=[]), activity=[])
+
+    assert result.can_finish is False
+    assert "ignored nullish/empty segments" in result.reason
+    assert adapter.calls == []
+
+
+@pytest.mark.asyncio
+async def test_external_workspace_coverage_verifier_rejects_url_join_missing_absolute_path_case(
+    tmp_path: Path,
+) -> None:
+    env, structural = await _accepted_url_join_workspace(
+        tmp_path,
+        test_body=(
+            'const assert = require("node:assert/strict");\n'
+            'const { joinUrl } = require("../src/urlJoin");\n'
+            'assert.equal(joinUrl("https://example.com", "api"), "https://example.com/api");\n'
+            'assert.equal(joinUrl("https://example.com/", "/api/"), "https://example.com/api");\n'
+            'assert.equal(joinUrl("https://example.com", "", null, "api"), "https://example.com/api");\n'
+        ),
+    )
+    adapter = CoverageReviewAdapter({"can_finish": True, "reason": "looks good", "confidence": 0.9})
+    verifier = ExternalWorkspaceCoverageVerifier(
+        environment=env,
+        workdir=str(tmp_path),
+        instruction=(
+            "Fix URL joining. joinUrl should preserve a URL scheme and host, ignore "
+            "nullish or empty segments, collapse duplicate slashes between path "
+            "segments, keep a leading slash for absolute paths, and trim trailing "
+            "slashes."
+        ),
+        adapter=adapter,
+        model="judge",
+        structural_verifier=structural,
+    )
+
+    result = await verifier.verify(session=SimpleNamespace(messages=[]), activity=[])
+
+    assert result.can_finish is False
+    assert "keeps the leading slash" in result.reason
+    assert adapter.calls == []
 
 
 @pytest.mark.asyncio

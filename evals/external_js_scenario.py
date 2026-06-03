@@ -200,7 +200,21 @@ for (const [input, expected] of cases) {
         timeout=30,
     )
     status_text = status_result.stdout
-    leftover_scratch_paths = untracked_scratch_paths(status_text)
+    status_paths = [
+        line[3:]
+        for line in status_text.splitlines()
+        if len(line) > 3 and (line[:2].strip() or line.startswith("?? "))
+    ]
+    changed_test_paths = [
+        path
+        for path in status_paths
+        if path == "test/urlJoin.test.js"
+        or (path.startswith("test/") and path.endswith(".test.js"))
+    ]
+    leftover_scratch_paths = untracked_scratch_paths(
+        status_text,
+        allowed_untracked=set(changed_test_paths),
+    )
     return {
         "npm_test_return_code": npm_result.returncode,
         "npm_test_stdout": npm_result.stdout[-1000:],
@@ -211,7 +225,8 @@ for (const [input, expected] of cases) {
         "diff": diff_result.stdout,
         "status": status_text,
         "changed_source": "src/urlJoin.js" in status_text,
-        "changed_tests": "test/urlJoin.test.js" in status_text,
+        "changed_tests": bool(changed_test_paths),
+        "changed_test_paths": changed_test_paths,
         "leftover_scratch_paths": leftover_scratch_paths,
     }
 
