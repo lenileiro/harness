@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from evals.external_scenario_checks import load_dotenv
+from evals.external_scenario_checks import is_generated_artifact, load_dotenv
 
 
 @pytest.mark.parametrize(
@@ -54,6 +54,13 @@ def test_external_scenario_dotenv_loader_sets_missing_values_only(
     assert os.environ["OPENROUTER_API_KEY"] == "fake-openrouter-key"
     assert os.environ["TAVILY_API_KEY"] == "fake-tavily-key"
     assert os.environ["EXISTING"] == "already-set"
+
+
+def test_external_scenario_generated_artifact_filter_is_language_neutral() -> None:
+    assert is_generated_artifact("cache/blob.bin")
+    assert is_generated_artifact("build/tool_cache/blob.bin")
+    assert is_generated_artifact("work/.tool-cache/blob.bin")
+    assert not is_generated_artifact("src/cacheable_feature.txt")
 
 
 @pytest.mark.parametrize(

@@ -386,6 +386,31 @@ def test_copy_fixture_for_run_hides_eval_metadata(tmp_path: Path) -> None:
     assert not (dest / "fixture.yaml").exists()
 
 
+def test_copy_fixture_for_run_ignores_generic_cache_directories(tmp_path: Path) -> None:
+    src = _write_fixture(tmp_path, "01-demo", metadata="family: demo\n")
+    (src / "engine_cache").mkdir()
+    (src / "engine_cache" / "blob.bin").write_text("cached\n", encoding="utf-8")
+    (src / ".tool-cache").mkdir()
+    (src / ".tool-cache" / "blob.bin").write_text("cached\n", encoding="utf-8")
+    dest = tmp_path / "copied"
+
+    runner._copy_fixture_for_run(src, dest)  # type: ignore[attr-defined]
+
+    assert not (dest / "engine_cache").exists()
+    assert not (dest / ".tool-cache").exists()
+
+
+def test_runner_generated_artifact_filters_do_not_hardcode_language_caches() -> None:
+    source = Path(runner.__file__).read_text(encoding="utf-8")
+    for legacy_term in (
+        ".v" + "env",
+        "__py" + "cache__",
+        "*." + "pyc",
+        "*." + "pyo",
+    ):
+        assert legacy_term not in source
+
+
 def test_metadata_only_fixture_uses_repo_workspace(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -6,7 +6,7 @@ Discovers fixtures under evals/fixtures/, runs each one by:
   3. reads TASK.md as the agent prompt
   4. invokes `harness run` as a subprocess (captures stdout+stderr)
   5. captures `git diff HEAD` (what the agent changed)
-  6. runs `python -m pytest tests/` (whether the fix is correct)
+  6. runs the fixture's declared verify command (whether the fix is correct)
 """
 
 from __future__ import annotations
@@ -47,6 +47,9 @@ _check_sustained_coherence_scope = _hard_checks.check_sustained_coherence_scope
 _check_wrong_diagnosis_scope = _hard_checks.check_wrong_diagnosis_scope
 
 _TIMEOUT_EXIT_CODE = 124
+_CACHE_GITIGNORE = (
+    "cache/\n.cache/\n*_cache/\n.*_cache/\n*-cache/\n.*-cache/\n*cache__/\n.*cache__/\n"
+)
 
 
 def _timeout_output(value: str | bytes | None) -> str:
@@ -87,6 +90,21 @@ def _git_env() -> dict[str, str]:
 
 def _project_root() -> Path:
     return Path(__file__).resolve().parents[1]
+
+
+def _path_part_is_generated_cache(part: str) -> bool:
+    normalized = part.lower()
+    return (
+        normalized in {"cache", ".cache"}
+        or normalized.endswith("_cache")
+        or normalized.endswith("-cache")
+        or normalized.endswith("cache__")
+    )
+
+
+def _is_generated_cache_path(path: str | Path) -> bool:
+    parts = [part for part in Path(path).parts if part]
+    return any(_path_part_is_generated_cache(part) for part in parts)
 
 
 def _agent_cmd(
@@ -193,19 +211,21 @@ def _copy_fixture_for_run(src: Path, dest: Path) -> None:
     provides their contents to the judge and discovery layer directly, so the
     agent should not be able to read them from the workspace during execution.
     """
-    shutil.copytree(
-        src,
-        dest,
-        ignore=shutil.ignore_patterns("EVAL.md", "fixture.yaml", "__pycache__", "*.pyc", "*.pyo"),
-    )
+
+    def _ignore(_: str, names: list[str]) -> set[str]:
+        ignored = {"EVAL.md", "fixture.yaml"}
+        ignored.update(name for name in names if _is_generated_cache_path(name))
+        return ignored
+
+    shutil.copytree(src, dest, ignore=_ignore)
 
 
 def _fixture_has_workspace_payload(src: Path) -> bool:
-    ignored_names = {"TASK.md", "EVAL.md", "fixture.yaml", "workspace", "__pycache__"}
+    ignored_names = {"TASK.md", "EVAL.md", "fixture.yaml", "workspace"}
     for child in src.iterdir():
         if child.name in ignored_names:
             continue
-        if child.name.endswith((".pyc", ".pyo")):
+        if _is_generated_cache_path(child.name):
             continue
         return True
     return False
@@ -221,10 +241,10 @@ def _copy_repo_for_run(dest: Path) -> None:
             candidate = current / name
             rel = candidate.relative_to(project_root)
             rel_text = rel.as_posix()
-            if name in {".git", ".venv", ".harness", ".gstack", "__pycache__"}:
+            if name in {".git", ".harness", ".gstack"}:
                 ignored.add(name)
                 continue
-            if name.endswith((".pyc", ".pyo")):
+            if _is_generated_cache_path(name):
                 ignored.add(name)
                 continue
             if rel_text in {
@@ -275,8 +295,8 @@ def run_fixture(
         git_env = _git_env()
 
         # Create a clean git baseline so git diff HEAD captures only agent changes.
-        # Write a .gitignore first so __pycache__ / *.pyc don't pollute the diff.
-        (work / ".gitignore").write_text("__pycache__/\n*.pyc\n*.pyo\n")
+        # Write a .gitignore first so generated cache directories do not pollute the diff.
+        (work / ".gitignore").write_text(_CACHE_GITIGNORE, encoding="utf-8")
         subprocess.run(
             ["git", "-c", "init.defaultBranch=main", "init"],
             cwd=work,

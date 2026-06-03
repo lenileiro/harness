@@ -237,7 +237,7 @@ _workspace_db = workspace_db
 
 app = typer.Typer(
     name="harness",
-    help="Harness — Python agent runtime over OpenAI-compatible providers and Ollama.",
+    help="Harness — AI work-agent runtime over OpenAI-compatible providers and Ollama.",
     no_args_is_help=True,
     add_completion=False,
 )
@@ -417,8 +417,10 @@ _DEFAULT_SYSTEM_PROMPT = (
     "Describe what you plan to do and why — the critic will identify flaws. "
     "Call this when your diagnosis feels uncertain.\n\n"
     "Shell hygiene rules (follow these on every shell call):\n"
-    "- Exclude .venv, __pycache__, node_modules, .git from find/glob commands:\n"
-    "  find . -name '*.py' -not -path './.venv/*' -not -path './__pycache__/*'\n"
+    "- Keep recursive discovery scoped: exclude VCS metadata, dependency directories, "
+    "generated output, and cache directories from find/glob commands.\n"
+    "- Prefer repository-aware or targeted tools such as `git ls-files` and `rg` "
+    "before broad filesystem walks.\n"
     "- Use pipes to count/sort/summarize large output: | wc -l, | sort | uniq -c | sort -rn\n"
     "- Never run long-running background processes.\n\n"
     "For long-running or durable work, do not invent an ad hoc background loop. "

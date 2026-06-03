@@ -518,6 +518,23 @@ class TestRegularTurns:
         assert "compact context packet" in prompt
         assert "permission or data-governance boundaries" in prompt
 
+    def test_default_system_prompt_shell_hygiene_is_language_neutral(self) -> None:
+        prompt = cli_main._DEFAULT_SYSTEM_PROMPT
+        shell_section = prompt[
+            prompt.index("Shell hygiene rules") : prompt.index("For long-running or durable work")
+        ]
+
+        assert "dependency directories" in shell_section
+        assert "cache directories" in shell_section
+        assert "git ls-files" in shell_section
+        for legacy_term in (
+            ".v" + "env",
+            "__py" + "cache__",
+            "node_" + "modules",
+            "'*." + "py'",
+        ):
+            assert legacy_term not in shell_section
+
     def test_workflow_turn_policy_prompt_enforces_exact_harness_bootstrap_order(self) -> None:
         prompt = chat_commands._WORKFLOW_BOOTSTRAP_SYSTEM_PROMPT
         assert chat_commands._WORKFLOW_TURN_POLICY.disable_verify is True

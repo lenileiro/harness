@@ -37,14 +37,15 @@ def load_dotenv(path: Path) -> None:
 
 def is_generated_artifact(path: str) -> bool:
     parts = [part.lower() for part in path.strip("/").split("/") if part]
-    name = parts[-1] if parts else ""
+    return any(_path_part_is_generated_cache(part) for part in parts)
+
+
+def _path_part_is_generated_cache(part: str) -> bool:
     return (
-        "__pycache__" in parts
-        or ".pytest_cache" in parts
-        or ".mypy_cache" in parts
-        or ".ruff_cache" in parts
-        or ".tox" in parts
-        or name.endswith((".pyc", ".pyo"))
+        part in {"cache", ".cache"}
+        or part.endswith("_cache")
+        or part.endswith("-cache")
+        or part.endswith("cache__")
     )
 
 
