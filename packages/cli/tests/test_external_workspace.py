@@ -4126,6 +4126,8 @@ async def test_external_workspace_verifier_reads_committed_nested_checkout_chang
 
 async def _accepted_slug_workspace(
     tmp_path: Path,
+    *,
+    test_body: str | None = None,
 ) -> tuple[LocalEnvironment, ExternalWorkspaceVerifier]:
     env = LocalEnvironment(tmp_path)
     (tmp_path / "tests").mkdir()
@@ -4150,12 +4152,15 @@ async def _accepted_slug_workspace(
         "    return text or 'untitled'\n",
         encoding="utf-8",
     )
-    (tmp_path / "tests" / "test_slugify.py").write_text(
+    default_test_body = (
         "from slugify import slugify\n\n"
         "def test_basic_slugify():\n    assert slugify('Hello World') == 'hello-world'\n\n"
         "def test_regression():\n"
         "    assert slugify('Crème Brûlée') == 'creme-brulee'\n"
-        "    assert slugify('---') == 'untitled'\n",
+        "    assert slugify('---') == 'untitled'\n"
+    )
+    (tmp_path / "tests" / "test_slugify.py").write_text(
+        test_body if test_body is not None else default_test_body,
         encoding="utf-8",
     )
     structural = ExternalWorkspaceVerifier(env, workdir=str(tmp_path))
@@ -4414,6 +4419,81 @@ async def test_external_workspace_coverage_verifier_rejects_weak_regression_test
     assert "transient setup or verification command failure" in system_prompt
     assert "Harness/tooling environment" in system_prompt
     assert "command the agent tried" in system_prompt
+
+
+@pytest.mark.asyncio
+async def test_external_workspace_coverage_verifier_rejects_weak_slugify_tests(
+    tmp_path: Path,
+) -> None:
+    env, structural = await _accepted_slug_workspace(
+        tmp_path,
+        test_body=(
+            "from slugify import slugify\n\n"
+            "def test_basic_slugify():\n"
+            "    assert slugify('Hello World') == 'hello-world'\n\n"
+            "def test_unicode_and_fallback():\n"
+            "    assert slugify('Crème Brûlée') == 'creme-brulee'\n"
+            "    assert slugify('---') == 'untitled'\n"
+        ),
+    )
+    adapter = CoverageReviewAdapter({"can_finish": True, "reason": "looks good", "confidence": 0.9})
+    verifier = ExternalWorkspaceCoverageVerifier(
+        environment=env,
+        workdir=str(tmp_path),
+        instruction=(
+            "Fix slugify. It should produce lowercase ASCII-ish slugs, collapse "
+            "repeated separators into one hyphen, trim leading/trailing separators, "
+            "and return 'untitled' when nothing slug-safe remains."
+        ),
+        adapter=adapter,
+        model="judge",
+        structural_verifier=structural,
+    )
+
+    result = await verifier.verify(session=SimpleNamespace(messages=[]), activity=[])
+
+    assert result.can_finish is False
+    assert "repeated or leading/trailing separator input" in result.reason
+    assert adapter.calls == []
+
+
+@pytest.mark.asyncio
+async def test_external_workspace_coverage_verifier_accepts_representative_slugify_tests(
+    tmp_path: Path,
+) -> None:
+    env, structural = await _accepted_slug_workspace(
+        tmp_path,
+        test_body=(
+            "from slugify import slugify\n\n"
+            "def test_basic_slugify():\n"
+            "    assert slugify('Hello World') == 'hello-world'\n\n"
+            "def test_slugify_contract():\n"
+            "    assert slugify('Crème Brûlée') == 'creme-brulee'\n"
+            "    assert slugify('  Hello__World--- ') == 'hello-world'\n"
+            "    assert slugify('!!!---   $$$') == 'untitled'\n"
+        ),
+    )
+    adapter = CoverageReviewAdapter(
+        {"can_finish": True, "reason": "tests cover slug behavior", "confidence": 0.9}
+    )
+    verifier = ExternalWorkspaceCoverageVerifier(
+        environment=env,
+        workdir=str(tmp_path),
+        instruction=(
+            "Fix slugify. It should produce lowercase ASCII-ish slugs, collapse "
+            "repeated separators into one hyphen, trim leading/trailing separators, "
+            "and return 'untitled' when nothing slug-safe remains."
+        ),
+        adapter=adapter,
+        model="judge",
+        structural_verifier=structural,
+    )
+
+    result = await verifier.verify(session=SimpleNamespace(messages=[]), activity=[])
+
+    assert result.can_finish is True
+    assert "coverage review passed" in result.reason
+    assert len(adapter.calls) == 1
 
 
 @pytest.mark.asyncio

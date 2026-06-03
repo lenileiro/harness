@@ -4814,6 +4814,8 @@ _URL_JOIN_CALL_RE = re.compile(r"\bjoinUrl\((?P<args>[^)]{0,1200})\)", flags=re.
 _INI_SECTION_WITH_SPACES_RE = re.compile(r"(?m)^\s*\[\s+[A-Za-z0-9_.:-]+\s+\]\s*$")
 _INI_KEY_VALUE_WHITESPACE_RE = re.compile(r"(?m)^\s*[^#;\s=\[]+\s+=\s+[^=\n]+")
 _INI_EQUALS_VALUE_RE = re.compile(r"(?m)^\s*[^#;\s=\[]+\s*=\s*[^#;\n]*=[^#;\n]*")
+_SLUG_SAFE_EXPECTED_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)+$")
+_SLUG_SEPARATOR_EDGE_RE = re.compile(r"(^[^A-Za-z0-9]+|[^A-Za-z0-9]+$|[-_\s!.,]{2,})")
 
 
 def _quoted_string_values(text: str) -> list[str]:
@@ -5030,6 +5032,54 @@ def _ini_lookup_coverage_reason(*, instruction: str, test_content: str) -> str |
     )
 
 
+def _slugify_coverage_reason(*, instruction: str, test_content: str) -> str | None:
+    lowered = instruction.lower()
+    if not (
+        "slug" in lowered
+        and "ascii" in lowered
+        and "collapse" in lowered
+        and "trim" in lowered
+        and "untitled" in lowered
+    ):
+        return None
+
+    values = _quoted_string_values(test_content)
+    missing: list[str] = []
+    has_unicode_input = any(any(ord(char) > 127 for char in value) for value in values)
+    has_ascii_slug_expected = any(_SLUG_SAFE_EXPECTED_RE.match(value) for value in values)
+    if not (has_unicode_input and has_ascii_slug_expected):
+        missing.append("a non-ASCII/diacritic input with an ASCII-ish slug expectation")
+
+    has_separator_input = any(
+        any(char.isalnum() for char in value) and _SLUG_SEPARATOR_EDGE_RE.search(value)
+        for value in values
+    )
+    has_non_fallback_slug_expected = any(
+        value != "untitled" and _SLUG_SAFE_EXPECTED_RE.match(value) for value in values
+    )
+    if not (has_separator_input and has_non_fallback_slug_expected):
+        missing.append(
+            "a repeated or leading/trailing separator input that collapses and trims to a slug"
+        )
+
+    has_fallback_input = any(
+        value.strip() and not any(char.isalnum() for char in value) and len(value.strip()) >= 2
+        for value in values
+    )
+    if "untitled" not in test_content or not has_fallback_input:
+        missing.append("an input with nothing slug-safe remaining that returns `untitled`")
+
+    if not missing:
+        return None
+    return (
+        "Slugify tests must explicitly cover "
+        + "; ".join(missing)
+        + ". Otherwise a slug implementation can pass happy-path tests while "
+        "dropping Unicode letters, failing to collapse/trim separators, or "
+        "returning an empty slug."
+    )
+
+
 def _url_join_tests_cover_clean_origin_path_boundary(test_content: str) -> bool:
     for match in _URL_JOIN_ORIGIN_LITERAL_RE.finditer(test_content):
         origin = match.group("origin")
@@ -5170,6 +5220,17 @@ class ExternalWorkspaceCoverageVerifier:
             return VerificationResult(
                 can_finish=False,
                 reason=f"Regression coverage is too weak: {ini_reason}",
+                confidence=0.9,
+                verifier_name=self.name,
+            )
+        slug_reason = _slugify_coverage_reason(
+            instruction=self.instruction,
+            test_content=test_content,
+        )
+        if slug_reason is not None:
+            return VerificationResult(
+                can_finish=False,
+                reason=f"Regression coverage is too weak: {slug_reason}",
                 confidence=0.9,
                 verifier_name=self.name,
             )
