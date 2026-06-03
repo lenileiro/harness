@@ -4808,6 +4808,7 @@ _URL_JOIN_ORIGIN_LITERAL_RE = re.compile(r"(?P<quote>['\"])(?P<origin>https?://[
 _CLEAN_PATH_SEGMENT_LITERAL_RE = re.compile(
     r"(?P<quote>['\"])(?!https?://)(?P<segment>[^/'\"\s][^/'\"]*)(?P=quote)"
 )
+_URL_JOIN_CALL_RE = re.compile(r"\bjoinUrl\((?P<args>[^)]{0,1200})\)", flags=re.DOTALL)
 
 
 def _quoted_string_values(text: str) -> list[str]:
@@ -4911,7 +4912,16 @@ def _url_join_boundary_coverage_reason(
     ):
         return None
     if _url_join_tests_cover_clean_origin_path_boundary(test_content):
-        return None
+        if _url_join_tests_cover_origin_duplicate_slash_boundary(test_content):
+            return None
+        return (
+            "URL joining tests must include duplicate-slash collapse across the "
+            "scheme+host/path boundary, for example "
+            '`joinUrl("https://example.com/", "/api/")` expecting '
+            '`"https://example.com/api"`. Tests that cover slash normalization '
+            "only on relative paths can miss implementations that preserve the "
+            "origin but mishandle slashes once a host is present."
+        )
     return (
         "URL joining tests must include the boundary where a clean scheme+host "
         "segment is followed by a clean path segment with no slash already present "
@@ -4935,6 +4945,34 @@ def _url_join_tests_cover_clean_origin_path_boundary(test_content: str) -> bool:
             if segment.startswith(("/", "#")):
                 continue
             if f"{origin}/{segment.lstrip('/')}" in window:
+                return True
+    return False
+
+
+def _url_join_tests_cover_origin_duplicate_slash_boundary(test_content: str) -> bool:
+    for call in _URL_JOIN_CALL_RE.finditer(test_content):
+        args = _quoted_string_values(call.group("args"))
+        if not args:
+            continue
+        origin_match = re.match(r"^(?P<origin>https?://[^/]+)(?P<path>/.*)?$", args[0])
+        if origin_match is None:
+            continue
+        origin = origin_match.group("origin")
+        first_path = origin_match.group("path") or ""
+        if not first_path.startswith("/"):
+            continue
+        slashy_segment = next(
+            (value for value in args[1:] if value.startswith("/") and value.strip("/")),
+            "",
+        )
+        if not slashy_segment:
+            continue
+        expected_window = test_content[call.end() : call.end() + 500]
+        for expected in _quoted_string_values(expected_window):
+            if not expected.startswith(f"{origin}/"):
+                continue
+            suffix = expected[len(origin) :]
+            if suffix != "/" and not suffix.endswith("/") and "//" not in suffix:
                 return True
     return False
 

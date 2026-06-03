@@ -4402,6 +4402,40 @@ async def test_external_workspace_coverage_verifier_allows_url_join_clean_bounda
 
 
 @pytest.mark.asyncio
+async def test_external_workspace_coverage_verifier_rejects_url_join_missing_origin_slash_boundary(
+    tmp_path: Path,
+) -> None:
+    env, structural = await _accepted_url_join_workspace(
+        tmp_path,
+        test_body=(
+            'const assert = require("node:assert/strict");\n'
+            'const { joinUrl } = require("../src/urlJoin");\n'
+            'assert.equal(joinUrl("https://example.com", "api"), "https://example.com/api");\n'
+            'assert.equal(joinUrl("api//", "/v1/"), "api/v1");\n'
+        ),
+    )
+    adapter = CoverageReviewAdapter({"can_finish": True, "reason": "looks good", "confidence": 0.9})
+    verifier = ExternalWorkspaceCoverageVerifier(
+        environment=env,
+        workdir=str(tmp_path),
+        instruction=(
+            "Fix URL joining. joinUrl should preserve a URL scheme and host, collapse "
+            "duplicate slashes between path segments, and trim trailing slashes."
+        ),
+        adapter=adapter,
+        model="judge",
+        structural_verifier=structural,
+    )
+
+    result = await verifier.verify(session=SimpleNamespace(messages=[]), activity=[])
+
+    assert result.can_finish is False
+    assert "duplicate-slash collapse across the scheme+host/path boundary" in result.reason
+    assert 'joinUrl("https://example.com/", "/api/")' in result.reason
+    assert adapter.calls == []
+
+
+@pytest.mark.asyncio
 async def test_external_workspace_coverage_verifier_rejects_labelled_current_release_value(
     tmp_path: Path,
 ) -> None:
