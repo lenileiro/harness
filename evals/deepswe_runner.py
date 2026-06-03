@@ -62,6 +62,14 @@ class DeepSWETask:
     original_title: str = ""
 
 
+@dataclass(frozen=True)
+class DockerRunReplay:
+    image: str
+    command_words: tuple[str, ...]
+    no_network: bool
+    mounts_app: bool
+
+
 def _load_dotenv(path: Path) -> None:
     if not path.exists():
         return
@@ -215,18 +223,161 @@ def _hidden_verifier_command() -> str:
     )
 
 
-def _offline_verification_command(run_root: Path, command: str) -> tuple[str, str]:
+_DOCKER_RUN_OPTIONS_WITH_VALUES = {
+    "--add-host",
+    "--cidfile",
+    "--cpus",
+    "--dns",
+    "--entrypoint",
+    "--env",
+    "--env-file",
+    "--expose",
+    "--hostname",
+    "--label",
+    "--link",
+    "--log-driver",
+    "--log-opt",
+    "--memory",
+    "--mount",
+    "--name",
+    "--network",
+    "--net",
+    "--platform",
+    "--publish",
+    "--user",
+    "--volume",
+    "--volumes-from",
+    "--workdir",
+    "-e",
+    "-h",
+    "-l",
+    "-m",
+    "-p",
+    "-u",
+    "-v",
+    "-w",
+}
+_DOCKER_RUN_SHORT_OPTIONS_WITH_VALUES = {"-e", "-h", "-l", "-m", "-p", "-u", "-v", "-w"}
+
+
+def _docker_run_mounts_app(value: str) -> bool:
+    return (
+        value == "/app"
+        or ":/app" in value
+        or "target=/app" in value
+        or "dst=/app" in value
+        or "destination=/app" in value
+    )
+
+
+def _docker_run_replay(words: list[str]) -> DockerRunReplay | None:
+    if len(words) < 3 or words[1] != "run":
+        return None
+    index = 2
+    no_network = False
+    mounts_app = False
+    while index < len(words):
+        word = words[index]
+        if word == "--":
+            index += 1
+            break
+        if word.startswith("--"):
+            option, has_value, value = word.partition("=")
+            if has_value:
+                if option in {"--network", "--net"} and value == "none":
+                    no_network = True
+                if option in {"--volume", "--mount"} and _docker_run_mounts_app(value):
+                    mounts_app = True
+                index += 1
+                continue
+            if option in _DOCKER_RUN_OPTIONS_WITH_VALUES:
+                value = words[index + 1] if index + 1 < len(words) else ""
+                if option in {"--network", "--net"} and value == "none":
+                    no_network = True
+                if option in {"--volume", "--mount"} and _docker_run_mounts_app(value):
+                    mounts_app = True
+                index += 2
+                continue
+            index += 1
+            continue
+        if word.startswith("-") and word != "-":
+            option = word[:2]
+            if option in _DOCKER_RUN_SHORT_OPTIONS_WITH_VALUES and len(word) > 2:
+                value = word[2:]
+                if option == "-v" and _docker_run_mounts_app(value):
+                    mounts_app = True
+                index += 1
+                continue
+            if word in _DOCKER_RUN_OPTIONS_WITH_VALUES:
+                value = words[index + 1] if index + 1 < len(words) else ""
+                if word == "-v" and _docker_run_mounts_app(value):
+                    mounts_app = True
+                index += 2
+                continue
+            index += 1
+            continue
+        break
+    if index >= len(words):
+        return None
+    return DockerRunReplay(
+        image=words[index],
+        command_words=tuple(words[index + 1 :]),
+        no_network=no_network,
+        mounts_app=mounts_app,
+    )
+
+
+def _docker_verify_inner_command(command: str, *, image: str | None) -> str | None:
+    required_image = (image or "").strip()
+    if not required_image:
+        return None
+    try:
+        words = shlex.split(command, posix=True)
+    except ValueError:
+        return None
+    for index, word in enumerate(words):
+        if Path(word).name.lower() != "docker":
+            continue
+        replay = _docker_run_replay(words[index:])
+        if replay is None:
+            continue
+        if replay.image != required_image or not replay.no_network or not replay.mounts_app:
+            continue
+        inner_words = list(replay.command_words)
+        if not inner_words:
+            continue
+        shell_name = Path(inner_words[0]).name.lower()
+        if (
+            shell_name in {"bash", "sh", "dash", "zsh", "ksh"}
+            and len(inner_words) >= 3
+            and inner_words[1] in {"-c", "-lc"}
+        ):
+            return inner_words[2].strip()
+        return " ".join(shlex.quote(word) for word in inner_words).strip()
+    return None
+
+
+def _offline_verification_command(
+    run_root: Path,
+    command: str,
+    *,
+    image: str | None = None,
+) -> tuple[str, str]:
     """Replay the agent's public verify command from the image repository root.
 
     DeepSWE agents work in a wrapper workspace and usually clone the target repo
     into a subdirectory such as `repo/`. The task image already has that target
     repo at `/app`, so a leading `cd repo && ...` must be removed before replay.
+    If the accepted verify command is itself a no-network Docker run of the
+    declared task image with the checkout mounted at `/app`, replay the command
+    from inside that container instead of nesting Docker inside Docker.
     """
 
     normalized = command.strip()
     target_path = run_root / "target_repo.txt"
     if not normalized or not target_path.exists():
-        return command, normalized
+        replay = _docker_verify_inner_command(normalized, image=image)
+        return command, replay or normalized
 
     try:
         target_repo = Path(target_path.read_text(encoding="utf-8").strip())
@@ -246,8 +397,9 @@ def _offline_verification_command(run_root: Path, command: str) -> tuple[str, st
         pattern = rf"^\s*cd\s+{re.escape(variant)}\s*(?:&&|;)\s*"
         stripped = re.sub(pattern, "", normalized, count=1)
         if stripped != normalized:
-            return command, stripped.strip()
-    return command, normalized
+            replay = stripped.strip()
+            return command, _docker_verify_inner_command(replay, image=image) or replay
+    return command, _docker_verify_inner_command(normalized, image=image) or normalized
 
 
 def _public_offline_verification_command(command: str) -> str:
@@ -273,7 +425,11 @@ async def _run_public_offline_verification(
             stderr="model.patch was not captured before public offline verification",
             return_code=2,
         )
-    original_command, replay_command = _offline_verification_command(run_root, command)
+    original_command, replay_command = _offline_verification_command(
+        run_root,
+        command,
+        image=task.image,
+    )
     if not replay_command:
         return CommandResult(
             stdout="",

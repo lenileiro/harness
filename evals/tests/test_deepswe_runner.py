@@ -547,6 +547,41 @@ def test_public_offline_verification_strips_wrapper_repo_cd(tmp_path: Path) -> N
     )
 
 
+def test_public_offline_verification_replays_inner_declared_docker_command(
+    tmp_path: Path,
+) -> None:
+    run_root = tmp_path / "run"
+    target_repo = run_root / "agent-workspace" / "aiomonitor_repo"
+    target_repo.parent.mkdir(parents=True)
+    (run_root / "target_repo.txt").write_text(str(target_repo) + "\n", encoding="utf-8")
+    image = "public.ecr.aws/d3j8x8q7/swe-bench-202605:kh75rc2q0zhmsqwk7wewfwwtrx830v2n"
+    command = (
+        'cd aiomonitor_repo && docker run --rm --network none -v "$PWD":/app '
+        f'-w /app {image} bash -lc "pytest -q"'
+    )
+
+    original, replay = _offline_verification_command(run_root, command, image=image)
+
+    assert original == command
+    assert replay == "pytest -q"
+    assert (
+        _offline_verification_command(
+            run_root,
+            command.replace("--network none", "--network bridge"),
+            image=image,
+        )[1]
+        != "pytest -q"
+    )
+    assert (
+        _offline_verification_command(
+            run_root,
+            command.replace(image, "other/image:latest"),
+            image=image,
+        )[1]
+        != "pytest -q"
+    )
+
+
 def test_public_offline_verification_command_fails_on_patch_apply_error() -> None:
     command = _public_offline_verification_command("cargo test")
 
@@ -603,6 +638,53 @@ async def test_public_offline_verification_replays_without_hidden_test_mount(
     )
     assert command_json["original_command"] == "cd repo && cargo test"
     assert command_json["replay_command"] == "cargo test"
+
+
+async def test_public_offline_verification_does_not_nest_declared_docker_verify(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    import evals.deepswe_runner as runner
+
+    task = load_task(_write_task(tmp_path))
+    run_root = tmp_path / "run"
+    run_root.mkdir()
+    (run_root / "model.patch").write_text("", encoding="utf-8")
+    target_repo = run_root / "agent-workspace" / "repo"
+    target_repo.parent.mkdir(parents=True)
+    (run_root / "target_repo.txt").write_text(str(target_repo) + "\n", encoding="utf-8")
+    calls: list[list[str]] = []
+
+    async def fake_run_exec(
+        argv: list[str],
+        *,
+        input_text: str | None = None,
+        timeout_sec: int | float | None = None,
+    ) -> CommandResult:
+        del input_text, timeout_sec
+        calls.append(argv)
+        return CommandResult(stdout="ok\n", stderr="", return_code=0)
+
+    monkeypatch.setattr(runner, "_run_exec", fake_run_exec)
+
+    result = await _run_public_offline_verification(
+        task=task,
+        run_root=run_root,
+        command=(
+            'cd repo && docker run --rm --network none -v "$PWD":/app '
+            f'-w /app {task.image} bash -lc "pytest -q"'
+        ),
+        timeout_sec=12,
+    )
+
+    assert result.return_code == 0
+    assert calls
+    assert "pytest -q" in calls[0][-1]
+    assert "docker run" not in calls[0][-1]
+    command_json = json.loads(
+        (run_root / "public-offline-verification" / "command.json").read_text(encoding="utf-8")
+    )
+    assert command_json["replay_command"] == "pytest -q"
 
 
 def test_public_offline_verification_runs_only_for_no_network_passes(tmp_path: Path) -> None:
