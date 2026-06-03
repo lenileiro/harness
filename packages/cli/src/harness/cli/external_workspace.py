@@ -4819,6 +4819,7 @@ _INI_HASH_FULL_LINE_COMMENT_RE = re.compile(r"(?m)^\s*#")
 _INI_SEMICOLON_FULL_LINE_COMMENT_RE = re.compile(r"(?m)^\s*;")
 _INI_INDENTED_FULL_LINE_COMMENT_RE = re.compile(r"(?m)^\s+[;#]")
 _INI_EQUALS_VALUE_RE = re.compile(r"(?m)^\s*[^#;\s=\[]+\s*=\s*[^#;\n]*=[^#;\n]*")
+_SLUGIFY_CALL_RE = re.compile(r"\bslugify\((?P<args>[^)]{0,500})\)")
 _SLUG_SAFE_EXPECTED_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)+$")
 _SLUG_SEPARATOR_EDGE_RE = re.compile(r"(^[^A-Za-z0-9]+|[^A-Za-z0-9]+$|[-_\s!.,]{2,})")
 
@@ -5113,30 +5114,35 @@ def _slugify_coverage_reason(*, instruction: str, test_content: str) -> str | No
     ):
         return None
 
-    values = _quoted_string_values(test_content)
+    asserted_pairs = _slugify_asserted_pairs(test_content)
     missing: list[str] = []
-    has_unicode_input = any(any(ord(char) > 127 for char in value) for value in values)
-    has_ascii_slug_expected = any(_SLUG_SAFE_EXPECTED_RE.match(value) for value in values)
-    if not (has_unicode_input and has_ascii_slug_expected):
+    has_unicode_assertion = any(
+        any(ord(char) > 127 for char in raw) and _SLUG_SAFE_EXPECTED_RE.match(expected)
+        for raw, expected in asserted_pairs
+    )
+    if not has_unicode_assertion:
         missing.append("a non-ASCII/diacritic input with an ASCII-ish slug expectation")
 
-    has_separator_input = any(
-        any(char.isalnum() for char in value) and _SLUG_SEPARATOR_EDGE_RE.search(value)
-        for value in values
+    has_separator_assertion = any(
+        any(char.isalnum() for char in raw)
+        and _SLUG_SEPARATOR_EDGE_RE.search(raw)
+        and expected != "untitled"
+        and _SLUG_SAFE_EXPECTED_RE.match(expected)
+        for raw, expected in asserted_pairs
     )
-    has_non_fallback_slug_expected = any(
-        value != "untitled" and _SLUG_SAFE_EXPECTED_RE.match(value) for value in values
-    )
-    if not (has_separator_input and has_non_fallback_slug_expected):
+    if not has_separator_assertion:
         missing.append(
             "a repeated or leading/trailing separator input that collapses and trims to a slug"
         )
 
-    has_fallback_input = any(
-        value.strip() and not any(char.isalnum() for char in value) and len(value.strip()) >= 2
-        for value in values
+    has_fallback_assertion = any(
+        raw.strip()
+        and not any(char.isalnum() for char in raw)
+        and len(raw.strip()) >= 2
+        and expected == "untitled"
+        for raw, expected in asserted_pairs
     )
-    if "untitled" not in test_content or not has_fallback_input:
+    if not has_fallback_assertion:
         missing.append("an input with nothing slug-safe remaining that returns `untitled`")
 
     if not missing:
@@ -5148,6 +5154,25 @@ def _slugify_coverage_reason(*, instruction: str, test_content: str) -> str | No
         "dropping Unicode letters, failing to collapse/trim separators, or "
         "returning an empty slug."
     )
+
+
+def _slugify_asserted_pairs(test_content: str) -> list[tuple[str, str]]:
+    pairs: list[tuple[str, str]] = []
+    for call in _SLUGIFY_CALL_RE.finditer(test_content):
+        args = _quoted_string_values(call.group("args"))
+        if not args:
+            continue
+        for expected in _quoted_string_values_after_line_call(test_content, call.end()):
+            pairs.append((args[0], expected))
+    return pairs
+
+
+def _quoted_string_values_after_line_call(test_content: str, call_end: int) -> list[str]:
+    tail = test_content[call_end : call_end + 500]
+    line_end = tail.find("\n")
+    if line_end >= 0:
+        tail = tail[:line_end]
+    return _quoted_string_values(tail)
 
 
 def _quoted_string_values_after_js_call(test_content: str, call_end: int) -> list[str]:

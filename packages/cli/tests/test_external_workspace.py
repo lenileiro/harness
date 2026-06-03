@@ -4458,6 +4458,41 @@ async def test_external_workspace_coverage_verifier_rejects_weak_slugify_tests(
 
 
 @pytest.mark.asyncio
+async def test_external_workspace_coverage_verifier_rejects_unasserted_slugify_separator_sample(
+    tmp_path: Path,
+) -> None:
+    env, structural = await _accepted_slug_workspace(
+        tmp_path,
+        test_body=(
+            "from slugify import slugify\n\n"
+            "SEPARATOR_SAMPLE = '---Hello__World---'\n\n"
+            "def test_unicode_and_fallback():\n"
+            "    assert slugify('Crème Brûlée') == 'creme-brulee'\n"
+            "    assert slugify('---') == 'untitled'\n"
+        ),
+    )
+    adapter = CoverageReviewAdapter({"can_finish": True, "reason": "looks good", "confidence": 0.9})
+    verifier = ExternalWorkspaceCoverageVerifier(
+        environment=env,
+        workdir=str(tmp_path),
+        instruction=(
+            "Fix slugify. It should produce lowercase ASCII-ish slugs, collapse "
+            "repeated separators into one hyphen, trim leading/trailing separators, "
+            "and return 'untitled' when nothing slug-safe remains."
+        ),
+        adapter=adapter,
+        model="judge",
+        structural_verifier=structural,
+    )
+
+    result = await verifier.verify(session=SimpleNamespace(messages=[]), activity=[])
+
+    assert result.can_finish is False
+    assert "repeated or leading/trailing separator input" in result.reason
+    assert adapter.calls == []
+
+
+@pytest.mark.asyncio
 async def test_external_workspace_coverage_verifier_accepts_representative_slugify_tests(
     tmp_path: Path,
 ) -> None:
