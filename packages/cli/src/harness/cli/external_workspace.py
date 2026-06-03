@@ -4793,29 +4793,24 @@ _COVERAGE_REVIEW_SYSTEM_PROMPT = (
 )
 
 
-_CURRENT_RELEASE_TASK_RE = re.compile(
-    r"\b(?:latest|current|newest|up-to-date|stable)\b", flags=re.IGNORECASE
+_QUOTED_STRING_LITERAL_RE = re.compile(
+    r'"(?P<double>(?:\\.|[^"\\]){0,200})"|' r"'(?P<single>(?:\\.|[^'\\]){0,200})'"
 )
-_RELEASE_VALUE_RE = re.compile(r"\b(?:release|version)\b", flags=re.IGNORECASE)
+_RELEASE_TASK_RE = re.compile(r"\b(?:latest|current|newest|up-to-date|stable)\b", flags=re.I)
+_RELEASE_VALUE_TASK_RE = re.compile(r"\b(?:release|version)\b", flags=re.I)
+_SOURCE_URL_TASK_RE = re.compile(r"\bsource\s+url\b|\burl\b.*\bsource\b", flags=re.I)
+_VERSION_VALUE_RE = re.compile(r"v?\d+(?:[._]\d+){1,}(?:[-+][0-9A-Za-z_.-]+)?")
+_LABEL_PREFIXED_VERSION_RE = re.compile(
+    r"^(?P<label>[A-Za-z][A-Za-z0-9_.+-]*(?:[ -][A-Za-z][A-Za-z0-9_.+-]*){0,3})\s+"
+    r"(?P<version>v?\d+(?:[._]\d+){1,}(?:[-+][0-9A-Za-z_.-]+)?)$"
+)
 _LABELLED_RELEASE_ALLOWED_RE = re.compile(
     r"\b(?:release title|full title|display title|display label|"
     r"human-readable|label(?:ed|led)?|"
     r"include(?:s|ing)?\s+(?:the\s+)?(?:[A-Za-z0-9_.+-]+\s+)?name|"
     r"with\s+(?:the\s+)?(?:product|project|package|language|tool|runtime|name)"
     r")\b",
-    flags=re.IGNORECASE,
-)
-_QUOTED_STRING_LITERAL_RE = re.compile(
-    r'"(?P<double>(?:\\.|[^"\\]){0,200})"|' r"'(?P<single>(?:\\.|[^'\\]){0,200})'"
-)
-_LABEL_PREFIXED_VERSION_RE = re.compile(
-    r"^(?P<label>[A-Za-z][A-Za-z0-9_.+-]*(?:[ -][A-Za-z][A-Za-z0-9_.+-]*){0,3})\s+"
-    r"(?P<version>v?\d+(?:[._]\d+){1,}(?:[-+][0-9A-Za-z_.-]+)?)$"
-)
-_SOURCE_URL_TASK_RE = re.compile(r"\bsource\s+url\b|\burl\b.*\bsource\b", flags=re.IGNORECASE)
-_BARE_VERSION_RE = re.compile(r"(?<![0-9A-Za-z])\d+\.\d+\.\d+(?![0-9A-Za-z])")
-_CURRENT_RELEASE_HELPER_RE = re.compile(
-    r"\b(?:current_python_release|CURRENT_PYTHON_RELEASE|source_url|SOURCE_URL)\b"
+    flags=re.I,
 )
 _URL_JOIN_ORIGIN_LITERAL_RE = re.compile(r"(?P<quote>['\"])(?P<origin>https?://[^/'\"]+)(?P=quote)")
 _CLEAN_PATH_SEGMENT_LITERAL_RE = re.compile(
@@ -4879,6 +4874,20 @@ def _command_output_text(value: object) -> str:
     return str(value)
 
 
+def _release_task_requires_value_evidence(instruction: str) -> bool:
+    return bool(_RELEASE_TASK_RE.search(instruction) and _RELEASE_VALUE_TASK_RE.search(instruction))
+
+
+def _quoted_version_values(content: str) -> list[str]:
+    return sorted(
+        {
+            value.strip()
+            for value in _quoted_string_values(content)
+            if _VERSION_VALUE_RE.fullmatch(value.strip())
+        }
+    )
+
+
 def _has_version_evidence_outside_labelled_literal(
     text: str, *, literal: str, version: str
 ) -> bool:
@@ -4905,19 +4914,19 @@ def _has_version_evidence_outside_labelled_literal(
     )
 
 
-def _current_release_value_format_reason(
+def _release_value_format_reason(
     *,
     instruction: str,
     source_content: str,
     test_content: str,
 ) -> str | None:
-    if not (_CURRENT_RELEASE_TASK_RE.search(instruction) and _RELEASE_VALUE_RE.search(instruction)):
+    if not _release_task_requires_value_evidence(instruction):
         return None
     if _LABELLED_RELEASE_ALLOWED_RE.search(instruction):
         return None
     if not (
-        _current_release_artifact_mentions_value(test_content)
-        and _current_release_artifact_mentions_value(source_content)
+        _RELEASE_VALUE_TASK_RE.search(test_content)
+        and _RELEASE_VALUE_TASK_RE.search(source_content)
     ):
         return None
 
@@ -4941,7 +4950,7 @@ def _current_release_value_format_reason(
         return (
             "changed tests assert the current/latest release/version value as "
             f"{value!r}, which includes a label prefix; nearby source evidence "
-            f"points to canonical version {bare_version!r}. Require the tests "
+            f"points to normalized version {bare_version!r}. Require the tests "
             "and source to use the task's normalized value format, or make the "
             "task contract explicit that the helper should return a labelled "
             "display title."
@@ -4949,19 +4958,14 @@ def _current_release_value_format_reason(
     return None
 
 
-def _current_release_artifact_mentions_value(content: str) -> bool:
-    return bool(_RELEASE_VALUE_RE.search(content) or _CURRENT_RELEASE_HELPER_RE.search(content))
-
-
-def _current_release_source_url_coverage_reason(
+def _release_source_url_coverage_reason(
     *,
     instruction: str,
     source_content: str,
     test_content: str,
 ) -> str | None:
     if not (
-        _CURRENT_RELEASE_TASK_RE.search(instruction)
-        and _RELEASE_VALUE_RE.search(instruction)
+        _release_task_requires_value_evidence(instruction)
         and _SOURCE_URL_TASK_RE.search(instruction)
     ):
         return None
@@ -4969,20 +4973,15 @@ def _current_release_source_url_coverage_reason(
     source_urls = [
         value for value in _quoted_string_values(source_content) if value.startswith("https://")
     ]
-    official_source_urls = [value for value in source_urls if "python.org/" in value]
-    if official_source_urls and not any(value in test_content for value in official_source_urls):
+    if source_urls and not any(value in test_content for value in source_urls):
         return (
-            "changed tests must assert the exact official source URL from the "
-            "updated source. A prefix check or a test that derives the expected "
-            "URL from production code can pass while the stored release source "
-            "URL is wrong."
+            "changed tests must assert the exact source URL value from the updated "
+            "source. A prefix check or a test that derives the expected URL from "
+            "production code can pass while the stored source URL is wrong."
         )
 
-    source_versions = sorted(set(_BARE_VERSION_RE.findall(source_content)))
-    if source_versions and not _test_asserts_current_release_value(
-        test_content,
-        versions=source_versions,
-    ):
+    source_versions = _quoted_version_values(source_content)
+    if source_versions and not any(version in test_content for version in source_versions):
         return (
             "changed tests must assert the concrete current/latest release value "
             "from the updated source. Tests that only check helper types, parser "
@@ -4990,20 +4989,6 @@ def _current_release_source_url_coverage_reason(
             "value is stale or hallucinated."
         )
     return None
-
-
-def _test_asserts_current_release_value(test_content: str, *, versions: list[str]) -> bool:
-    for name in ("current_python_release", "CURRENT_PYTHON_RELEASE"):
-        start = 0
-        while True:
-            index = test_content.find(name, start)
-            if index < 0:
-                break
-            window = test_content[index : index + 240]
-            if any(version in window for version in versions):
-                return True
-            start = index + len(name)
-    return False
 
 
 def _url_join_boundary_coverage_reason(
@@ -5513,7 +5498,7 @@ class ExternalWorkspaceCoverageVerifier:
 
         source_content = await self._read_changed_paths(snapshot.source_change_paths or [])
         test_content = await self._read_changed_paths(snapshot.test_change_paths or [])
-        format_reason = _current_release_value_format_reason(
+        format_reason = _release_value_format_reason(
             instruction=self.instruction,
             source_content=source_content,
             test_content=test_content,
@@ -5525,7 +5510,7 @@ class ExternalWorkspaceCoverageVerifier:
                 confidence=0.92,
                 verifier_name=self.name,
             )
-        source_url_reason = _current_release_source_url_coverage_reason(
+        source_url_reason = _release_source_url_coverage_reason(
             instruction=self.instruction,
             source_content=source_content,
             test_content=test_content,

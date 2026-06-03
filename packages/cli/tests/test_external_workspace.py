@@ -4266,53 +4266,53 @@ async def _accepted_slug_workspace(
     return env, structural
 
 
-async def _accepted_current_release_workspace(
+async def _accepted_release_metadata_workspace(
     tmp_path: Path,
     *,
     release_value: str,
-    source_url: str = "https://www.python.org/downloads/release/python-3145/",
+    normalized_version: str | None = None,
+    source_url: str = "https://vendor.example/releases/widget-3.14.5",
     test_body: str | None = None,
 ) -> tuple[LocalEnvironment, ExternalWorkspaceVerifier]:
     env = LocalEnvironment(tmp_path)
+    (tmp_path / "src").mkdir()
     (tmp_path / "tests").mkdir()
-    (tmp_path / "current_python.py").write_text(
-        'CURRENT_PYTHON_RELEASE = "unknown"\n'
-        'SOURCE_URL = ""\n\n'
-        "def current_python_release():\n"
-        "    return CURRENT_PYTHON_RELEASE\n\n"
-        "def source_url():\n"
-        "    return SOURCE_URL\n",
+    (tmp_path / "src" / "release.json").write_text(
+        '{\n  "release": "unknown",\n  "source_url": ""\n}\n',
         encoding="utf-8",
     )
-    (tmp_path / "tests" / "test_current_python.py").write_text(
-        "import current_python\n\n"
-        "def test_exports_release_helpers():\n"
-        "    assert isinstance(current_python.current_python_release(), str)\n"
-        "    assert isinstance(current_python.source_url(), str)\n",
+    (tmp_path / "tests" / "run_release_checks.sh").write_text(
+        "#!/usr/bin/env bash\n"
+        "set -eu\n"
+        "grep -F '\"release\":' src/release.json >/dev/null\n"
+        "grep -F '\"source_url\":' src/release.json >/dev/null\n",
         encoding="utf-8",
     )
     await env.exec("git init")
-    await env.exec("git add current_python.py tests/test_current_python.py")
+    await env.exec("git add src/release.json tests/run_release_checks.sh")
     await env.exec("git -c user.name=test -c user.email=test@example.com commit -m baseline")
-    (tmp_path / "current_python.py").write_text(
-        f'CURRENT_PYTHON_RELEASE = "{release_value}"\n'
-        f'SOURCE_URL = "{source_url}"\n\n'
-        "def current_python_release():\n"
-        "    return CURRENT_PYTHON_RELEASE\n\n"
-        "def source_url():\n"
-        "    return SOURCE_URL\n",
+    normalized_version_line = (
+        f',\n  "normalized_version": "{normalized_version}"'
+        if normalized_version is not None
+        else ""
+    )
+    (tmp_path / "src" / "release.json").write_text(
+        "{\n"
+        f'  "release": "{release_value}",\n'
+        f'  "source_url": "{source_url}"'
+        f"{normalized_version_line}\n"
+        "}\n",
         encoding="utf-8",
     )
     default_test_body = (
-        "import current_python\n\n"
-        "def test_exports_release_helpers():\n"
-        "    assert isinstance(current_python.current_python_release(), str)\n"
-        "    assert isinstance(current_python.source_url(), str)\n\n"
-        "def test_latest_python_release_and_source_url():\n"
-        f'    assert current_python.current_python_release() == "{release_value}"\n'
-        f'    assert current_python.source_url() == "{source_url}"\n'
+        "#!/usr/bin/env bash\n"
+        "set -eu\n"
+        f'expected_release="{release_value}"\n'
+        f'expected_source_url="{source_url}"\n'
+        'grep -F "\\"release\\": \\"$expected_release\\"" src/release.json >/dev/null\n'
+        'grep -F "\\"source_url\\": \\"$expected_source_url\\"" src/release.json >/dev/null\n'
     )
-    (tmp_path / "tests" / "test_current_python.py").write_text(
+    (tmp_path / "tests" / "run_release_checks.sh").write_text(
         test_body if test_body is not None else default_test_body,
         encoding="utf-8",
     )
@@ -4320,9 +4320,9 @@ async def _accepted_current_release_workspace(
     result = await structural.verify(
         session=SimpleNamespace(),
         activity=[
-            _completed("write_file", metadata={"path": "current_python.py"}),
-            _completed("write_file", metadata={"path": "tests/test_current_python.py"}),
-            _completed("verify_work", metadata={"command": "python -m pytest -q"}),
+            _completed("write_file", metadata={"path": "src/release.json"}),
+            _completed("write_file", metadata={"path": "tests/run_release_checks.sh"}),
+            _completed("verify_work", metadata={"command": "bash tests/run_release_checks.sh"}),
         ],
     )
     assert result.can_finish is True
@@ -5238,22 +5238,101 @@ async def test_external_workspace_coverage_verifier_rejects_url_join_missing_ori
 
 
 @pytest.mark.asyncio
-async def test_external_workspace_coverage_verifier_rejects_labelled_current_release_value(
+async def test_external_workspace_coverage_verifier_rejects_release_without_exact_source_url(
     tmp_path: Path,
 ) -> None:
-    env, structural = await _accepted_current_release_workspace(
+    env, structural = await _accepted_release_metadata_workspace(
         tmp_path,
-        release_value="Python 3.14.5",
+        release_value="3.14.5",
+        test_body=(
+            "#!/usr/bin/env bash\n"
+            "set -eu\n"
+            'grep -F \'"release": "3.14.5"\' src/release.json >/dev/null\n'
+            'grep -F \'"source_url": "https://vendor.example/\' src/release.json >/dev/null\n'
+        ),
     )
     adapter = CoverageReviewAdapter(
-        {"can_finish": True, "reason": "tests assert the exact release", "confidence": 0.9}
+        {"can_finish": True, "reason": "tests check release metadata", "confidence": 0.9}
     )
     verifier = ExternalWorkspaceCoverageVerifier(
         environment=env,
         workdir=str(tmp_path),
         instruction=(
-            "Update current_python.py with the latest stable Python 3 release "
-            "from official public web sources. Add/update focused project tests."
+            "Update the product metadata with the latest stable release version "
+            "from official public sources. Add a focused project test for the "
+            "release value and source URL."
+        ),
+        adapter=adapter,
+        model="judge",
+        structural_verifier=structural,
+    )
+
+    result = await verifier.verify(session=SimpleNamespace(messages=[]), activity=[])
+
+    assert result.can_finish is False
+    assert "exact source URL value" in result.reason
+    assert adapter.calls == []
+
+
+@pytest.mark.asyncio
+async def test_external_workspace_coverage_verifier_rejects_release_without_exact_value(
+    tmp_path: Path,
+) -> None:
+    env, structural = await _accepted_release_metadata_workspace(
+        tmp_path,
+        release_value="3.14.5",
+        source_url="https://vendor.example/releases/current",
+        test_body=(
+            "#!/usr/bin/env bash\n"
+            "set -eu\n"
+            "grep -F '\"release\":' src/release.json >/dev/null\n"
+            'grep -F \'"source_url": "https://vendor.example/releases/current"\' '
+            "src/release.json >/dev/null\n"
+        ),
+    )
+    adapter = CoverageReviewAdapter(
+        {"can_finish": True, "reason": "tests check release metadata", "confidence": 0.9}
+    )
+    verifier = ExternalWorkspaceCoverageVerifier(
+        environment=env,
+        workdir=str(tmp_path),
+        instruction=(
+            "Update the product metadata with the latest stable release version "
+            "from official public sources. Add a focused project test for the "
+            "release value and source URL."
+        ),
+        adapter=adapter,
+        model="judge",
+        structural_verifier=structural,
+    )
+
+    result = await verifier.verify(session=SimpleNamespace(messages=[]), activity=[])
+
+    assert result.can_finish is False
+    assert "concrete current/latest release value" in result.reason
+    assert adapter.calls == []
+
+
+@pytest.mark.asyncio
+async def test_external_workspace_coverage_verifier_rejects_labelled_release_value(
+    tmp_path: Path,
+) -> None:
+    env, structural = await _accepted_release_metadata_workspace(
+        tmp_path,
+        release_value="Widget 3.14.5",
+        normalized_version="3.14.5",
+        source_url="https://vendor.example/releases/widget-3145",
+    )
+    adapter = CoverageReviewAdapter(
+        {"can_finish": True, "reason": "tests assert the display label", "confidence": 0.9}
+    )
+    verifier = ExternalWorkspaceCoverageVerifier(
+        environment=env,
+        workdir=str(tmp_path),
+        instruction=(
+            "Update the product metadata with the latest stable release version "
+            "from official public sources. Add a focused project test for the "
+            "release value and source URL."
         ),
         adapter=adapter,
         model="judge",
@@ -5269,62 +5348,24 @@ async def test_external_workspace_coverage_verifier_rejects_labelled_current_rel
 
 
 @pytest.mark.asyncio
-async def test_external_workspace_coverage_verifier_rejects_current_release_without_exact_source_url(
+async def test_external_workspace_coverage_verifier_allows_labelled_release_when_requested(
     tmp_path: Path,
 ) -> None:
-    env, structural = await _accepted_current_release_workspace(
+    env, structural = await _accepted_release_metadata_workspace(
         tmp_path,
-        release_value="3.14.5",
-        test_body=(
-            "import current_python\n\n"
-            "def test_latest_python_release_and_source_url():\n"
-            '    assert current_python.current_python_release() == "3.14.5"\n'
-            '    assert current_python.source_url().startswith("https://www.python.org/")\n'
-        ),
+        release_value="Widget 3.14.5",
+        normalized_version="3.14.5",
+        source_url="https://vendor.example/releases/widget-3145",
     )
     adapter = CoverageReviewAdapter(
-        {"can_finish": True, "reason": "tests check the source URL", "confidence": 0.9}
+        {"can_finish": True, "reason": "tests assert the display label", "confidence": 0.9}
     )
     verifier = ExternalWorkspaceCoverageVerifier(
         environment=env,
         workdir=str(tmp_path),
         instruction=(
-            "Update current_python.py with the latest stable Python 3 release "
-            "from official public web sources. Add a focused project test for "
-            "the release value and source URL."
-        ),
-        adapter=adapter,
-        model="judge",
-        structural_verifier=structural,
-    )
-
-    result = await verifier.verify(session=SimpleNamespace(messages=[]), activity=[])
-
-    assert result.can_finish is False
-    assert "exact official source URL" in result.reason
-    assert adapter.calls == []
-
-
-@pytest.mark.asyncio
-async def test_external_workspace_coverage_verifier_allows_exact_source_url_without_python_shape_policy(
-    tmp_path: Path,
-) -> None:
-    tarball_url = "https://www.python.org/ftp/python/3.14.5/Python-3.14.5.tgz"
-    env, structural = await _accepted_current_release_workspace(
-        tmp_path,
-        release_value="3.14.5",
-        source_url=tarball_url,
-    )
-    adapter = CoverageReviewAdapter(
-        {"can_finish": True, "reason": "tests assert the exact tarball URL", "confidence": 0.9}
-    )
-    verifier = ExternalWorkspaceCoverageVerifier(
-        environment=env,
-        workdir=str(tmp_path),
-        instruction=(
-            "Update current_python.py with the latest stable Python 3 release "
-            "from official public web sources. Add a focused project test for "
-            "the release value and source URL."
+            "Update the product metadata with the latest stable release display "
+            "title including the product name from official public sources."
         ),
         adapter=adapter,
         model="judge",
@@ -5334,77 +5375,7 @@ async def test_external_workspace_coverage_verifier_allows_exact_source_url_with
     result = await verifier.verify(session=SimpleNamespace(messages=[]), activity=[])
 
     assert result.can_finish is True
-    assert result.reason == "coverage review passed: tests assert the exact tarball URL"
-    assert len(adapter.calls) == 1
-
-
-@pytest.mark.asyncio
-async def test_external_workspace_coverage_verifier_rejects_current_release_without_exact_value(
-    tmp_path: Path,
-) -> None:
-    env, structural = await _accepted_current_release_workspace(
-        tmp_path,
-        release_value="3.14.5",
-        test_body=(
-            "import current_python\n\n"
-            "def test_latest_python_source_url():\n"
-            "    assert isinstance(current_python.current_python_release(), str)\n"
-            "    assert (\n"
-            "        current_python.source_url()\n"
-            '        == "https://www.python.org/downloads/release/python-3145/"\n'
-            "    )\n"
-        ),
-    )
-    adapter = CoverageReviewAdapter(
-        {"can_finish": True, "reason": "tests check the source URL", "confidence": 0.9}
-    )
-    verifier = ExternalWorkspaceCoverageVerifier(
-        environment=env,
-        workdir=str(tmp_path),
-        instruction=(
-            "Update current_python.py with the latest stable Python 3 release "
-            "from official public web sources. Add a focused project test for "
-            "the release value and source URL."
-        ),
-        adapter=adapter,
-        model="judge",
-        structural_verifier=structural,
-    )
-
-    result = await verifier.verify(session=SimpleNamespace(messages=[]), activity=[])
-
-    assert result.can_finish is False
-    assert "concrete current/latest release value" in result.reason
-    assert adapter.calls == []
-
-
-@pytest.mark.asyncio
-async def test_external_workspace_coverage_verifier_allows_labelled_release_title_when_requested(
-    tmp_path: Path,
-) -> None:
-    env, structural = await _accepted_current_release_workspace(
-        tmp_path,
-        release_value="Python 3.14.5",
-    )
-    adapter = CoverageReviewAdapter(
-        {"can_finish": True, "reason": "tests cover the display title", "confidence": 0.9}
-    )
-    verifier = ExternalWorkspaceCoverageVerifier(
-        environment=env,
-        workdir=str(tmp_path),
-        instruction=(
-            "Update current_python.py with the latest stable Python 3 release "
-            "display title including the Python name from official public web sources."
-        ),
-        adapter=adapter,
-        model="judge",
-        structural_verifier=structural,
-    )
-
-    result = await verifier.verify(session=SimpleNamespace(messages=[]), activity=[])
-
-    assert result.can_finish is True
-    assert "coverage review passed" in result.reason
+    assert result.reason == "coverage review passed: tests assert the display label"
     assert len(adapter.calls) == 1
 
 
