@@ -203,37 +203,18 @@ _SETUP_COMMAND_WORDS = {
     "add",
     "bootstrap",
     "build",
+    "ci",
     "create",
-    "ensurepip",
+    "deps",
+    "download",
     "install",
     "pull",
+    "restore",
     "remove",
     "sync",
     "uninstall",
     "update",
     "upgrade",
-}
-_SETUP_COMMAND_EXECUTABLES = {
-    "apt",
-    "apt-get",
-    "brew",
-    "bundle",
-    "cargo",
-    "composer",
-    "docker",
-    "gem",
-    "go",
-    "npm",
-    "npx",
-    "pip",
-    "pip3",
-    "pipx",
-    "pnpm",
-    "poetry",
-    "python",
-    "python3",
-    "uv",
-    "yarn",
 }
 _TEST_DIR_NAMES = {
     "test",
@@ -889,41 +870,13 @@ def _activity_event_checks_docker_runtime(event: ActivityEvent) -> bool:
     )
 
 
-_NETWORK_SHELL_TOOLS = frozenset(
-    {
-        "curl",
-        "wget",
-        "git",
-        "gh",
-        "http",
-        "https",
-        "fetch",
-        "python",
-        "python3",
-        "node",
-        "npm",
-        "npx",
-        "pnpm",
-        "yarn",
-        "uv",
-        "pip",
-        "pip3",
-    }
-)
+_NETWORK_SHELL_TOOLS = frozenset({"curl", "fetch", "gh", "git", "http", "https", "wget"})
 
 
 def _shell_command_may_access_network(command: str) -> bool:
     if re.search(r"\b(?:https?|ssh)://|git@[^:\s]+:", command, flags=re.IGNORECASE):
         return True
-    parts = _shell_words(command)
-    if not parts:
-        return False
-    while parts and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*=.*", parts[0]):
-        parts = parts[1:]
-    if not parts:
-        return False
-    executable = PurePosixPath(parts[0]).name.lower()
-    return executable in _NETWORK_SHELL_TOOLS
+    return _shell_command_requests_external_network(command)
 
 
 def _shell_command_requests_external_network(command: str) -> bool:
@@ -937,7 +890,7 @@ def _shell_command_requests_external_network(command: str) -> bool:
     if not parts:
         return False
     executable = PurePosixPath(parts[0]).name.lower()
-    if executable in {"curl", "wget", "http", "https", "gh"}:
+    if executable in _NETWORK_SHELL_TOOLS - {"git"}:
         return True
     if executable == "git":
         network_subcommands = {"clone", "fetch", "pull", "ls-remote", "submodule"}
@@ -984,28 +937,13 @@ def _shell_command_is_allowed_git_clone(
         if not segment:
             continue
         executable = PurePosixPath(segment[0].strip("()")).name.lower()
-        if executable in {
-            "cd",
-            "ls",
-            "mkdir",
-            "pwd",
-            "test",
-            "true",
-            "python",
-            "python3",
-            "pip",
-            "pip3",
-            "uv",
-            "pytest",
-            "npm",
-            "npx",
-            "pnpm",
-            "yarn",
-        }:
+        if _git_setup_segment_is_neutral_local_command(segment):
             continue
         if executable == "rm":
             if not _safe_git_setup_rm_segment(segment, policy):
                 return False
+            continue
+        if saw_allowed_git_operation and _git_setup_segment_is_local_project_command(segment):
             continue
         if executable != "git":
             return False
@@ -1034,6 +972,24 @@ def _shell_command_is_allowed_git_clone(
             continue
         return False
     return saw_allowed_git_operation
+
+
+def _git_setup_segment_is_neutral_local_command(segment: list[str]) -> bool:
+    if not segment:
+        return False
+    executable = PurePosixPath(segment[0].strip("()")).name.lower()
+    return executable in {"cd", "env", "ls", "mkdir", "printf", "pwd", "test", "true"}
+
+
+def _git_setup_segment_is_local_project_command(segment: list[str]) -> bool:
+    if not segment:
+        return False
+    command = " ".join(shlex.quote(part) for part in segment)
+    if _shell_command_requests_external_network(command):
+        return False
+    if any(PurePosixPath(part.strip("()")).is_absolute() for part in segment):
+        return False
+    return not any(_shell_word_references_parent_directory(part.strip("()")) for part in segment)
 
 
 def _git_fetch_segment_uses_named_remote(segment: list[str]) -> bool:
@@ -1575,16 +1531,8 @@ def _shell_command_requests_setup(command: str) -> bool:
         executable = PurePosixPath(segment[0]).name.lower()
         if executable == "cd":
             continue
-        lowered = [part.strip("()").lower() for part in segment[1:]]
-        if executable not in _SETUP_COMMAND_EXECUTABLES:
-            continue
-        if "ensurepip" in lowered:
-            return True
-        if executable in {"python", "python3"} and "-m" in lowered:
-            module_indexes = [index + 1 for index, part in enumerate(lowered[:-1]) if part == "-m"]
-            if any(lowered[index] in {"pip", "ensurepip"} for index in module_indexes):
-                return any(word in _SETUP_COMMAND_WORDS for word in lowered)
-        if any(word in _SETUP_COMMAND_WORDS for word in lowered):
+        lowered = [PurePosixPath(part.strip("()")).name.lower() for part in segment]
+        if any(word in _SETUP_COMMAND_WORDS for word in lowered if not word.startswith("-")):
             return True
     return False
 

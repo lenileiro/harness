@@ -158,6 +158,31 @@ def test_external_workspace_gates_do_not_reintroduce_python_specific_policy() ->
     for fragment in forbidden_policy_fragments:
         assert fragment not in source
 
+    clone_gate = source[
+        source.index("def _shell_command_is_allowed_git_clone") : source.index(
+            "def _git_fetch_segment_uses_named_remote"
+        )
+    ]
+    setup_detector = source[
+        source.index("def _shell_command_requests_setup") : source.index("def _porcelain_paths")
+    ]
+    language_specific_gate_terms = (
+        "python",
+        "python3",
+        "pytest",
+        "pip",
+        "pip3",
+        "node",
+        "npm",
+        "npx",
+        "pnpm",
+        "yarn",
+        "cargo",
+    )
+    for fragment in language_specific_gate_terms:
+        assert fragment not in clone_gate.lower()
+        assert fragment not in setup_detector.lower()
+
 
 class FlakyVerifyEnvironment:
     def __init__(self) -> None:
@@ -1593,6 +1618,17 @@ async def test_repository_policy_allows_task_repo_clone_but_blocks_repo_searches
             ),
         )
     )
+    docker_clone_project_command_result = await shell(
+        _call(
+            "shell",
+            command=(
+                "docker run --rm -t example.test/toolchain:latest "
+                "bash -lc 'git clone https://github.com/python-attrs/cattrs repo4 && "
+                "cd repo4 && git checkout 6bc4708fb9b2ac52d9a18997e923da6a58916102 && "
+                "./node_modules/.bin/local-check --version && make test'"
+            ),
+        )
+    )
     unsafe_cleanup_clone_result = await shell(
         _call(
             "shell",
@@ -1636,6 +1672,7 @@ async def test_repository_policy_allows_task_repo_clone_but_blocks_repo_searches
     assert cleanup_contents_clone_result.is_error is False
     assert docker_clone_result.is_error is False
     assert docker_clone_inspect_result.is_error is False
+    assert docker_clone_project_command_result.is_error is False
     assert unsafe_cleanup_clone_result.is_error is True
     assert remote_context_result.is_error is False
     assert env.calls
