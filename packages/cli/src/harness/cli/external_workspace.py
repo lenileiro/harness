@@ -4804,6 +4804,10 @@ _LABEL_PREFIXED_VERSION_RE = re.compile(
     r"^(?P<label>[A-Za-z][A-Za-z0-9_.+-]*(?:[ -][A-Za-z][A-Za-z0-9_.+-]*){0,3})\s+"
     r"(?P<version>v?\d+(?:[._]\d+){1,}(?:[-+][0-9A-Za-z_.-]+)?)$"
 )
+_URL_JOIN_ORIGIN_LITERAL_RE = re.compile(r"(?P<quote>['\"])(?P<origin>https?://[^/'\"]+)(?P=quote)")
+_CLEAN_PATH_SEGMENT_LITERAL_RE = re.compile(
+    r"(?P<quote>['\"])(?!https?://)(?P<segment>[^/'\"\s][^/'\"]*)(?P=quote)"
+)
 
 
 def _quoted_string_values(text: str) -> list[str]:
@@ -4892,6 +4896,49 @@ def _current_release_value_format_reason(
     return None
 
 
+def _url_join_boundary_coverage_reason(
+    *,
+    instruction: str,
+    test_content: str,
+) -> str | None:
+    lowered = instruction.lower()
+    if not (
+        "url" in lowered
+        and "join" in lowered
+        and "scheme" in lowered
+        and "host" in lowered
+        and "slash" in lowered
+    ):
+        return None
+    if _url_join_tests_cover_clean_origin_path_boundary(test_content):
+        return None
+    return (
+        "URL joining tests must include the boundary where a clean scheme+host "
+        "segment is followed by a clean path segment with no slash already present "
+        'on either side, for example `joinUrl("https://example.com", "api")` '
+        'expecting `"https://example.com/api"`. Tests that only use a trailing '
+        "slash on the host or a leading slash on the path can miss implementations "
+        "that preserve the origin but fail to insert the required separator."
+    )
+
+
+def _url_join_tests_cover_clean_origin_path_boundary(test_content: str) -> bool:
+    for match in _URL_JOIN_ORIGIN_LITERAL_RE.finditer(test_content):
+        origin = match.group("origin")
+        window = test_content[match.end() : match.end() + 800]
+        if f"{origin}/" not in window:
+            continue
+        for segment_match in _CLEAN_PATH_SEGMENT_LITERAL_RE.finditer(window):
+            segment = segment_match.group("segment").strip()
+            if not segment or segment in {origin, f"{origin}/"}:
+                continue
+            if segment.startswith(("/", "#")):
+                continue
+            if f"{origin}/{segment.lstrip('/')}" in window:
+                return True
+    return False
+
+
 class ExternalWorkspaceCoverageVerifier:
     """Semantic regression-coverage review for external workspace tasks.
 
@@ -4954,6 +5001,17 @@ class ExternalWorkspaceCoverageVerifier:
                 can_finish=False,
                 reason=f"Regression coverage is too weak: {format_reason}",
                 confidence=0.92,
+                verifier_name=self.name,
+            )
+        url_join_reason = _url_join_boundary_coverage_reason(
+            instruction=self.instruction,
+            test_content=test_content,
+        )
+        if url_join_reason is not None:
+            return VerificationResult(
+                can_finish=False,
+                reason=f"Regression coverage is too weak: {url_join_reason}",
+                confidence=0.9,
                 verifier_name=self.name,
             )
         final_answer = ""

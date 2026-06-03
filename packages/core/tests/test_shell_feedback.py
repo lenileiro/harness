@@ -42,6 +42,32 @@ def test_shell_failure_hint_suggests_diagnostics_for_terse_test_failure() -> Non
     assert "variable values" in hint
 
 
+def test_shell_failure_hint_suggests_tracing_empty_shell_script_failure() -> None:
+    hint = shell_failure_hint(
+        "./tests/run.sh",
+        exit_code=1,
+        stdout="",
+        stderr="",
+    )
+
+    assert "empty failure" in hint
+    assert "bash -x ./tests/run.sh" in hint
+    assert "Do not append `; echo $?`" in hint
+
+
+def test_shell_failure_hint_suggests_tracing_make_invoked_script() -> None:
+    hint = shell_failure_hint(
+        "make test",
+        exit_code=2,
+        stdout="./tests/run.sh\n",
+        stderr="make: *** [test] Error 1\n",
+    )
+
+    assert "diagnostic hint" in hint
+    assert "Makefile target failed" in hint
+    assert "bash -x ./tests/run.sh" in hint
+
+
 def test_shell_failure_hint_suggests_discovered_container_executable_path() -> None:
     hint = shell_failure_hint(
         "project-test-command",

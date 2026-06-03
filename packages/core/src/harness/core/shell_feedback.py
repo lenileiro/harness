@@ -55,6 +55,15 @@ def shell_empty_failure_hint(
             "[empty failure] This search returned no matches. Broaden the query, "
             "search related terms, or inspect likely files directly before retrying."
         )
+    shell_script = _shell_script_target(tokens)
+    if shell_script:
+        return (
+            "[empty failure] The shell script exited non-zero with no stdout or "
+            "stderr. Rerun it with execution tracing, for example "
+            f"`bash -x {shlex.quote(shell_script)}`, so the exact failing assertion, "
+            "inputs, and variable values are visible. Do not append `; echo $?` or "
+            "another fallback that masks the failing command's exit status."
+        )
     return (
         "[empty failure] The command exited non-zero with no stdout or stderr. "
         "Treat this as failed evidence; choose a different check or inspect the "
@@ -118,6 +127,14 @@ def shell_failure_hint(
             "check with execution tracing or temporary diagnostics so the exact "
             "failing command, inputs, and variable values are visible."
         )
+    make_script = _make_invoked_shell_script(command, stdout)
+    if exit_code and exit_code != 0 and make_script:
+        return (
+            "[diagnostic hint] The Makefile target failed after invoking a shell "
+            f"script. Rerun the underlying script with tracing, for example "
+            f"`bash -x {shlex.quote(make_script)}`, so the exact failing assertion, "
+            "inputs, and variable values are visible before editing more code."
+        )
     return shell_empty_failure_hint(command, exit_code=exit_code, stdout=stdout, stderr=stderr)
 
 
@@ -127,6 +144,34 @@ def _looks_like_terse_test_failure(output: str) -> bool:
         return False
     lowered = [line.lower() for line in lines]
     return any(line == "not ok" or line.startswith("not ok:") for line in lowered)
+
+
+def _shell_script_target(tokens: list[str]) -> str:
+    if not tokens:
+        return ""
+    command = _basename(tokens[0])
+    if command in {"bash", "sh", "zsh"}:
+        for token in tokens[1:]:
+            if token.startswith("-"):
+                continue
+            return token if token.endswith(".sh") else ""
+    first = tokens[0]
+    if first.endswith(".sh") or _basename(first).endswith(".sh"):
+        return first
+    return ""
+
+
+def _make_invoked_shell_script(command: str, stdout: str) -> str:
+    tokens = _tokenize_shell_command(command)
+    if not tokens or _basename(tokens[0]) != "make":
+        return ""
+    lines = [line.strip() for line in stdout.splitlines() if line.strip()]
+    for line in lines[-5:]:
+        line_tokens = _tokenize_shell_command(line)
+        target = _shell_script_target(line_tokens)
+        if target:
+            return target
+    return ""
 
 
 __all__ = ["shell_empty_failure_hint", "shell_failure_hint"]

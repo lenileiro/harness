@@ -2799,6 +2799,24 @@ async def test_remote_verify_work_reruns_success_with_untracked_regression_tests
 
 
 @pytest.mark.asyncio
+async def test_remote_verify_work_hints_to_trace_empty_shell_script_failure(
+    tmp_path: Path,
+) -> None:
+    env = LocalEnvironment(tmp_path)
+    (tmp_path / "tests").mkdir()
+    script = tmp_path / "tests" / "run.sh"
+    script.write_text("#!/usr/bin/env bash\nexit 1\n", encoding="utf-8")
+    script.chmod(0o755)
+    verify = RemoteVerifyWorkTool(env, workdir=str(tmp_path))
+
+    result = await verify(_call("verify_work", command="./tests/run.sh"))
+
+    assert result.is_error is True
+    assert "bash -x ./tests/run.sh" in result.content
+    assert "Do not append `; echo $?`" in result.content
+
+
+@pytest.mark.asyncio
 async def test_remote_verify_work_tool_uses_configured_default_timeout(tmp_path: Path) -> None:
     env = LocalEnvironment(tmp_path)
     registry = build_remote_tool_registry(
@@ -4211,6 +4229,49 @@ async def _accepted_current_release_workspace(
     return env, structural
 
 
+async def _accepted_url_join_workspace(
+    tmp_path: Path,
+    *,
+    test_body: str,
+) -> tuple[LocalEnvironment, ExternalWorkspaceVerifier]:
+    env = LocalEnvironment(tmp_path)
+    (tmp_path / "src").mkdir()
+    (tmp_path / "test").mkdir()
+    (tmp_path / "src" / "urlJoin.js").write_text(
+        'function joinUrl(...segments) { return segments.filter(Boolean).join("/"); }\n'
+        "module.exports = { joinUrl };\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "test" / "urlJoin.test.js").write_text(
+        'const assert = require("node:assert/strict");\n'
+        'const { joinUrl } = require("../src/urlJoin");\n'
+        'assert.equal(joinUrl("api", "v1"), "api/v1");\n',
+        encoding="utf-8",
+    )
+    await env.exec("git init")
+    await env.exec("git add src/urlJoin.js test/urlJoin.test.js")
+    await env.exec("git -c user.name=test -c user.email=test@example.com commit -m baseline")
+    (tmp_path / "src" / "urlJoin.js").write_text(
+        "function joinUrl(...segments) {\n"
+        "  return segments.filter((part) => part != null && part !== '').join('/');\n"
+        "}\n"
+        "module.exports = { joinUrl };\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "test" / "urlJoin.test.js").write_text(test_body, encoding="utf-8")
+    structural = ExternalWorkspaceVerifier(env, workdir=str(tmp_path))
+    result = await structural.verify(
+        session=SimpleNamespace(),
+        activity=[
+            _completed("write_file", metadata={"path": "src/urlJoin.js"}),
+            _completed("write_file", metadata={"path": "test/urlJoin.test.js"}),
+            _completed("verify_work", metadata={"command": "npm test"}),
+        ],
+    )
+    assert result.can_finish is True
+    return env, structural
+
+
 @pytest.mark.asyncio
 async def test_external_workspace_coverage_verifier_rejects_weak_regression_tests(
     tmp_path: Path,
@@ -4269,6 +4330,75 @@ async def test_external_workspace_coverage_verifier_rejects_weak_regression_test
     assert "transient setup or verification command failure" in system_prompt
     assert "Harness/tooling environment" in system_prompt
     assert "command the agent tried" in system_prompt
+
+
+@pytest.mark.asyncio
+async def test_external_workspace_coverage_verifier_rejects_url_join_missing_clean_boundary(
+    tmp_path: Path,
+) -> None:
+    env, structural = await _accepted_url_join_workspace(
+        tmp_path,
+        test_body=(
+            'const assert = require("node:assert/strict");\n'
+            'const { joinUrl } = require("../src/urlJoin");\n'
+            'assert.equal(joinUrl("https://example.com/", "/api/"), "https://example.com/api");\n'
+            'assert.equal(joinUrl("https://example.com", "///"), "https://example.com");\n'
+        ),
+    )
+    adapter = CoverageReviewAdapter({"can_finish": True, "reason": "looks good", "confidence": 0.9})
+    verifier = ExternalWorkspaceCoverageVerifier(
+        environment=env,
+        workdir=str(tmp_path),
+        instruction=(
+            "Fix URL joining. joinUrl should preserve a URL scheme and host, collapse "
+            "duplicate slashes between path segments, and trim trailing slashes."
+        ),
+        adapter=adapter,
+        model="judge",
+        structural_verifier=structural,
+    )
+
+    result = await verifier.verify(session=SimpleNamespace(messages=[]), activity=[])
+
+    assert result.can_finish is False
+    assert "clean scheme+host segment is followed by a clean path segment" in result.reason
+    assert "https://example.com/api" in result.reason
+    assert adapter.calls == []
+
+
+@pytest.mark.asyncio
+async def test_external_workspace_coverage_verifier_allows_url_join_clean_boundary(
+    tmp_path: Path,
+) -> None:
+    env, structural = await _accepted_url_join_workspace(
+        tmp_path,
+        test_body=(
+            'const assert = require("node:assert/strict");\n'
+            'const { joinUrl } = require("../src/urlJoin");\n'
+            'assert.equal(joinUrl("https://example.com", "api"), "https://example.com/api");\n'
+            'assert.equal(joinUrl("https://example.com/", "/api/"), "https://example.com/api");\n'
+        ),
+    )
+    adapter = CoverageReviewAdapter(
+        {"can_finish": True, "reason": "tests cover URL boundaries", "confidence": 0.9}
+    )
+    verifier = ExternalWorkspaceCoverageVerifier(
+        environment=env,
+        workdir=str(tmp_path),
+        instruction=(
+            "Fix URL joining. joinUrl should preserve a URL scheme and host, collapse "
+            "duplicate slashes between path segments, and trim trailing slashes."
+        ),
+        adapter=adapter,
+        model="judge",
+        structural_verifier=structural,
+    )
+
+    result = await verifier.verify(session=SimpleNamespace(messages=[]), activity=[])
+
+    assert result.can_finish is True
+    assert "coverage review passed" in result.reason
+    assert len(adapter.calls) == 1
 
 
 @pytest.mark.asyncio
