@@ -4811,6 +4811,9 @@ _CLEAN_PATH_SEGMENT_LITERAL_RE = re.compile(
     r"(?P<quote>['\"])(?!https?://)(?P<segment>[^/'\"\s][^/'\"]*)(?P=quote)"
 )
 _URL_JOIN_CALL_RE = re.compile(r"\bjoinUrl\((?P<args>[^)]{0,1200})\)", flags=re.DOTALL)
+_INI_SECTION_WITH_SPACES_RE = re.compile(r"(?m)^\s*\[\s+[A-Za-z0-9_.:-]+\s+\]\s*$")
+_INI_KEY_VALUE_WHITESPACE_RE = re.compile(r"(?m)^\s*[^#;\s=\[]+\s+=\s+[^=\n]+")
+_INI_EQUALS_VALUE_RE = re.compile(r"(?m)^\s*[^#;\s=\[]+\s*=\s*[^#;\n]*=[^#;\n]*")
 
 
 def _quoted_string_values(text: str) -> list[str]:
@@ -4987,6 +4990,46 @@ def _url_join_boundary_coverage_reason(
     )
 
 
+def _ini_lookup_coverage_reason(*, instruction: str, test_content: str) -> str | None:
+    lowered = instruction.lower()
+    if not (
+        "ini" in lowered
+        and "section" in lowered
+        and "key" in lowered
+        and "comment" in lowered
+        and "equals" in lowered
+    ):
+        return None
+
+    missing: list[str] = []
+    if "#" not in test_content or ";" not in test_content:
+        missing.append("both # and ; full-line comment cases")
+    if not _INI_SECTION_WITH_SPACES_RE.search(test_content):
+        missing.append("a section header with surrounding whitespace, such as `[ server ]`")
+    if not _INI_KEY_VALUE_WHITESPACE_RE.search(test_content):
+        missing.append("a key/value line with whitespace around `=`")
+    if not _INI_EQUALS_VALUE_RE.search(test_content):
+        missing.append("a value containing an additional `=` after the first separator")
+    lowered_tests = test_content.lower()
+    if "missing" not in lowered_tests or not (
+        "no output" in lowered_tests
+        or "assert_failure" in lowered_tests
+        or "expected failure" in lowered_tests
+        or "returncode" in lowered_tests
+        or "non-zero" in lowered_tests
+    ):
+        missing.append("missing-key behavior with non-zero exit and no output")
+
+    if not missing:
+        return None
+    return (
+        "INI lookup tests must explicitly cover "
+        + "; ".join(missing)
+        + ". Otherwise a parser can pass happy-path tests while still accepting "
+        "comments, whitespace, values, or missing keys incorrectly."
+    )
+
+
 def _url_join_tests_cover_clean_origin_path_boundary(test_content: str) -> bool:
     for match in _URL_JOIN_ORIGIN_LITERAL_RE.finditer(test_content):
         origin = match.group("origin")
@@ -5116,6 +5159,17 @@ class ExternalWorkspaceCoverageVerifier:
             return VerificationResult(
                 can_finish=False,
                 reason=f"Regression coverage is too weak: {url_join_reason}",
+                confidence=0.9,
+                verifier_name=self.name,
+            )
+        ini_reason = _ini_lookup_coverage_reason(
+            instruction=self.instruction,
+            test_content=test_content,
+        )
+        if ini_reason is not None:
+            return VerificationResult(
+                can_finish=False,
+                reason=f"Regression coverage is too weak: {ini_reason}",
                 confidence=0.9,
                 verifier_name=self.name,
             )
