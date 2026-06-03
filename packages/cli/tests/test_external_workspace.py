@@ -394,6 +394,12 @@ def test_verification_command_must_cover_changed_tests() -> None:
         "stestr run tests.unit.cli.test_incremental_cache_cli",
         ["repo/bandit/tests/unit/cli/test_incremental_cache_cli.py"],
     )
+    assert _verification_command_covers_test_changes(
+        'cd repo && docker run --rm --network none -v "$PWD:/work" -w /work '
+        'public.example/task:latest bash -lc "cargo test -q -p boa_engine '
+        '--test evaluation_cancel"',
+        ["repo/core/engine/tests/evaluation_cancel.rs"],
+    )
     assert not _verification_command_covers_test_changes("pytest -k unrelated", changed)
     assert not _verification_command_covers_test_changes("pytest -m slow", changed)
     assert not _verification_command_covers_test_changes(

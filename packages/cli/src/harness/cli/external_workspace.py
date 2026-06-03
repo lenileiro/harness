@@ -1894,6 +1894,8 @@ def _command_path_tokens(command: str) -> list[str]:
                 if inner_command:
                     paths.extend(_command_path_tokens(inner_command))
                 continue
+            if executable in _SHELL_COMMAND_RUNNERS:
+                continue
             paths.extend(_command_segment_path_tokens(segment, current_prefix))
     return list(dict.fromkeys(paths))
 
@@ -1918,6 +1920,8 @@ def _command_verification_path_tokens(command: str) -> list[str]:
                 inner_command = _docker_run_inner_command(segment)
                 if inner_command:
                     paths.extend(_command_verification_path_tokens(inner_command))
+                continue
+            if executable in _SHELL_COMMAND_RUNNERS:
                 continue
             if _segment_is_inspection_probe(segment):
                 continue
