@@ -161,6 +161,18 @@ def test_external_workspace_gates_do_not_reintroduce_language_specific_policy() 
             "def _diff_references_untracked_test_paths"
         )
     ]
+    generated_artifact_filter = (
+        source[
+            source.index("_GIT_WORKSPACE_FINGERPRINT_COMMAND") : source.index(
+                "_ROOT_PROBE_COMMANDS"
+            )
+        ]
+        + source[
+            source.index("def _path_part_is_generated_cache") : source.index(
+                "def _workspace_test_change_paths"
+            )
+        ]
+    )
     language_specific_gate_terms = frozenset(
         {
             "python",
@@ -178,7 +190,7 @@ def test_external_workspace_gates_do_not_reintroduce_language_specific_policy() 
             "rust",
         }
     )
-    for section in (clone_gate, setup_detector, coverage_gate):
+    for section in (clone_gate, setup_detector, coverage_gate, generated_artifact_filter):
         words = set(re.findall(r"[a-z0-9_+.-]+", section.lower()))
         assert words.isdisjoint(language_specific_gate_terms)
 
@@ -3324,8 +3336,8 @@ def test_workspace_source_change_status_separates_scratch_from_source() -> None:
         "ark/json-schema/__tests__/helper.ts"
     ]
     assert _workspace_test_change_paths(
-        "?? tests/__pycache__/test_app.cpython-314-pytest-9.0.3.pyc\n?? tests/test_app.py\n"
-    ) == ["tests/test_app.py"]
+        "?? tests/.runner_cache/generated.bin\n?? tests/test_app.js\n"
+    ) == ["tests/test_app.js"]
     assert _workspace_test_change_paths(" D tests/test_removed.py\n") == []
     assert _workspace_test_change_paths("R  tests/test_old.py -> tests/test_new.py\n") == []
     assert _workspace_deleted_source_paths(
@@ -3345,10 +3357,10 @@ def test_workspace_source_change_status_separates_scratch_from_source() -> None:
     assert source_paths == ["src/app.py"]
     assert scratch_paths == ["tests/test_new.py"]
     passed, source_paths, scratch_paths = _workspace_source_change_status(
-        "?? src/__pycache__/app.cpython-314.pyc\n?? src/app.py\n"
+        "?? src/.build_cache/generated.bin\n?? src/app.ts\n"
     )
     assert passed is True
-    assert source_paths == ["src/app.py"]
+    assert source_paths == ["src/app.ts"]
     assert scratch_paths == []
 
     passed, source_paths, scratch_paths = _workspace_source_change_status(
@@ -7303,6 +7315,65 @@ async def test_external_environment_runner_retries_runtime_failure_after_source_
     assert context.metadata["model_attempts"][0]["source_change_paths"] == ["src/app.py"]
     log_text = (tmp_path / "logs" / "harness.txt").read_text(encoding="utf-8")
     assert "continuing from current workspace" in log_text
+
+
+@pytest.mark.asyncio
+async def test_external_environment_runner_refreshes_stale_snapshot_after_runtime_error(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("HARNESS_EXTERNAL_WORKSPACE_MODEL_FALLBACKS", raising=False)
+    monkeypatch.delenv("HARNESS_OPENROUTER_MODEL_FALLBACKS", raising=False)
+
+    async def fake_run_once(**kwargs: object) -> str:
+        verifier = kwargs["build_verifier"]()
+        await verifier.verify(
+            session=SimpleNamespace(
+                messages=[
+                    Message(
+                        role="assistant",
+                        content=(
+                            "I can't continue because the source tree is missing. "
+                            "Please provide the repository files."
+                        ),
+                    )
+                ]
+            ),
+            activity=[],
+        )
+        (tmp_path / "src").mkdir()
+        (tmp_path / "src" / "app.py").write_text("print('partial')\n", encoding="utf-8")
+        render = kwargs["render"]
+        assert callable(render)
+        render(
+            ErrorEvent(
+                kind="timeout",
+                error="model stream produced no events for 120.0s",
+                recoverable=False,
+            )
+        )
+        return ""
+
+    monkeypatch.setattr("harness.cli.external_workspace._harness_run_once", fake_run_once)
+    await LocalEnvironment(tmp_path).exec("git init")
+    context = SimpleNamespace(n_agent_steps=0, metadata={})
+
+    with pytest.raises(RuntimeError, match="did not produce a later passing"):
+        await run_harness_on_external_environment(
+            instruction="fix the task",
+            environment=LocalEnvironment(tmp_path),
+            context=context,
+            logs_dir=str(tmp_path / "logs"),
+            source_change_retries=0,
+            verification_retries=0,
+            pass_timeout_seconds=20,
+            require_regression_test_change=False,
+        )
+
+    assert context.metadata["latest_runtime_error_kind"] == "timeout"
+    assert context.metadata["source_change_paths"] == ["src/app.py"]
+    assert context.metadata["model_attempts"][0]["source_change_paths"] == ["src/app.py"]
+    assert "did not produce a later passing" in context.metadata["verification_error"]
 
 
 @pytest.mark.asyncio

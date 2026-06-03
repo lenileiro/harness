@@ -150,9 +150,8 @@ _GIT_WORKSPACE_FINGERPRINT_COMMAND = (
     "while IFS= read -r path; do "
     'case "$path" in '
     ".harness-home|.harness-home/*|*/.harness-home|*/.harness-home/*|"
-    "*/__pycache__/*|__pycache__/*|*/.pytest_cache/*|.pytest_cache/*|"
-    "*/.mypy_cache/*|.mypy_cache/*|*/.ruff_cache/*|.ruff_cache/*|"
-    "*/.tox/*|.tox/*|*.pyc|*.pyo) continue ;; "
+    "cache/*|*/cache/*|.cache/*|*/.cache/*|*_cache/*|*cache__/*|*-cache/*) "
+    "continue ;; "
     "esac; "
     "printf 'untracked %s\\n' \"$path\"; "
     "if stat -f '%Lp' \"$path\" >/dev/null 2>&1; then "
@@ -1647,18 +1646,20 @@ def _path_is_scratch_artifact(path: str) -> bool:
     )
 
 
+def _path_part_is_generated_cache(part: str) -> bool:
+    name = part.lower()
+    bare = name.strip(".")
+    return (
+        bare == "cache"
+        or bare.endswith("_cache")
+        or bare.endswith("-cache")
+        or (bare.startswith("__") and bare.endswith("cache__"))
+    )
+
+
 def _path_is_generated_artifact(path: str) -> bool:
     parts = [part.lower() for part in path.strip("/").split("/") if part]
-    name = parts[-1] if parts else ""
-    return (
-        "__pycache__" in parts
-        or ".harness-home" in parts
-        or ".pytest_cache" in parts
-        or ".mypy_cache" in parts
-        or ".ruff_cache" in parts
-        or ".tox" in parts
-        or name.endswith((".pyc", ".pyo"))
-    )
+    return ".harness-home" in parts or any(_path_part_is_generated_cache(part) for part in parts)
 
 
 def _workspace_test_change_paths(
@@ -5820,23 +5821,6 @@ def _snapshot_has_no_workspace_mutation(snapshot: ExternalWorkspaceVerificationS
     )
 
 
-def _snapshot_has_external_workspace_state(
-    snapshot: ExternalWorkspaceVerificationSnapshot,
-) -> bool:
-    return bool(
-        snapshot.source_change_passed
-        or snapshot.source_change_paths
-        or snapshot.test_change_paths
-        or snapshot.scratch_paths
-        or snapshot.deleted_source_paths
-        or snapshot.verification_passed_after_source_change
-        or snapshot.latest_verification_error
-        or snapshot.latest_verification_command
-        or snapshot.source_change_error
-        or snapshot.verification_error
-    )
-
-
 def _completion_verification_metadata(
     result: VerificationResult | None,
 ) -> dict[str, Any]:
@@ -6166,9 +6150,7 @@ async def run_harness_on_external_environment(
                     else:
                         os.environ[key] = previous
 
-            if run_error is not None and not _snapshot_has_external_workspace_state(
-                verifier.latest
-            ):
+            if run_error is not None and _snapshot_has_no_workspace_mutation(verifier.latest):
                 await verifier.verify(session=None, activity=[])
 
             snapshot = verifier.latest
