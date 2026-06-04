@@ -286,90 +286,56 @@ def test_workspace_test_change_paths_detects_common_test_layouts() -> None:
 
 
 def test_verification_command_must_cover_changed_tests() -> None:
-    changed = ["t/unit/transport/virtual/test_sac_priority.py"]
+    changed = ["t/unit/transport/virtual/test_sac_priority.case"]
 
     assert _verification_command_covers_test_changes(
-        "pytest t/unit/transport/virtual/test_sac_priority.py",
-        changed,
-    )
-    assert _verification_command_covers_test_changes("pytest t/unit/transport/virtual", changed)
-    assert _verification_command_covers_test_changes("pytest", changed)
-    assert _verification_command_covers_test_changes(
-        "python -m pytest t/unit/transport/virtual/test_sac_priority.py",
+        "project-test t/unit/transport/virtual/test_sac_priority.case",
         changed,
     )
     assert _verification_command_covers_test_changes(
-        "/tmp/work/.venv/bin/python3 -m pytest -q",
+        "project-test t/unit/transport/virtual",
         changed,
     )
+    assert not _verification_command_covers_test_changes("project-test", changed)
     assert _verification_command_covers_test_changes(
-        "/tmp/work/.venv/bin/python3 -m pytest -q t/unit/transport/virtual/test_sac_priority.py",
-        changed,
+        "project-check tests/test_feature.case",
+        ["tests/test_feature.case"],
     )
     assert _verification_command_covers_test_changes(
-        "/tmp/work/.venv/bin/python3 -m pytest -q && /tmp/work/.venv/bin/python3 - <<'PY'\n"
-        "url = 'https://www.python.org/downloads/source/'\n"
-        "PY\n",
-        changed,
-    )
-    assert _verification_command_covers_test_changes(
-        "uv run python -m pytest t/unit/transport/virtual/test_sac_priority.py",
-        changed,
-    )
-    assert _verification_command_covers_test_changes("uv run pytest", changed)
-    assert _verification_command_covers_test_changes("npm test", ["tests/test_feature.js"])
-    assert _verification_command_covers_test_changes(
-        "node --test",
-        ["test/urlJoin.test.js"],
-    )
-    assert _verification_command_covers_test_changes(
-        "node --test test/urlJoin.test.js",
-        ["test/urlJoin.test.js"],
-    )
-    assert _verification_command_covers_test_changes(
-        "project-check tests/test_feature.js",
-        ["tests/test_feature.js"],
-    )
-    assert not _verification_command_covers_test_changes(
-        "go test ./...",
-        ["core/testdata/func.ank"],
-    )
-    assert _verification_command_covers_test_changes(
-        "cd repo && python -m pytest tests/test_helper.py",
+        "cd repo && project-test tests/test_helper.py",
         ["repo/tests/test_helper.py"],
     )
     assert _verification_command_covers_test_changes(
-        "cd repo && go test ./...",
+        "cd repo && project-test ./...",
         ["repo/ansi/truncate_test.go"],
     )
     assert not _verification_command_covers_test_changes(
-        "cd repo && go test ./...",
+        "cd repo && project-test ./...",
         ["other/tests/test_helper.py"],
     )
     assert _verification_command_covers_test_changes(
-        "cd repo && PYTHONPATH=. pytest -q -W ignore::pytest.PytestConfigWarning "
-        "tests/test_helper.py",
+        "cd repo && PROJECT_ENV=. project-test -q tests/test_helper.py",
         ["repo/tests/test_helper.py"],
     )
     assert _verification_command_covers_test_changes(
         "cd .termenv-src && docker run --rm -t -v $(pwd):/app "
         "public.ecr.aws/x8v8d7g8/mars-base:latest bash -lc "
-        "'cd /app && go test ./... -count=1'",
+        "'cd /app && project-test ./... -count=1'",
         [".termenv-src/ansi/truncate_test.go"],
     )
     assert _verification_command_covers_test_changes(
         "cd .termenv-src && docker run --rm -t -v $(pwd):/app "
         "public.ecr.aws/x8v8d7g8/mars-base:latest bash -lc "
-        "'cd /app && go test ./ansi -count=1'",
+        "'cd /app && project-test ./ansi -count=1'",
         [".termenv-src/ansi/truncate_test.go"],
     )
     assert not _verification_command_covers_test_changes(
         "cd .termenv-src && docker run --rm -t -v $(pwd):/app "
         "public.ecr.aws/x8v8d7g8/mars-base:latest bash -lc "
-        "'cd /app && go test ./... -run Other'",
+        "'cd /app && project-test ./... -run Other'",
         [".termenv-src/ansi/truncate_test.go"],
     )
-    assert _verification_command_covers_test_changes("CI=true pytest", changed)
+    assert not _verification_command_covers_test_changes("CI=true project-test", changed)
     assert not _verification_command_covers_test_changes(
         "make test",
         ["tests/regression.sh"],
@@ -400,72 +366,78 @@ def test_verification_command_must_cover_changed_tests() -> None:
         runner_wires_changed_tests=True,
     )
     assert _verification_command_covers_test_changes(
-        "stestr run tests.unit.cli.test_incremental_cache_cli",
+        "project-test run tests.unit.cli.test_incremental_cache_cli",
         ["repo/bandit/tests/unit/cli/test_incremental_cache_cli.py"],
     )
     assert _verification_command_covers_test_changes(
         "cd repo/bandit && docker run --network none --rm -v $(pwd):/app/bandit "
         "-w /app/bandit public.example/task:latest "
-        "stestr run tests.unit.cli.test_incremental_cache_cli",
+        "project-test run tests.unit.cli.test_incremental_cache_cli",
         ["repo/bandit/tests/unit/cli/test_incremental_cache_cli.py"],
     )
     assert _verification_command_covers_test_changes(
         'cd repo && docker run --rm --network none -v "$PWD:/work" -w /work '
-        'public.example/task:latest bash -lc "cargo test -q -p boa_engine '
-        '--test evaluation_cancel"',
+        'public.example/task:latest bash -lc "project-test -q '
+        'core/engine/tests/evaluation_cancel.rs"',
         ["repo/core/engine/tests/evaluation_cancel.rs"],
     )
-    assert not _verification_command_covers_test_changes("pytest -k unrelated", changed)
-    assert not _verification_command_covers_test_changes("pytest -m slow", changed)
+    assert not _verification_command_covers_test_changes("project-test -k unrelated", changed)
+    assert not _verification_command_covers_test_changes("project-test -m slow", changed)
     assert not _verification_command_covers_test_changes(
-        "PYTEST_ADDOPTS=--collect-only pytest t/unit/transport/virtual/test_sac_priority.py",
+        "PROJECT_TEST_OPTS=--collect-only project-test "
+        "t/unit/transport/virtual/test_sac_priority.case",
         changed,
     )
     assert not _verification_command_covers_test_changes(
-        "GOFLAGS='-run Other' go test ./...",
-        changed,
-    )
-    assert not _verification_command_covers_test_changes("go test ./... -run Other", changed)
-    assert not _verification_command_covers_test_changes(
-        "python -m pytest t/unit/transport/virtual/test_sac_priority.py -m slow",
+        "PROJECT_TEST_FLAGS='-run Other' project-test ./...",
         changed,
     )
     assert not _verification_command_covers_test_changes(
-        "pytest t/unit/transport/virtual --ignore t/unit/transport/virtual/test_sac_priority.py",
+        "project-test ./... -run Other",
         changed,
     )
     assert not _verification_command_covers_test_changes(
-        "pytest t/unit/transport/virtual --ignore=t/unit/transport/virtual/test_sac_priority.py",
+        "project-test t/unit/transport/virtual/test_sac_priority.case -m slow",
         changed,
     )
     assert not _verification_command_covers_test_changes(
-        "pytest t/unit/transport/virtual --ignore-glob=t/unit/transport/virtual/test_sac_*.py",
+        "project-test t/unit/transport/virtual --ignore "
+        "t/unit/transport/virtual/test_sac_priority.case",
+        changed,
+    )
+    assert not _verification_command_covers_test_changes(
+        "project-test t/unit/transport/virtual "
+        "--ignore=t/unit/transport/virtual/test_sac_priority.case",
+        changed,
+    )
+    assert not _verification_command_covers_test_changes(
+        "project-test t/unit/transport/virtual --ignore-glob=t/unit/transport/virtual/test_sac_*",
         changed,
     )
 
     assert not _verification_command_covers_test_changes(
-        "pytest --collect-only t/unit/transport/virtual/test_sac_priority.py",
+        "project-test --collect-only t/unit/transport/virtual/test_sac_priority.case",
         changed,
     )
     assert not _verification_command_covers_test_changes(
-        "pytest --co t/unit/transport/virtual/test_sac_priority.py",
+        "project-test --co t/unit/transport/virtual/test_sac_priority.case",
         changed,
     )
     assert not _verification_command_covers_test_changes(
-        "pytest --fixtures t/unit/transport/virtual/test_sac_priority.py",
+        "project-test --fixtures t/unit/transport/virtual/test_sac_priority.case",
         changed,
     )
-    assert not _verification_command_covers_test_changes("go test -list . ./...", changed)
+    assert not _verification_command_covers_test_changes("project-test -list . ./...", changed)
     assert not _verification_command_covers_test_changes(
-        "npm test -- --testNamePattern=Other",
-        ["tests/test_feature.js"],
+        "project-test -- --testNamePattern=Other",
+        ["tests/test_feature.case"],
     )
     assert not _verification_command_covers_test_changes(
-        "pytest t/unit/transport/virtual/test_sac_priority.py::test_specific",
+        "project-test t/unit/transport/virtual/test_sac_priority.case::test_specific",
         changed,
     )
     assert not _verification_command_covers_test_changes(
-        "pytest t/unit/transport/virtual/test_base.py",
+        "project-test t/unit/transport/virtual/test_base.case",
         changed,
     )
     assert not _verification_command_covers_test_changes("test -f " + changed[0], changed)
@@ -473,7 +445,7 @@ def test_verification_command_must_cover_changed_tests() -> None:
     assert not _verification_command_covers_test_changes("rg case " + changed[0], changed)
     assert not _verification_command_covers_test_changes("cat " + changed[0], changed)
     assert not _verification_command_covers_test_changes(
-        "python -c \"open('t/unit/transport/virtual/test_sac_priority.py').read()\"",
+        "runner -c \"open('t/unit/transport/virtual/test_sac_priority.case').read()\"",
         changed,
     )
     assert not _verification_command_covers_test_changes(
@@ -4360,7 +4332,7 @@ async def _accepted_slug_workspace(
         activity=[
             _completed("write_file", metadata={"path": "slugify.py"}),
             _completed("write_file", metadata={"path": "tests/test_slugify.py"}),
-            _completed("verify_work", metadata={"command": "python -m pytest -q"}),
+            _completed("verify_work", metadata={"command": "project-test tests/test_slugify.py"}),
         ],
     )
     assert result.can_finish is True
@@ -4466,7 +4438,7 @@ async def _accepted_url_join_workspace(
         activity=[
             _completed("write_file", metadata={"path": "src/urlJoin.js"}),
             _completed("write_file", metadata={"path": "test/urlJoin.test.js"}),
-            _completed("verify_work", metadata={"command": "npm test"}),
+            _completed("verify_work", metadata={"command": "project-test test/urlJoin.test.js"}),
         ],
     )
     assert result.can_finish is True
@@ -4548,7 +4520,7 @@ async def _accepted_ini_lookup_workspace(
         activity=[
             _completed("write_file", metadata={"path": "bin/ini_get"}),
             _completed("write_file", metadata={"path": "tests/run.sh"}),
-            _completed("verify_work", metadata={"command": "make test"}),
+            _completed("verify_work", metadata={"command": "./tests/run.sh"}),
         ],
     )
     assert result.can_finish is True

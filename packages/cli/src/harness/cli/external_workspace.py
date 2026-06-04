@@ -2219,7 +2219,7 @@ def _verification_command_covers_test_changes(
                 (tracked_changed or runner_wires_untracked_tests)
                 and _is_broad_test_command(command)
             )
-        return _is_broad_test_command(command)
+        return False
     verification_targets = set(_command_verification_path_tokens(command))
     for target in targets:
         if target in {".", "./"}:
