@@ -2387,14 +2387,7 @@ def test_exact_stdout_requires_program_output_after_state_change() -> None:
         data={
             "name": "verify_work",
             "is_error": False,
-            "arguments": {
-                "command": (
-                    "python3 -c 'import subprocess, sys; "
-                    "expected=b'\"'\"'harness-ok'\"'\"'; "
-                    "out=subprocess.check_output([sys.executable, '\"'\"'hello.py'\"'\"']); "
-                    "assert out == expected, repr(out)'"
-                )
-            },
+            "arguments": {"command": "./hello.py | cmp - <(printf %s 'harness-ok')"},
             "content_preview": "PASSED",
             "metadata": {"stdout": "", "exit_code": 0},
         },
@@ -2599,14 +2592,7 @@ def test_exact_stdout_no_trailing_newline_requires_raw_direct_output() -> None:
         data={
             "name": "verify_work",
             "is_error": False,
-            "arguments": {
-                "command": (
-                    "python3 -c 'import subprocess, sys; "
-                    "expected=b'\"'\"'harness-ok'\"'\"'; "
-                    "out=subprocess.check_output([sys.executable, '\"'\"'hello.py'\"'\"']); "
-                    "assert out == expected, repr(out)'"
-                )
-            },
+            "arguments": {"command": "./hello.py | cmp - <(printf %s 'harness-ok')"},
             "content_preview": "PASSED",
             "metadata": {"stdout": "", "exit_code": 0},
         },
@@ -4296,6 +4282,48 @@ def test_source_artifact_presence_gate_has_no_language_specific_policy() -> None
         }
     )
     words = set(re.findall(r"[a-z0-9_+.-]+", section.lower()))
+    assert words.isdisjoint(language_specific_terms)
+
+
+def test_generic_verification_gates_have_no_language_specific_policy() -> None:
+    source = (
+        Path(__file__).resolve().parents[1] / "src" / "harness" / "core" / "dynamic_workflows.py"
+    ).read_text(encoding="utf-8")
+    sections = [
+        source[
+            source.index("_EXACT_FILE_CONTENT_NAMED_REQUEST_RE") : source.index("_NUMERIC_CLAIM_RE")
+        ],
+        source[
+            source.index("def _command_directly_runs_path") : source.index(
+                "def _stdout_no_trailing_newline_requested"
+            )
+        ],
+        source[
+            source.index("def _command_reads_path") : source.index("def _byte_size_check_requested")
+        ],
+    ]
+    language_specific_terms = frozenset(
+        {
+            "python",
+            "python3",
+            "pytest",
+            "pip",
+            "pip3",
+            "node",
+            "npm",
+            "npx",
+            "pnpm",
+            "yarn",
+            "cargo",
+            "go",
+            "rust",
+            "javascript",
+            "js",
+            "typescript",
+            "ts",
+        }
+    )
+    words = {word for section in sections for word in re.findall(r"[a-z0-9_+.-]+", section.lower())}
     assert words.isdisjoint(language_specific_terms)
 
 

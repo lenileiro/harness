@@ -141,7 +141,7 @@ class TestListDir:
         assert "a.txt" in result.content
         assert "b/" in result.content
 
-    async def test_hides_workspace_noise_by_default(self, tmp_path: Path) -> None:
+    async def test_hides_control_dirs_by_default(self, tmp_path: Path) -> None:
         (tmp_path / ".harness").mkdir()
         (tmp_path / ".venv").mkdir()
         (tmp_path / "node_modules").mkdir()
@@ -149,8 +149,8 @@ class TestListDir:
         tool = ListDirTool(cwd=tmp_path)
         result = await tool(_call("list_dir"))
         assert result.is_error is False
-        assert result.content.strip() == "src/"
-        assert result.metadata["ignored_entries"] == 3
+        assert result.content.splitlines() == [".venv/", "node_modules/", "src/"]
+        assert result.metadata["ignored_entries"] == 1
 
     async def test_lists_subdir(self, tmp_path: Path) -> None:
         (tmp_path / "sub").mkdir()
@@ -218,9 +218,9 @@ class TestGlob:
         assert "httpx/_models.py" in names
         assert "httpx/_client.py" in names
 
-    async def test_recursive_match_hides_workspace_noise(self, tmp_path: Path) -> None:
+    async def test_recursive_match_hides_control_dirs_only(self, tmp_path: Path) -> None:
         (tmp_path / ".venv" / "lib").mkdir(parents=True)
-        (tmp_path / ".venv" / "lib" / "ignored.py").write_text("", encoding="utf-8")
+        (tmp_path / ".venv" / "lib" / "visible.py").write_text("", encoding="utf-8")
         (tmp_path / ".harness").mkdir()
         (tmp_path / ".harness" / "ignored.py").write_text("", encoding="utf-8")
         (tmp_path / "src").mkdir()
@@ -228,7 +228,7 @@ class TestGlob:
         tool = GlobTool(cwd=tmp_path)
         result = await tool(_call("glob", pattern="**/*.py"))
         assert result.is_error is False
-        assert result.content.strip() == "src/app.py"
+        assert result.content.splitlines() == [".venv/lib/visible.py", "src/app.py"]
 
     async def test_no_match_returns_marker(self, tmp_path: Path) -> None:
         tool = GlobTool(cwd=tmp_path)

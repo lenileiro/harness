@@ -786,8 +786,6 @@ class HostWorkspaceEnvironment:
             env["XDG_CACHE_HOME"] = str(self.home / ".cache")
             env["XDG_CONFIG_HOME"] = str(self.home / ".config")
             env["XDG_DATA_HOME"] = str(self.home / ".local" / "share")
-            env["PYTHONUSERBASE"] = str(self.home / ".python-userbase")
-            env["PIP_DISABLE_PIP_VERSION_CHECK"] = "1"
             return subprocess.run(
                 command,
                 cwd=working_dir,

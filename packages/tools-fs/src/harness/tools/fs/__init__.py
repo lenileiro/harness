@@ -27,17 +27,7 @@ _DEFAULT_IGNORED_DIR_NAMES = frozenset(
         ".git",
         ".harness",
         ".hg",
-        ".mypy_cache",
-        ".nox",
-        ".pytest_cache",
-        ".ruff_cache",
         ".svn",
-        ".tox",
-        ".venv",
-        "__pycache__",
-        "env",
-        "node_modules",
-        "venv",
     }
 )
 

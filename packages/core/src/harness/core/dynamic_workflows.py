@@ -1143,7 +1143,7 @@ _EXACT_FILE_CONTENT_REQUEST_RE = re.compile(
 )
 _EXACT_FILE_CONTENT_NAMED_REQUEST_RE = re.compile(
     r"\b(?:create|write|make)\s+(?:(?:an?|the)\s+)?"
-    r"(?:(?:plain|text|json|python|node|shell|bash)\s+)?"
+    r"(?:(?:[A-Za-z0-9_+.-]+)\s+)?"
     r"(?:file|script|program)\s+(?:(?:named|called|at|as)\s+)?"
     r"(?P<path>[A-Za-z0-9._@%+=:,~/-]+)\s+"
     r"(?:containing|that\s+contains|with(?:\s+the)?(?:\s+exact)?(?:\s+contents?|\s+content|\s+text)?)"
@@ -1173,7 +1173,7 @@ _EXACT_STDOUT_REQUEST_RE = re.compile(
 )
 _EXACT_STDOUT_NAMED_REQUEST_RE = re.compile(
     r"\b(?:create|write|make)\s+(?:(?:an?|the)\s+)?"
-    r"(?:(?:python|node|shell|bash)\s+)?(?:script|program|file)\s+"
+    r"(?:(?:[A-Za-z0-9_+.-]+)\s+)?(?:script|program|file)\s+"
     r"(?:(?:named|called|at|as)\s+)?(?P<path>[A-Za-z0-9._@%+=:,~/-]+)\s+"
     r"(?:that\s+)?(?:prints?|outputs?|emits|writes\s+to\s+stdout)\s+exactly\s+"
     r"(?P<content>`[^`\n]+`|\"[^\"\n]+\"|'[^'\n]+'|[^\n.;]+?)"
@@ -1197,8 +1197,8 @@ _TWO_RESULT_REQUEST_RE = re.compile(
     re.IGNORECASE | re.S,
 )
 _TEST_FILE_REQUEST_RE = re.compile(
-    r"\b(?:add|create|write|include)\b.{0,120}\b(?:unit\s*test|unittest|test\s+file|tests?)\b"
-    r"|\b(?:unit\s*test|unittest|test\s+file)\b",
+    r"\b(?:add|create|write|include)\b.{0,120}\b(?:unit\s*test|test\s+file|tests?)\b"
+    r"|\b(?:unit\s*test|test\s+file)\b",
     re.IGNORECASE | re.S,
 )
 _TEST_RUN_REQUEST_RE = re.compile(
@@ -1206,14 +1206,12 @@ _TEST_RUN_REQUEST_RE = re.compile(
     re.IGNORECASE,
 )
 _TEST_ARTIFACT_EVIDENCE_RE = re.compile(
-    r"(?<![\w./-])(?:[\w./-]*(?:test|spec)[\w./-]*\."
-    r"(?:py|js|jsx|ts|tsx|rs|go|ex|exs|rb|java|kt|php)|tests?/[^\s\"'`]+)",
+    r"(?<![\w./-])(?:[\w./-]*(?:test|spec)[\w./-]*\." r"[A-Za-z0-9]+|tests?/[^\s\"'`]+)",
     re.IGNORECASE,
 )
 _TEST_RUN_EVIDENCE_RE = re.compile(
-    r"\b(?:pytest|unittest|npm\s+(?:run\s+)?test|pnpm\s+test|yarn\s+test|"
-    r"bun\s+test|deno\s+test|cargo\s+test|go\s+test|mix\s+test|mvn\s+test|"
-    r"gradle\s+test|python[0-9.]*\s+-m\s+unittest)\b",
+    r"(?<![\w./-])(?:[\w./-]*(?:test|spec)[\w./-]*)(?=$|[\s;&|\"'`)}])"
+    r"|\btests?\s+(?:pass|passed|passing|run|ran|failed|failing)\b",
     re.IGNORECASE,
 )
 _NUMERIC_CLAIM_RE = re.compile(r"(?<![\w.-])\d+(?:\.\d+)?%?(?![\w.-])")
@@ -1665,16 +1663,43 @@ def _command_directly_runs_path(command: str, *, path: str) -> bool:
     command = _strip_shell_comment_lines(command)
     if re.search(r"[|<>`]", command) or _command_has_shell_control_operator(command):
         return False
+    return _shell_fragment_invokes_path(command, path=path)
+
+
+_FILE_OBSERVATION_COMMANDS = frozenset(
+    {
+        "awk",
+        "cat",
+        "cmp",
+        "diff",
+        "echo",
+        "find",
+        "grep",
+        "head",
+        "ls",
+        "printf",
+        "sed",
+        "stat",
+        "tail",
+        "test",
+        "wc",
+    }
+)
+
+
+def _shell_fragment_invokes_path(fragment: str, *, path: str) -> bool:
     try:
-        tokens = shlex.split(command)
+        tokens = shlex.split(fragment)
     except ValueError:
         return False
     if not tokens:
         return False
-    executable = Path(tokens[0]).name
-    if executable in {"python", "python3", "node", "bash", "sh"}:
-        return len(tokens) >= 2 and _path_matches_request(tokens[1], path)
-    return _path_matches_request(tokens[0], path)
+    if _path_matches_request(tokens[0], path):
+        return True
+    executable = Path(tokens[0]).name.lower()
+    if executable in _FILE_OBSERVATION_COMMANDS:
+        return False
+    return any(_path_matches_request(token, path) for token in tokens[1:])
 
 
 def _command_asserts_exact_stdout(command: str, *, path: str, content: str) -> bool:
@@ -1693,46 +1718,80 @@ def _segment_asserts_exact_stdout(segment: str, *, path: str, content: str) -> b
         return False
     if _segment_asserts_exact_stdout_bytes(segment, path=path, content=content):
         return True
-    escaped_path = re.escape(path)
     escaped_content = re.escape(content)
     expected_expr = rf"(?:[\"']{escaped_content}[\"']|{escaped_content}(?=\s|\]|\)|$))"
-    run_expr = rf"(?:python3?|node|bash|sh)\s+{escaped_path}|\.\/{escaped_path}|{escaped_path}"
-    command_substitution = rf"\$\(\s*(?:{run_expr})\s*\)"
-    return bool(
-        re.search(
-            rf"[\"']?{command_substitution}[\"']?\s*(?:=|==)\s*{expected_expr}",
+    command_substitutions = _shell_command_substitutions(segment)
+    for command_substitution, inner_command in command_substitutions:
+        if not _shell_fragment_invokes_path(inner_command, path=path):
+            continue
+        if re.search(
+            rf"[\"']?{re.escape(command_substitution)}[\"']?\s*(?:=|==)\s*{expected_expr}",
             segment,
             re.S,
-        )
-        or re.search(
-            rf"\btest\s+[\"']?{command_substitution}[\"']?\s*=\s*{expected_expr}",
+        ) or re.search(
+            rf"\btest\s+[\"']?{re.escape(command_substitution)}[\"']?\s*=\s*{expected_expr}",
             segment,
             re.S,
-        )
-        or re.search(
-            rf"\b(?:python3?|node|bash|sh)\b[^\n;&|]*{escaped_path}[^\n;&|]*\|\s*"
-            rf"\bgrep\b[^\n;&|]*\s-[A-Za-z]*x[A-Za-z]*\b[^\n;&|]*"
-            rf"{expected_expr}",
-            segment,
+        ):
+            return True
+    return any(
+        _shell_fragment_invokes_path(pipeline_segment, path=path)
+        and re.search(
+            rf"\bgrep\b[^\n;&|]*\s-[A-Za-z]*x[A-Za-z]*\b[^\n;&|]*{expected_expr}",
+            pipeline_segments[index + 1],
             re.S,
         )
+        for pipeline_segments in (_shell_pipeline_segments(segment),)
+        for index, pipeline_segment in enumerate(pipeline_segments[:-1])
     )
 
 
-def _python_command_code(command: str) -> str:
-    try:
-        tokens = shlex.split(command)
-    except ValueError:
-        return ""
-    if not tokens or Path(tokens[0]).name not in {"python", "python3"}:
-        return ""
-    try:
-        index = tokens.index("-c")
-    except ValueError:
-        return ""
-    if index + 1 >= len(tokens):
-        return ""
-    return tokens[index + 1]
+def _shell_command_substitutions(command: str) -> list[tuple[str, str]]:
+    substitutions: list[tuple[str, str]] = []
+    index = 0
+    while index < len(command):
+        start = command.find("$(", index)
+        if start < 0:
+            break
+        depth = 1
+        cursor = start + 2
+        in_single = False
+        in_double = False
+        escaped = False
+        while cursor < len(command):
+            char = command[cursor]
+            if escaped:
+                escaped = False
+                cursor += 1
+                continue
+            if char == "\\" and not in_single:
+                escaped = True
+                cursor += 1
+                continue
+            if char == "'" and not in_double:
+                in_single = not in_single
+                cursor += 1
+                continue
+            if char == '"' and not in_single:
+                in_double = not in_double
+                cursor += 1
+                continue
+            if not in_single and not in_double:
+                if command.startswith("$(", cursor):
+                    depth += 1
+                    cursor += 2
+                    continue
+                if char == ")":
+                    depth -= 1
+                    if depth == 0:
+                        substitutions.append(
+                            (command[start : cursor + 1], command[start + 2 : cursor])
+                        )
+                        cursor += 1
+                        break
+            cursor += 1
+        index = max(cursor, start + 2)
+    return substitutions
 
 
 def _command_asserts_exact_stdout_bytes(command: str, *, path: str, content: str) -> bool:
@@ -1749,20 +1808,48 @@ def _command_asserts_exact_stdout_bytes(command: str, *, path: str, content: str
 def _segment_asserts_exact_stdout_bytes(segment: str, *, path: str, content: str) -> bool:
     if path not in segment or content not in segment:
         return False
-    code = _python_command_code(segment)
-    if not code or path not in code:
+    if not re.search(r"\b(?:cmp|diff)\b", segment) or not re.search(r"\bprintf\b", segment):
         return False
-    expected_bytes = repr(content.encode("utf-8"))
-    if not re.search(rf"\bexpected\s*=\s*{re.escape(expected_bytes)}(?=\s|;|$)", code):
-        return False
-    if "subprocess.check_output" not in code:
-        return False
-    if not re.search(r"\b(out|stdout|actual)\s*=\s*subprocess\.check_output\s*\(", code):
-        return False
-    return bool(
-        re.search(r"\bassert\s+(out|stdout|actual)\s*==\s*expected\b", code)
-        or re.search(r"\bassert\s+expected\s*==\s*(out|stdout|actual)\b", code)
+    expected_literal = rf"\bprintf\b[^\n;&|]*{re.escape(content)}"
+    process_substitution = re.search(
+        rf"<\(\s*(?P<left>[^)]*{re.escape(path)}[^)]*)\s*\)[^\n;&|]*"
+        rf"\b(?:cmp|diff)\b[^\n;&|]*<\(\s*{expected_literal}[^)]*\)",
+        segment,
+        re.S,
+    ) or re.search(
+        rf"<\(\s*{expected_literal}[^)]*\)[^\n;&|]*\b(?:cmp|diff)\b[^\n;&|]*"
+        rf"<\(\s*(?P<left>[^)]*{re.escape(path)}[^)]*)\s*\)",
+        segment,
+        re.S,
     )
+    if process_substitution and _shell_fragment_invokes_path(
+        process_substitution.group("left"), path=path
+    ):
+        return True
+    pipeline_segments = _shell_pipeline_segments(segment)
+    if len(pipeline_segments) < 2:
+        return False
+    for index in range(len(pipeline_segments) - 1):
+        left = pipeline_segments[index]
+        right = pipeline_segments[index + 1]
+        if _shell_fragment_invokes_path(left, path=path) and re.search(
+            rf"\b(?:cmp|diff)\b[^\n;&|]*-(?=\s|$)[^\n;&|]*<\(\s*{expected_literal}[^)]*\)",
+            right,
+            re.S,
+        ):
+            return True
+        right_path_match = re.search(
+            rf"\b(?:cmp|diff)\b[^\n;&|]*-(?=\s|$)[^\n;&|]*<\(\s*(?P<right>[^)]*{re.escape(path)}[^)]*)\s*\)",
+            right,
+            re.S,
+        )
+        if (
+            re.search(expected_literal, left, re.S)
+            and right_path_match
+            and _shell_fragment_invokes_path(right_path_match.group("right"), path=path)
+        ):
+            return True
+    return False
 
 
 def _stdout_no_trailing_newline_requested(*, node: WorkflowNode, run: WorkflowRun) -> bool:
@@ -1870,23 +1957,14 @@ def _segment_asserts_exact_content(segment: str, *, path: str, content: str) -> 
     )
     if process_substitution_cmp:
         return True
-    pipe_cmp = re.search(
-        rf"\bprintf\b[^\n;&|]*{escaped_content}[^\n;&|]*\|\s*"
-        rf"\b(?:cmp|diff)\b[^\n;&|]*-\s+{escaped_path}\b",
-        segment,
-        re.S,
-    )
-    if pipe_cmp:
-        return True
-    if re.search(r"\bpython3?\b", segment):
-        read_expr = (
-            rf"(?:open|Path)\s*\([^\n;&|]*{escaped_path}[^\n;&|]*" r"(?:read|read_text)\s*\(\s*\)"
+    return bool(
+        re.search(
+            rf"\bprintf\b[^\n;&|]*{escaped_content}[^\n;&|]*\|\s*"
+            rf"\b(?:cmp|diff)\b[^\n;&|]*-\s+{escaped_path}\b",
+            segment,
+            re.S,
         )
-        if re.search(rf"{read_expr}\s*(?:=|==)\s*{expected_expr}", segment, re.S):
-            return True
-        if re.search(rf"[\"']{escaped_content}[\"']\s*(?:=|==)\s*{read_expr}", segment, re.S):
-            return True
-    return False
+    )
 
 
 def _grep_segment_asserts_exact_content(segment: str, *, path: str, content: str) -> bool:
@@ -2285,13 +2363,6 @@ def _command_reads_path(command: str, *, path: str) -> bool:
     return bool(
         re.search(rf"\b(?:cat|head|tail|grep|sed|awk)\b[^\n;&|]*{escaped_path}\b", command)
         or re.search(rf"<\s*{escaped_path}\b", command)
-        or (
-            re.search(r"\bpython3?\b", command)
-            and re.search(
-                rf"\b(?:open|Path)\s*\([^\n;&|]*{escaped_path}",
-                command,
-            )
-        )
     )
 
 
@@ -2322,18 +2393,6 @@ def _segment_asserts_byte_size(segment: str, *, path: str, size: int) -> bool:
             return True
         if re.search(rf"\b{size_text}\s*(?:=|==)\s*{expr}", segment):
             return True
-    if re.search(r"\bpython3?\b", segment):
-        python_size_exprs = (
-            rf"len\s*\([^\n;&|]*(?:open|Path)\s*\([^\n;&|]*{escaped_path}"
-            rf"[^\n;&|]*(?:read|read_bytes)\s*\(\s*\)[^\n;&|]*\)",
-            rf"(?:open|Path)\s*\([^\n;&|]*{escaped_path}[^\n;&|]*" r"stat\s*\(\s*\)\s*\.st_size",
-            rf"\bgetsize\s*\([^\n;&|]*{escaped_path}[^\n;&|]*\)",
-        )
-        for expr in python_size_exprs:
-            if re.search(rf"{expr}\s*(?:=|==)\s*{size_text}\b", segment, re.S):
-                return True
-            if re.search(rf"\b{size_text}\s*(?:=|==)\s*{expr}", segment, re.S):
-                return True
     return False
 
 
@@ -2627,7 +2686,7 @@ def _claim_grounding_failure(
     ):
         return "result claims the directory is empty but list_dir returned entries"
 
-    for command in ("pwd", "ls", "pytest"):
+    for command in ("pwd", "ls"):
         if re.search(rf"\b{re.escape(command)}\b", result_lower) and command not in evidence_lower:
             return f"unsupported command claim: {command}"
 
