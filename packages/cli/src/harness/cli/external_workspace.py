@@ -2142,6 +2142,9 @@ def _test_option_value_looks_opaque(value: str) -> bool:
         return False
     if re.fullmatch(r"\d+(?:\.\d+)?[a-z]*", lowered):
         return False
+    if "::" in lowered:
+        selected_path = lowered.split("::", 1)[0]
+        return "/" in selected_path or _path_is_test_only(selected_path)
     if "/" in lowered or lowered.startswith("./") or lowered.startswith("../"):
         return False
     if _path_is_test_only(lowered) or _path_is_test_only(lowered.replace(".", "/")):

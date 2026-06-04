@@ -392,6 +392,12 @@ def test_verification_command_must_cover_changed_tests() -> None:
         'core/engine/tests/evaluation_cancel.rs"',
         ["repo/core/engine/tests/evaluation_cancel.rs"],
     )
+    assert _verification_command_covers_test_changes(
+        'cd repo && docker run --rm --network none -v "$PWD":/app -w /app '
+        "public.example/task:latest bash -lc "
+        "'project-test -q -W ignore::example.Warning tests/test_enable_counts.case'",
+        ["repo/tests/test_enable_counts.case"],
+    )
     assert not _verification_command_covers_test_changes("project-test --filter unrelated", changed)
     assert not _verification_command_covers_test_changes("project-test --only slow", changed)
     assert not _verification_command_covers_test_changes("project-test -k unrelated", changed)
