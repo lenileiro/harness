@@ -3079,16 +3079,8 @@ def _grep_segment_uses_weak_variable_presence(
     )
 
 
-def _python_command_uses_weak_membership_presence(
-    command: str,
-    *,
-    artifact_paths: list[str],
-) -> bool:
-    if not re.search(r"\bpython3?\b", command):
-        return False
-    if not any(_command_mentions_path(command, path) for path in artifact_paths):
-        return False
-    if (
+def _command_uses_computed_pair_membership_assertion(command: str) -> bool:
+    return bool(
         re.search(
             r"\bfor\s+\w+\s*,\s*\w+\s+in\s+\w+\.items\(\)",
             command,
@@ -3104,16 +3096,32 @@ def _python_command_uses_weak_membership_presence(
             command,
             re.IGNORECASE | re.S,
         )
-    ):
+    )
+
+
+def _command_uses_weak_membership_presence(
+    command: str,
+    *,
+    artifact_paths: list[str],
+) -> bool:
+    if not any(_command_mentions_path(command, path) for path in artifact_paths):
         return False
+    if _command_uses_computed_pair_membership_assertion(command):
+        return False
+    artifact_text_names = r"(?:report|artifact|content|text)"
     return bool(
         re.search(
-            r"\ball\s*\([^;\n]*\bin\s+(?:report|artifact|content|text)\b" r"[^;\n]*\bfor\b",
+            rf"\ball\s*\([^;\n]*\bin\s+{artifact_text_names}\b[^;\n]*\bfor\b",
             command,
             re.IGNORECASE | re.S,
         )
         or re.search(
-            r"\bassert\s+[^;\n]*\bin\s+(?:report|artifact|content|text)\b",
+            rf"\bassert\s+[^;\n]*\bin\s+{artifact_text_names}\b",
+            command,
+            re.IGNORECASE | re.S,
+        )
+        or re.search(
+            r"\bevery\s*\([^;\n]*(?:=>|function\b)[^;\n]*\.includes\s*\(",
             command,
             re.IGNORECASE | re.S,
         )
@@ -3137,7 +3145,7 @@ def _verify_command_uses_weak_source_artifact_presence(
         for segment in _shell_command_segments(command)
     ):
         return True
-    return _python_command_uses_weak_membership_presence(
+    return _command_uses_weak_membership_presence(
         command,
         artifact_paths=artifact_paths,
     )

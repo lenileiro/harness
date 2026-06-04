@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -4154,6 +4155,60 @@ def test_verify_node_rejects_membership_only_source_artifact_check() -> None:
     assert "did not compare dependency artifacts with source inputs" in results[0].message
 
 
+def test_verify_node_rejects_every_includes_membership_only_source_artifact_check() -> None:
+    work = WorkflowNode(
+        id="work",
+        title="Work",
+        kind="work",
+        prompt="create report",
+        status="completed",
+        metadata={
+            "activity_summary": {
+                "read_paths": ["records.json"],
+                "changed_paths": ["ANALYSIS.md"],
+            }
+        },
+    )
+    verify = WorkflowNode(
+        id="verify",
+        title="Verify",
+        kind="verify",
+        prompt="verify report",
+        depends_on=("work",),
+        expected_evidence=(EvidenceRequirement(kind="verify_work_passed"),),
+    )
+    run = WorkflowRun(id="wf", title="WF", goal="Verify ANALYSIS.md.", nodes=(work, verify))
+    weak_check = ActivityEvent(
+        session_id="s",
+        kind="tool_call.completed",
+        data={
+            "name": "verify_work",
+            "is_error": False,
+            "arguments": {
+                "command": (
+                    "node -e \"const fs = require('fs'); "
+                    "const data = JSON.parse(fs.readFileSync('records.json', 'utf8')); "
+                    "const kinds = [...new Set(data.items.map((item) => item.kind))]; "
+                    "const report = fs.readFileSync('ANALYSIS.md', 'utf8'); "
+                    'if (!kinds.every((kind) => report.includes(kind))) process.exit(1);"'
+                )
+            },
+            "content_preview": "PASSED",
+        },
+    )
+
+    ok, results = evaluate_node_evidence(
+        node=verify,
+        result="Verified report from source.",
+        activity=[weak_check],
+        run=run,
+    )
+
+    assert ok is False
+    assert results[0].status == "failed"
+    assert "did not compare dependency artifacts with source inputs" in results[0].message
+
+
 def test_verify_node_accepts_computed_key_value_source_artifact_check() -> None:
     work = WorkflowNode(
         id="work",
@@ -4208,6 +4263,40 @@ def test_verify_node_accepts_computed_key_value_source_artifact_check() -> None:
 
     assert ok is True
     assert results[0].message == "verify_work passed"
+
+
+def test_source_artifact_presence_gate_has_no_language_specific_policy() -> None:
+    source = (
+        Path(__file__).resolve().parents[1] / "src" / "harness" / "core" / "dynamic_workflows.py"
+    ).read_text(encoding="utf-8")
+    section = source[
+        source.index("def _grep_segment_uses_weak_variable_presence") : source.index(
+            "def _verify_work_command_changes_state"
+        )
+    ]
+    language_specific_terms = frozenset(
+        {
+            "python",
+            "python3",
+            "pytest",
+            "pip",
+            "pip3",
+            "node",
+            "npm",
+            "npx",
+            "pnpm",
+            "yarn",
+            "cargo",
+            "go",
+            "rust",
+            "javascript",
+            "js",
+            "typescript",
+            "ts",
+        }
+    )
+    words = set(re.findall(r"[a-z0-9_+.-]+", section.lower()))
+    assert words.isdisjoint(language_specific_terms)
 
 
 def test_derived_artifact_rejects_shell_generated_output_only_check() -> None:
