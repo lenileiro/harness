@@ -2013,82 +2013,140 @@ def _command_test_segments(command: str) -> list[tuple[list[str], list[str]]]:
 
 
 def _command_uses_test_selector(command: str) -> bool:
-    selector_flags = {
-        "-k",
-        "-m",
-        "--run",
-        "-run",
-        "-bench",
-        "-t",
-        "-g",
-        "--grep",
-        "--testnamepattern",
-        "--test-name-pattern",
-        "--filter",
-        "--ignore",
-        "--ignore-glob",
-        "--deselect",
-        "--exclude",
-        "--exclude-from",
-        "--collect-only",
-        "--co",
-        "--setup-only",
-        "--setup-plan",
-        "--fixtures",
-        "--markers",
-        "--version",
-        "--help",
-        "-h",
-        "--dry-run",
-        "--list",
-        "--list-tests",
-        "--listtests",
-        "-list",
-    }
     for segment, raw_segment in _command_test_segments(command):
         words = raw_segment if raw_segment else segment
-        for index, word in enumerate(words):
-            lowered = word.lower()
-            if index == 0 and PurePosixPath(word).name.lower() == "env":
-                continue
-            if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*=.*", word):
-                value = word.split("=", 1)[1].strip("'\"")
-                candidates = [value, *_shell_words(value)]
-                if any(
-                    candidate.lower() in selector_flags
-                    or any(candidate.lower().startswith(f"{flag}=") for flag in selector_flags)
-                    for candidate in candidates
-                ):
-                    return True
-                continue
-            lowered = lowered.strip("'\"")
-            if "::" in lowered:
-                selected_path = lowered.split("::", 1)[0]
-                if "/" in selected_path or _path_is_test_only(selected_path):
-                    return True
-                continue
-            if lowered == "-m" and _selector_flag_is_module_invocation(words, index):
-                continue
-            if lowered in selector_flags:
-                return True
-            if any(lowered.startswith(f"{flag}=") for flag in selector_flags):
-                return True
-            if "=" in lowered and not lowered.startswith("-"):
-                value = lowered.split("=", 1)[1].strip("'\"")
-                candidates = [value, *value.split()]
-                if any(
-                    candidate in selector_flags
-                    or any(candidate.startswith(f"{flag}=") for flag in selector_flags)
-                    for candidate in candidates
-                ):
-                    return True
+        if _test_words_use_selector(words):
+            return True
     return False
 
 
-def _selector_flag_is_module_invocation(words: list[str], index: int) -> bool:
-    if index + 1 >= len(words):
+def _test_words_use_selector(words: list[str]) -> bool:
+    for index, word in enumerate(words):
+        if index == 0 and PurePosixPath(word).name.lower() == "env":
+            continue
+        if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*=.*", word):
+            value = word.split("=", 1)[1].strip("'\"")
+            value_words = _shell_words(value)
+            if _test_words_use_selector(value_words or [value]):
+                return True
+            continue
+        lowered = word.lower().strip("'\"")
+        if "::" in lowered:
+            selected_path = lowered.split("::", 1)[0]
+            if "/" in selected_path or _path_is_test_only(selected_path):
+                return True
+            continue
+        if _word_looks_like_test_selector(word):
+            return True
+        if _test_option_value_may_select_tests(words, index):
+            return True
+        if "=" in lowered and not lowered.startswith("-"):
+            value = lowered.split("=", 1)[1].strip("'\"")
+            value_words = _shell_words(value)
+            if _test_words_use_selector(value_words or [value]):
+                return True
+    return False
+
+
+def _word_looks_like_test_selector(word: str) -> bool:
+    raw = word.strip().strip("'\"").lower()
+    if not raw.startswith("-"):
         return False
-    return _word_looks_like_test_action(words[index + 1], executable=True)
+    flag = raw.split("=", 1)[0].lstrip("-")
+    if not flag:
+        return False
+    normalized = re.sub(r"[^a-z0-9]+", "-", flag).strip("-")
+    compact = normalized.replace("-", "")
+    parts = {part for part in normalized.split("-") if part}
+    if not compact:
+        return False
+    if compact in {"h", "help", "version"} or "help" in parts or "version" in parts:
+        return True
+    if "dryrun" in compact or "only" in parts:
+        return True
+    selector_terms = {
+        "filter",
+        "grep",
+        "match",
+        "matches",
+        "matching",
+        "pattern",
+        "selector",
+        "select",
+        "deselect",
+        "ignore",
+        "exclude",
+        "skip",
+    }
+    listing_terms = {
+        "collect",
+        "discover",
+        "enumerate",
+        "list",
+        "fixture",
+        "fixtures",
+        "marker",
+        "markers",
+    }
+    if parts & selector_terms or parts & listing_terms:
+        return True
+    if any(term in compact for term in selector_terms | listing_terms):
+        return True
+    return bool({"test", "spec", "case"} & parts and {"name", "names"} & parts)
+
+
+def _test_option_value_may_select_tests(words: list[str], index: int) -> bool:
+    raw = words[index].strip().strip("'\"")
+    if not raw.startswith("-") or raw in {"-", "--"}:
+        return False
+    if "=" in raw:
+        value = raw.split("=", 1)[1].strip("'\"")
+    elif index + 1 < len(words):
+        value = words[index + 1].strip().strip("'\"")
+        if not value or value.startswith("-"):
+            return False
+    else:
+        return False
+    return _test_option_value_looks_opaque(value)
+
+
+def _test_option_value_looks_opaque(value: str) -> bool:
+    lowered = value.strip().strip("'\"").lower()
+    if not lowered:
+        return False
+    neutral_values = {
+        "always",
+        "auto",
+        "compact",
+        "false",
+        "full",
+        "json",
+        "junit",
+        "long",
+        "never",
+        "no",
+        "off",
+        "on",
+        "plain",
+        "pretty",
+        "quiet",
+        "short",
+        "tap",
+        "text",
+        "true",
+        "verbose",
+        "xml",
+        "yes",
+    }
+    if lowered in neutral_values:
+        return False
+    if re.fullmatch(r"\d+(?:\.\d+)?[a-z]*", lowered):
+        return False
+    if "/" in lowered or lowered.startswith("./") or lowered.startswith("../"):
+        return False
+    if _path_is_test_only(lowered) or _path_is_test_only(lowered.replace(".", "/")):
+        return False
+    return not _word_looks_like_test_action(lowered, executable=True)
 
 
 def _command_invokes_opaque_test_wrapper(command: str) -> bool:

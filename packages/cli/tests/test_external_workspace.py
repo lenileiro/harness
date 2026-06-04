@@ -381,8 +381,12 @@ def test_verification_command_must_cover_changed_tests() -> None:
         'core/engine/tests/evaluation_cancel.rs"',
         ["repo/core/engine/tests/evaluation_cancel.rs"],
     )
+    assert not _verification_command_covers_test_changes("project-test --filter unrelated", changed)
+    assert not _verification_command_covers_test_changes("project-test --only slow", changed)
     assert not _verification_command_covers_test_changes("project-test -k unrelated", changed)
     assert not _verification_command_covers_test_changes("project-test -m slow", changed)
+    assert not _verification_command_covers_test_changes("project-test ./... -run Other", changed)
+    assert _verification_command_covers_test_changes("project-test -m " + changed[0], changed)
     assert not _verification_command_covers_test_changes(
         "PROJECT_TEST_OPTS=--collect-only project-test "
         "t/unit/transport/virtual/test_sac_priority.case",
@@ -393,11 +397,11 @@ def test_verification_command_must_cover_changed_tests() -> None:
         changed,
     )
     assert not _verification_command_covers_test_changes(
-        "project-test ./... -run Other",
+        "project-test ./... --filter Other",
         changed,
     )
     assert not _verification_command_covers_test_changes(
-        "project-test t/unit/transport/virtual/test_sac_priority.case -m slow",
+        "project-test t/unit/transport/virtual/test_sac_priority.case --only slow",
         changed,
     )
     assert not _verification_command_covers_test_changes(
@@ -420,7 +424,7 @@ def test_verification_command_must_cover_changed_tests() -> None:
         changed,
     )
     assert not _verification_command_covers_test_changes(
-        "project-test --co t/unit/transport/virtual/test_sac_priority.case",
+        "project-test --collect t/unit/transport/virtual/test_sac_priority.case",
         changed,
     )
     assert not _verification_command_covers_test_changes(
@@ -7955,7 +7959,9 @@ async def test_external_environment_runner_rejects_verification_that_ignores_cha
         "def test_existing(): pass\n",
         encoding="utf-8",
     )
-    await env.exec("git add tests/test_existing.py")
+    (tmp_path / "project-test").write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    (tmp_path / "project-test").chmod(0o755)
+    await env.exec("git add project-test tests/test_existing.py")
     await env.exec("git -c user.name=test -c user.email=test@example.com commit -m baseline")
 
     adapter = ScriptedAdapter(
@@ -7974,7 +7980,7 @@ async def test_external_environment_runner_rejects_verification_that_ignores_cha
             _scripted_tool_turn(
                 "verify",
                 "verify_work",
-                {"command": "pytest tests --ignore tests/test_app.py"},
+                {"command": "./project-test tests --ignore tests/test_app.py"},
             ),
             [Done(final_message=Message(role="assistant", content="done"))],
         ]
@@ -7994,7 +8000,7 @@ async def test_external_environment_runner_rejects_verification_that_ignores_cha
         )
 
     assert context.metadata["latest_verification_command"] == (
-        "pytest tests --ignore tests/test_app.py"
+        "./project-test tests --ignore tests/test_app.py"
     )
     assert context.metadata["verification_passed_after_source_change"] is False
 
@@ -8004,6 +8010,12 @@ async def test_external_environment_runner_rejects_collect_only_verification(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    env = LocalEnvironment(tmp_path)
+    await env.exec("git init")
+    (tmp_path / "project-test").write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    (tmp_path / "project-test").chmod(0o755)
+    await env.exec("git add project-test")
+    await env.exec("git -c user.name=test -c user.email=test@example.com commit -m baseline")
     adapter = ScriptedAdapter(
         [
             _planner_turn(),
@@ -8020,19 +8032,18 @@ async def test_external_environment_runner_rejects_collect_only_verification(
             _scripted_tool_turn(
                 "verify",
                 "verify_work",
-                {"command": "pytest --collect-only tests/test_app.py"},
+                {"command": "./project-test --collect-only tests/test_app.py"},
             ),
             [Done(final_message=Message(role="assistant", content="done"))],
         ]
     )
     monkeypatch.setattr("harness.cli.external_workspace._build_adapter", lambda *_a, **_kw: adapter)
-    await LocalEnvironment(tmp_path).exec("git init")
     context = SimpleNamespace(n_agent_steps=0, metadata={})
 
     with pytest.raises(RuntimeError, match="did not cover the changed regression tests"):
         await run_harness_on_external_environment(
             instruction="fix the task",
-            environment=LocalEnvironment(tmp_path),
+            environment=env,
             context=context,
             logs_dir=str(tmp_path / "logs"),
             source_change_retries=0,
@@ -8041,7 +8052,7 @@ async def test_external_environment_runner_rejects_collect_only_verification(
         )
 
     assert context.metadata["latest_verification_command"] == (
-        "pytest --collect-only tests/test_app.py"
+        "./project-test --collect-only tests/test_app.py"
     )
     assert context.metadata["verification_passed_after_source_change"] is False
 
