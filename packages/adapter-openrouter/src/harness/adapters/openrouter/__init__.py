@@ -299,6 +299,8 @@ class OpenRouterAdapter:
                 ) from exc
             except httpx.TimeoutException as exc:
                 raise TimeoutError(f"OpenRouter request timed out: {exc}") from exc
+            except httpx.RemoteProtocolError as exc:
+                raise NetworkError(f"OpenRouter connection dropped: {exc}") from exc
             except httpx.HTTPError as exc:
                 raise InternalError(f"OpenRouter HTTP error: {exc}") from exc
         finally:

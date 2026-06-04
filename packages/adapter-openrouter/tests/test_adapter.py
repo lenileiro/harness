@@ -226,6 +226,42 @@ class TestStream:
         assert events[-1].final_message is not None
         assert events[-1].final_message.content == "ok"
 
+    async def test_remote_protocol_disconnect_uses_explicit_fallback(self) -> None:
+        seen_models: list[str] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            body = json.loads(request.content)
+            seen_models.append(body["model"])
+            if body["model"] == "google/gemma-4-31b-it":
+                raise httpx.RemoteProtocolError(
+                    "Server disconnected without sending a response.",
+                    request=request,
+                )
+            return httpx.Response(200, content=make_sse(text_chunk("ok"), "[DONE]"))
+
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            adapter = OpenRouterAdapter(
+                api_key="k",
+                client=client,
+                model_fallbacks=["openai/gpt-4.1-mini"],
+                auto_model_fallback=False,
+            )
+            events = await collect(
+                adapter.stream(
+                    model="google/gemma-4-31b-it",
+                    messages=[Message(role="user", content="hi")],
+                )
+            )
+
+        assert seen_models == ["google/gemma-4-31b-it", "openai/gpt-4.1-mini"]
+        selected = [e for e in events if isinstance(e, ModelSelectedEvent)]
+        assert len(selected) == 1
+        assert selected[0].model == "openai/gpt-4.1-mini"
+        assert selected[0].fallback is True
+        assert isinstance(events[-1], Done)
+        assert events[-1].final_message is not None
+        assert events[-1].final_message.content == "ok"
+
     async def test_invalid_model_id_uses_explicit_fallback_before_failing(self) -> None:
         seen_models: list[str] = []
 
