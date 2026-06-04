@@ -90,61 +90,46 @@ _PROMOTION_FLOW_COMMAND_HINTS: tuple[str, ...] = (
     ".harness/research/promotions/",
 )
 
-_TEST_COMMAND_HINTS: tuple[str, ...] = (
-    "pytest",
-    "python -m pytest",
-    "uv run pytest",
-    "npm test",
-    "pnpm test",
-    "yarn test",
-    "bun test",
-    "node --test",
-    "cargo test",
-    "go test",
-    "jest",
-    "vitest",
-)
-
-_TEST_OUTPUT_HINTS: tuple[str, ...] = (
-    "test session starts",
-    "collected ",
-    " passed",
-    " failed",
-    "error:",
-    "assertionerror",
-)
-_DIRECT_VERIFY_COMMANDS = frozenset(
+_VERIFY_INTENT_WORDS = frozenset(
     {
-        "pytest",
-        "tox",
-        "nox",
-        "jest",
-        "vitest",
-        "mocha",
-        "ruff",
-        "mypy",
-        "eslint",
-        "tsc",
-        "cargo",
-        "go",
-        "make",
-        "npm",
-        "pnpm",
-        "yarn",
-        "bun",
-        "node",
+        "build",
+        "check",
+        "checks",
+        "ci",
+        "lint",
+        "spec",
+        "specs",
+        "test",
+        "tests",
+        "typecheck",
+        "typechecks",
+        "validate",
+        "validation",
+        "verify",
+        "verification",
     }
 )
-_PACKAGE_VERIFY_SCRIPTS = (
-    "test",
-    "check",
-    "lint",
-    "type",
-    "verify",
-    "build",
-    "ci",
-)
+_VERIFY_INTENT_SUFFIXES = ("test", "tests", "spec", "specs", "check", "checks")
 _ASSERTION_TOOL_NAMES = frozenset({"test", "[", "grep", "cmp", "diff"})
+_FILE_OBSERVATION_COMMANDS = frozenset(
+    {
+        "awk",
+        "cat",
+        "cmp",
+        "diff",
+        "echo",
+        "find",
+        "grep",
+        "head",
+        "ls",
+        "printf",
+        "sed",
+        "stat",
+        "tail",
+        "test",
+        "wc",
+    }
+)
 _TRIVIAL_VERIFY_TOOL_NAMES = frozenset(
     {":", "true", "false", "echo", "printf", "date", "pwd", "sleep", "uname", "whoami"}
 )
@@ -154,12 +139,6 @@ _NON_EXECUTING_VERIFY_FLAGS = frozenset(
         "version",
         "--help",
         "-h",
-        "--collect-only",
-        "--co",
-        "--setup-only",
-        "--setup-plan",
-        "--fixtures",
-        "--markers",
         "--dry-run",
         "--list",
         "--list-tests",
@@ -176,6 +155,13 @@ def _token_has_non_executing_verify_flag(token: str) -> bool:
     if lowered in _NON_EXECUTING_VERIFY_FLAGS:
         return True
     if any(lowered.startswith(f"{flag}=") for flag in _NON_EXECUTING_VERIFY_FLAGS):
+        return True
+    flag_words = set(re.split(r"[^a-z0-9]+", lowered))
+    if "collect" in flag_words and "only" in flag_words:
+        return True
+    if "setup" in flag_words and any(word in flag_words for word in {"only", "plan"}):
+        return True
+    if "show" in flag_words and "config" in flag_words:
         return True
     if "=" not in lowered or lowered.startswith("-"):
         return False
@@ -203,6 +189,37 @@ def _strip_leading_env_assignments(tokens: list[str]) -> list[str]:
     return remaining
 
 
+def _intent_words_from_token(token: str) -> set[str]:
+    lowered = Path(token).name.lower().strip()
+    words = {word for word in re.split(r"[^a-z0-9]+", lowered) if word}
+    for suffix in _VERIFY_INTENT_SUFFIXES:
+        if lowered.endswith(suffix):
+            words.add(suffix)
+    return words
+
+
+def _token_has_verify_intent(token: str) -> bool:
+    return bool(_intent_words_from_token(token) & _VERIFY_INTENT_WORDS)
+
+
+def _command_segment_has_verify_intent(tokens: list[str]) -> bool:
+    if not tokens:
+        return False
+    executable = Path(tokens[0]).name.lower()
+    if executable in _TRIVIAL_VERIFY_TOOL_NAMES:
+        return False
+    if executable in _ASSERTION_TOOL_NAMES:
+        return False
+    if executable in _READ_ONLY_SHELL_TOOLS:
+        return False
+    return any(_token_has_verify_intent(token) for token in tokens)
+
+
+def _path_tokens(path: str) -> set[str]:
+    normalized = path.strip().strip("/").lower()
+    return {token for token in re.split(r"[^a-z0-9]+", normalized) if token}
+
+
 _EXACT_FILE_CONTENT_REQUEST_RE = re.compile(
     r"\b(?:create|write|make)\s+(?P<path>[A-Za-z0-9._@%+=:,~/-]+)\s+"
     r"(?:containing|that\s+contains|with(?:\s+the)?(?:\s+exact)?(?:\s+contents?|\s+content|\s+text)?)"
@@ -215,7 +232,7 @@ _EXACT_FILE_CONTENT_REQUEST_RE = re.compile(
 )
 _EXACT_FILE_CONTENT_NAMED_REQUEST_RE = re.compile(
     r"\b(?:create|write|make)\s+(?:(?:an?|the)\s+)?"
-    r"(?:(?:plain|text|json|python|node|shell|bash)\s+)?"
+    r"(?:(?:[A-Za-z0-9_+.-]+)\s+)?"
     r"(?:file|script|program)\s+(?:(?:named|called|at|as)\s+)?"
     r"(?P<path>[A-Za-z0-9._@%+=:,~/-]+)\s+"
     r"(?:containing|that\s+contains|with(?:\s+the)?(?:\s+exact)?(?:\s+contents?|\s+content|\s+text)?)"
@@ -228,7 +245,7 @@ _EXACT_FILE_CONTENT_NAMED_REQUEST_RE = re.compile(
 )
 _EXACT_FILE_CONTENT_IS_REQUEST_RE = re.compile(
     r"\b(?:create|write|make)\s+(?:(?:an?|the)\s+)?"
-    r"(?:(?:plain|text|json|python|node|shell|bash)\s+)?"
+    r"(?:(?:[A-Za-z0-9_+.-]+)\s+)?"
     r"(?:file|script|program)?\s*(?:(?:named|called|at|as)\s+)?"
     r"(?P<path>[A-Za-z0-9._@%+=:,~/-]+)\s+"
     r"(?:whose\s+)?(?:exact\s+)?(?:contents?|content|text)\s+"
@@ -250,7 +267,7 @@ _EXACT_STDOUT_REQUEST_RE = re.compile(
 )
 _EXACT_STDOUT_NAMED_REQUEST_RE = re.compile(
     r"\b(?:create|write|make)\s+(?:(?:an?|the)\s+)?"
-    r"(?:(?:python|node|shell|bash)\s+)?(?:script|program|file)\s+"
+    r"(?:(?:[A-Za-z0-9_+.-]+)\s+)?(?:script|program|file)\s+"
     r"(?:(?:named|called|at|as)\s+)?(?P<path>[A-Za-z0-9._@%+=:,~/-]+)\s+"
     r"(?:that\s+)?(?:prints?|outputs?|emits|writes\s+to\s+stdout)\s+exactly\s+"
     r"(?P<content>`[^`\n]+`|\"[^\"\n]+\"|'[^'\n]+'|[^\n.;]+?)"
@@ -272,11 +289,7 @@ _MINIMAL_HINTS_RE = re.compile(
     re.IGNORECASE,
 )
 
-_FILE_PATH_RE = re.compile(
-    r"`([^`\n]+?\.(?:py|ts|tsx|js|jsx|go|rs|java|kt|rb|php|c|cc|cpp|h|hpp|md|json|toml|yaml|yml|sql|sh|cfg|ini|html|css|tf|hcl))`"
-    r"|"
-    r"`([^`\n]*?/[^`\n]+?)`"
-)
+_FILE_PATH_RE = re.compile(r"`([^`\n]+?\.[A-Za-z0-9_+.-]{1,16})`|`([^`\n]*?/[^`\n]+?)`")
 
 _FUNCTION_CALL_RE = re.compile(r"`[A-Za-z_][A-Za-z0-9_]*\([^`\n]*\)`")
 
@@ -377,12 +390,20 @@ def looks_like_test_invocation(event: ActivityEvent) -> bool:
         )
     if _WRITE_SHELL_RE.search(command):
         return False
-    command_lower = command.lower()
-    if any(hint in command_lower for hint in _TEST_COMMAND_HINTS):
-        return True
+    for segment in _reachable_shell_segments(command):
+        try:
+            tokens = shlex.split(segment)
+        except ValueError:
+            continue
+        if _command_segment_has_verify_intent(_strip_leading_env_assignments(tokens)):
+            return True
 
     preview = str(event.data.get("content_preview") or "").lower()
-    return any(hint in preview for hint in _TEST_OUTPUT_HINTS)
+    return bool(
+        re.search(r"\b[1-9]\d*\s+(?:tests?|specs?|checks?)\b", preview)
+        or re.search(r"\b[1-9]\d*\s+(?:passed|failed)\b", preview)
+        or re.search(r"\b(?:all\s+)?(?:tests?|specs?|checks?)\s+passed\b", preview)
+    )
 
 
 def _tool_event_path(event: ActivityEvent) -> str:
@@ -399,8 +420,10 @@ def _is_test_path(path: str) -> bool:
     if not path:
         return False
     parts = Path(path).parts
-    name = Path(path).name.lower()
-    return "tests" in parts or name.startswith("test_") or name.endswith(("_test.py", ".test.ts"))
+    if any(_path_tokens(part) & {"test", "tests", "spec", "specs"} for part in parts[:-1]):
+        return True
+    name_tokens = _path_tokens(Path(path).stem)
+    return bool(name_tokens & {"test", "tests", "spec", "specs"})
 
 
 def _has_post_edit_regression_verification(
@@ -466,7 +489,7 @@ def shell_command_changes_state(command: str) -> bool:
     if executable == "git":
         subcommand = next((part.lower() for part in args if not part.startswith("-")), "")
         return subcommand not in _READ_ONLY_GIT_COMMANDS
-    if executable == "node" and "--check" in args:
+    if "--check" in lowered_args and not any(arg in _SHELL_MUTATION_WORDS for arg in lowered_args):
         return False
     return executable not in _READ_ONLY_SHELL_TOOLS
 
@@ -659,52 +682,7 @@ def _verify_command_segment_is_broad_check(segment: str) -> bool:
     tokens = _strip_leading_env_assignments(tokens)
     if not tokens:
         return False
-    lowered = [Path(token).name.lower() for token in tokens]
-    if lowered[:3] in (["python", "-m", "pytest"], ["python3", "-m", "pytest"]):
-        return True
-    if len(lowered) >= 3 and lowered[0] == "uv" and lowered[1] == "run":
-        return _verify_command_segment_is_broad_check(" ".join(tokens[2:]))
-    if (
-        len(lowered) >= 2
-        and lowered[0] in {"npx", "pnpm", "yarn", "bun"}
-        and lowered[1] in {"jest", "vitest", "mocha", "eslint", "tsc"}
-    ):
-        return True
-    executable = lowered[0]
-    if executable not in _DIRECT_VERIFY_COMMANDS:
-        return False
-    if executable in {
-        "pytest",
-        "tox",
-        "nox",
-        "jest",
-        "vitest",
-        "mocha",
-        "ruff",
-        "mypy",
-        "eslint",
-        "tsc",
-    }:
-        return True
-    if executable == "node":
-        return len(lowered) >= 2 and lowered[1] == "--test"
-    if executable == "cargo":
-        return len(lowered) >= 2 and lowered[1] in {"test", "check", "clippy", "build"}
-    if executable == "go":
-        return len(lowered) >= 2 and lowered[1] in {"test", "vet"}
-    if executable == "make":
-        return any(
-            any(hint in target for hint in _PACKAGE_VERIFY_SCRIPTS)
-            for target in lowered[1:]
-            if not target.startswith("-")
-        )
-    if executable in {"npm", "pnpm", "yarn", "bun"}:
-        if len(lowered) >= 2 and lowered[1] == "test":
-            return True
-        if len(lowered) >= 3 and lowered[1] == "run":
-            script = lowered[2]
-            return any(hint in script for hint in _PACKAGE_VERIFY_SCRIPTS)
-    return False
+    return _command_segment_has_verify_intent(tokens)
 
 
 def _verify_work_command_asserts_changed_path(command: str, paths: set[str]) -> bool:
@@ -1377,16 +1355,24 @@ def _command_directly_runs_path(command: str, *, path: str) -> bool:
     command = _strip_shell_comment_lines(command)
     if re.search(r"[|<>`]", command) or _command_has_shell_control_operator(command):
         return False
+    return _shell_fragment_invokes_path(command, path=path)
+
+
+def _shell_fragment_invokes_path(fragment: str, *, path: str) -> bool:
     try:
-        tokens = shlex.split(command)
+        tokens = shlex.split(fragment)
     except ValueError:
         return False
     if not tokens:
         return False
-    executable = Path(tokens[0]).name
-    if executable in {"python", "python3", "node", "bash", "sh"}:
-        return len(tokens) >= 2 and _path_matches_request(tokens[1], path)
-    return _path_matches_request(tokens[0], path)
+    if _path_matches_request(tokens[0], path):
+        return True
+    executable = Path(tokens[0]).name.lower()
+    if executable in _FILE_OBSERVATION_COMMANDS:
+        return False
+    return any(
+        _path_matches_request(token, path) for token in tokens[1:] if not token.startswith("-")
+    )
 
 
 def _directly_run_script_path(command: str) -> str:
@@ -1400,12 +1386,16 @@ def _directly_run_script_path(command: str) -> str:
     if not tokens:
         return ""
     executable = Path(tokens[0]).name.lower()
-    if executable in {"python", "python3", "node", "bash", "sh"}:
-        if len(tokens) < 2 or tokens[1].startswith("-"):
-            return ""
-        return tokens[1].strip().lstrip("./")
     if _is_test_path(tokens[0]):
         return tokens[0].strip().lstrip("./")
+    if executable in _FILE_OBSERVATION_COMMANDS:
+        return ""
+    for token in tokens[1:]:
+        if token.startswith("-"):
+            continue
+        normalized = token.strip().lstrip("./")
+        if _is_test_path(normalized):
+            return normalized
     return ""
 
 
@@ -1424,15 +1414,11 @@ def _inline_script_from_command(command: str) -> str:
         return ""
     if not tokens:
         return ""
-    executable = Path(tokens[0]).name.lower()
-    if executable in {"python", "python3"} and "-c" in tokens:
-        index = tokens.index("-c") + 1
-        if index < len(tokens):
-            return tokens[index]
-    if executable == "node" and "-e" in tokens:
-        index = tokens.index("-e") + 1
-        if index < len(tokens):
-            return tokens[index]
+    for option in ("-c", "-e", "--eval"):
+        if option in tokens:
+            index = tokens.index(option) + 1
+            if index < len(tokens):
+                return tokens[index]
     return ""
 
 
@@ -1504,30 +1490,80 @@ def _command_asserts_exact_stdout(command: str, *, path: str, content: str) -> b
 def _segment_asserts_exact_stdout(segment: str, *, path: str, content: str) -> bool:
     if path not in segment or content not in segment:
         return False
-    escaped_path = re.escape(path)
     escaped_content = re.escape(content)
     expected_expr = rf"(?:[\"']{escaped_content}[\"']|{escaped_content}(?=\s|\]|\)|$))"
-    run_expr = rf"(?:python3?|node|bash|sh)\s+{escaped_path}|\.\/{escaped_path}|{escaped_path}"
-    command_substitution = rf"\$\(\s*(?:{run_expr})\s*\)"
-    return bool(
-        re.search(
-            rf"[\"']?{command_substitution}[\"']?\s*(?:=|==)\s*{expected_expr}",
+    command_substitutions = _shell_command_substitutions(segment)
+    for command_substitution, inner_command in command_substitutions:
+        if not _shell_fragment_invokes_path(inner_command, path=path):
+            continue
+        if re.search(
+            rf"[\"']?{re.escape(command_substitution)}[\"']?\s*(?:=|==)\s*{expected_expr}",
             segment,
             re.S,
-        )
-        or re.search(
-            rf"\btest\s+[\"']?{command_substitution}[\"']?\s*=\s*{expected_expr}",
+        ) or re.search(
+            rf"\btest\s+[\"']?{re.escape(command_substitution)}[\"']?\s*=\s*{expected_expr}",
             segment,
             re.S,
-        )
-        or re.search(
-            rf"\b(?:python3?|node|bash|sh)\b[^\n;&|]*{escaped_path}[^\n;&|]*\|\s*"
-            rf"\bgrep\b[^\n;&|]*\s-[A-Za-z]*x[A-Za-z]*\b[^\n;&|]*"
-            rf"{expected_expr}",
-            segment,
+        ):
+            return True
+    return any(
+        _shell_fragment_invokes_path(pipeline_segment, path=path)
+        and re.search(
+            rf"\bgrep\b[^\n;&|]*\s-[A-Za-z]*x[A-Za-z]*\b[^\n;&|]*{expected_expr}",
+            pipeline_segments[index + 1],
             re.S,
         )
+        for pipeline_segments in (_shell_pipeline_segments(segment),)
+        for index, pipeline_segment in enumerate(pipeline_segments[:-1])
     )
+
+
+def _shell_command_substitutions(command: str) -> list[tuple[str, str]]:
+    substitutions: list[tuple[str, str]] = []
+    index = 0
+    while index < len(command):
+        start = command.find("$(", index)
+        if start < 0:
+            break
+        depth = 1
+        cursor = start + 2
+        in_single = False
+        in_double = False
+        escaped = False
+        while cursor < len(command):
+            char = command[cursor]
+            if escaped:
+                escaped = False
+                cursor += 1
+                continue
+            if char == "\\" and not in_single:
+                escaped = True
+                cursor += 1
+                continue
+            if char == "'" and not in_double:
+                in_single = not in_single
+                cursor += 1
+                continue
+            if char == '"' and not in_single:
+                in_double = not in_double
+                cursor += 1
+                continue
+            if not in_single and not in_double:
+                if command.startswith("$(", cursor):
+                    depth += 1
+                    cursor += 2
+                    continue
+                if char == ")":
+                    depth -= 1
+                    if depth == 0:
+                        substitutions.append(
+                            (command[start : cursor + 1], command[start + 2 : cursor])
+                        )
+                        cursor += 1
+                        break
+            cursor += 1
+        index = max(cursor, start + 2)
+    return substitutions
 
 
 def _verify_work_event_asserts_exact_stdout_requests(
@@ -2446,7 +2482,7 @@ class VerifyBeforeDoneVerifier:
         elif stdout_requests:
             example_path, example_content = stdout_requests[0]
             quoted_content = "'" + example_content.replace("'", "'\"'\"'") + "'"
-            example = f'test "$(python3 {shlex.quote(example_path)})" = {quoted_content}'
+            example = f'test "$(./{shlex.quote(example_path)})" = {quoted_content}'
             if stdout_no_trailing_newline_required:
                 exact_hint = (
                     " For exact-output tasks with no trailing newline, verify_work must run "

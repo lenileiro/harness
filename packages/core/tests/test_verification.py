@@ -5,6 +5,7 @@ from __future__ import annotations
 # pyright: reportArgumentType=false
 import asyncio
 import json
+import re
 import subprocess
 from pathlib import Path
 
@@ -1286,8 +1287,8 @@ async def test_verify_work_ignores_generated_test_artifacts_for_workspace_change
             id="v1",
             name="verify_work",
             arguments={
-                "command": "mkdir -p .pytest_cache src/__pycache__ && "
-                "touch .pytest_cache/v src/__pycache__/app.pyc && printf ok"
+                "command": "mkdir -p .runner_cache build/cache && "
+                "touch .runner_cache/v build/cache/output.bin && printf ok"
             },
         )
     )
@@ -1296,6 +1297,91 @@ async def test_verify_work_ignores_generated_test_artifacts_for_workspace_change
     assert result.content == "PASSED\n\nok"
     assert result.metadata is not None
     assert result.metadata["workspace_changed"] is False
+
+
+def test_structural_verification_gates_have_no_language_specific_policy() -> None:
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "harness"
+        / "core"
+        / "verification_structural.py"
+    ).read_text(encoding="utf-8")
+    sections = [
+        source[
+            source.index("_VERIFY_INTENT_WORDS") : source.index("_EXACT_FILE_CONTENT_REQUEST_RE")
+        ],
+        source[
+            source.index("def looks_like_test_invocation") : source.index(
+                "def shell_command_changes_state"
+            )
+        ],
+        source[
+            source.index("def _verify_work_command_is_broad_check") : source.index(
+                "def _verify_work_command_asserts_changed_path"
+            )
+        ],
+        source[
+            source.index("def _command_directly_runs_path") : source.index(
+                "def _verify_work_event_asserts_exact_stdout_requests"
+            )
+        ],
+    ]
+    language_specific_terms = frozenset(
+        {
+            "python",
+            "python3",
+            "pytest",
+            "pip",
+            "pip3",
+            "node",
+            "npm",
+            "npx",
+            "pnpm",
+            "yarn",
+            "bun",
+            "cargo",
+            "go",
+            "rust",
+            "javascript",
+            "js",
+            "typescript",
+            "ts",
+            "tox",
+            "ruff",
+            "mypy",
+            "jest",
+            "vitest",
+            "mocha",
+            "eslint",
+            "tsc",
+        }
+    )
+    words = {word for section in sections for word in re.findall(r"[a-z0-9_+.-]+", section.lower())}
+    assert words.isdisjoint(language_specific_terms)
+
+
+def test_verify_work_generated_artifact_filter_has_no_language_specific_policy() -> None:
+    source = (
+        Path(__file__).resolve().parents[1] / "src" / "harness" / "core" / "tools_verification.py"
+    ).read_text(encoding="utf-8")
+    section = source[
+        source.index("_GIT_STATUS_COMMAND") : source.index("def _relevant_status_entries")
+    ]
+    language_specific_terms = frozenset(
+        {
+            "python",
+            "python3",
+            "pytest",
+            "pip",
+            "pip3",
+            "tox",
+            "ruff",
+            "mypy",
+        }
+    )
+    words = set(re.findall(r"[a-z0-9_+.-]+", section.lower()))
+    assert words.isdisjoint(language_specific_terms)
 
 
 @pytest.mark.asyncio

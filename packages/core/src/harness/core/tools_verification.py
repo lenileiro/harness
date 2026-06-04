@@ -115,13 +115,6 @@ _GIT_INSPECTION_SUBCOMMANDS = {
 }
 _NONZERO_EXIT_RE = re.compile(r"\b(?:exit|return)\s+[1-9]\d*\b")
 _GIT_STATUS_COMMAND = ("git", "status", "--porcelain", "--untracked-files=all")
-_GENERATED_STATUS_PARTS = {
-    "__pycache__",
-    ".pytest_cache",
-    ".mypy_cache",
-    ".ruff_cache",
-    ".tox",
-}
 
 
 def _failure_branch_masks_exit_status(command: str) -> bool:
@@ -576,11 +569,11 @@ def _output_reports_failure(output: str) -> bool:
     )
     if any(re.search(pattern, normalized) for pattern in no_test_patterns):
         return True
-    go_failure_patterns = (
+    line_failure_patterns = (
         r"(?m)^\s*---\s+fail:",
         r"(?m)^\s*fail(?:\s|$)",
     )
-    if any(re.search(pattern, normalized) for pattern in go_failure_patterns):
+    if any(re.search(pattern, normalized) for pattern in line_failure_patterns):
         return True
     runtime_error_patterns = (
         r"\btraceback\s+\(most recent call last\):",
@@ -667,8 +660,12 @@ def _porcelain_paths(status: str) -> list[tuple[str, str]]:
 
 def _path_is_generated_artifact(path: str) -> bool:
     parts = [part.lower() for part in path.strip("/").split("/") if part]
-    name = parts[-1] if parts else ""
-    return bool(_GENERATED_STATUS_PARTS.intersection(parts)) or name.endswith((".pyc", ".pyo"))
+    return any(_path_part_looks_generated(part) for part in parts)
+
+
+def _path_part_looks_generated(part: str) -> bool:
+    normalized = part.strip("._-")
+    return normalized == "cache" or normalized.endswith("cache")
 
 
 def _relevant_status_entries(status: str) -> tuple[tuple[str, str], ...]:
