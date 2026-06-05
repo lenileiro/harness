@@ -440,6 +440,45 @@ class TestStream:
                 adapter.stream(model="gpt-5.5", messages=[Message(role="user", content="hi")])
             )
 
+    async def test_post_done_stdin_exit_is_treated_as_completed(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        codex_dir = tmp_path / ".codex"
+        codex_dir.mkdir()
+        (codex_dir / "auth.json").write_text(
+            json.dumps({"auth_mode": "chatgpt", "tokens": {"access_token": "oauth-token"}}),
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        monkeypatch.setattr("shutil.which", lambda _name: "/usr/bin/codex")
+        lines = [
+            json.dumps(
+                {
+                    "type": "item.completed",
+                    "item": {"id": "m1", "type": "agent_message", "text": "Done."},
+                }
+            ).encode()
+            + b"\n",
+        ]
+
+        async def fake_exec(*_args, **_kwargs):
+            return _FakeProcess(
+                lines=lines,
+                returncode=1,
+                stderr=b"Reading additional input from stdin...\n",
+            )
+
+        monkeypatch.setattr("asyncio.create_subprocess_exec", fake_exec)
+        adapter = CodexAdapter(cwd=tmp_path)
+        events = await _collect(
+            adapter.stream(model="gpt-5.5", messages=[Message(role="user", content="hi")])
+        )
+
+        done = events[-1]
+        assert isinstance(done, Done)
+        assert done.final_message is not None
+        assert done.final_message.content == "Done."
+
     async def test_idle_timeout_terminates_codex_process_and_raises_harness_timeout(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:

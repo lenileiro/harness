@@ -2137,6 +2137,9 @@ def _test_option_value_may_select_tests(words: list[str], index: int) -> bool:
     raw = words[index].strip().strip("'\"")
     if not raw.startswith("-") or raw in {"-", "--"}:
         return False
+    flag = raw.split("=", 1)[0].lstrip("-").lower()
+    if flag in {"p", "package"}:
+        return False
     if "=" in raw:
         value = raw.split("=", 1)[1].strip("'\"")
     elif index + 1 < len(words):
@@ -2303,7 +2306,7 @@ def _verification_command_covers_test_changes(
     if runner_wires_changed_tests:
         return True
     if _command_uses_test_selector(command):
-        return False
+        return _command_test_selectors_cover_test_changes(command, test_paths)
     if _command_runs_changed_test_script(command, test_paths):
         return True
     changed = [_normal_path(path) for path in test_paths]
@@ -2343,6 +2346,48 @@ def _verification_command_covers_test_changes(
             ):
                 return target in verification_targets or _is_broad_test_command(command)
     return False
+
+
+def _command_test_selectors_cover_test_changes(command: str, test_paths: list[str]) -> bool:
+    selectors = _command_test_selector_values(command)
+    if not selectors:
+        return False
+    changed_candidates: set[str] = set()
+    for path in test_paths:
+        changed_candidates.update(_test_path_reference_candidates(path))
+    return any(_normal_test_selector(selector) in changed_candidates for selector in selectors)
+
+
+def _command_test_selector_values(command: str) -> list[str]:
+    selectors: list[str] = []
+    for segment, raw_segment in _command_test_segments(command):
+        words = raw_segment if raw_segment else segment
+        test_action_index = _first_test_action_index(words)
+        index = test_action_index
+        while index < len(words):
+            word = words[index].strip().strip("'\"")
+            if not word or re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*=.*", word):
+                index += 1
+                continue
+            if _test_option_value_may_select_tests(words, index):
+                if "=" in word:
+                    value = word.split("=", 1)[1]
+                elif index + 1 < len(words):
+                    value = words[index + 1]
+                    index += 1
+                else:
+                    value = ""
+                if value:
+                    selectors.append(value.strip().strip("'\""))
+            index += 1
+    return selectors
+
+
+def _normal_test_selector(selector: str) -> str:
+    normalized = selector.strip().strip("'\"")
+    if "::" in normalized:
+        normalized = normalized.split("::", 1)[0]
+    return _normal_path(normalized)
 
 
 def _verification_command_covers_changed_fixtures(command: str, fixture_paths: list[str]) -> bool:
@@ -5467,7 +5512,14 @@ async def run_harness_on_external_environment(
                 require_default_verify_command=bool(default_verify_command),
                 policy=policy,
             )
-            cfg = HarnessConfig(default_provider=provider, default_model=attempt_model)
+            provider_settings: dict[str, dict[str, Any]] = {}
+            if provider == "codex":
+                provider_settings["codex"] = {"cwd": workdir}
+            cfg = HarnessConfig(
+                default_provider=provider,
+                default_model=attempt_model,
+                provider_settings=provider_settings,
+            )
 
             def _build_remote_tools(
                 _cwd: Any,

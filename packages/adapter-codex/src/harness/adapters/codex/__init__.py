@@ -468,7 +468,8 @@ class CodexAdapter:
             error_text = stderr_text or "\n".join(ignored_lines) or "unknown Codex CLI failure"
             if "login" in error_text.lower() or "auth" in error_text.lower():
                 raise ConfigurationError(f"Codex CLI auth failed: {error_text}")
-            raise InternalError(f"Codex CLI exited with status {return_code}: {error_text}")
+            if assistant_text is None or not _is_codex_post_done_stdin_error(error_text):
+                raise InternalError(f"Codex CLI exited with status {return_code}: {error_text}")
         if assistant_text is None:
             fallback = stderr_text or ("\n".join(ignored_lines).strip())
             assistant_text = fallback or ""
@@ -477,6 +478,10 @@ class CodexAdapter:
 
 async def _empty_bytes() -> bytes:
     return b""
+
+
+def _is_codex_post_done_stdin_error(text: str) -> bool:
+    return "reading additional input from stdin" in text.lower()
 
 
 def _tail(text: str, limit: int) -> str:

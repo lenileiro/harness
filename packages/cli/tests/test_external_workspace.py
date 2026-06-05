@@ -456,6 +456,22 @@ def test_verification_command_must_cover_changed_tests() -> None:
         "workspace-runner --filter @scope/core test'",
         ["repo/packages/core/test/prompts/autocomplete.test.ts"],
     )
+    assert _verification_command_covers_test_changes(
+        "cargo test -p pest_vm --test char_class",
+        ["vm/tests/char_class.rs"],
+    )
+    assert _verification_command_covers_test_changes(
+        "cargo test -p pest_derive --test grammar_inline",
+        ["derive/tests/grammar_inline.rs"],
+    )
+    assert _verification_command_covers_test_changes(
+        "project-test --test test_feature",
+        ["tests/test_feature.py"],
+    )
+    assert not _verification_command_covers_test_changes(
+        "cargo test -p pest_vm --test unrelated",
+        ["vm/tests/char_class.rs"],
+    )
     assert not _verification_command_covers_test_changes("project-test --filter unrelated", changed)
     assert not _verification_command_covers_test_changes(
         "workspace-runner test --filter unrelated",
@@ -5747,6 +5763,38 @@ async def test_external_workspace_verifier_accepts_shell_no_network_fixture_chec
     assert verifier.latest.verification_passed_after_source_change is True
 
 
+@pytest.mark.asyncio
+async def test_external_workspace_verifier_accepts_shell_test_target_selector(
+    tmp_path: Path,
+) -> None:
+    env = StaticStatusEnvironment(
+        tmp_path,
+        statuses=[],
+        baseline_status=" M repo/vm/src/lib.rs\n?? repo/vm/tests/char_class.rs\n",
+    )
+    verifier = ExternalWorkspaceVerifier(env, workdir=str(tmp_path))
+
+    result = await verifier.verify(
+        session=SimpleNamespace(),
+        activity=[
+            _completed("write_file", metadata={"path": "repo/vm/src/lib.rs"}),
+            _completed("write_file", metadata={"path": "repo/vm/tests/char_class.rs"}),
+            _completed(
+                "shell",
+                arguments={"command": "cd repo && cargo test -p pest_vm --test char_class"},
+                metadata={"exit_code": 0, "workspace_changed": False},
+            ),
+        ],
+    )
+
+    assert result.can_finish is True
+    assert verifier.latest.latest_verification_command is not None
+    assert "cargo test -p pest_vm --test char_class" in (
+        verifier.latest.latest_verification_command
+    )
+    assert verifier.latest.verification_passed_after_source_change is True
+
+
 def test_no_network_image_check_accepts_provider_shell_wrappers() -> None:
     image = "public.example/task:latest"
 
@@ -5918,6 +5966,7 @@ async def test_external_environment_runner_uses_requested_provider(
         observed["goal"] = kwargs["goal"]
         config = cast(Any, kwargs["config"])
         observed["provider"] = config.default_provider
+        observed["provider_settings"] = config.provider("codex")
         render = kwargs["render"]
         assert callable(render)
         render(Done(final_message=Message(role="assistant", content="done")))
@@ -5947,6 +5996,7 @@ async def test_external_environment_runner_uses_requested_provider(
         "model": "openai/gpt-5.5",
         "goal": False,
         "provider": "codex",
+        "provider_settings": {"cwd": str(tmp_path)},
     }
     assert context.metadata["requested_model"] == "openai/gpt-5.5"
     assert context.metadata["attempt_model"] == "openai/gpt-5.5"
