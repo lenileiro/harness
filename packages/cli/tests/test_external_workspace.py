@@ -20,6 +20,7 @@ from harness.cli.external_workspace import (
     _GIT_WORKSPACE_FINGERPRINT_COMMAND,
     ExternalWorkspaceCoverageVerifier,
     ExternalWorkspacePolicy,
+    ExternalWorkspaceVerificationSnapshot,
     ExternalWorkspaceVerifier,
     PolicyFetchUrlTool,
     PolicyWebSearchTool,
@@ -320,6 +321,22 @@ def test_verification_command_must_cover_changed_tests() -> None:
         changed,
     )
     assert not _verification_command_covers_test_changes("project-test", changed)
+    assert _verification_command_covers_test_changes(
+        "project-test ./core",
+        ["core/testdata/func.ank"],
+    )
+    assert _verification_command_covers_test_changes(
+        "project-test ./core",
+        ["repo/core/testdata/func.ank"],
+    )
+    assert not _verification_command_covers_test_changes(
+        "project-test ./...",
+        ["core/testdata/func.ank"],
+    )
+    assert not _verification_command_covers_test_changes(
+        "project-test core/testdata/func.ank",
+        ["core/testdata/func.ank"],
+    )
     assert _verification_command_covers_test_changes(
         "project-check tests/test_feature.case",
         ["tests/test_feature.case"],
@@ -4891,6 +4908,63 @@ async def test_external_workspace_coverage_verifier_accepts_reviewed_tests(
 
 
 @pytest.mark.asyncio
+async def test_external_workspace_coverage_verifier_reads_diff_hunks_for_large_changed_files(
+    tmp_path: Path,
+) -> None:
+    env = LocalEnvironment(tmp_path)
+    (tmp_path / "src").mkdir()
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "src" / "sorter.py").write_text(
+        "def sort_label_values(values):\n    return sorted(values)\n",
+        encoding="utf-8",
+    )
+    long_test = "\n".join(
+        f"def test_filler_{index}():\n    assert {index} == {index}\n" for index in range(280)
+    )
+    (tmp_path / "tests" / "test_sorting.py").write_text(long_test, encoding="utf-8")
+    await env.exec("git init")
+    await env.exec("git add src/sorter.py tests/test_sorting.py")
+    await env.exec("git -c user.name=test -c user.email=test@example.com commit -m baseline")
+
+    (tmp_path / "src" / "sorter.py").write_text(
+        "def sort_label_values(values):\n    return typed_label_sort(values)\n",
+        encoding="utf-8",
+    )
+    changed_test = long_test.replace(
+        "def test_filler_270():\n    assert 270 == 270\n",
+        ("def test_filler_270():\n    assert sort_label_values(['1', ' 1']) == [' 1', '1']\n"),
+    )
+    (tmp_path / "tests" / "test_sorting.py").write_text(changed_test, encoding="utf-8")
+
+    structural = ExternalWorkspaceVerifier(env, workdir=str(tmp_path))
+    structural.latest = ExternalWorkspaceVerificationSnapshot(
+        source_change_paths=["src/sorter.py"],
+        test_change_paths=["tests/test_sorting.py"],
+        verification_passed_after_source_change=True,
+        latest_verification_command="pytest tests/test_sorting.py",
+    )
+    adapter = CoverageReviewAdapter(
+        {"can_finish": True, "reason": "tests cover observable behavior", "confidence": 0.9}
+    )
+    verifier = ExternalWorkspaceCoverageVerifier(
+        environment=env,
+        workdir=str(tmp_path),
+        instruction="sort label values with leading whitespace before typed values",
+        adapter=adapter,
+        model="judge",
+        structural_verifier=structural,
+    )
+
+    result = await verifier.verify(session=SimpleNamespace(messages=[]), activity=[])
+
+    assert result.can_finish is True
+    prompt = adapter.calls[0]["messages"][1].content
+    assert "diff --git a/tests/test_sorting.py b/tests/test_sorting.py" in prompt
+    assert "sort_label_values(['1', ' 1']) == [' 1', '1']" in prompt
+    assert "def test_filler_0()" not in prompt
+
+
+@pytest.mark.asyncio
 async def test_external_workspace_verifier_accepts_default_runner_wired_untracked_test(
     tmp_path: Path,
 ) -> None:
@@ -5526,6 +5600,47 @@ async def test_external_workspace_verifier_accepts_public_no_network_image_check
     )
 
     assert result.can_finish is True
+    assert verifier.latest.verification_passed_after_source_change is True
+
+
+@pytest.mark.asyncio
+async def test_external_workspace_verifier_accepts_shell_no_network_fixture_check(
+    tmp_path: Path,
+) -> None:
+    env = StaticStatusEnvironment(
+        tmp_path,
+        statuses=[],
+        baseline_status=" M repo/core/engine.ext\n M repo/core/testdata/func.ank\n",
+    )
+    verifier = ExternalWorkspaceVerifier(
+        env,
+        workdir=str(tmp_path),
+        policy=ExternalWorkspacePolicy(
+            required_no_network_verify_image="public.example/task:latest"
+        ),
+    )
+
+    result = await verifier.verify(
+        session=SimpleNamespace(),
+        activity=[
+            _completed("write_file", metadata={"path": "repo/core/engine.ext"}),
+            _completed("write_file", metadata={"path": "repo/core/testdata/func.ank"}),
+            _completed(
+                "shell",
+                arguments={
+                    "command": (
+                        "docker run --rm --network none -v $PWD/repo:/work -w /work "
+                        "public.example/task:latest sh -lc 'project-test ./core'"
+                    )
+                },
+                metadata={"exit_code": 0, "workspace_changed": False},
+            ),
+        ],
+    )
+
+    assert result.can_finish is True
+    assert verifier.latest.latest_verification_command is not None
+    assert "project-test ./core" in verifier.latest.latest_verification_command
     assert verifier.latest.verification_passed_after_source_change is True
 
 

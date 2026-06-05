@@ -2307,8 +2307,9 @@ def _verification_command_covers_test_changes(
     if _command_runs_changed_test_script(command, test_paths):
         return True
     changed = [_normal_path(path) for path in test_paths]
-    if any(_path_is_test_fixture(path) for path in changed):
-        return False
+    fixture_changed = [path for path in changed if _path_is_test_fixture(path)]
+    if fixture_changed:
+        return _verification_command_covers_changed_fixtures(command, fixture_changed)
     untracked = {_normal_path(path) for path in untracked_test_paths or []}
     tracked_changed = [path for path in changed if path not in untracked]
     targets = _command_path_tokens(command)
@@ -2333,8 +2334,7 @@ def _verification_command_covers_test_changes(
         for path in changed:
             changed_candidates = _test_path_reference_candidates(path)
             if (
-                path == target
-                or path.startswith(f"{target.rstrip('/')}/")
+                _verification_target_covers_changed_path(target, path)
                 or target in changed_candidates
                 or any(
                     candidate.startswith(f"{target.rstrip('/')}/")
@@ -2342,6 +2342,46 @@ def _verification_command_covers_test_changes(
                 )
             ):
                 return target in verification_targets or _is_broad_test_command(command)
+    return False
+
+
+def _verification_command_covers_changed_fixtures(command: str, fixture_paths: list[str]) -> bool:
+    if not fixture_paths or not _is_broad_test_command(command):
+        return False
+    targets = _command_verification_path_tokens(command)
+    if not targets:
+        return False
+    for fixture_path in fixture_paths:
+        if not any(
+            _verification_target_covers_changed_fixture(target, fixture_path) for target in targets
+        ):
+            return False
+    return True
+
+
+def _verification_target_covers_changed_fixture(target: str, fixture_path: str) -> bool:
+    normalized_target = _normal_path(target).rstrip("/")
+    if normalized_target in {"", "."}:
+        return False
+    if _path_is_test_fixture(normalized_target):
+        return False
+    return _verification_target_covers_changed_path(normalized_target, fixture_path)
+
+
+def _verification_target_covers_changed_path(target: str, path: str) -> bool:
+    normalized_target = _normal_path(target).rstrip("/")
+    normalized_path = _normal_path(path)
+    if normalized_target in {"", "."}:
+        return False
+    if normalized_path == normalized_target or normalized_path.startswith(f"{normalized_target}/"):
+        return True
+    target_parts = [part for part in normalized_target.split("/") if part]
+    path_parts = [part for part in normalized_path.split("/") if part]
+    if not target_parts or len(target_parts) >= len(path_parts):
+        return False
+    for index in range(1, len(path_parts) - len(target_parts) + 1):
+        if path_parts[index : index + len(target_parts)] == target_parts:
+            return True
     return False
 
 
@@ -5103,7 +5143,14 @@ class ExternalWorkspaceCoverageVerifier:
                 f"{quoted}; do "
                 '[ -f "$path" ] || continue; '
                 "printf '\\n--- %s ---\\n' \"$path\"; "
+                'dir=$(dirname "$path"); '
+                'base=$(basename "$path"); '
+                'diff_output=$(git -C "$dir" diff -- "$base" 2>/dev/null || true); '
+                'if [ -n "$diff_output" ]; then '
+                "printf '%s\\n' \"$diff_output\"; "
+                "else "
                 "sed -n '1,240p' \"$path\"; "
+                "fi; "
                 "done"
             ),
             cwd=self.workdir,

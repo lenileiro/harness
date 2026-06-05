@@ -2095,11 +2095,25 @@ def _promotion_artifact_writes(tool_events: list[ActivityEvent]) -> list[Activit
 def _prompt_requires_public_source_evidence(prompt: str) -> bool:
     if not prompt.strip():
         return False
-    return bool(
-        _CURRENT_FACT_RE.search(prompt)
-        and _PUBLIC_SOURCE_RE.search(prompt)
-        and _PUBLIC_FACT_SUBJECT_RE.search(prompt)
-    )
+    for segment in _public_source_prompt_segments(prompt):
+        if (
+            _CURRENT_FACT_RE.search(segment)
+            and _PUBLIC_SOURCE_RE.search(segment)
+            and _PUBLIC_FACT_SUBJECT_RE.search(segment)
+        ):
+            return True
+    return False
+
+
+def _public_source_prompt_segments(prompt: str) -> list[str]:
+    segments: list[str] = []
+    for line in prompt.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        segments.append(stripped)
+        segments.extend(part.strip() for part in re.split(r"(?<=[.!?])\s+", stripped))
+    return [segment for segment in segments if segment]
 
 
 def _has_successful_public_source_evidence(activity: list[ActivityEvent]) -> bool:

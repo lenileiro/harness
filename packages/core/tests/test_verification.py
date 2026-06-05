@@ -196,6 +196,30 @@ async def test_public_source_evidence_ignores_ordinary_current_source_tasks() ->
     assert result.can_finish is True
 
 
+@pytest.mark.asyncio
+async def test_public_source_evidence_ignores_current_behavior_with_public_metadata() -> None:
+    session = _session(
+        messages=[
+            Message(
+                role="user",
+                content=(
+                    "Public task metadata:\n"
+                    "- Repository URL: https://github.com/example/project\n"
+                    "- Required base commit: abc123\n\n"
+                    "Task instruction:\n"
+                    "Current behavior sorts labels incorrectly. Fix the code and "
+                    "verify it in the declared task image."
+                ),
+            ),
+            Message(role="assistant", content="Fixed and verified."),
+        ]
+    )
+
+    result = await PublicSourceEvidenceVerifier().verify(session=session, activity=[])
+
+    assert result.can_finish is True
+
+
 class _StaticVerifier:
     def __init__(self, result: VerificationResult) -> None:
         self._result = result
