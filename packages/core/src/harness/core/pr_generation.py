@@ -8,11 +8,11 @@ from pathlib import Path
 from typing import Any
 
 from harness.core.promotion_candidates import PromotionCandidate
+from harness.core.slug import slugify
 
 
 def _slugify(value: str) -> str:
-    cleaned = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
-    return cleaned or "candidate"
+    return slugify(value)
 
 
 @dataclass(frozen=True, slots=True)

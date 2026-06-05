@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import typer
 
@@ -38,6 +38,7 @@ from harness.core import (
     PhaseTool,
     Planner,
     PromptSurfaceRevertVerifier,
+    PublicSourceEvidenceVerifier,
     RepairOrchestrator,
     RequestCritiqueTool,
     ResearchPromotionFlowVerifier,
@@ -145,6 +146,7 @@ class SpawnAgentsTool:
                 sub_tools.register(ListWorkItemsTool(store, job_id))
 
             adapter = self._build_adapter(self._provider, base_url=None, config=self._config)
+            adapter = _align_adapter_cwd(self._provider, adapter, self._cwd)
             return Agent(
                 adapters={self._provider: adapter},
                 tools=sub_tools,
@@ -245,6 +247,13 @@ def load_project_context(cwd: Path) -> str:
     return f"<project_instructions>\n{body}\n</project_instructions>"
 
 
+def _align_adapter_cwd(provider: str, adapter: Adapter, cwd: Path) -> Adapter:
+    if provider == "codex" and hasattr(adapter, "cwd"):
+        adapter_with_cwd = cast(Any, adapter)
+        adapter_with_cwd.cwd = cwd.resolve()
+    return adapter
+
+
 def build_agent(
     *,
     chain: list[str],
@@ -282,6 +291,7 @@ def build_agent(
     memory_tools_enabled: bool = True,
     auxiliary_tools_enabled: bool = True,
     project_context_enabled: bool = True,
+    skip_builtin_verify_before_done: bool = False,
 ) -> Agent:
     if not chain:
         raise typer.BadParameter("provider chain is empty")
@@ -291,7 +301,8 @@ def build_agent(
     adapters: dict[str, Adapter] = {}
     for index, provider in enumerate(chain):
         provider_base_url = base_url if index == 0 else None
-        adapters[provider] = build_adapter(provider, base_url=provider_base_url, config=config)
+        adapter = build_adapter(provider, base_url=provider_base_url, config=config)
+        adapters[provider] = _align_adapter_cwd(provider, adapter, cwd)
 
     project_ctx = load_project_context(cwd) if project_context_enabled else ""
     if project_ctx and system_prompt:
@@ -320,6 +331,7 @@ def build_agent(
         )
         structural = ChainedVerifier(
             FileScopeVerifier(),
+            PublicSourceEvidenceVerifier(),
             ResearchPromotionFlowVerifier(),
             MinimalFixVerifier(),
             TestsBeforeEditVerifier(),
@@ -343,6 +355,7 @@ def build_agent(
         )
         structural = ChainedVerifier(
             FileScopeVerifier(),
+            PublicSourceEvidenceVerifier(),
             ResearchPromotionFlowVerifier(),
             verify_before_done,
             DiagnosisAlignmentVerifier(),
@@ -358,10 +371,18 @@ def build_agent(
             else structural
         )
     elif profile == "minimal":
-        verify_before_done = VerifyBeforeDoneVerifier(
-            default_verify_command_available=bool(verify_command)
+        verify_only = (
+            ChainedVerifier(
+                PublicSourceEvidenceVerifier(),
+                ResearchPromotionFlowVerifier(),
+            )
+            if skip_builtin_verify_before_done
+            else ChainedVerifier(
+                PublicSourceEvidenceVerifier(),
+                ResearchPromotionFlowVerifier(),
+                VerifyBeforeDoneVerifier(default_verify_command_available=bool(verify_command)),
+            )
         )
-        verify_only = ChainedVerifier(ResearchPromotionFlowVerifier(), verify_before_done)
         verifier = (
             ChainedVerifier(verify_only, verifier, fail_fast=False)
             if verifier is not None
@@ -428,4 +449,10 @@ def build_agent(
     )
 
 
-__all__ = ["_SPAWN_SCHEMA", "SpawnAgentsTool", "build_agent", "load_project_context"]
+__all__ = [
+    "_SPAWN_SCHEMA",
+    "SpawnAgentsTool",
+    "_align_adapter_cwd",
+    "build_agent",
+    "load_project_context",
+]

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from collections.abc import Awaitable
 from contextlib import suppress
 from datetime import UTC, datetime
@@ -24,6 +25,26 @@ console = Console()
 KNOWN_PROVIDERS: tuple[str, ...] = ("ollama", "codex", "openai", "openrouter")
 
 _T = TypeVar("_T")
+
+
+def _float_setting(
+    settings: dict[str, Any],
+    key: str,
+    default: float,
+    *,
+    env_var: str | None = None,
+) -> float:
+    if env_var:
+        raw_env = os.environ.get(env_var)
+        if raw_env is not None:
+            try:
+                value = float(raw_env)
+            except ValueError:
+                pass
+            else:
+                if value > 0:
+                    return value
+    return float(settings.get(key, default))
 
 
 async def _await_any(awaitable: Awaitable[_T]) -> _T:
@@ -93,8 +114,18 @@ def _build_adapter(provider: str, *, base_url: str | None, config: HarnessConfig
             timeout=timeout,
         )
     if provider == "codex":
-        timeout = float(settings.get("timeout", 600.0))
-        idle_timeout = float(settings.get("idle_timeout", 120.0))
+        timeout = _float_setting(
+            settings,
+            "timeout",
+            600.0,
+            env_var="HARNESS_MODEL_TURN_TIMEOUT",
+        )
+        idle_timeout = _float_setting(
+            settings,
+            "idle_timeout",
+            120.0,
+            env_var="HARNESS_MODEL_STREAM_IDLE_TIMEOUT",
+        )
         cwd = settings.get("cwd")
         return CodexAdapter(cwd=cwd, timeout=timeout, idle_timeout=idle_timeout)
     if provider == "openai":

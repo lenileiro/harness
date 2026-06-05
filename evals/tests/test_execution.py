@@ -258,6 +258,45 @@ def test_eval_metrics_ignore_file_content_mentions_of_pytest() -> None:
     assert metrics.verify_passed is False
 
 
+def test_eval_metrics_count_verify_work_result_lines() -> None:
+    transcript = "\n".join(
+        [
+            "→ shell(command='git ls-files')",
+            "✓ shell: exit_code: 0",
+            "✗ verify_work: FAILED (exit 1)",
+            "tests/test_api.py::test_hyphenated_id FAILED",
+            "→ read_file(path='src/db.py')",
+            "✓ read_file: content",
+            "→ edit_file(path='src/db.py', old='x', new='y')",
+            "✓ edit_file: replaced 1 occurrence",
+            "✓ verify_work: PASSED",
+            "5 passed in 0.09s",
+        ]
+    )
+
+    assert extract_tool_sequence(transcript) == [
+        "shell",
+        "verify_work",
+        "read_file",
+        "edit_file",
+        "verify_work",
+    ]
+    assert transcript_mentions_verification(transcript, "pytest tests/")
+    metrics = compute_hard_metrics(
+        transcript,
+        "diff --git a/src/db.py b/src/db.py\n+++ b/src/db.py\n+change\n",
+        "pytest tests/",
+        run_exit_code=0,
+        verify_exit_code=0,
+        agent_duration_seconds=28.0,
+        verify_duration_seconds=0.1,
+    )
+    assert metrics.tool_calls == 5
+    assert metrics.did_run_verification is True
+    assert metrics.verification_after_failure is True
+    assert metrics.verify_passed is True
+
+
 def test_benchmark_integrity_rejects_reference_solution_access() -> None:
     report = check_benchmark_integrity("→ shell(command='cat solution/solve.sh')\n")
 

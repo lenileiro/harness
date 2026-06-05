@@ -67,6 +67,105 @@ def test_evaluate_docs_report_requires_expected_finding_and_topic(tmp_path: Path
     assert missing == []
 
 
+def test_evaluate_docs_report_accepts_stronger_severity_and_setup_synonym(
+    tmp_path: Path,
+) -> None:
+    _write_docs_fixture(tmp_path, "01-demo")
+    fixture = docs_runner.discover_docs_fixtures(tmp_path / "evals")[0]
+    parsed = docs_runner.parse_docs_audit_report(
+        json.dumps(
+            {
+                "summary": "Plugin docs are incomplete.",
+                "findings": [
+                    {
+                        "severity": "high",
+                        "path": "README.md",
+                        "issue": "No plugin or extension setup guidance is documented.",
+                        "rationale": "Users cannot configure plugins from the README.",
+                    }
+                ],
+                "missing_topics": ["plugin installation"],
+            }
+        )
+    )
+
+    passed, matched, matched_topics, missing = docs_runner.evaluate_docs_report(
+        fixture,
+        parsed,
+    )
+
+    assert passed is True
+    assert matched == 1
+    assert matched_topics == 1
+    assert missing == []
+
+
+def test_evaluate_docs_report_rejects_weaker_severity(tmp_path: Path) -> None:
+    _write_docs_fixture(tmp_path, "01-demo")
+    fixture = docs_runner.discover_docs_fixtures(tmp_path / "evals")[0]
+    parsed = docs_runner.parse_docs_audit_report(
+        json.dumps(
+            {
+                "summary": "Plugin docs are incomplete.",
+                "findings": [
+                    {
+                        "severity": "low",
+                        "path": "README.md",
+                        "issue": "Plugin setup is missing.",
+                        "rationale": "Users cannot discover the extension flow.",
+                    }
+                ],
+                "missing_topics": ["plugin setup"],
+            }
+        )
+    )
+
+    passed, matched, matched_topics, missing = docs_runner.evaluate_docs_report(
+        fixture,
+        parsed,
+    )
+
+    assert passed is False
+    assert matched == 0
+    assert matched_topics == 1
+    assert missing == ["README.md:medium:plugin"]
+
+
+def test_evaluate_docs_report_matches_schema_topic_synonym(tmp_path: Path) -> None:
+    fixture_dir = _write_docs_fixture(tmp_path, "01-demo")
+    expected_path = fixture_dir / "expected.json"
+    payload = json.loads(expected_path.read_text(encoding="utf-8"))
+    payload["missing_topics"] = ["review output schema"]
+    expected_path.write_text(json.dumps(payload), encoding="utf-8")
+    fixture = docs_runner.discover_docs_fixtures(tmp_path / "evals")[0]
+    parsed = docs_runner.parse_docs_audit_report(
+        json.dumps(
+            {
+                "summary": "Plugin docs are incomplete.",
+                "findings": [
+                    {
+                        "severity": "medium",
+                        "path": "README.md",
+                        "issue": "Plugin setup is missing.",
+                        "rationale": "Users cannot discover the extension flow.",
+                    }
+                ],
+                "missing_topics": ["review output structure"],
+            }
+        )
+    )
+
+    passed, matched, matched_topics, missing = docs_runner.evaluate_docs_report(
+        fixture,
+        parsed,
+    )
+
+    assert passed is True
+    assert matched == 1
+    assert matched_topics == 1
+    assert missing == []
+
+
 def test_run_docs_fixture_executes_docs_command_and_persists_artifacts(
     tmp_path: Path,
 ) -> None:

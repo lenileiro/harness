@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import json
-import re
 import time
 import uuid
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
+from harness.core.slug import slugify
 from harness.core.telemetry import get_logger
 from harness.core.tips_models import Tip
 
@@ -19,8 +19,7 @@ def _new_procedure_id() -> str:
 
 
 def _slugify(value: str) -> str:
-    slug = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
-    return slug or _new_procedure_id()
+    return slugify(value)
 
 
 @dataclass

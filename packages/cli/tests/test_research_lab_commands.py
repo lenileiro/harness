@@ -1465,8 +1465,9 @@ def test_research_execute_next_turns_hypothesis_into_plan(tmp_path: Path) -> Non
         in plan_json
     )
     assert '"checks": [' in plan_json
-    assert '"pytest"' in plan_json
+    assert '"uv run harness eval validate"' in plan_json
     assert '"workflow-smoke"' in plan_json
+    assert '"pytest"' not in plan_json
 
 
 def test_research_execute_next_runs_experiment_plan(tmp_path: Path) -> None:

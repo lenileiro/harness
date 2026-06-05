@@ -17,6 +17,7 @@ from harness.core.verification import (
     ConsensusVerifier,
     StateVerifier,
 )
+from harness.core.verification_guards import _COUNT_CLAIM_RE
 
 from .conftest import MockAdapter
 
@@ -130,6 +131,21 @@ class TestClaimGroundingVerifier:
         result = await ClaimGroundingVerifier().verify(session=session, activity=[event])
         assert result.can_finish is False
         assert "foo.py" in result.reason
+
+    async def test_grounding_write_claim_supports_non_python_paths(self) -> None:
+        event = _completed_event(
+            "write_file",
+            content_preview="wrote file",
+            arguments={"path": "src/main.rs"},
+        )
+        session = _make_session("I wrote to src/main.rs with the implementation.")
+        result = await ClaimGroundingVerifier().verify(session=session, activity=[event])
+        assert result.can_finish is True
+        assert result.confidence == pytest.approx(0.85)
+
+    async def test_count_claim_gate_has_no_language_specific_prefix(self) -> None:
+        assert "python" not in _COUNT_CLAIM_RE.pattern.lower()
+        assert _COUNT_CLAIM_RE.search("42 source files")
 
 
 # ---------------------------------------------------------------------------

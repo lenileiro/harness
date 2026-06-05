@@ -117,7 +117,7 @@ _DENYLIST: tuple[tuple[re.Pattern[str], DenyTier, str], ...] = (
         "package publish/upload (releases an artifact)",
     ),
     (
-        re.compile(r"\bpypi-cli\s+upload\b|\bdocker\s+push\b"),
+        re.compile(r"\bdocker\s+push\b"),
         "soft",
         "registry push (publishes an artifact)",
     ),

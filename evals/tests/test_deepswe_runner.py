@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import ast
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -13,7 +14,10 @@ from evals.deepswe_runner import (
     CommandResult,
     DeepSWETask,
     HostWorkspaceEnvironment,
+    _agent_instruction,
     _capture_target_patch,
+    _deepswe_model_selection_env,
+    _deepswe_strict_coverage_env,
     _enforce_hidden_verifier_reward,
     _enforce_public_offline_verification,
     _failure_metadata,
@@ -83,6 +87,23 @@ def test_load_task_reads_public_metadata_without_solution_or_tests(tmp_path: Pat
     assert task.display_title == "Sample hidden benchmark title"
     assert task.display_description == "Sample hidden benchmark description"
     assert task.original_title == "Sample original issue title"
+
+
+def test_agent_instruction_includes_public_checkout_contract_only(tmp_path: Path) -> None:
+    task = load_task(_write_task(tmp_path))
+
+    prompt = _agent_instruction(task)
+
+    assert "Repository URL: https://example.test/repo" in prompt
+    assert "Required base commit: abc123" in prompt
+    assert "Declared task image: example/image:latest" in prompt
+    assert "nested subdirectory" in prompt
+    assert "Checkout the required base commit" in prompt
+    assert "Fix observable behavior." in prompt
+    assert str(task.task_dir / "tests") not in prompt
+    assert str(task.task_dir / "solution") not in prompt
+    assert "solution.patch" not in prompt
+    assert "solve.sh" not in prompt
 
 
 def test_policy_blocks_deepswe_private_artifacts_but_not_repo_tests(tmp_path: Path) -> None:
@@ -170,7 +191,9 @@ def test_cli_defaults_use_harness_external_runner_contract() -> None:
     args = build_parser().parse_args(["/tmp/deep-swe/tasks/sample"])
 
     assert isinstance(args, argparse.Namespace)
+    assert args.provider == "openrouter"
     assert args.model == "openai/gpt-5.4-nano"
+    assert args.no_goal_plan is False
     assert args.results_root == "evals/results/deepswe"
     assert args.max_steps == 50
     assert args.run_timeout_seconds == 0.0
@@ -178,6 +201,50 @@ def test_cli_defaults_use_harness_external_runner_contract() -> None:
     assert args.idle_timeout == 90.0
     assert args.turn_timeout == 120.0
     assert args.allow_web_access is True
+    assert args.allow_model_fallbacks is False
+
+
+def test_cli_can_opt_into_deepswe_model_fallbacks() -> None:
+    args = build_parser().parse_args(["/tmp/deep-swe/tasks/sample", "--allow-model-fallbacks"])
+
+    assert args.allow_model_fallbacks is True
+
+
+def test_deepswe_model_selection_is_strict_by_default(monkeypatch) -> None:
+    monkeypatch.setenv("HARNESS_EXTERNAL_WORKSPACE_MODEL_FALLBACK_LIMIT", "2")
+    monkeypatch.setenv("HARNESS_OPENROUTER_MODEL_FALLBACK_LIMIT", "2")
+    monkeypatch.setenv("HARNESS_EXTERNAL_WORKSPACE_MODEL_FALLBACKS", "openai/gpt-4.1-mini")
+    monkeypatch.setenv("HARNESS_OPENROUTER_MODEL_FALLBACKS", "openai/gpt-4.1-mini")
+    monkeypatch.setenv("HARNESS_OPENROUTER_AUTO_MODEL_FALLBACK", "1")
+
+    with _deepswe_model_selection_env(allow_model_fallbacks=False):
+        assert os.environ["HARNESS_EXTERNAL_WORKSPACE_MODEL_FALLBACK_LIMIT"] == "0"
+        assert os.environ["HARNESS_OPENROUTER_MODEL_FALLBACK_LIMIT"] == "0"
+        assert os.environ["HARNESS_EXTERNAL_WORKSPACE_MODEL_FALLBACKS"] == ""
+        assert os.environ["HARNESS_OPENROUTER_MODEL_FALLBACKS"] == ""
+        assert os.environ["HARNESS_OPENROUTER_AUTO_MODEL_FALLBACK"] == "0"
+
+    assert os.environ["HARNESS_EXTERNAL_WORKSPACE_MODEL_FALLBACK_LIMIT"] == "2"
+    assert os.environ["HARNESS_OPENROUTER_MODEL_FALLBACK_LIMIT"] == "2"
+    assert os.environ["HARNESS_EXTERNAL_WORKSPACE_MODEL_FALLBACKS"] == "openai/gpt-4.1-mini"
+    assert os.environ["HARNESS_OPENROUTER_MODEL_FALLBACKS"] == "openai/gpt-4.1-mini"
+    assert os.environ["HARNESS_OPENROUTER_AUTO_MODEL_FALLBACK"] == "1"
+
+
+def test_deepswe_model_fallback_opt_in_preserves_env(monkeypatch) -> None:
+    monkeypatch.setenv("HARNESS_OPENROUTER_AUTO_MODEL_FALLBACK", "1")
+
+    with _deepswe_model_selection_env(allow_model_fallbacks=True):
+        assert os.environ["HARNESS_OPENROUTER_AUTO_MODEL_FALLBACK"] == "1"
+
+
+def test_deepswe_coverage_review_rejections_are_blocking(monkeypatch) -> None:
+    monkeypatch.setenv("HARNESS_EXTERNAL_WORKSPACE_COVERAGE_BLOCK_CONFIDENCE", "0.65")
+
+    with _deepswe_strict_coverage_env():
+        assert os.environ["HARNESS_EXTERNAL_WORKSPACE_COVERAGE_BLOCK_CONFIDENCE"] == "0"
+
+    assert os.environ["HARNESS_EXTERNAL_WORKSPACE_COVERAGE_BLOCK_CONFIDENCE"] == "0.65"
 
 
 def test_cli_can_opt_out_of_deepswe_web_access() -> None:
@@ -227,6 +294,7 @@ async def test_host_workspace_environment_does_not_leak_parent_virtualenv(
     harness_bin.mkdir(parents=True)
     monkeypatch.setenv("VIRTUAL_ENV", str(harness_venv))
     monkeypatch.setenv("PYTHONPATH", "/leaked/pythonpath")
+    monkeypatch.setenv("PYTHONUSERBASE", "/leaked/python-userbase")
     monkeypatch.setenv("PATH", f"{harness_bin}:/usr/bin:/bin")
 
     env = HostWorkspaceEnvironment(tmp_path)
@@ -240,7 +308,8 @@ async def test_host_workspace_environment_does_not_leak_parent_virtualenv(
     assert f"HOME={tmp_path / '.harness-home'}" in result.stdout
     assert f"VIRTUAL_ENV={harness_venv}" not in result.stdout
     assert "PYTHONPATH=/leaked/pythonpath" not in result.stdout
-    assert f"PYTHONUSERBASE={tmp_path / '.harness-home' / '.python-userbase'}" in result.stdout
+    assert "PYTHONUSERBASE=/leaked/python-userbase" not in result.stdout
+    assert "PYTHONUSERBASE=" in result.stdout
     assert str(harness_bin) not in result.stdout
     assert "/usr/bin" in result.stdout
 
@@ -582,6 +651,27 @@ def test_public_offline_verification_replays_inner_declared_docker_command(
     )
 
 
+def test_public_offline_verification_replays_shell_wrapped_docker_chain(
+    tmp_path: Path,
+) -> None:
+    run_root = tmp_path / "run"
+    target_repo = run_root / "agent-workspace" / "prometheus"
+    target_repo.parent.mkdir(parents=True)
+    (run_root / "target_repo.txt").write_text(str(target_repo) + "\n", encoding="utf-8")
+    image = "public.ecr.aws/d3j8x8q7/swe-bench-202605:kh76dadw64v8013j689380xsg182yhfc"
+    command = (
+        '/bin/zsh -lc \'docker run --rm --network none -v "$PWD:/app" -w /app '
+        f"{image} gofmt -w promql/typed_label_sort_test.go && "
+        'docker run --rm --network none -v "$PWD:/app" -w /app '
+        f"{image} go test ./promql'"
+    )
+
+    original, replay = _offline_verification_command(run_root, command, image=image)
+
+    assert original == command
+    assert replay == "gofmt -w promql/typed_label_sort_test.go && go test ./promql"
+
+
 def test_public_offline_verification_replays_inner_workspace_mount_command(
     tmp_path: Path,
 ) -> None:
@@ -705,6 +795,65 @@ async def test_public_offline_verification_does_not_nest_declared_docker_verify(
         (run_root / "public-offline-verification" / "command.json").read_text(encoding="utf-8")
     )
     assert command_json["replay_command"] == "pytest -q"
+
+
+async def test_public_offline_verification_preserves_declared_docker_env(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    import evals.deepswe_runner as runner
+
+    task = load_task(_write_task(tmp_path))
+    run_root = tmp_path / "run"
+    run_root.mkdir()
+    (run_root / "model.patch").write_text("", encoding="utf-8")
+    target_repo = run_root / "agent-workspace" / "repo"
+    target_repo.parent.mkdir(parents=True)
+    (run_root / "target_repo.txt").write_text(str(target_repo) + "\n", encoding="utf-8")
+    calls: list[list[str]] = []
+
+    async def fake_run_exec(
+        argv: list[str],
+        *,
+        input_text: str | None = None,
+        timeout_sec: int | float | None = None,
+    ) -> CommandResult:
+        del input_text, timeout_sec
+        calls.append(argv)
+        return CommandResult(stdout="ok\n", stderr="", return_code=0)
+
+    monkeypatch.setattr(runner, "_run_exec", fake_run_exec)
+
+    result = await _run_public_offline_verification(
+        task=task,
+        run_root=run_root,
+        command=(
+            "cd repo && docker run --rm --network none -e CONTEXT=abs "
+            f'--env FEATURE_FLAG=1 -v "$PWD":/app -w /app {task.image} '
+            "sh -lc 'go test ./parser ./evaluator'"
+        ),
+        timeout_sec=12,
+    )
+
+    assert result.return_code == 0
+    assert calls
+    argv = calls[0]
+    assert "-e" in argv
+    assert "CONTEXT=abs" in argv
+    assert "FEATURE_FLAG=1" in argv
+    assert argv.index("CONTEXT=abs") < argv.index(task.image)
+    assert "go test ./parser ./evaluator" in argv[-1]
+    assert "docker run" not in argv[-1]
+    command_json = json.loads(
+        (run_root / "public-offline-verification" / "command.json").read_text(encoding="utf-8")
+    )
+    assert command_json["replay_command"] == "go test ./parser ./evaluator"
+    assert command_json["docker_run_args"] == [
+        "-e",
+        "CONTEXT=abs",
+        "-e",
+        "FEATURE_FLAG=1",
+    ]
 
 
 def test_public_offline_verification_runs_only_for_no_network_passes(tmp_path: Path) -> None:

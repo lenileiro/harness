@@ -10,6 +10,7 @@ from typing import Any, Literal
 from uuid import uuid4
 
 from harness.core.activity import ActivityEvent
+from harness.core.slug import slugify
 from harness.core.tools_verification import (
     _command_exits_before_trailing_command,
     _failure_branch_masks_exit_status,
@@ -161,7 +162,7 @@ def _utcnow() -> str:
 
 
 def _slugify(value: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-") or "workflow"
+    return slugify(value)
 
 
 def normalize_node_id(value: str, *, fallback: str) -> str:

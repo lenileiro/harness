@@ -23,6 +23,8 @@ from harness.core.research_scheduler import build_research_queue
 from harness.core.research_store import ResearchStore
 
 _RISK_ORDER = {"low": 0, "medium": 1, "high": 2}
+_DEFAULT_AUTONOMY_CHECKS = ("uv run harness eval validate",)
+_DEFAULT_AUTONOMY_EVAL_SLICES = ("workflow-smoke",)
 
 
 def _risk_value(level: str) -> int:
@@ -255,8 +257,8 @@ def execute_next_research_item(
             id=store.new_id("plan", hypothesis.id),
             hypothesis_id=hypothesis.id,
             plan=f"Test the hypothesis: {hypothesis.claim}",
-            checks=("pytest",),
-            eval_slices=("workflow-smoke",),
+            checks=_DEFAULT_AUTONOMY_CHECKS,
+            eval_slices=_DEFAULT_AUTONOMY_EVAL_SLICES,
             created_by="autonomy",
         )
         store.add_experiment_plan(plan)

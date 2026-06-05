@@ -16,6 +16,17 @@ _TRACE_NON_COMMAND_PREFIX_RE = re.compile(
 )
 _TRACE_SAFE_STATUS_FOLLOWUP_RE = re.compile(r"^\+(?!\+)\s+(?:rc|status|exit_code|code)=")
 _TRACE_CLEANUP_FOLLOWUP_RE = re.compile(r"^\+(?!\+)\s+(?:rm\b|trap\b|cleanup\b|exit\b)")
+_PACKAGE_SETUP_FAILURE_RE = re.compile(
+    r"(?i)(?:"
+    r"cannot be installed in editable mode|"
+    r"editable mode currently requires|"
+    r"successfully installed unknown|"
+    r"package manifest(?:s)? not found|"
+    r"build metadata not found|"
+    r"missing build metadata|"
+    r"missing package metadata"
+    r")"
+)
 
 
 def _tokenize_shell_command(command: str) -> list[str]:
@@ -113,15 +124,14 @@ def shell_failure_hint(
                 "available install, container, or equivalent command before retrying. "
                 "For final verification, verify_work can run the same read-only "
                 "containerized command. If you discover the tool inside a container "
-                "but it is not on that container's PATH, use the discovered executable "
-                "path in the container command instead of retrying the host command."
+                "but it is not on that container shell's PATH, remember that login "
+                "shells, entrypoints, and clean environments can reset PATH; rerun "
+                "the availability check inside the same shell form, then export the "
+                "discovered bin directory into PATH or invoke the discovered "
+                "executable path as an absolute executable path in the container "
+                "command instead of retrying the host command."
             )
-    if (
-        "editable mode currently requires" in lowered
-        or 'file "setup.py" or "setup.cfg" not found' in lowered
-        or "successfully installed unknown" in lowered
-        or "no module named build" in lowered
-    ):
+    if _PACKAGE_SETUP_FAILURE_RE.search(output):
         return (
             "[setup hint] The package/build setup path did not produce a usable "
             "project install. Inspect the project metadata and declared runtime files "

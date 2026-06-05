@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import re
 from dataclasses import dataclass
 from pathlib import Path
 from uuid import uuid4
@@ -15,6 +14,7 @@ from harness.core.mission_models import (
     MissionRun,
     ValidationContract,
 )
+from harness.core.slug import slugify
 
 
 def default_mission_root(cwd: Path | None = None) -> Path:
@@ -22,8 +22,7 @@ def default_mission_root(cwd: Path | None = None) -> Path:
 
 
 def _slugify(value: str) -> str:
-    cleaned = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
-    return cleaned or "item"
+    return slugify(value)
 
 
 def _write_json(path: Path, payload: dict) -> None:

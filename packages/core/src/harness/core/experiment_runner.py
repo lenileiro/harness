@@ -10,6 +10,13 @@ from harness.core.experiment_plans import ExperimentPlan
 from harness.core.experiments import CommandResult, Experiment, ExperimentResult
 from harness.core.research_store import ResearchStore
 
+_EVAL_SLICE_COMMANDS = {
+    "docs-smoke": "uv run harness eval docs-audit --suite docs-smoke",
+    "research-smoke": "uv run harness eval research --suite research-smoke",
+    "review-smoke": "uv run harness eval review --suite review-smoke",
+    "workflow-smoke": "uv run harness eval workflow --suite workflow-smoke --timeout 120",
+}
+
 
 def _utcnow() -> str:
     return datetime.now(UTC).isoformat(timespec="seconds")
@@ -26,6 +33,12 @@ def _current_branch(cwd: Path) -> str:
     if result.returncode != 0:
         return ""
     return result.stdout.strip()
+
+
+def _eval_slice_command(slice_or_command: str) -> str:
+    normalized = slice_or_command.strip()
+    key = normalized.removesuffix(".txt")
+    return _EVAL_SLICE_COMMANDS.get(key, normalized)
 
 
 def run_experiment_plan(
@@ -48,7 +61,7 @@ def run_experiment_plan(
     artifact_dir.mkdir(parents=True, exist_ok=True)
     commands: list[tuple[str, str]] = []
     commands.extend(("check", command) for command in plan.checks)
-    commands.extend(("eval", command) for command in plan.eval_slices)
+    commands.extend(("eval", _eval_slice_command(command)) for command in plan.eval_slices)
 
     command_results: list[CommandResult] = []
     overall_ok = True

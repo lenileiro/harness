@@ -113,6 +113,31 @@ _AUTONOMOUS_REPAIR_GUIDANCE = (
 )
 
 
+def _adapter_result_fallback_call(result: ToolResult) -> ToolCall:
+    metadata = result.metadata or {}
+    arguments: dict[str, Any] = {}
+    if isinstance(metadata, dict):
+        for key in ("command", "cmd", "text", "path", "file", "paths", "files", "changed_paths"):
+            if key in metadata:
+                arguments[key] = metadata[key]
+    return ToolCall(
+        id=result.tool_call_id,
+        name=result.name,
+        arguments=arguments,
+    )
+
+
+def _adapter_result_is_native(result: ToolResult) -> bool:
+    metadata = result.metadata or {}
+    if not isinstance(metadata, dict):
+        return False
+    return bool(
+        metadata.get("backend")
+        or metadata.get("workspace_changed") is True
+        or metadata.get("workspace_fingerprint_changed") is True
+    )
+
+
 def _normalize_outcome(raw: bool | ApprovalOutcome) -> ApprovalOutcome:
     """Coerce legacy `bool` return values into the open `ApprovalOutcome` set."""
     if isinstance(raw, bool):
@@ -1353,6 +1378,9 @@ class Agent:
         _max_model_error_retries = max(0, self._max_repair_attempts)
         _changed_workspace = False
         _last_tool_result_error = False
+        adapter_tool_calls: dict[str, ToolCall] = {}
+        adapter_tool_call_dispatches: set[str] = set()
+        adapter_native_tool_evidence_seen = False
         for _turn in range(request.max_steps):
             final: Message | None = None
             usage = None
@@ -1432,6 +1460,37 @@ class Agent:
                                 )
                         elif not isinstance(event, ModelSelectedEvent):
                             turn_yielded_model_output = True
+                        if isinstance(event, ToolCallEvent):
+                            adapter_tool_calls[event.call.id] = event.call
+                        elif isinstance(event, ToolResultEvent):
+                            metadata = event.result.metadata or {}
+                            if _adapter_result_is_native(event.result) and not (
+                                isinstance(metadata, dict) and metadata.get("partial") is True
+                            ):
+                                call = adapter_tool_calls.get(event.result.tool_call_id)
+                                synthesized = False
+                                if call is None:
+                                    call = _adapter_result_fallback_call(event.result)
+                                    adapter_tool_calls[call.id] = call
+                                    synthesized = True
+                                if call.id not in adapter_tool_call_dispatches:
+                                    await self._emit(
+                                        session,
+                                        activity_kinds.TOOL_CALL_DISPATCHED,
+                                        {
+                                            "tool_call_id": call.id,
+                                            "name": call.name,
+                                            "arguments": call.arguments,
+                                            "source": "adapter",
+                                            "synthesized": synthesized,
+                                        },
+                                    )
+                                    adapter_tool_call_dispatches.add(call.id)
+                                await self._emit_tool_completed(session, call, event.result)
+                                adapter_native_tool_evidence_seen = True
+                                if self._tool_result_changed_workspace(call, event.result):
+                                    _changed_workspace = True
+                                _last_tool_result_error = bool(event.result.is_error)
                         yield event
             except (HarnessError, TimeoutError) as exc:
                 if isinstance(exc, TimeoutError):
@@ -1624,7 +1683,12 @@ class Agent:
             session.touch()
 
             if not final.tool_calls:
-                if request.require_tool_use and not _any_tool_called and tool_schemas:
+                if (
+                    request.require_tool_use
+                    and not _any_tool_called
+                    and not adapter_native_tool_evidence_seen
+                    and tool_schemas
+                ):
                     session.messages.append(
                         Message(
                             role="user",

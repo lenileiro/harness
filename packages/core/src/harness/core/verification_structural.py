@@ -89,6 +89,20 @@ _PROMOTION_FLOW_COMMAND_HINTS: tuple[str, ...] = (
     "gh pr create",
     ".harness/research/promotions/",
 )
+_PUBLIC_SOURCE_EVIDENCE_TOOLS = frozenset({"web_search", "fetch_url"})
+_PUBLIC_SOURCE_SHELL_FETCH_TOOLS = frozenset({"curl", "wget", "fetch"})
+_SHELL_WRAPPER_TOOLS = frozenset({"sh", "bash", "zsh", "ksh"})
+_CURRENT_FACT_RE = re.compile(r"\b(latest|current|most\s+recent|newest|recent|stable)\b", re.I)
+_PUBLIC_SOURCE_RE = re.compile(
+    r"\b(public|web|online|official|external|internet|documentation|docs|changelog|"
+    r"release\s+notes?)\b",
+    re.I,
+)
+_PUBLIC_FACT_SUBJECT_RE = re.compile(
+    r"\b(release|version|api|tool|library|package|dependency|url|source|status|docs?|"
+    r"documentation|changelog|value|fact)\b",
+    re.I,
+)
 
 _VERIFY_INTENT_WORDS = frozenset(
     {
@@ -540,6 +554,18 @@ def verify_work_command_changes_state(command: str) -> bool:
     return bool(_VERIFY_WORK_MUTATION_RE.search(_mask_shell_quoted_text(stripped)))
 
 
+def _verify_work_command(event: ActivityEvent) -> str:
+    arguments = event.data.get("arguments")
+    if isinstance(arguments, dict):
+        command = str(arguments.get("command") or arguments.get("cmd") or "")
+        if command:
+            return command
+    metadata = event.data.get("metadata")
+    if isinstance(metadata, dict):
+        return str(metadata.get("command") or "")
+    return ""
+
+
 def verify_work_event_changes_state(event: ActivityEvent) -> bool:
     if str(event.data.get("name") or "") != "verify_work":
         return False
@@ -550,10 +576,7 @@ def verify_work_event_changes_state(event: ActivityEvent) -> bool:
         return False
     if isinstance(metadata, dict) and metadata.get("used_default_command") is True:
         return False
-    arguments = event.data.get("arguments")
-    command = ""
-    if isinstance(arguments, dict):
-        command = str(arguments.get("command") or arguments.get("cmd") or "")
+    command = _verify_work_command(event)
     return verify_work_command_changes_state(command)
 
 
@@ -607,6 +630,14 @@ def _event_changed_paths(event: ActivityEvent) -> set[str]:
                 normalized = value.strip().lstrip("./")
                 paths.add(normalized)
                 paths.add(Path(normalized).name)
+        for key in ("paths", "files", "changed_paths"):
+            value = source.get(key)
+            if isinstance(value, list):
+                for item in value:
+                    if isinstance(item, str) and item.strip():
+                        normalized = item.strip().lstrip("./")
+                        paths.add(normalized)
+                        paths.add(Path(normalized).name)
         patch = source.get("patch") or source.get("diff")
         if isinstance(patch, str):
             for match in re.finditer(r"^diff --git a/(.+?) b/(.+?)$", patch, re.MULTILINE):
@@ -765,10 +796,7 @@ def verify_work_event_has_generic_evidence(
     metadata = event.data.get("metadata")
     if isinstance(metadata, dict) and metadata.get("used_default_command") is True:
         return True
-    arguments = event.data.get("arguments")
-    command = ""
-    if isinstance(arguments, dict):
-        command = str(arguments.get("command") or arguments.get("cmd") or "")
+    command = _verify_work_command(event)
     if _shell_command_static_outcome(command) in {"failure", "exit"}:
         return False
     if _failure_branch_masks_exit_status(command):
@@ -1579,10 +1607,7 @@ def _verify_work_event_asserts_exact_stdout_requests(
         return False
     if _verify_work_output_reports_failure(event):
         return False
-    arguments = event.data.get("arguments")
-    command = ""
-    if isinstance(arguments, dict):
-        command = str(arguments.get("command") or arguments.get("cmd") or "")
+    command = _verify_work_command(event)
     for path, content in requests:
         if no_trailing_newline_required:
             if _command_directly_runs_path(command, path=path) and _verify_work_stdout_matches(
@@ -1639,10 +1664,7 @@ def _verify_work_events_assert_exact_stdout_requests(
                 continue
             if _verify_work_output_reports_failure(event):
                 continue
-            arguments = event.data.get("arguments")
-            command = ""
-            if isinstance(arguments, dict):
-                command = str(arguments.get("command") or arguments.get("cmd") or "")
+            command = _verify_work_command(event)
             if not no_trailing_newline_required and _command_asserts_exact_stdout(
                 command, path=path, content=content
             ):
@@ -1679,10 +1701,7 @@ def _verify_work_event_asserts_exact_requests(
         return False
     if _verify_work_output_reports_failure(event):
         return False
-    arguments = event.data.get("arguments")
-    command = ""
-    if isinstance(arguments, dict):
-        command = str(arguments.get("command") or arguments.get("cmd") or "")
+    command = _verify_work_command(event)
     for path, content in requests:
         if _command_asserts_exact_content(command, path=path, content=content):
             continue
@@ -1733,10 +1752,7 @@ def _verify_work_runs_exact_assertion_script(
     content: str,
     byte_size_required: bool,
 ) -> bool:
-    arguments = event.data.get("arguments")
-    command = ""
-    if isinstance(arguments, dict):
-        command = str(arguments.get("command") or arguments.get("cmd") or "")
+    command = _verify_work_command(event)
     script_path = _directly_run_script_path(command)
     if not script_path or not _is_test_path(script_path):
         return False
@@ -1759,10 +1775,7 @@ def _verify_work_runs_exact_stdout_assertion_script(
     content: str,
     no_trailing_newline_required: bool,
 ) -> bool:
-    arguments = event.data.get("arguments")
-    command = ""
-    if isinstance(arguments, dict):
-        command = str(arguments.get("command") or arguments.get("cmd") or "")
+    command = _verify_work_command(event)
     script_path = _directly_run_script_path(command)
     if not script_path or not _is_test_path(script_path):
         return False
@@ -1897,10 +1910,7 @@ def _verify_work_events_assert_exact_requests(
                 continue
             if _verify_work_output_reports_failure(event):
                 continue
-            arguments = event.data.get("arguments")
-            command = ""
-            if isinstance(arguments, dict):
-                command = str(arguments.get("command") or arguments.get("cmd") or "")
+            command = _verify_work_command(event)
             if _command_asserts_exact_content(command, path=path, content=content):
                 content_asserted = True
             if _command_inline_script_asserts_exact_content(
@@ -2080,6 +2090,62 @@ def _promotion_artifact_writes(tool_events: list[ActivityEvent]) -> list[Activit
         if path and _promotion_artifact_path(path):
             writes.append(event)
     return writes
+
+
+def _prompt_requires_public_source_evidence(prompt: str) -> bool:
+    if not prompt.strip():
+        return False
+    return bool(
+        _CURRENT_FACT_RE.search(prompt)
+        and _PUBLIC_SOURCE_RE.search(prompt)
+        and _PUBLIC_FACT_SUBJECT_RE.search(prompt)
+    )
+
+
+def _has_successful_public_source_evidence(activity: list[ActivityEvent]) -> bool:
+    for event in activity:
+        if event.kind != "tool_call.completed" or event.data.get("is_error"):
+            continue
+        name = str(event.data.get("name") or "")
+        if name in _PUBLIC_SOURCE_EVIDENCE_TOOLS:
+            return True
+        if name in _SHELL_TOOL_NAMES and _shell_command_fetches_public_source(
+            _shell_command(event)
+        ):
+            return True
+    return False
+
+
+def _shell_command_fetches_public_source(command: str, *, _depth: int = 0) -> bool:
+    for segment in _reachable_shell_segments(command):
+        try:
+            tokens = shlex.split(segment)
+        except ValueError:
+            continue
+        tokens = _strip_leading_env_assignments(tokens)
+        if not tokens:
+            continue
+        executable = Path(tokens[0]).name.lower()
+        if executable in _SHELL_WRAPPER_TOOLS and _depth < 3:
+            nested = _shell_wrapper_command_body(tokens)
+            if nested and _shell_command_fetches_public_source(nested, _depth=_depth + 1):
+                return True
+        if executable not in _PUBLIC_SOURCE_SHELL_FETCH_TOOLS:
+            continue
+        if any(token.startswith(("http://", "https://")) for token in tokens[1:]):
+            return True
+    return False
+
+
+def _shell_wrapper_command_body(tokens: list[str]) -> str:
+    for index, token in enumerate(tokens[1:], start=1):
+        if not token.startswith("-"):
+            continue
+        if "c" not in token:
+            continue
+        if index + 1 < len(tokens):
+            return tokens[index + 1]
+    return ""
 
 
 def _executed_shell_commands(tool_events: list[ActivityEvent]) -> list[str]:
@@ -2564,6 +2630,41 @@ class ResearchPromotionFlowVerifier:
                 "`harness research promote`, and `harness research pr --push --open` instead. "
                 f"Missing: {', '.join(missing)}."
             ),
+            verifier_name=self.name,
+        )
+
+
+class PublicSourceEvidenceVerifier:
+    name = "public_source_evidence"
+
+    async def verify(
+        self, *, session: Session, activity: list[ActivityEvent]
+    ) -> VerificationResult:
+        prompt = first_user_prompt(session)
+        if not _prompt_requires_public_source_evidence(prompt):
+            return VerificationResult(
+                can_finish=True,
+                reason="task does not require latest/current public-source evidence",
+                confidence=0.6,
+                verifier_name=self.name,
+            )
+        if _has_successful_public_source_evidence(activity):
+            return VerificationResult(
+                can_finish=True,
+                reason="latest/current public-source task has successful web evidence",
+                confidence=0.95,
+                verifier_name=self.name,
+            )
+        return VerificationResult(
+            can_finish=False,
+            reason=(
+                "This task asks for a latest/current fact grounded in public sources. "
+                "Use web_search or fetch_url to retrieve an official or public source. "
+                "If this provider only exposes shell tools, run a read-only HTTP(S) "
+                "fetch such as curl or wget against the official source. Then base the "
+                "update and verification on that evidence before finishing."
+            ),
+            confidence=0.95,
             verifier_name=self.name,
         )
 

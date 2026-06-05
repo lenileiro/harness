@@ -6,6 +6,14 @@ stack without depending on external model providers.
 
 from __future__ import annotations
 
+import sys
+
+if __package__ in (None, "") and sys.path:
+    _script_dir = sys.path[0]
+    if _script_dir.endswith("/evals"):
+        sys.path.pop(0)
+        sys.path.insert(0, _script_dir.rsplit("/", 1)[0])
+
 import json
 import shutil
 import subprocess

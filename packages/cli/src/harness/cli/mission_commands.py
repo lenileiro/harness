@@ -80,6 +80,7 @@ from harness.core.mission_planner import (
 from harness.core.opportunities import Opportunity
 from harness.core.promotion_candidates import PromotionCandidate
 from harness.core.research_store import ResearchStore, default_research_root
+from harness.core.slug import slugify
 from harness.core.tips_models import keywords_from_text
 from harness.storage.sqlite import SQLiteStorage
 from harness.tasks import ActivityEvent, Task
@@ -93,12 +94,7 @@ mission_app = typer.Typer(
 
 
 def _workflow_slug(value: str) -> str:
-    return (
-        "-".join(
-            part for part in "".join(ch.lower() if ch.isalnum() else " " for ch in value).split()
-        )
-        or "workflow"
-    )
+    return slugify(value)
 
 
 def _ensure_workspace_db(cwd: Path) -> Path:

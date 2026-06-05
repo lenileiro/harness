@@ -65,6 +65,7 @@ PromptSurfaceRevertVerifier = _behavioral.PromptSurfaceRevertVerifier
 NegativeConstraintVerifier = _behavioral.NegativeConstraintVerifier
 BugfixCommentRewriteVerifier = _behavioral.BugfixCommentRewriteVerifier
 DiagnosisAlignmentVerifier = _behavioral.DiagnosisAlignmentVerifier
+PublicSourceEvidenceVerifier = _structural.PublicSourceEvidenceVerifier
 
 
 __all__ = [
@@ -82,6 +83,7 @@ __all__ = [
     "NegativeConstraintVerifier",
     "PhaseGateVerifier",
     "PromptSurfaceRevertVerifier",
+    "PublicSourceEvidenceVerifier",
     "ResearchPromotionFlowVerifier",
     "RuleVerifier",
     "ShellVerifier",

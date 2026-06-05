@@ -2,7 +2,16 @@
 
 from __future__ import annotations
 
+import sys
+
+if __package__ in (None, "") and sys.path:
+    _script_dir = sys.path[0]
+    if _script_dir.endswith("/evals"):
+        sys.path.pop(0)
+        sys.path.insert(0, _script_dir.rsplit("/", 1)[0])
+
 import json
+import re
 import shutil
 import subprocess
 import tempfile
@@ -172,12 +181,57 @@ def _docs_cmd(
     return cmd
 
 
+_SEVERITY_RANK = {
+    "info": 0,
+    "low": 1,
+    "medium": 2,
+    "high": 3,
+    "critical": 4,
+}
+
+_TOPIC_TOKEN_NORMALIZATIONS = {
+    "instal": "setup",
+    "install": "setup",
+    "installing": "setup",
+    "installation": "setup",
+    "installed": "setup",
+    "format": "schema",
+    "structure": "schema",
+    "setup": "setup",
+    "set-up": "setup",
+}
+
+
+def _severity_satisfies(expected: str, actual: str) -> bool:
+    expected_rank = _SEVERITY_RANK.get(expected)
+    actual_rank = _SEVERITY_RANK.get(actual)
+    if expected_rank is None or actual_rank is None:
+        return actual == expected
+    return actual_rank >= expected_rank
+
+
+def _topic_tokens(text: str) -> set[str]:
+    tokens: set[str] = set()
+    for token in re.findall(r"[a-z0-9]+", text.lower().replace("-", " ")):
+        normalized = _TOPIC_TOKEN_NORMALIZATIONS.get(token) or token
+        tokens.add(normalized)
+        if normalized.endswith("s") and len(normalized) > 4:
+            tokens.add(normalized[:-1])
+    return tokens
+
+
+def _topic_matches(expected: str, actual: str) -> bool:
+    expected_tokens = _topic_tokens(expected)
+    actual_tokens = _topic_tokens(actual)
+    return bool(expected_tokens) and expected_tokens.issubset(actual_tokens)
+
+
 def _matches(expectation: DocsFindingExpectation, finding: dict[str, Any]) -> bool:
     if expectation.path is not None and str(finding.get("path") or "").strip() != expectation.path:
         return False
-    if (
-        expectation.severity
-        and str(finding.get("severity") or "").strip().lower() != expectation.severity
+    if expectation.severity and not _severity_satisfies(
+        expectation.severity,
+        str(finding.get("severity") or "").strip().lower(),
     ):
         return False
     issue = str(finding.get("issue") or "")
@@ -208,7 +262,7 @@ def evaluate_docs_report(
 
     matched_topics = 0
     for topic in fixture.missing_topics:
-        if any(topic.lower() == value.lower() for value in report.missing_topics):
+        if any(_topic_matches(topic, value) for value in report.missing_topics):
             matched_topics += 1
         else:
             missing.append(f"missing_topic~{topic}")

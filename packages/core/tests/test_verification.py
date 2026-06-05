@@ -24,6 +24,7 @@ from harness.core import (
     Message,
     NegativeConstraintVerifier,
     PromptSurfaceRevertVerifier,
+    PublicSourceEvidenceVerifier,
     ResearchPromotionFlowVerifier,
     RuleVerifier,
     RunRequest,
@@ -87,6 +88,112 @@ def test_failed_shell_event_with_changed_workspace_metadata_changes_state() -> N
     )
 
     assert tool_event_changes_state(event, frozenset({"shell"})) is True
+
+
+@pytest.mark.asyncio
+async def test_public_source_evidence_rejects_current_public_fact_without_web_tool() -> None:
+    session = _session(
+        messages=[
+            Message(
+                role="user",
+                content=(
+                    "Update release.txt with the latest stable release from official "
+                    "public web sources."
+                ),
+            ),
+            Message(role="assistant", content="Updated release.txt to 1.2.3."),
+        ]
+    )
+    activity = [
+        _activity(
+            kind=activity_kinds.TOOL_CALL_COMPLETED,
+            name="read_file",
+            is_error=False,
+            content_preview="CURRENT_RELEASE=unknown",
+        )
+    ]
+
+    result = await PublicSourceEvidenceVerifier().verify(session=session, activity=activity)
+
+    assert result.can_finish is False
+    assert "web_search or fetch_url" in result.reason
+    assert "curl or wget" in result.reason
+
+
+@pytest.mark.asyncio
+async def test_public_source_evidence_accepts_successful_web_tool() -> None:
+    session = _session(
+        messages=[
+            Message(
+                role="user",
+                content=(
+                    "Update release.txt with the latest stable release from official "
+                    "public web sources."
+                ),
+            ),
+            Message(role="assistant", content="Updated release.txt to 1.2.3."),
+        ]
+    )
+    activity = [
+        _activity(
+            kind=activity_kinds.TOOL_CALL_COMPLETED,
+            name="fetch_url",
+            is_error=False,
+            arguments={"url": "https://example.test/releases"},
+            content_preview="latest release: 1.2.3",
+        )
+    ]
+
+    result = await PublicSourceEvidenceVerifier().verify(session=session, activity=activity)
+
+    assert result.can_finish is True
+
+
+@pytest.mark.asyncio
+async def test_public_source_evidence_accepts_successful_shell_fetch() -> None:
+    session = _session(
+        messages=[
+            Message(
+                role="user",
+                content=(
+                    "Update release.txt with the latest stable release from official "
+                    "public web sources."
+                ),
+            ),
+            Message(role="assistant", content="Updated release.txt to 1.2.3."),
+        ]
+    )
+    activity = [
+        _activity(
+            kind=activity_kinds.TOOL_CALL_COMPLETED,
+            name="shell",
+            is_error=False,
+            arguments={"command": '/bin/zsh -lc "curl -fsSL https://example.test/releases"'},
+            metadata={"exit_code": 0},
+            content_preview="latest release: 1.2.3",
+        )
+    ]
+
+    result = await PublicSourceEvidenceVerifier().verify(session=session, activity=activity)
+
+    assert result.can_finish is True
+
+
+@pytest.mark.asyncio
+async def test_public_source_evidence_ignores_ordinary_current_source_tasks() -> None:
+    session = _session(
+        messages=[
+            Message(
+                role="user",
+                content="Fix the bug in the current source file and verify it locally.",
+            ),
+            Message(role="assistant", content="Fixed and verified."),
+        ]
+    )
+
+    result = await PublicSourceEvidenceVerifier().verify(session=session, activity=[])
+
+    assert result.can_finish is True
 
 
 class _StaticVerifier:
@@ -636,6 +743,7 @@ async def test_verify_work_can_use_configured_default_command(tmp_path: Path) ->
     assert result.is_error is False
     assert result.content == "PASSED\n\ndefault-ok"
     assert result.metadata is not None
+    assert result.metadata["command"] == "printf 'default-ok\\n'"
     assert result.metadata["used_default_command"] is True
     assert "required" not in tool.parameters_schema
     assert "default verifier" in tool.description
@@ -1324,6 +1432,11 @@ def test_structural_verification_gates_have_no_language_specific_policy() -> Non
         source[
             source.index("def _command_directly_runs_path") : source.index(
                 "def _verify_work_event_asserts_exact_stdout_requests"
+            )
+        ],
+        source[
+            source.index("_PUBLIC_SOURCE_EVIDENCE_TOOLS") : source.index(
+                "class ResearchPromotionFlowVerifier"
             )
         ],
     ]
@@ -2765,6 +2878,45 @@ class TestVerifyBeforeDoneVerifier:
 
         assert result.can_finish is True
         assert "after the last state change" in result.reason
+
+    async def test_exact_content_accepts_configured_default_verify_work_command(
+        self,
+    ) -> None:
+        verifier = VerifyBeforeDoneVerifier()
+        session = _session(
+            messages=[
+                Message(
+                    role="user",
+                    content="Create answer.txt containing exactly ok.",
+                )
+            ]
+        )
+        activity = [
+            self._activity(
+                kind="tool_call.completed",
+                name="write_file",
+                is_error=False,
+                arguments={"path": "answer.txt", "content": "ok"},
+            ),
+            self._activity(
+                kind="tool_call.completed",
+                name="verify_work",
+                is_error=False,
+                arguments={},
+                metadata={
+                    "command": 'test "$(cat answer.txt)" = "ok"',
+                    "exit_code": 0,
+                    "used_default_command": True,
+                    "workspace_changed": False,
+                    "output_reports_failure": False,
+                },
+            ),
+        ]
+
+        result = await verifier.verify(session=session, activity=activity)
+
+        assert result.can_finish is True
+        assert "passing verify_work ran after the last state change" in result.reason
 
     async def test_exact_content_task_rejects_print_only_verify_work(self) -> None:
         verifier = VerifyBeforeDoneVerifier()

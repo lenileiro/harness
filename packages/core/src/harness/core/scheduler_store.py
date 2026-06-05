@@ -2,17 +2,16 @@ from __future__ import annotations
 
 import json
 import os
-import re
 from dataclasses import replace
 from pathlib import Path
 from uuid import uuid4
 
 from harness.core.scheduler_models import SchedulerJob, SchedulerRunRecord
+from harness.core.slug import slugify
 
 
 def _slugify(value: str) -> str:
-    cleaned = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
-    return cleaned or "item"
+    return slugify(value)
 
 
 def _write_json(path: Path, payload: dict) -> None:

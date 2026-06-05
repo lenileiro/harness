@@ -74,19 +74,30 @@ def _strip_fenced_json(text: str) -> str:
 
 def _json_object_candidates(text: str) -> list[dict[str, Any]]:
     decoder = json.JSONDecoder()
-    body = _repair_unescaped_inner_quotes(
-        _escape_quotes_in_backticks(_normalize_wrapped_json_strings(_strip_fenced_json(text)))
-    )
+    stripped = _strip_fenced_json(text)
+    normalized = _normalize_wrapped_json_strings(stripped)
+    bodies = [
+        _repair_unescaped_inner_quotes(_escape_quotes_in_backticks(normalized)),
+        _repair_unescaped_inner_quotes(normalized),
+        _escape_quotes_in_backticks(normalized),
+        normalized,
+    ]
     candidates: list[dict[str, Any]] = []
-    for index, char in enumerate(body):
-        if char != "{":
-            continue
-        try:
-            payload, _end = decoder.raw_decode(body[index:])
-        except json.JSONDecodeError:
-            continue
-        if isinstance(payload, dict):
-            candidates.append(payload)
+    seen: set[str] = set()
+    for body in bodies:
+        for index, char in enumerate(body):
+            if char != "{":
+                continue
+            try:
+                payload, _end = decoder.raw_decode(body[index:])
+            except json.JSONDecodeError:
+                continue
+            if isinstance(payload, dict):
+                key = json.dumps(payload, sort_keys=True, default=str)
+                if key in seen:
+                    continue
+                seen.add(key)
+                candidates.append(payload)
     return candidates
 
 

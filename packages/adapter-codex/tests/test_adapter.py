@@ -150,6 +150,44 @@ class TestAuthHelper:
 
 @pytest.mark.asyncio
 class TestStream:
+    async def test_stream_isolates_user_config_and_normalizes_openai_model_prefix(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        codex_dir = tmp_path / ".codex"
+        codex_dir.mkdir()
+        (codex_dir / "auth.json").write_text(
+            json.dumps({"auth_mode": "chatgpt", "tokens": {"access_token": "oauth-token"}}),
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        monkeypatch.setattr("shutil.which", lambda _name: "/usr/bin/codex")
+        captured_args: tuple[object, ...] | None = None
+
+        async def fake_exec(*args, **_kwargs):
+            nonlocal captured_args
+            captured_args = args
+            return _FakeProcess(lines=[])
+
+        monkeypatch.setattr("asyncio.create_subprocess_exec", fake_exec)
+
+        adapter = CodexAdapter(cwd=tmp_path)
+        await _collect(
+            adapter.stream(
+                model="openai/gpt-5.5",
+                messages=[Message(role="user", content="Say hi")],
+            )
+        )
+
+        assert captured_args is not None
+        assert "--ignore-user-config" in captured_args
+        model_index = captured_args.index("--model")
+        assert captured_args[model_index + 1] == "gpt-5.5"
+        prompt = str(captured_args[-1])
+        assert "Keep shell output bounded" in prompt
+        assert "`rg -m`" in prompt
+        assert "per file, not total output" in prompt
+        assert "| head -200" in prompt
+
     async def test_stream_parses_agent_messages_and_shell_activity(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
@@ -242,6 +280,74 @@ class TestStream:
         assert done.usage is not None
         assert done.usage.prompt_tokens == 10
         assert done.usage.cache_read_input_tokens == 4
+
+    async def test_stream_parses_codex_file_change_activity(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        codex_dir = tmp_path / ".codex"
+        codex_dir.mkdir()
+        (codex_dir / "auth.json").write_text(
+            json.dumps({"auth_mode": "chatgpt", "tokens": {"access_token": "oauth-token"}}),
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        monkeypatch.setattr("shutil.which", lambda _name: "/usr/bin/codex")
+
+        lines = [
+            json.dumps(
+                {
+                    "type": "item.started",
+                    "item": {
+                        "id": "fc1",
+                        "type": "file_change",
+                        "changes": [{"path": "answer.txt", "kind": "add"}],
+                    },
+                }
+            ).encode()
+            + b"\n",
+            json.dumps(
+                {
+                    "type": "item.completed",
+                    "item": {
+                        "id": "fc1",
+                        "type": "file_change",
+                        "status": "completed",
+                        "changes": [{"path": "answer.txt", "kind": "add"}],
+                    },
+                }
+            ).encode()
+            + b"\n",
+            json.dumps(
+                {
+                    "type": "item.completed",
+                    "item": {"id": "m1", "type": "agent_message", "text": "Done."},
+                }
+            ).encode()
+            + b"\n",
+        ]
+
+        async def fake_exec(*_args, **_kwargs):
+            return _FakeProcess(lines=lines)
+
+        monkeypatch.setattr("asyncio.create_subprocess_exec", fake_exec)
+
+        adapter = CodexAdapter(cwd=tmp_path)
+        events = await _collect(
+            adapter.stream(model="gpt-5.5", messages=[Message(role="user", content="write")])
+        )
+
+        tool_calls = [event for event in events if isinstance(event, ToolCallEvent)]
+        assert len(tool_calls) == 1
+        assert tool_calls[0].call.name == "apply_diff"
+        assert tool_calls[0].call.arguments["path"] == "answer.txt"
+        assert tool_calls[0].call.arguments["paths"] == ["answer.txt"]
+        tool_results = [event for event in events if isinstance(event, ToolResultEvent)]
+        assert len(tool_results) == 1
+        assert tool_results[0].result.name == "apply_diff"
+        assert "add: answer.txt" in tool_results[0].result.content
+        assert tool_results[0].result.metadata is not None
+        assert tool_results[0].result.metadata["workspace_changed"] is True
+        assert tool_results[0].result.metadata["paths"] == ["answer.txt"]
 
     async def test_stream_surfaces_partial_command_updates(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path

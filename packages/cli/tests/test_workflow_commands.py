@@ -2294,7 +2294,7 @@ def test_workflow_auto_verifies_declared_executable_script(
         encoding="utf-8",
     )
     (tmp_path / "sales_report").write_text(
-        "#!/bin/sh\n" "printf '%s\\n' 'Total Revenue: $110.00'\n",
+        "#!/bin/sh\nprintf '%s\\n' 'Total Revenue: $110.00'\n",
         encoding="utf-8",
     )
     node = WorkflowNode(
@@ -2382,7 +2382,7 @@ def test_workflow_auto_verify_prefers_declared_test_command_over_plain_script(
         encoding="utf-8",
     )
     (tmp_path / "test_inventory").write_text(
-        "#!/bin/sh\n" "printf '%s\\n' 'PASSED inventory check'\n",
+        "#!/bin/sh\nprintf '%s\\n' 'PASSED inventory check'\n",
         encoding="utf-8",
     )
     node = WorkflowNode(

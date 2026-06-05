@@ -82,6 +82,21 @@ RuntimeError: aclose(): asynchronous generator is already running
     assert "display_name" in report.summary
 
 
+def test_parse_review_report_recovers_wrapped_json_with_escaped_backtick_quotes() -> None:
+    text = """{"summary":"The diff changes `display_name` from a tolerant helper into one that
+raises on inputs still allowed by its type signature and prior behavior.",
+"findings":[{"severity":"high","file":"src/profile.py","line":2,"issue"
+:"`display_name(None)` now raises `TypeError` instead of returning `\\"anonymous\\"`.",
+"rationale":"The function signature still accepts `dict | None`, and the removed code
+explicitly supported `None`.","suggested_fix":"Restore the `None` guard."}]}"""
+
+    report = parse_review_report(text)
+
+    assert report is not None
+    assert report.findings[0].file == "src/profile.py"
+    assert '"anonymous"' in report.findings[0].issue
+
+
 def test_parse_research_memo_parses_valid_json() -> None:
     memo = parse_research_memo(
         json.dumps(

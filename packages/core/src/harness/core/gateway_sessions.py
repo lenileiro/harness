@@ -1,16 +1,15 @@
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
 from uuid import uuid4
 
 from harness.core.gateway_models import GatewaySessionBinding, GatewayUserProfile
+from harness.core.slug import slugify
 
 
 def _slugify(value: str) -> str:
-    cleaned = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
-    return cleaned or "item"
+    return slugify(value)
 
 
 class GatewaySessionStore:

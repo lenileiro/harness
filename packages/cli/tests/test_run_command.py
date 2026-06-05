@@ -76,6 +76,13 @@ class OpenRouterAdapterProbe:
         type(self).captured = kwargs
 
 
+class CodexAdapterProbe:
+    captured: ClassVar[dict[str, object]] = {}
+
+    def __init__(self, **kwargs: object) -> None:
+        type(self).captured = kwargs
+
+
 @pytest.fixture
 def patch_adapter(monkeypatch: pytest.MonkeyPatch):
     """Swap the real OllamaAdapter for FakeAdapter and let the test pre-load scripts."""
@@ -97,6 +104,20 @@ def test_cli_openrouter_adapter_respects_configured_timeout(
 
     assert OpenRouterAdapterProbe.captured["timeout"] == 23.0
     FakeAdapter.next_script = []
+
+
+def test_cli_codex_adapter_uses_model_timeout_env_overrides(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(cli_main, "CodexAdapter", CodexAdapterProbe)
+    monkeypatch.setenv("HARNESS_MODEL_TURN_TIMEOUT", "900")
+    monkeypatch.setenv("HARNESS_MODEL_STREAM_IDLE_TIMEOUT", "180")
+    cfg = HarnessConfig(provider_settings={"codex": {"timeout": 600.0, "idle_timeout": 120.0}})
+
+    cli_main._build_adapter("codex", base_url=None, config=cfg)
+
+    assert CodexAdapterProbe.captured["timeout"] == 900.0
+    assert CodexAdapterProbe.captured["idle_timeout"] == 180.0
 
 
 # ---------------------------------------------------------------------------

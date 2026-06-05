@@ -105,7 +105,7 @@ def test_run_research_fixture_executes_research_command_and_persists_artifacts(
     )
 
     argv = json.loads(log_path.read_text(encoding="utf-8"))
-    assert argv[:2] == ["research", "Research topic here."]
+    assert argv[:3] == ["research", "run", "Research topic here."]
     assert "--cwd" in argv
     assert result.passed is True
     assert result.matched_findings == 1
@@ -157,6 +157,49 @@ def test_evaluate_research_memo_matches_semantic_tradeoff_wording(tmp_path: Path
         discovered,
         parsed,
     )
+    assert passed is True
+    assert matched_findings == 1
+    assert matched_sources == 1
+    assert missing == []
+
+
+def test_evaluate_research_memo_matches_no_setup_to_zero_setup(tmp_path: Path) -> None:
+    fixture = tmp_path / "evals" / "research-fixtures" / "01-demo"
+    (fixture / "workspace" / "docs").mkdir(parents=True)
+    (fixture / "TASK.md").write_text("Research topic here.", encoding="utf-8")
+    (fixture / "expected.json").write_text(
+        json.dumps(
+            {
+                "summary_contains": "SQLite",
+                "min_findings": 1,
+                "min_sources": 1,
+                "required_findings": ["zero-setup"],
+                "required_sources": [{"url_substring": "docs/persistence.md"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (fixture / "workspace" / "docs" / "persistence.md").write_text(
+        "# Persistence\nWhy: zero-setup local storage.\n",
+        encoding="utf-8",
+    )
+    discovered = research_runner.discover_research_fixtures(tmp_path / "evals")[0]
+    parsed = research_runner.parse_research_memo(
+        json.dumps(
+            {
+                "summary": "SQLite is the default here.",
+                "findings": ["SQLite requires no setup for local development."],
+                "open_questions": [],
+                "sources": [{"title": "Persistence", "url": "docs/persistence.md"}],
+            }
+        )
+    )
+
+    passed, matched_findings, matched_sources, missing = research_runner.evaluate_research_memo(
+        discovered,
+        parsed,
+    )
+
     assert passed is True
     assert matched_findings == 1
     assert matched_sources == 1

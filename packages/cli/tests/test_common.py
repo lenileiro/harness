@@ -13,6 +13,13 @@ class _OpenRouterAdapterProbe:
         type(self).captured = kwargs
 
 
+class _CodexAdapterProbe:
+    captured: ClassVar[dict[str, object]] = {}
+
+    def __init__(self, **kwargs: object) -> None:
+        type(self).captured = kwargs
+
+
 class _FakeLoop:
     def __init__(self) -> None:
         self.calls = 0
@@ -70,3 +77,15 @@ def test_common_openrouter_adapter_respects_configured_timeout(monkeypatch) -> N
     common._build_adapter("openrouter", base_url=None, config=cfg)
 
     assert _OpenRouterAdapterProbe.captured["timeout"] == 17.5
+
+
+def test_common_codex_adapter_uses_model_timeout_env_overrides(monkeypatch) -> None:
+    monkeypatch.setattr(common, "CodexAdapter", _CodexAdapterProbe)
+    monkeypatch.setenv("HARNESS_MODEL_TURN_TIMEOUT", "1200")
+    monkeypatch.setenv("HARNESS_MODEL_STREAM_IDLE_TIMEOUT", "240")
+    cfg = HarnessConfig(provider_settings={"codex": {"timeout": 600.0, "idle_timeout": 120.0}})
+
+    common._build_adapter("codex", base_url=None, config=cfg)
+
+    assert _CodexAdapterProbe.captured["timeout"] == 1200.0
+    assert _CodexAdapterProbe.captured["idle_timeout"] == 240.0

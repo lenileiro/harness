@@ -9,6 +9,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any, cast
 
 import pytest
 import typer
@@ -31,10 +32,12 @@ from harness.cli.external_workspace import (
     RemoteVerifyWorkTool,
     RemoteWorkspaceState,
     RemoteWriteFileTool,
+    _external_workspace_coverage_review_timeout_seconds,
     _external_workspace_model_candidates,
     _fingerprint_has_untracked_test_path,
     _merge_workspace_status,
     _normalize_unified_diff_hunk_headers,
+    _shell_command_uses_no_network_container,
     _tool_result_counts_as_source_change,
     _verification_command_covers_test_changes,
     _workspace_deleted_source_paths,
@@ -205,7 +208,6 @@ def test_external_workspace_gates_do_not_reintroduce_language_specific_policy() 
 
     hardcoded_semantic_gate_identifiers = frozenset(
         {
-            "non_canonical_python_urls",
             "_release_value_format_reason",
             "_release_source_url_coverage_reason",
             "_url_join_boundary_coverage_reason",
@@ -276,6 +278,16 @@ class CoverageReviewAdapter:
         body = self.payload if isinstance(self.payload, str) else json.dumps(self.payload)
         yield TextDelta(text=body)
         yield Done(final_message=Message(role="assistant", content=body))
+
+
+class HangingCoverageReviewAdapter:
+    def __init__(self) -> None:
+        self.calls: list[dict[str, object]] = []
+
+    async def stream(self, *, model: str, messages: list[Message], **_kwargs: object):
+        self.calls.append({"model": model, "messages": messages})
+        await asyncio.sleep(3600)
+        yield TextDelta(text="")
 
 
 def test_workspace_test_change_paths_detects_common_test_layouts() -> None:
@@ -398,7 +410,19 @@ def test_verification_command_must_cover_changed_tests() -> None:
         "'project-test -q -W ignore::example.Warning tests/test_enable_counts.case'",
         ["repo/tests/test_enable_counts.case"],
     )
+    assert _verification_command_covers_test_changes(
+        'docker run --rm --network none -v "$PWD/repo:/mnt/repo:ro" -w /app '
+        "public.example/task:latest bash -lc "
+        "'cp /mnt/repo/packages/core/test/prompts/autocomplete.test.ts "
+        "packages/core/test/prompts/autocomplete.test.ts && "
+        "workspace-runner --filter @scope/core test'",
+        ["repo/packages/core/test/prompts/autocomplete.test.ts"],
+    )
     assert not _verification_command_covers_test_changes("project-test --filter unrelated", changed)
+    assert not _verification_command_covers_test_changes(
+        "workspace-runner test --filter unrelated",
+        changed,
+    )
     assert not _verification_command_covers_test_changes("project-test --only slow", changed)
     assert not _verification_command_covers_test_changes("project-test -k unrelated", changed)
     assert not _verification_command_covers_test_changes("project-test -m slow", changed)
@@ -4061,6 +4085,74 @@ async def test_external_workspace_verifier_accepts_shell_test_after_failed_verif
 
 
 @pytest.mark.asyncio
+async def test_external_workspace_verifier_ignores_later_numbered_file_read(
+    tmp_path: Path,
+) -> None:
+    env = StaticStatusEnvironment(
+        tmp_path,
+        statuses=[],
+        baseline_status=" M bin/ini_get\n M tests/run.sh\n",
+        tracked_paths={"Makefile", "bin/ini_get", "tests/run.sh"},
+    )
+    verifier = ExternalWorkspaceVerifier(env, workdir=str(tmp_path))
+
+    result = await verifier.verify(
+        session=SimpleNamespace(),
+        activity=[
+            _completed("write_file", metadata={"path": "bin/ini_get"}),
+            _completed("write_file", metadata={"path": "tests/run.sh"}),
+            _completed(
+                "shell",
+                arguments={"command": "make test"},
+                metadata={"exit_code": 0, "workspace_changed": False},
+                content_preview="exit_code: 0\n\nstdout:\nok\n",
+            ),
+            _completed(
+                "shell",
+                arguments={"command": "nl -ba tests/run.sh | sed -n '1,90p'"},
+                metadata={"exit_code": 0, "workspace_changed": False},
+                content_preview="exit_code: 0\n\nstdout:\n     1\t#!/usr/bin/env bash\n",
+            ),
+        ],
+    )
+
+    assert result.can_finish is True
+    assert verifier.latest.latest_verification_command == "make test"
+    assert verifier.latest.verification_passed_after_source_change is True
+
+
+@pytest.mark.asyncio
+async def test_external_workspace_verifier_accepts_broad_shell_test_for_tracked_tests(
+    tmp_path: Path,
+) -> None:
+    env = StaticStatusEnvironment(
+        tmp_path,
+        statuses=[],
+        baseline_status=" M src/app\n M tests/app.spec\n",
+        tracked_paths={"src/app", "tests/app.spec"},
+    )
+    verifier = ExternalWorkspaceVerifier(env, workdir=str(tmp_path))
+
+    result = await verifier.verify(
+        session=SimpleNamespace(),
+        activity=[
+            _completed("write_file", metadata={"path": "src/app"}),
+            _completed("write_file", metadata={"path": "tests/app.spec"}),
+            _completed(
+                "shell",
+                arguments={"command": "project-test"},
+                metadata={"exit_code": 0, "workspace_changed": False},
+                content_preview="exit_code: 0\n\nstdout:\n2 tests passed\n",
+            ),
+        ],
+    )
+
+    assert result.can_finish is True
+    assert verifier.latest.latest_verification_command == "project-test"
+    assert verifier.latest.verification_passed_after_source_change is True
+
+
+@pytest.mark.asyncio
 async def test_external_workspace_verifier_accepts_shell_test_without_regression_requirement(
     tmp_path: Path,
 ) -> None:
@@ -4594,6 +4686,9 @@ async def test_external_workspace_coverage_verifier_rejects_weak_regression_test
     assert "safe" in system_prompt
     assert "equivalence class" in system_prompt
     assert "near-duplicate" in system_prompt
+    assert "explicitly lists multiple accepted forms" in system_prompt
+    assert "distinct stated behavior" in system_prompt
+    assert "omitted component plus reverse traversal" in system_prompt
     assert "contradict the task" in system_prompt
     assert "merely arguable" in system_prompt
     assert "Stay inside the user's stated behavior" in system_prompt
@@ -4634,6 +4729,77 @@ async def test_external_workspace_coverage_verifier_treats_low_confidence_reject
 
     assert result.can_finish is True
     assert "advisory below blocking confidence" in result.reason
+
+
+def test_external_workspace_coverage_review_timeout_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("HARNESS_EXTERNAL_WORKSPACE_COVERAGE_REVIEW_TIMEOUT", raising=False)
+    monkeypatch.delenv("HARNESS_MODEL_TURN_TIMEOUT", raising=False)
+    assert _external_workspace_coverage_review_timeout_seconds() == 120.0
+
+    monkeypatch.setenv("HARNESS_MODEL_TURN_TIMEOUT", "45")
+    assert _external_workspace_coverage_review_timeout_seconds() == 45.0
+
+    monkeypatch.setenv("HARNESS_EXTERNAL_WORKSPACE_COVERAGE_REVIEW_TIMEOUT", "7.5")
+    assert _external_workspace_coverage_review_timeout_seconds() == 7.5
+
+    monkeypatch.setenv("HARNESS_EXTERNAL_WORKSPACE_COVERAGE_REVIEW_TIMEOUT", "0")
+    assert _external_workspace_coverage_review_timeout_seconds() == 120.0
+
+    monkeypatch.setenv("HARNESS_EXTERNAL_WORKSPACE_COVERAGE_REVIEW_TIMEOUT", "bogus")
+    assert _external_workspace_coverage_review_timeout_seconds() == 120.0
+
+
+@pytest.mark.asyncio
+async def test_external_workspace_coverage_verifier_blocks_all_rejections_at_zero_threshold(
+    tmp_path: Path,
+) -> None:
+    env, structural = await _accepted_slug_workspace(tmp_path)
+    adapter = CoverageReviewAdapter(
+        {
+            "can_finish": False,
+            "reason": "tests miss a boundary case from the task",
+            "confidence": 0.01,
+        }
+    )
+    verifier = ExternalWorkspaceCoverageVerifier(
+        environment=env,
+        workdir=str(tmp_path),
+        instruction="fix slugify",
+        adapter=adapter,
+        model="judge",
+        structural_verifier=structural,
+        block_confidence=0,
+    )
+
+    result = await verifier.verify(session=SimpleNamespace(messages=[]), activity=[])
+
+    assert result.can_finish is False
+    assert "Regression coverage is too weak" in result.reason
+    assert "tests miss a boundary case" in result.reason
+
+
+@pytest.mark.asyncio
+async def test_external_workspace_coverage_verifier_times_out_hung_review(
+    tmp_path: Path,
+) -> None:
+    env, structural = await _accepted_slug_workspace(tmp_path)
+    adapter = HangingCoverageReviewAdapter()
+    verifier = ExternalWorkspaceCoverageVerifier(
+        environment=env,
+        workdir=str(tmp_path),
+        instruction="fix slugify",
+        adapter=adapter,
+        model="judge",
+        structural_verifier=structural,
+        max_retries=1,
+        review_timeout_seconds=0.01,
+    )
+
+    result = await verifier.verify(session=SimpleNamespace(messages=[]), activity=[])
+
+    assert result.can_finish is False
+    assert "coverage reviewer timed out after" in result.reason
+    assert adapter.calls
 
 
 @pytest.mark.asyncio
@@ -5186,6 +5352,40 @@ async def test_external_workspace_verifier_does_not_treat_verification_setup_as_
 
 
 @pytest.mark.asyncio
+async def test_external_workspace_verifier_preserves_failed_verify_before_final_edit(
+    tmp_path: Path,
+) -> None:
+    env = StaticStatusEnvironment(
+        tmp_path,
+        statuses=[],
+        baseline_status=" M src/app.py\n M tests/test_app.py\n",
+    )
+    verifier = ExternalWorkspaceVerifier(env, workdir=str(tmp_path))
+
+    result = await verifier.verify(
+        session=SimpleNamespace(),
+        activity=[
+            _completed("write_file", metadata={"path": "src/app.py"}),
+            _completed("write_file", metadata={"path": "tests/test_app.py"}),
+            _completed(
+                "verify_work",
+                is_error=True,
+                metadata={"command": "pytest tests/test_app.py", "exit_code": 1},
+                content_preview="FAILED (exit 1)\n\nstdout:\n1 failed\n",
+            ),
+            _completed("edit_file", metadata={"path": "src/app.py"}),
+        ],
+    )
+
+    assert result.can_finish is False
+    assert "did not produce a later passing in-repository verification" in result.reason
+    assert "Latest verify_work error: FAILED (exit 1)" in result.reason
+    assert verifier.latest.latest_verification_command == "pytest tests/test_app.py"
+    assert "1 failed" in (verifier.latest.latest_verification_error or "")
+    assert verifier.latest.verification_passed_after_source_change is False
+
+
+@pytest.mark.asyncio
 async def test_external_workspace_verifier_rejects_later_mutating_verify_after_pass(
     tmp_path: Path,
 ) -> None:
@@ -5321,6 +5521,26 @@ async def test_external_workspace_verifier_accepts_public_no_network_image_check
 
     assert result.can_finish is True
     assert verifier.latest.verification_passed_after_source_change is True
+
+
+def test_no_network_image_check_accepts_provider_shell_wrappers() -> None:
+    image = "public.example/task:latest"
+
+    assert _shell_command_uses_no_network_container(
+        (
+            "/bin/zsh -lc 'cd repo && docker run --rm --network none "
+            '-v "$PWD":/workspace -w /workspace public.example/task:latest '
+            'sh -lc "project-test"\''
+        ),
+        image=image,
+    )
+    assert _shell_command_uses_no_network_container(
+        (
+            "env FOO=bar bash -lc 'docker run --rm --net=none "
+            "-v $PWD:/app -w /app public.example/task:latest project-test'"
+        ),
+        image=image,
+    )
 
 
 @pytest.mark.asyncio
@@ -5462,6 +5682,53 @@ async def test_external_environment_runner_delegates_to_normal_harness_run_once(
 
 
 @pytest.mark.asyncio
+async def test_external_environment_runner_uses_requested_provider(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    observed: dict[str, object] = {}
+
+    async def fake_run_once(**kwargs: object) -> str:
+        observed["chain"] = kwargs["chain"]
+        observed["model"] = kwargs["model"]
+        observed["goal"] = kwargs["goal"]
+        config = cast(Any, kwargs["config"])
+        observed["provider"] = config.default_provider
+        render = kwargs["render"]
+        assert callable(render)
+        render(Done(final_message=Message(role="assistant", content="done")))
+        return "done"
+
+    monkeypatch.setattr("harness.cli.external_workspace._harness_run_once", fake_run_once)
+    env = StaticStatusEnvironment(tmp_path, statuses=[""])
+    context = SimpleNamespace(n_agent_steps=0, metadata={})
+
+    await run_harness_on_external_environment(
+        instruction="inspect the task",
+        environment=env,
+        context=context,
+        logs_dir=str(tmp_path / "logs"),
+        provider_name="codex",
+        model_name="openai/gpt-5.5",
+        goal_plan=False,
+        source_change_retries=0,
+        verification_retries=0,
+        fail_without_source_change=False,
+        fail_without_verification=False,
+        require_regression_test_change=False,
+    )
+
+    assert observed == {
+        "chain": ["codex"],
+        "model": "openai/gpt-5.5",
+        "goal": False,
+        "provider": "codex",
+    }
+    assert context.metadata["requested_model"] == "openai/gpt-5.5"
+    assert context.metadata["attempt_model"] == "openai/gpt-5.5"
+
+
+@pytest.mark.asyncio
 async def test_external_environment_runner_disables_host_project_context(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -5512,6 +5779,7 @@ async def test_external_environment_runner_disables_host_project_context(
     assert observed_agent_kwargs["project_context_enabled"] is False
     assert observed_agent_kwargs["auxiliary_tools_enabled"] is False
     assert observed_agent_kwargs["memory_tools_enabled"] is False
+    assert observed_agent_kwargs["skip_builtin_verify_before_done"] is True
 
 
 @pytest.mark.asyncio
@@ -6533,6 +6801,66 @@ async def test_external_environment_runner_refreshes_stale_snapshot_after_runtim
     assert context.metadata["source_change_paths"] == ["src/app.py"]
     assert context.metadata["model_attempts"][0]["source_change_paths"] == ["src/app.py"]
     assert "did not produce a later passing" in context.metadata["verification_error"]
+
+
+@pytest.mark.asyncio
+async def test_external_environment_runner_accepts_current_state_after_runtime_error_with_passing_shell_verify(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_run_once(**kwargs: object) -> str:
+        storage = kwargs["build_storage"](db=None, in_memory=True, cwd=tmp_path)
+        session_id = kwargs["session_id"]
+        assert isinstance(session_id, str)
+        for event in [
+            _completed("write_file", metadata={"path": "src/app"}),
+            _completed("write_file", metadata={"path": "tests/app.spec"}),
+            _completed(
+                "shell",
+                arguments={"command": "project-test"},
+                metadata={"exit_code": 0, "workspace_changed": False},
+                content_preview="exit_code: 0\n\nstdout:\n2 tests passed\n",
+            ),
+        ]:
+            await storage.append_activity(event.model_copy(update={"session_id": session_id}))
+        render = kwargs["render"]
+        assert callable(render)
+        render(
+            ErrorEvent(
+                kind="timeout",
+                error="model turn exceeded 1200.0s",
+                recoverable=False,
+            )
+        )
+        raise typer.Exit(1)
+
+    monkeypatch.setattr("harness.cli.external_workspace._harness_run_once", fake_run_once)
+    env = StaticStatusEnvironment(
+        tmp_path,
+        statuses=[" M src/app\n M tests/app.spec\n"],
+        tracked_paths={"src/app", "tests/app.spec"},
+    )
+    context = SimpleNamespace(n_agent_steps=0, metadata={})
+
+    await run_harness_on_external_environment(
+        instruction="fix the task",
+        environment=env,
+        context=context,
+        logs_dir=str(tmp_path / "logs"),
+        source_change_retries=0,
+        verification_retries=0,
+        pass_timeout_seconds=20,
+    )
+
+    assert context.metadata["run_error"] is None
+    assert context.metadata["latest_runtime_error_kind"] == "timeout"
+    assert context.metadata["source_change_paths"] == ["src/app"]
+    assert context.metadata["test_change_paths"] == ["tests/app.spec"]
+    assert context.metadata["latest_verification_command"] == "project-test"
+    assert context.metadata["verification_passed_after_source_change"] is True
+    assert context.metadata["model_attempts"][0]["verification_passed_after_source_change"] is True
+    log_text = (tmp_path / "logs" / "harness.txt").read_text(encoding="utf-8")
+    assert "accepted current workspace after runtime error" in log_text
 
 
 @pytest.mark.asyncio

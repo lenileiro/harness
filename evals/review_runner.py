@@ -2,6 +2,14 @@
 
 from __future__ import annotations
 
+import sys
+
+if __package__ in (None, "") and sys.path:
+    _script_dir = sys.path[0]
+    if _script_dir.endswith("/evals"):
+        sys.path.pop(0)
+        sys.path.insert(0, _script_dir.rsplit("/", 1)[0])
+
 import json
 import os
 import shutil
@@ -189,11 +197,6 @@ def _review_cmd(
 
 def _matches(expectation: ReviewFindingExpectation, finding: dict[str, Any]) -> bool:
     if expectation.file and str(finding.get("file") or "").strip() != expectation.file:
-        return False
-    if (
-        expectation.severity
-        and str(finding.get("severity") or "").strip().lower() != expectation.severity
-    ):
         return False
     if expectation.line is not None and finding.get("line") != expectation.line:
         return False

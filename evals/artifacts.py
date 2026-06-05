@@ -79,6 +79,10 @@ def extract_tool_sequence(transcript: str) -> list[str]:
         lowered = stripped.lower()
         if stripped.startswith("→ "):
             lowered = stripped[2:].lstrip().lower()
+        elif lowered.startswith(("✓ verify_work:", "✗ verify_work:")):
+            if not sequence or sequence[-1] != "verify_work":
+                sequence.append("verify_work")
+            continue
         elif not any(
             lowered == tool_name or lowered.startswith(f"{tool_name}(") for tool_name in _TOOL_NAMES
         ):

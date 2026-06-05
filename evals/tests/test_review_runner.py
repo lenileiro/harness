@@ -95,6 +95,33 @@ def test_evaluate_review_report_matches_issue_substring_in_rationale(tmp_path: P
     assert missing == []
 
 
+def test_evaluate_review_report_treats_severity_as_advisory(tmp_path: Path) -> None:
+    _write_review_fixture(tmp_path, "01-demo")
+    fixture = review_runner.discover_review_fixtures(tmp_path / "evals")[0]
+    parsed = review_runner.parse_review_report(
+        json.dumps(
+            {
+                "summary": "Structured regression findings.",
+                "findings": [
+                    {
+                        "severity": "medium",
+                        "file": "src/demo.py",
+                        "line": 2,
+                        "issue": "None input will crash here",
+                        "rationale": "The code dereferences user without checking for None.",
+                    }
+                ],
+            }
+        )
+    )
+
+    passed, matched, missing = review_runner.evaluate_review_report(fixture, parsed)
+
+    assert passed is True
+    assert matched == 1
+    assert missing == []
+
+
 def test_run_review_fixture_executes_review_command_and_persists_artifacts(
     tmp_path: Path,
 ) -> None:

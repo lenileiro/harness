@@ -313,7 +313,9 @@ async def run(args: argparse.Namespace) -> int:
             environment=LocalEnvironment(workspace),
             context=context,
             logs_dir=str(logs_dir),
+            provider_name=args.provider,
             model_name=args.model,
+            goal_plan=not bool(args.no_goal_plan),
             max_steps=args.max_steps,
             max_output_tokens=args.max_output_tokens,
             source_change_retries=args.source_change_retries,
@@ -357,9 +359,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--results-root", default="evals/results/live-scenarios")
     parser.add_argument("--env-file", default=".env")
+    parser.add_argument("--provider", default="openrouter")
     parser.add_argument("--model", default="openai/gpt-5.4-nano")
     parser.add_argument("--max-steps", type=int, default=45)
     parser.add_argument("--max-output-tokens", type=int, default=4096)
+    parser.add_argument(
+        "--no-goal-plan",
+        action="store_true",
+        help="Skip the optional LLM planning pre-call and enter the tool loop directly.",
+    )
     parser.add_argument("--source-change-retries", type=int, default=1)
     parser.add_argument("--verification-retries", type=int, default=1)
     parser.add_argument("--pass-timeout-seconds", type=float, default=260.0)

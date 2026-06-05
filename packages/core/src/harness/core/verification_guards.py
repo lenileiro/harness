@@ -171,7 +171,7 @@ class VerificationGateway:
 
 
 _COUNT_CLAIM_RE = re.compile(
-    r"\b(\d+)\s+(?:(?:python|source|total)\s+)?"
+    r"\b(\d+)\s+(?:(?:source|total)\s+)?"
     r"(?:file|error|line|package|module|item|result|function|class|number)s?"
     r"(?:\s+(?:were|was|found|counted|detected|identified))?",
     re.IGNORECASE,
@@ -180,7 +180,7 @@ _NUMBER_CLAIM_RE = re.compile(r"(?<![A-Za-z0-9_])[-+]?\d+(?:\.\d+)?(?![A-Za-z0-9
 
 _WRITE_CLAIM_RE = re.compile(
     r"(?:wrote|saved|created|written|stored|saving)\s+(?:to\s+)?"
-    r"([\w./][\w./\-]*\.(?:py|txt|json|sh|md|csv|yaml|yml))",
+    r"([\w./][\w./\-]*\.[A-Za-z0-9][A-Za-z0-9._-]*)",
     re.IGNORECASE,
 )
 

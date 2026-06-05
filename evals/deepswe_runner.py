@@ -26,6 +26,8 @@ import shlex
 import shutil
 import subprocess
 import tomllib
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
@@ -37,6 +39,18 @@ from harness.cli.external_workspace import (
     run_harness_on_external_environment,
 )
 from harness.core.command_env import clean_command_env
+
+_DEEPSWE_STRICT_MODEL_ENV = {
+    "HARNESS_EXTERNAL_WORKSPACE_MODEL_FALLBACK_LIMIT": "0",
+    "HARNESS_OPENROUTER_MODEL_FALLBACK_LIMIT": "0",
+    "HARNESS_EXTERNAL_WORKSPACE_MODEL_FALLBACKS": "",
+    "HARNESS_OPENROUTER_MODEL_FALLBACKS": "",
+    "HARNESS_OPENROUTER_AUTO_MODEL_FALLBACK": "0",
+}
+
+_DEEPSWE_STRICT_COVERAGE_ENV = {
+    "HARNESS_EXTERNAL_WORKSPACE_COVERAGE_BLOCK_CONFIDENCE": "0",
+}
 
 
 @dataclass(frozen=True)
@@ -68,6 +82,14 @@ class DockerRunReplay:
     command_words: tuple[str, ...]
     no_network: bool
     has_bind_mount: bool
+    offline_docker_args: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class PublicOfflineReplay:
+    original_command: str
+    replay_command: str
+    docker_run_args: tuple[str, ...] = ()
 
 
 def _load_dotenv(path: Path) -> None:
@@ -87,6 +109,38 @@ def _load_dotenv(path: Path) -> None:
         ):
             value = value[1:-1]
         os.environ[key] = value
+
+
+@contextmanager
+def _deepswe_model_selection_env(*, allow_model_fallbacks: bool) -> Iterator[None]:
+    if allow_model_fallbacks:
+        yield
+        return
+
+    previous = {key: os.environ.get(key) for key in _DEEPSWE_STRICT_MODEL_ENV}
+    try:
+        os.environ.update(_DEEPSWE_STRICT_MODEL_ENV)
+        yield
+    finally:
+        for key, value in previous.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+
+
+@contextmanager
+def _deepswe_strict_coverage_env() -> Iterator[None]:
+    previous = {key: os.environ.get(key) for key in _DEEPSWE_STRICT_COVERAGE_ENV}
+    try:
+        os.environ.update(_DEEPSWE_STRICT_COVERAGE_ENV)
+        yield
+    finally:
+        for key, value in previous.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
 
 
 def _failure_metadata(context: SimpleNamespace, error: str) -> dict[str, object]:
@@ -270,6 +324,7 @@ def _docker_run_replay(words: list[str]) -> DockerRunReplay | None:
     index = 2
     no_network = False
     has_bind_mount = False
+    offline_docker_args: list[str] = []
     while index < len(words):
         word = words[index]
         if word == "--":
@@ -282,6 +337,8 @@ def _docker_run_replay(words: list[str]) -> DockerRunReplay | None:
                     no_network = True
                 if option in {"--volume", "--mount"} and _docker_run_has_bind_mount(value):
                     has_bind_mount = True
+                if option == "--env" and value:
+                    offline_docker_args.extend(("-e", value))
                 index += 1
                 continue
             if option in _DOCKER_RUN_OPTIONS_WITH_VALUES:
@@ -290,6 +347,8 @@ def _docker_run_replay(words: list[str]) -> DockerRunReplay | None:
                     no_network = True
                 if option in {"--volume", "--mount"} and _docker_run_has_bind_mount(value):
                     has_bind_mount = True
+                if option == "--env" and value:
+                    offline_docker_args.extend(("-e", value))
                 index += 2
                 continue
             index += 1
@@ -300,12 +359,16 @@ def _docker_run_replay(words: list[str]) -> DockerRunReplay | None:
                 value = word[2:]
                 if option == "-v" and _docker_run_has_bind_mount(value):
                     has_bind_mount = True
+                if option == "-e" and value:
+                    offline_docker_args.extend(("-e", value))
                 index += 1
                 continue
             if word in _DOCKER_RUN_OPTIONS_WITH_VALUES:
                 value = words[index + 1] if index + 1 < len(words) else ""
                 if word == "-v" and _docker_run_has_bind_mount(value):
                     has_bind_mount = True
+                if word == "-e" and value:
+                    offline_docker_args.extend(("-e", value))
                 index += 2
                 continue
             index += 1
@@ -318,13 +381,15 @@ def _docker_run_replay(words: list[str]) -> DockerRunReplay | None:
         command_words=tuple(words[index + 1 :]),
         no_network=no_network,
         has_bind_mount=has_bind_mount,
+        offline_docker_args=tuple(offline_docker_args),
     )
 
 
-def _docker_verify_inner_command(command: str, *, image: str | None) -> str | None:
+def _docker_verify_replay(command: str, *, image: str | None) -> DockerRunReplay | None:
     required_image = (image or "").strip()
     if not required_image:
         return None
+    command = _unwrap_shell_runner(command)
     try:
         words = shlex.split(command, posix=True)
     except ValueError:
@@ -337,18 +402,181 @@ def _docker_verify_inner_command(command: str, *, image: str | None) -> str | No
             continue
         if replay.image != required_image or not replay.no_network or not replay.has_bind_mount:
             continue
-        inner_words = list(replay.command_words)
-        if not inner_words:
-            continue
-        shell_name = Path(inner_words[0]).name.lower()
-        if (
-            shell_name in {"bash", "sh", "dash", "zsh", "ksh"}
-            and len(inner_words) >= 3
-            and inner_words[1] in {"-c", "-lc"}
-        ):
-            return inner_words[2].strip()
-        return " ".join(shlex.quote(word) for word in inner_words).strip()
+        return replay
     return None
+
+
+def _unwrap_shell_runner(command: str) -> str:
+    unwrapped = command.strip()
+    for _ in range(5):
+        try:
+            words = shlex.split(unwrapped, posix=True)
+        except ValueError:
+            return unwrapped
+        if len(words) < 3:
+            return unwrapped
+        executable = Path(words[0]).name.lower()
+        if executable not in {"bash", "dash", "ksh", "sh", "zsh"}:
+            return unwrapped
+        for index, word in enumerate(words[:-1]):
+            if word in {"-c", "-lc"}:
+                inner = words[index + 1].strip()
+                if not inner or inner == unwrapped:
+                    return unwrapped
+                unwrapped = inner
+                break
+        else:
+            return unwrapped
+    return unwrapped
+
+
+def _docker_verify_replay_chain(
+    command: str,
+    *,
+    image: str | None,
+) -> PublicOfflineReplay | None:
+    required_image = (image or "").strip()
+    if not required_image:
+        return None
+    normalized = _unwrap_shell_runner(command)
+    try:
+        words = shlex.split(normalized, posix=True)
+    except ValueError:
+        return None
+
+    segments: list[list[str]] = []
+    current: list[str] = []
+    for word in words:
+        if word in {"&&", ";"}:
+            if not current:
+                return None
+            segments.append(current)
+            current = []
+            continue
+        current.append(word)
+    if current:
+        segments.append(current)
+    if not segments:
+        return None
+
+    replay_commands: list[str] = []
+    docker_run_args: list[str] = []
+    for segment in segments:
+        if not segment or Path(segment[0]).name.lower() != "docker":
+            return None
+        replay = _docker_run_replay(segment)
+        if replay is None:
+            return None
+        if replay.image != required_image or not replay.no_network or not replay.has_bind_mount:
+            return None
+        inner_command = _docker_replay_inner_command(replay)
+        if not inner_command:
+            return None
+        replay_commands.append(inner_command)
+        docker_run_args.extend(replay.offline_docker_args)
+    return PublicOfflineReplay(
+        original_command=command,
+        replay_command=" && ".join(replay_commands),
+        docker_run_args=tuple(docker_run_args),
+    )
+
+
+def _docker_replay_inner_command(replay: DockerRunReplay) -> str | None:
+    inner_words = list(replay.command_words)
+    if not inner_words:
+        return None
+    shell_name = Path(inner_words[0]).name.lower()
+    if (
+        shell_name in {"bash", "sh", "dash", "zsh", "ksh"}
+        and len(inner_words) >= 3
+        and inner_words[1] in {"-c", "-lc"}
+    ):
+        return inner_words[2].strip()
+    return " ".join(shlex.quote(word) for word in inner_words).strip()
+
+
+def _docker_verify_inner_command(command: str, *, image: str | None) -> str | None:
+    replay = _docker_verify_replay(command, image=image)
+    if replay is None:
+        return None
+    return _docker_replay_inner_command(replay)
+
+
+def _offline_verification_replay(
+    run_root: Path,
+    command: str,
+    *,
+    image: str | None = None,
+) -> PublicOfflineReplay:
+    """Plan the public verify replay from the image repository root.
+
+    If the accepted verify command is itself a no-network Docker run of the
+    declared task image with a bind-mounted checkout, replay the inner command
+    from inside the task image instead of nesting Docker inside Docker. Replay
+    safe Docker environment flags as outer Docker args so project tests that
+    depend on declared public env vars reproduce faithfully.
+    """
+
+    normalized = command.strip()
+    target_path = run_root / "target_repo.txt"
+    if not normalized or not target_path.exists():
+        docker_chain_replay = _docker_verify_replay_chain(normalized, image=image)
+        if docker_chain_replay is not None:
+            return docker_chain_replay
+        docker_replay = _docker_verify_replay(normalized, image=image)
+        inner_replay = (
+            _docker_replay_inner_command(docker_replay) if docker_replay is not None else None
+        )
+        return PublicOfflineReplay(
+            original_command=command,
+            replay_command=inner_replay or normalized,
+            docker_run_args=(
+                docker_replay.offline_docker_args if docker_replay is not None else ()
+            ),
+        )
+
+    try:
+        target_repo = Path(target_path.read_text(encoding="utf-8").strip())
+        target_rel = target_repo.relative_to(run_root / "agent-workspace").as_posix()
+    except (OSError, ValueError):
+        return PublicOfflineReplay(command, normalized)
+
+    variants = {
+        target_rel,
+        f"./{target_rel}",
+        shlex.quote(target_rel),
+        shlex.quote(f"./{target_rel}"),
+        f'"{target_rel}"',
+        f"'{target_rel}'",
+    }
+    replay = _strip_target_repo_cd(_unwrap_shell_runner(normalized), variants)
+    docker_chain_replay = _docker_verify_replay_chain(replay, image=image)
+    if docker_chain_replay is not None:
+        return PublicOfflineReplay(
+            original_command=command,
+            replay_command=_strip_target_repo_cd(docker_chain_replay.replay_command, variants),
+            docker_run_args=docker_chain_replay.docker_run_args,
+        )
+    docker_replay = _docker_verify_replay(replay, image=image)
+    if docker_replay is not None:
+        inner_replay = _docker_replay_inner_command(docker_replay)
+        if inner_replay:
+            return PublicOfflineReplay(
+                original_command=command,
+                replay_command=_strip_target_repo_cd(inner_replay, variants),
+                docker_run_args=docker_replay.offline_docker_args,
+            )
+    return PublicOfflineReplay(command, replay)
+
+
+def _offline_verification_command(
+    run_root: Path,
+    command: str,
+    *,
+    image: str | None = None,
+) -> tuple[str, str]:
+    replay = _offline_verification_replay(run_root, command, image=image)
+    return replay.original_command, replay.replay_command
 
 
 def _strip_target_repo_cd(command: str, variants: set[str]) -> str:
@@ -360,49 +588,6 @@ def _strip_target_repo_cd(command: str, variants: set[str]) -> str:
         if stripped != stripped_command:
             return stripped.strip()
     return stripped_command
-
-
-def _offline_verification_command(
-    run_root: Path,
-    command: str,
-    *,
-    image: str | None = None,
-) -> tuple[str, str]:
-    """Replay the agent's public verify command from the image repository root.
-
-    DeepSWE agents work in a wrapper workspace and usually clone the target repo
-    into a subdirectory such as `repo/`. The task image already has that target
-    repo at `/app`, so a leading `cd repo && ...` must be removed before replay.
-    If the accepted verify command is itself a no-network Docker run of the
-    declared task image with a bind-mounted checkout, replay the inner command
-    from inside the task image instead of nesting Docker inside Docker.
-    """
-
-    normalized = command.strip()
-    target_path = run_root / "target_repo.txt"
-    if not normalized or not target_path.exists():
-        replay = _docker_verify_inner_command(normalized, image=image)
-        return command, replay or normalized
-
-    try:
-        target_repo = Path(target_path.read_text(encoding="utf-8").strip())
-        target_rel = target_repo.relative_to(run_root / "agent-workspace").as_posix()
-    except (OSError, ValueError):
-        return command, normalized
-
-    variants = {
-        target_rel,
-        f"./{target_rel}",
-        shlex.quote(target_rel),
-        shlex.quote(f"./{target_rel}"),
-        f'"{target_rel}"',
-        f"'{target_rel}'",
-    }
-    replay = _strip_target_repo_cd(normalized, variants)
-    inner_replay = _docker_verify_inner_command(replay, image=image)
-    if inner_replay:
-        return command, _strip_target_repo_cd(inner_replay, variants)
-    return command, replay
 
 
 def _public_offline_verification_command(command: str) -> str:
@@ -428,11 +613,13 @@ async def _run_public_offline_verification(
             stderr="model.patch was not captured before public offline verification",
             return_code=2,
         )
-    original_command, replay_command = _offline_verification_command(
+    replay = _offline_verification_replay(
         run_root,
         command,
         image=task.image,
     )
+    original_command = replay.original_command
+    replay_command = replay.replay_command
     if not replay_command:
         return CommandResult(
             stdout="",
@@ -448,6 +635,7 @@ async def _run_public_offline_verification(
             "--rm",
             "--network",
             "none",
+            *replay.docker_run_args,
             "--workdir",
             "/app",
             "-v",
@@ -476,6 +664,7 @@ async def _run_public_offline_verification(
             {
                 "original_command": original_command,
                 "replay_command": replay_command,
+                "docker_run_args": list(replay.docker_run_args),
                 "return_code": result.return_code,
             },
             indent=2,
@@ -566,6 +755,25 @@ def _init_public_workspace_git(workspace: Path) -> None:
     subprocess.run(["git", "config", "user.name", "Harness Eval"], cwd=workspace, check=True)
     subprocess.run(["git", "add", "."], cwd=workspace, check=True)
     subprocess.run(["git", "commit", "-q", "-m", "public task files"], cwd=workspace, check=True)
+
+
+def _agent_instruction(task: DeepSWETask) -> str:
+    return (
+        "Public task metadata:\n"
+        f"- Repository URL: {task.repository_url}\n"
+        f"- Required base commit: {task.base_commit}\n"
+        f"- Declared task image: {task.image}\n\n"
+        "Workspace contract:\n"
+        "- The current directory contains public task metadata only.\n"
+        "- Clone or checkout the public repository in a nested subdirectory of this workspace.\n"
+        "- Checkout the required base commit inside that nested repository before editing.\n"
+        "- Apply implementation and regression-test changes inside the nested repository.\n"
+        "- Run verification from inside the nested repository, using the declared task image when "
+        "the host lacks the required toolchain.\n"
+        "- Do not stage or commit the nested repository in the parent metadata workspace.\n\n"
+        "Task instruction:\n"
+        f"{task.instruction}"
+    )
 
 
 def _prepare_agent_workspace(task: DeepSWETask, run_root: Path) -> Path:
@@ -933,31 +1141,37 @@ async def run_deepswe_task(args: argparse.Namespace) -> int:
         max(1, int(args.verifier_timeout_seconds)),
     )
     try:
-        await asyncio.wait_for(
-            run_harness_on_external_environment(
-                instruction=task.instruction,
-                environment=HostWorkspaceEnvironment(agent_workspace),
-                context=context,
-                logs_dir=str(harness_logs),
-                model_name=args.model,
-                max_steps=args.max_steps,
-                max_output_tokens=args.max_output_tokens,
-                source_change_retries=args.source_change_retries,
-                verification_retries=args.verification_retries,
-                pass_timeout_seconds=args.pass_timeout_seconds,
-                require_regression_test_change=True,
-                policy=_policy_for_task(
-                    task,
-                    run_root,
-                    allow_web_access=bool(args.allow_web_access),
+        with (
+            _deepswe_model_selection_env(allow_model_fallbacks=bool(args.allow_model_fallbacks)),
+            _deepswe_strict_coverage_env(),
+        ):
+            await asyncio.wait_for(
+                run_harness_on_external_environment(
+                    instruction=_agent_instruction(task),
+                    environment=HostWorkspaceEnvironment(agent_workspace),
+                    context=context,
+                    logs_dir=str(harness_logs),
+                    provider_name=args.provider,
+                    model_name=args.model,
+                    goal_plan=not bool(args.no_goal_plan),
+                    max_steps=args.max_steps,
+                    max_output_tokens=args.max_output_tokens,
+                    source_change_retries=args.source_change_retries,
+                    verification_retries=args.verification_retries,
+                    pass_timeout_seconds=args.pass_timeout_seconds,
+                    require_regression_test_change=True,
+                    policy=_policy_for_task(
+                        task,
+                        run_root,
+                        allow_web_access=bool(args.allow_web_access),
+                    ),
+                    default_verify_command=None,
+                    default_verify_timeout_seconds=None,
+                    model_stream_idle_timeout_seconds=args.idle_timeout,
+                    model_turn_timeout_seconds=args.turn_timeout,
                 ),
-                default_verify_command=None,
-                default_verify_timeout_seconds=None,
-                model_stream_idle_timeout_seconds=args.idle_timeout,
-                model_turn_timeout_seconds=args.turn_timeout,
-            ),
-            timeout=run_timeout,
-        )
+                timeout=run_timeout,
+            )
         status = "passed"
         metadata = dict(context.metadata)
     except TimeoutError:
@@ -1071,9 +1285,24 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("task", help="Path to deep-swe/tasks/<task-id>")
     parser.add_argument("--results-root", default="evals/results/deepswe")
     parser.add_argument("--env-file", default=".env")
+    parser.add_argument("--provider", default="openrouter")
     parser.add_argument("--model", default="openai/gpt-5.4-nano")
+    parser.add_argument(
+        "--allow-model-fallbacks",
+        action="store_true",
+        help=(
+            "Allow OpenRouter/external-workspace fallback models. By default "
+            "DeepSWE runs are strict so benchmark results cannot silently use "
+            "a different model than --model."
+        ),
+    )
     parser.add_argument("--max-steps", type=int, default=50)
     parser.add_argument("--max-output-tokens", type=int, default=4096)
+    parser.add_argument(
+        "--no-goal-plan",
+        action="store_true",
+        help="Skip the optional LLM planning pre-call and enter the tool loop directly.",
+    )
     parser.add_argument("--source-change-retries", type=int, default=1)
     parser.add_argument("--verification-retries", type=int, default=1)
     parser.add_argument("--pass-timeout-seconds", type=float, default=900.0)

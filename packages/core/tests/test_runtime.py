@@ -30,6 +30,9 @@ from harness.core import (
     StepCompleted,
     StepStarted,
     TextDelta,
+    ToolCall,
+    ToolCallEvent,
+    ToolResult,
     ToolResultEvent,
     Verification,
     VerificationResult,
@@ -1130,6 +1133,189 @@ class TestToolCallLoop:
         verify_result = next(event.result for event in events if isinstance(event, Verification))
         assert verify_result.can_finish is False
         assert "never ran verify_work" in verify_result.reason
+
+    async def test_adapter_native_tool_results_are_persisted_for_verification(
+        self, tmp_path: Path
+    ) -> None:
+        sink = InMemoryActivitySink()
+        call = ToolCall(
+            id="native-file-change",
+            name="apply_diff",
+            arguments={"path": "answer.txt", "paths": ["answer.txt"]},
+        )
+        result = ToolResult(
+            tool_call_id=call.id,
+            name=call.name,
+            content="Codex file change completed:\n- add: answer.txt",
+            metadata={
+                "backend": "codex",
+                "workspace_changed": True,
+                "paths": ["answer.txt"],
+                "path": "answer.txt",
+            },
+        )
+
+        class CapturingVerifier:
+            name = "capture"
+
+            def __init__(self) -> None:
+                self.activity: list[ActivityEvent] = []
+
+            async def verify(self, *, session, activity) -> VerificationResult:
+                del session
+                self.activity = activity
+                return VerificationResult(can_finish=True, reason="verified", verifier_name="test")
+
+        verifier = CapturingVerifier()
+        adapter = MockAdapter(
+            "mock",
+            scripts=[
+                [
+                    ToolCallEvent(call=call),
+                    ToolResultEvent(result=result),
+                    Done(final_message=Message(role="assistant", content="done")),
+                ],
+            ],
+        )
+        agent, _storage = make_agent(
+            adapters={"mock": adapter},
+            verifier=verifier,
+            activity_store=sink,
+            default_cwd=str(tmp_path),
+            max_repair_attempts=0,
+        )
+
+        events = await collect(agent.run(RunRequest(prompt="write file", max_steps=2)))
+
+        assert any(isinstance(event, Verification) for event in events)
+        completed = [
+            event
+            for event in verifier.activity
+            if event.kind == "tool_call.completed" and event.data.get("name") == "apply_diff"
+        ]
+        assert len(completed) == 1
+        assert completed[0].data["arguments"]["path"] == "answer.txt"
+        assert completed[0].data["metadata"]["workspace_changed"] is True
+        dispatched = [
+            event
+            for event in sink.events
+            if event.kind == "tool_call.dispatched"
+            and event.data.get("tool_call_id") == "native-file-change"
+        ]
+        assert len(dispatched) == 1
+        assert dispatched[0].data["source"] == "adapter"
+
+    async def test_adapter_native_tool_results_satisfy_required_tool_use(
+        self, tmp_path: Path
+    ) -> None:
+        call = ToolCall(id="native-shell", name="shell", arguments={"command": "printf ok"})
+        result = ToolResult(
+            tool_call_id=call.id,
+            name=call.name,
+            content="ok",
+            metadata={"backend": "codex", "command": "printf ok"},
+        )
+        adapter = MockAdapter(
+            "mock",
+            scripts=[
+                [
+                    ToolCallEvent(call=call),
+                    ToolResultEvent(result=result),
+                    Done(final_message=Message(role="assistant", content="verified")),
+                ],
+            ],
+        )
+        shell_tool = MockTool(name="shell", approval="auto", responder=lambda **_: "ok")
+        agent, _storage = make_agent(
+            adapters={"mock": adapter},
+            tools=[shell_tool],
+            default_cwd=str(tmp_path),
+            max_repair_attempts=0,
+        )
+
+        events = await collect(
+            agent.run(RunRequest(prompt="do real work", max_steps=1, require_tool_use=True))
+        )
+
+        assert not any(isinstance(event, ErrorEvent) for event in events)
+        done = next(event for event in events if isinstance(event, Done))
+        assert done.final_message is not None
+        assert done.final_message.content == "verified"
+
+    async def test_adapter_partial_tool_results_are_not_completed_activity(
+        self, tmp_path: Path
+    ) -> None:
+        sink = InMemoryActivitySink()
+        call = ToolCall(id="native-shell", name="shell", arguments={"command": "touch a.txt"})
+        partial = ToolResult(
+            tool_call_id=call.id,
+            name=call.name,
+            content="running",
+            metadata={"backend": "codex", "partial": True, "command": "touch a.txt"},
+        )
+        adapter = MockAdapter(
+            "mock",
+            scripts=[
+                [
+                    ToolCallEvent(call=call),
+                    ToolResultEvent(result=partial),
+                    Done(final_message=Message(role="assistant", content="still running")),
+                ],
+            ],
+        )
+        agent, _storage = make_agent(
+            adapters={"mock": adapter},
+            verifier=AlwaysPassVerifier(),
+            activity_store=sink,
+            default_cwd=str(tmp_path),
+            max_repair_attempts=0,
+        )
+
+        events = await collect(agent.run(RunRequest(prompt="run shell", max_steps=2)))
+
+        assert any(isinstance(event, Verification) for event in events)
+        assert not [
+            event
+            for event in sink.events
+            if event.kind == "tool_call.completed" and event.data.get("name") == "shell"
+        ]
+
+    async def test_plain_adapter_tool_results_are_not_persisted_as_native_activity(
+        self, tmp_path: Path
+    ) -> None:
+        sink = InMemoryActivitySink()
+        call = ToolCall(id="fake-edit", name="edit_file", arguments={"path": "src/app.py"})
+        result = ToolResult(
+            tool_call_id=call.id,
+            name=call.name,
+            content="edited",
+        )
+        adapter = MockAdapter(
+            "mock",
+            scripts=[
+                [
+                    ToolCallEvent(call=call),
+                    ToolResultEvent(result=result),
+                    Done(final_message=Message(role="assistant", content="done")),
+                ],
+            ],
+        )
+        agent, _storage = make_agent(
+            adapters={"mock": adapter},
+            verifier=AlwaysPassVerifier(),
+            activity_store=sink,
+            default_cwd=str(tmp_path),
+            max_repair_attempts=0,
+        )
+
+        events = await collect(agent.run(RunRequest(prompt="edit", max_steps=2)))
+
+        assert any(isinstance(event, Verification) for event in events)
+        assert not [
+            event
+            for event in sink.events
+            if event.kind == "tool_call.completed" and event.data.get("name") == "edit_file"
+        ]
 
     async def test_verification_repair_directive_keeps_agent_autonomous(
         self, tmp_path: Path

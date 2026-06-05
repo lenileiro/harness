@@ -870,6 +870,7 @@ class VerifyWorkTool:
                 content=content,
                 is_error=not passed,
                 metadata={
+                    "command": command,
                     "exit_code": proc.returncode,
                     "stdout": output_raw,
                     "output_reports_failure": output_failure,

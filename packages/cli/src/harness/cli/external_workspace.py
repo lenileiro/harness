@@ -180,6 +180,7 @@ _SHELL_INSPECTION_COMMANDS = {
     "less",
     "ls",
     "more",
+    "nl",
     "pwd",
     "rg",
     "sed",
@@ -1105,6 +1106,17 @@ def _shell_command_uses_no_network_container(command: str, *, image: str) -> boo
     words = _shell_words(command)
     if not words:
         return False
+    words = _shell_words_after_env(words)
+    if not words:
+        return False
+    executable = PurePosixPath(words[0].strip("()")).name.lower()
+    if executable in {"bash", "dash", "ksh", "sh", "zsh"}:
+        for index, part in enumerate(words[:-1]):
+            if part in {"-c", "-lc"}:
+                return _shell_command_uses_no_network_container(
+                    words[index + 1],
+                    image=required_image,
+                )
     for index, word in enumerate(words):
         if PurePosixPath(word).name.lower() != "docker":
             continue
@@ -1610,6 +1622,11 @@ def _path_is_in_test_structure(path: str) -> bool:
     return bool(_TEST_DIR_NAMES.intersection(parts))
 
 
+def _path_is_in_broad_discoverable_test_structure(path: str) -> bool:
+    parts = {part.lower() for part in path.strip("/").split("/") if part}
+    return bool(parts & {"test", "tests", "spec", "specs", "__test__", "__tests__"})
+
+
 def _path_name_looks_like_test(path: str) -> bool:
     name = PurePosixPath(path.strip("/")).name.lower()
     tokens = [token for token in re.split(r"[^a-z0-9]+", name) if token]
@@ -2020,8 +2037,29 @@ def _command_uses_test_selector(command: str) -> bool:
     return False
 
 
-def _test_words_use_selector(words: list[str]) -> bool:
+def _first_test_action_index(words: list[str]) -> int:
     for index, word in enumerate(words):
+        if not word or re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*=.*", word):
+            continue
+        if index == 0:
+            if _word_looks_like_test_action(word, executable=True):
+                return index
+            continue
+        if _word_looks_like_test_action(word):
+            return index
+    return 0
+
+
+def _test_words_use_selector(words: list[str]) -> bool:
+    test_action_index = _first_test_action_index(words)
+    for word in words[:test_action_index]:
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*=.*", word):
+            continue
+        value = word.split("=", 1)[1].strip("'\"")
+        value_words = _shell_words(value)
+        if _test_words_use_selector(value_words or [value]):
+            return True
+    for index, word in enumerate(words[test_action_index:], start=test_action_index):
         if index == 0 and PurePosixPath(word).name.lower() == "env":
             continue
         if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*=.*", word):
@@ -2275,6 +2313,13 @@ def _verification_command_covers_test_changes(
     tracked_changed = [path for path in changed if path not in untracked]
     targets = _command_path_tokens(command)
     if not targets:
+        if (
+            tracked_changed
+            and not untracked
+            and _is_broad_test_command(command)
+            and all(_path_is_in_broad_discoverable_test_structure(path) for path in changed)
+        ):
+            return True
         if untracked and _command_invokes_opaque_test_wrapper(command):
             return bool(
                 (tracked_changed or runner_wires_untracked_tests)
@@ -3894,6 +3939,19 @@ def _activity_tool_is_verification_attempt(
     )
 
 
+def _activity_verification_failure_text(
+    event: ActivityEvent,
+    metadata: dict[str, Any] | None = None,
+) -> str | None:
+    metadata = metadata or _dict_metadata(event.data.get("metadata"))
+    preview = str(event.data.get("content_preview") or "")
+    if event.data.get("is_error") is True:
+        return preview or f"{event.data.get('name') or 'verification'} failed"
+    if metadata.get("workspace_changed") is True:
+        return preview or f"{event.data.get('name') or 'verification'} changed workspace"
+    return None
+
+
 def _latest_assistant_message_content(session: Any) -> str:
     messages = getattr(session, "messages", None)
     if not isinstance(messages, list | tuple):
@@ -4594,19 +4652,12 @@ class ExternalWorkspaceVerifier:
             snapshot.latest_verification_used_default_command = (
                 metadata.get("used_default_command") is True
             )
+            attempt_error = _activity_verification_failure_text(event, metadata)
+            if attempt_error is not None:
+                latest_verify_error = attempt_error
             if index < last_workspace_change_index:
                 continue
-            latest_verify_error = None
-            if event.data.get("is_error") is True:
-                preview = str(event.data.get("content_preview") or "")
-                latest_verify_error = (
-                    preview or f"{event.data.get('name') or 'verification'} failed"
-                )
-            elif metadata.get("workspace_changed") is True:
-                preview = str(event.data.get("content_preview") or "")
-                latest_verify_error = (
-                    preview or f"{event.data.get('name') or 'verification'} changed workspace"
-                )
+            latest_verify_error = attempt_error
             latest_verify_after_change = event
 
         if latest_verify_after_change is not None:
@@ -4620,11 +4671,10 @@ class ExternalWorkspaceVerifier:
                 metadata.get("used_default_command") is True
             )
             if not _activity_tool_is_passing_verify(latest_verify_after_change):
-                preview = str(latest_verify_after_change.data.get("content_preview") or "")
-                if latest_verify_after_change.data.get("is_error") is True:
-                    latest_verify_error = preview or "verify_work failed"
-                elif metadata.get("workspace_changed") is True:
-                    latest_verify_error = preview or "verify_work changed workspace"
+                latest_verify_error = _activity_verification_failure_text(
+                    latest_verify_after_change,
+                    metadata,
+                )
                 snapshot.latest_verification_error = latest_verify_error
                 declared_runtime_reason = await self._missing_tool_declared_runtime_reason(
                     tool_events
@@ -4876,7 +4926,13 @@ _COVERAGE_REVIEW_SYSTEM_PROMPT = (
     "new variant from that same class, pass instead of asking for another near-"
     "duplicate case. Fail only for a distinct stated behavior, a test expectation "
     "that conflicts with the stated behavior, or an obvious source bug that the "
-    "changed tests would miss.\n\n"
+    "changed tests would miss. When the task explicitly lists multiple accepted "
+    "forms, modes, directions, assignment/update cases, or required error cases, "
+    "treat each listed item as a distinct stated behavior. Tests should cover "
+    "every listed item directly or cover a representative combination that would "
+    "catch an implementation that omits that listed item. If two listed behaviors "
+    "interact, such as an omitted component plus reverse traversal, try a "
+    "counterexample that combines them before approving.\n\n"
     "Return only JSON on one line: "
     '{"can_finish": true|false, "reason": "<short actionable reason>", '
     '"confidence": 0.0..1.0}'
@@ -4912,6 +4968,7 @@ class ExternalWorkspaceCoverageVerifier:
         structural_verifier: ExternalWorkspaceVerifier,
         max_retries: int = 2,
         block_confidence: float | None = None,
+        review_timeout_seconds: float | None = None,
     ) -> None:
         self.environment = environment
         self.workdir = workdir
@@ -4924,6 +4981,11 @@ class ExternalWorkspaceCoverageVerifier:
             _external_workspace_coverage_block_confidence()
             if block_confidence is None
             else max(0.0, min(1.0, block_confidence))
+        )
+        self.review_timeout_seconds = (
+            _external_workspace_coverage_review_timeout_seconds()
+            if review_timeout_seconds is None
+            else max(0.001, float(review_timeout_seconds))
         )
 
     async def verify(
@@ -4967,16 +5029,20 @@ class ExternalWorkspaceCoverageVerifier:
             accumulated: list[str] = []
             final_content: str | None = None
             try:
-                async for event in self.adapter.stream(model=self.model, messages=messages):
-                    if isinstance(event, TextDelta):
-                        accumulated.append(event.text)
-                    elif isinstance(event, Done):
-                        final_content = (
-                            event.final_message.content
-                            if event.final_message and event.final_message.content
-                            else "".join(accumulated)
-                        )
-                        break
+                async with asyncio.timeout(self.review_timeout_seconds):
+                    async for event in self.adapter.stream(model=self.model, messages=messages):
+                        if isinstance(event, TextDelta):
+                            accumulated.append(event.text)
+                        elif isinstance(event, Done):
+                            final_content = (
+                                event.final_message.content
+                                if event.final_message and event.final_message.content
+                                else "".join(accumulated)
+                            )
+                            break
+            except TimeoutError:
+                last_reason = f"coverage reviewer timed out after {self.review_timeout_seconds:g}s"
+                continue
             except Exception as exc:
                 last_reason = f"coverage reviewer call failed: {exc!s}"
                 continue
@@ -5157,6 +5223,21 @@ def _external_workspace_coverage_block_confidence() -> float:
         return 0.65
 
 
+def _external_workspace_coverage_review_timeout_seconds() -> float:
+    raw = (
+        os.environ.get("HARNESS_EXTERNAL_WORKSPACE_COVERAGE_REVIEW_TIMEOUT")
+        or os.environ.get("HARNESS_MODEL_TURN_TIMEOUT")
+        or "120"
+    )
+    try:
+        value = float(raw)
+    except ValueError:
+        return 120.0
+    if value <= 0:
+        return 120.0
+    return value
+
+
 def _should_retry_external_workspace_with_fallback(
     *,
     run_error: str | None,
@@ -5212,9 +5293,11 @@ async def run_harness_on_external_environment(
     environment: Any,
     context: Any,
     logs_dir: str,
+    provider_name: str | None = None,
     model_name: str | None = None,
     max_steps: int = 30,
     max_output_tokens: int | None = 4096,
+    goal_plan: bool = True,
     source_change_retries: int = 1,
     verification_retries: int = 1,
     pass_timeout_seconds: float = 180.0,
@@ -5229,6 +5312,7 @@ async def run_harness_on_external_environment(
 ) -> None:
     workdir_result = await environment.exec("pwd")
     workdir = (workdir_result.stdout or "").strip() or "/app"
+    provider = (provider_name or "openrouter").strip() or "openrouter"
     model = (model_name or "google/gemma-4-26b-a4b-it").removeprefix("openrouter/")
     log_path = os.path.join(str(logs_dir), "harness.txt")
     events_path = os.path.join(str(logs_dir), "harness-events.jsonl")
@@ -5319,7 +5403,7 @@ async def run_harness_on_external_environment(
                 require_default_verify_command=bool(default_verify_command),
                 policy=policy,
             )
-            cfg = HarnessConfig(default_provider="openrouter", default_model=attempt_model)
+            cfg = HarnessConfig(default_provider=provider, default_model=attempt_model)
 
             def _build_remote_tools(
                 _cwd: Any,
@@ -5348,6 +5432,7 @@ async def run_harness_on_external_environment(
                     auxiliary_tools_enabled=False,
                     memory_tools_enabled=False,
                     project_context_enabled=False,
+                    skip_builtin_verify_before_done=True,
                 )
 
             def _build_external_workspace_verifier(
@@ -5363,7 +5448,7 @@ async def run_harness_on_external_environment(
                     environment=environment,
                     workdir=workdir,
                     instruction=instruction,
-                    adapter=_build_adapter("openrouter", base_url=None, config=_cfg),
+                    adapter=_build_adapter(provider, base_url=None, config=_cfg),
                     model=_attempt_model,
                     structural_verifier=_verifier,
                 )
@@ -5379,6 +5464,16 @@ async def run_harness_on_external_environment(
             effective_model = None
             model_selection = None
             session_id = f"sess_harness_external_{uuid4().hex[:12]}"
+            attempt_storage = InMemoryStorage()
+
+            def _build_attempt_storage(
+                *,
+                db: Any,
+                in_memory: bool,
+                cwd: Any = None,
+                _storage: InMemoryStorage = attempt_storage,
+            ) -> InMemoryStorage:
+                return _storage
 
             def _render(event: Any) -> None:
                 nonlocal event_count
@@ -5453,7 +5548,7 @@ async def run_harness_on_external_environment(
                     _harness_run_once(
                         prompt=prompt,
                         model=attempt_model,
-                        chain=["openrouter"],
+                        chain=[provider],
                         base_url=None,
                         cwd=Path(workdir),
                         max_steps=max_steps,
@@ -5468,7 +5563,7 @@ async def run_harness_on_external_environment(
                         verify_command=None,
                         critic=None,
                         require_tools=True,
-                        goal=True,
+                        goal=goal_plan,
                         max_context_tokens=None,
                         predict=True,
                         auto_compact=False,
@@ -5482,7 +5577,7 @@ async def run_harness_on_external_environment(
                         include_workspace_context=False,
                         silent=False,
                         config=cfg,
-                        build_storage=_memory_storage,
+                        build_storage=_build_attempt_storage,
                         resolve_task_attachment=_noop_task_attachment,
                         resolve_runtime_strategy=_resolve_runtime_strategy,
                         build_verifier=_build_external_workspace_verifier,
@@ -5515,8 +5610,30 @@ async def run_harness_on_external_environment(
                     else:
                         os.environ[key] = previous
 
-            if run_error is not None and _snapshot_has_no_workspace_mutation(verifier.latest):
-                await verifier.verify(session=None, activity=[])
+            if run_error is not None:
+                activity_events = await attempt_storage.list_activity(
+                    session_id=session_id,
+                    limit=500,
+                )
+                if activity_events:
+                    post_error_verifier = _build_external_workspace_verifier()
+                    post_error_result = await post_error_verifier.verify(
+                        session=None,
+                        activity=activity_events,
+                    )
+                    latest_completion_verification = post_error_result
+                    if post_error_result is not None and post_error_result.can_finish:
+                        log.write(
+                            "\n[harness:verification] accepted current workspace after "
+                            f"runtime error: {post_error_result.reason}\n"
+                        )
+                        log.flush()
+                        run_error = None
+                elif _snapshot_has_no_workspace_mutation(verifier.latest):
+                    latest_completion_verification = await verifier.verify(
+                        session=None,
+                        activity=[],
+                    )
 
             snapshot = verifier.latest
             source_change_error = snapshot.source_change_error

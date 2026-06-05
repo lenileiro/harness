@@ -110,9 +110,10 @@ def build_ledger(activity: list[ActivityEvent]) -> DefenseLedger:
             else:
                 ledger.verifier_blocks[name] += 1
         elif ev.kind == REPAIR_DIRECTIVE_ISSUED:
-            ledger.repair_attempts += 1
-            if ev.data.get("critic"):
-                ledger.critic_invocations += 1
+            if ev.data.get("verifier") and ev.data.get("attempt"):
+                ledger.repair_attempts += 1
+                if ev.data.get("critic"):
+                    ledger.critic_invocations += 1
         elif ev.kind == TOOL_CALL_COMPLETED:
             tool_name = str(ev.data.get("name", "unknown"))
             ledger.tool_calls[tool_name] += 1

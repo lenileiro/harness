@@ -33,6 +33,31 @@ def test_external_scenario_script_help_uses_stdlib_types(script_name: str) -> No
     assert result.returncode == 0, result.stderr or result.stdout
     assert "scenario" in result.stdout.lower()
     assert "--env-file" in result.stdout
+    assert "--provider" in result.stdout
+    assert "--no-goal-plan" in result.stdout
+
+
+@pytest.mark.parametrize(
+    "script_name",
+    [
+        "docs_runner.py",
+        "research_runner.py",
+        "review_runner.py",
+        "runner.py",
+        "workflow_runner.py",
+    ],
+)
+def test_eval_runner_script_path_execution_uses_stdlib_types(script_name: str) -> None:
+    runner = Path(__file__).resolve().parents[1] / script_name
+
+    result = subprocess.run(
+        [sys.executable, str(runner), "--help"],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr or result.stdout
 
 
 def test_external_scenario_dotenv_loader_sets_missing_values_only(
@@ -177,6 +202,33 @@ def test_release_value():
     assert "diff --git a/tests/test_current_release_value.py" in diff
     assert "+def test_release_value():" in diff
     assert check["leftover_scratch_paths"] == []
+
+
+def test_web_research_scenario_accepts_shell_public_source_evidence(tmp_path: Path) -> None:
+    from evals import external_web_research_scenario as scenario
+
+    run_root = tmp_path / "run"
+    events = run_root / "harness" / "harness-events.jsonl"
+    events.parent.mkdir(parents=True)
+    events.write_text(
+        json.dumps(
+            {
+                "type": "tool_result",
+                "result": {
+                    "name": "shell",
+                    "is_error": False,
+                    "metadata": {
+                        "command": '/bin/zsh -lc "curl -fsSL https://curl.se/download.html"',
+                        "exit_code": 0,
+                    },
+                },
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    assert scenario.event_log_has_successful_web_tool(run_root) is True
 
 
 def test_js_scenario_accepts_added_focused_test(tmp_path: Path) -> None:

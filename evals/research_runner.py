@@ -2,6 +2,14 @@
 
 from __future__ import annotations
 
+import sys
+
+if __package__ in (None, "") and sys.path:
+    _script_dir = sys.path[0]
+    if _script_dir.endswith("/evals"):
+        sys.path.pop(0)
+        sys.path.insert(0, _script_dir.rsplit("/", 1)[0])
+
 import json
 import re
 import shutil
@@ -156,6 +164,7 @@ def _research_cmd(
     cmd = [
         harness_cmd,
         "research",
+        "run",
         topic,
         "--cwd",
         str(work),
@@ -188,10 +197,22 @@ _TOKEN_NORMALIZATIONS = {
     "write": "write",
 }
 
+_PHRASE_NORMALIZATIONS = {
+    "no setup": "zero setup",
+    "zero-setup": "zero setup",
+}
+
+
+def _normalize_match_text(text: str) -> str:
+    normalized = text.lower()
+    for source, target in _PHRASE_NORMALIZATIONS.items():
+        normalized = normalized.replace(source, target)
+    return normalized
+
 
 def _normalize_tokens(text: str) -> set[str]:
     tokens: set[str] = set()
-    for token in re.findall(r"[a-z0-9]+", text.lower()):
+    for token in re.findall(r"[a-z0-9]+", _normalize_match_text(text)):
         normalized_token = _TOKEN_NORMALIZATIONS.get(token) or token
         tokens.add(normalized_token)
     normalized: set[str] = set()
@@ -203,8 +224,8 @@ def _normalize_tokens(text: str) -> set[str]:
 
 
 def _finding_matches(expectation: str, finding: str) -> bool:
-    expected_lower = expectation.lower()
-    finding_lower = finding.lower()
+    expected_lower = _normalize_match_text(expectation)
+    finding_lower = _normalize_match_text(finding)
     if expected_lower in finding_lower:
         return True
     expected_tokens = _normalize_tokens(expectation)

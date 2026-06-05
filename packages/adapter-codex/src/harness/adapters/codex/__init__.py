@@ -94,6 +94,19 @@ def _messages_to_codex_prompt(messages: list[Message]) -> str:
         "You are operating as the Codex provider inside Harness.",
         "Continue the conversation faithfully from the transcript below.",
         "Use your built-in workspace tools when needed. Do not ask for approval.",
+        (
+            "Keep shell output bounded. For broad repository searches, target specific "
+            "directories or file types and cap output with flags or pagers such as "
+            "`rg -m`, `head`, or `sed -n '1,200p'`; avoid commands that can print "
+            "thousands of matches."
+        ),
+        (
+            "Do not rely on `rg -m` alone for broad searches because it limits matches "
+            "per file, not total output. For commands that may touch many files, add a "
+            "total-output cap such as `| head -200` or `| sed -n '1,200p'`, or list "
+            "matching files first with `rg -l ... | head -100` and inspect selected "
+            "files in follow-up commands."
+        ),
         "",
         "Conversation transcript:",
     ]
@@ -104,6 +117,65 @@ def _messages_to_codex_prompt(messages: list[Message]) -> str:
         parts.append("")
     parts.append("Continue from the latest user request and finish the work.")
     return "\n".join(parts).strip()
+
+
+def _codex_file_changes(item: dict[str, Any]) -> list[dict[str, str]]:
+    raw_changes = item.get("changes")
+    if not isinstance(raw_changes, list):
+        return []
+    changes: list[dict[str, str]] = []
+    for raw_change in raw_changes:
+        if not isinstance(raw_change, dict):
+            continue
+        path = str(raw_change.get("path") or raw_change.get("file") or "").strip()
+        kind = str(raw_change.get("kind") or raw_change.get("type") or "").strip()
+        change: dict[str, str] = {}
+        if path:
+            change["path"] = path
+        if kind:
+            change["kind"] = kind
+        if change:
+            changes.append(change)
+    return changes
+
+
+def _codex_file_change_paths(changes: list[dict[str, str]]) -> list[str]:
+    return [change["path"] for change in changes if change.get("path")]
+
+
+def _codex_file_change_tool_call(item: dict[str, Any]) -> ToolCall:
+    changes = _codex_file_changes(item)
+    paths = _codex_file_change_paths(changes)
+    arguments: dict[str, Any] = {
+        "changes": changes,
+        "paths": paths,
+        "backend": "codex",
+    }
+    if paths:
+        arguments["path"] = paths[0]
+    return ToolCall(
+        id=str(item.get("id", "codex-file-change")),
+        name="apply_diff",
+        arguments=arguments,
+    )
+
+
+def _codex_file_change_summary(changes: list[dict[str, str]], status: str) -> str:
+    if not changes:
+        return f"Codex file change {status}."
+    lines = [f"Codex file change {status}:"]
+    for change in changes:
+        kind = change.get("kind") or "change"
+        path = change.get("path") or "<unknown>"
+        lines.append(f"- {kind}: {path}")
+    return "\n".join(lines)
+
+
+def _codex_cli_model(model: str) -> str:
+    stripped = model.strip()
+    if stripped.startswith("openai/"):
+        return stripped.removeprefix("openai/")
+    return stripped
 
 
 class CodexAdapter:
@@ -118,6 +190,7 @@ class CodexAdapter:
         cwd: str | Path | None = None,
         timeout: float = 600.0,
         idle_timeout: float = 120.0,
+        ignore_user_config: bool = True,
     ) -> None:
         self.codex_bin = codex_bin or shutil.which("codex")
         if not self.codex_bin:
@@ -128,6 +201,7 @@ class CodexAdapter:
         self.cwd = Path(cwd or Path.cwd()).resolve()
         self.timeout = timeout
         self.idle_timeout = idle_timeout
+        self.ignore_user_config = ignore_user_config
 
     def stream(
         self,
@@ -155,13 +229,19 @@ class CodexAdapter:
             self.codex_bin,
             "exec",
             "--json",
-            "--skip-git-repo-check",
-            "--dangerously-bypass-approvals-and-sandbox",
-            "-C",
-            str(self.cwd),
         ]
+        if self.ignore_user_config:
+            cmd.append("--ignore-user-config")
+        cmd.extend(
+            [
+                "--skip-git-repo-check",
+                "--dangerously-bypass-approvals-and-sandbox",
+                "-C",
+                str(self.cwd),
+            ]
+        )
         if model:
-            cmd.extend(["--model", model])
+            cmd.extend(["--model", _codex_cli_model(model)])
         cmd.append(prompt)
 
         try:
@@ -233,6 +313,12 @@ class CodexAdapter:
                             name="shell",
                             arguments={"command": str(item.get("command", ""))},
                         )
+                        tool_calls[call.id] = call
+                        visible_deadline = loop.time() + self.idle_timeout
+                        yield ToolCallEvent(call=call)
+                        visible_deadline = loop.time() + self.idle_timeout
+                    elif item.get("type") == "file_change":
+                        call = _codex_file_change_tool_call(item)
                         tool_calls[call.id] = call
                         visible_deadline = loop.time() + self.idle_timeout
                         yield ToolCallEvent(call=call)
@@ -312,6 +398,33 @@ class CodexAdapter:
                                 "exit_code": exit_code,
                                 "backend": "codex",
                             },
+                        )
+                        visible_deadline = loop.time() + self.idle_timeout
+                        yield ToolResultEvent(result=result)
+                        visible_deadline = loop.time() + self.idle_timeout
+                    elif item_type == "file_change":
+                        tool_id = str(item.get("id", "codex-file-change"))
+                        call = tool_calls.get(tool_id) or _codex_file_change_tool_call(item)
+                        tool_calls[tool_id] = call
+                        changes = _codex_file_changes(item)
+                        paths = _codex_file_change_paths(changes)
+                        status = str(item.get("status") or "completed")
+                        is_error = status.lower() not in {"completed", "success", "succeeded"}
+                        metadata: dict[str, Any] = {
+                            "backend": "codex",
+                            "changes": changes,
+                            "paths": paths,
+                            "status": status,
+                            "workspace_changed": not is_error,
+                        }
+                        if paths:
+                            metadata["path"] = paths[0]
+                        result = ToolResult(
+                            tool_call_id=call.id,
+                            name=call.name,
+                            content=_codex_file_change_summary(changes, status),
+                            is_error=is_error,
+                            metadata=metadata,
                         )
                         visible_deadline = loop.time() + self.idle_timeout
                         yield ToolResultEvent(result=result)

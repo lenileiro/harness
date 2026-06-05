@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import re
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
@@ -26,6 +25,7 @@ from harness.core.research_models import (
     Vision,
 )
 from harness.core.section_maps import SectionMap
+from harness.core.slug import slugify
 
 
 def default_research_root(cwd: Path | None = None) -> Path:
@@ -33,8 +33,7 @@ def default_research_root(cwd: Path | None = None) -> Path:
 
 
 def _slugify(value: str) -> str:
-    cleaned = re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
-    return cleaned or "item"
+    return slugify(value)
 
 
 def _split_csv(value: str | None) -> tuple[str, ...]:
