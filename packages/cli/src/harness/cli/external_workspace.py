@@ -73,9 +73,9 @@ _NESTED_GIT_STATUS_COMMAND = (
     "while IFS= read -r line; do "
     '[ -z "$line" ] && continue; '
     "code=$(printf '%.2s' \"$line\"); "
-    "path=${line#???}; "
-    "case \"$path\" in *' -> '*) path=${path##* -> } ;; esac; "
-    'printf \'%s %s/%s\\n\' "$code" "$repo" "$path"; '
+    "status_path=${line#???}; "
+    "case \"$status_path\" in *' -> '*) status_path=${status_path##* -> } ;; esac; "
+    'printf \'%s %s/%s\\n\' "$code" "$repo" "$status_path"; '
     "done; "
     'done < "$tmp"'
 )
@@ -89,9 +89,9 @@ _NESTED_GIT_LS_FILES_COMMAND = (
     "repo=${repo#./}; "
     '[ -z "$repo" ] && continue; '
     'git -C "$repo" ls-files 2>/dev/null | '
-    "while IFS= read -r path; do "
-    '[ -z "$path" ] && continue; '
-    'printf \'%s/%s\\n\' "$repo" "$path"; '
+    "while IFS= read -r listed_path; do "
+    '[ -z "$listed_path" ] && continue; '
+    'printf \'%s/%s\\n\' "$repo" "$listed_path"; '
     "done; "
     'done < "$tmp"'
 )
@@ -128,16 +128,16 @@ def _nested_git_committed_status_command(required_base: str) -> str:
         '[ "$head" = "$base_head" ] && continue; '
         'git -C "$repo" merge-base --is-ancestor "$base_head" HEAD 2>/dev/null || continue; '
         'git -C "$repo" diff --name-status "$base_head" HEAD -- 2>/dev/null | '
-        "while IFS=\"$(printf '\\t')\" read -r kind path extra; do "
+        "while IFS=\"$(printf '\\t')\" read -r kind diff_path extra; do "
         '[ -z "$kind" ] && continue; '
         'case "$kind" in '
         "A*) code='A ' ;; "
         "D*) code=' D' ;; "
-        'R*|C*) code=\'R \'; [ -n "$extra" ] && path="$extra" ;; '
+        'R*|C*) code=\'R \'; [ -n "$extra" ] && diff_path="$extra" ;; '
         "*) code=' M' ;; "
         "esac; "
-        '[ -z "$path" ] && continue; '
-        'printf \'%s %s/%s\\n\' "$code" "$repo" "$path"; '
+        '[ -z "$diff_path" ] && continue; '
+        'printf \'%s %s/%s\\n\' "$code" "$repo" "$diff_path"; '
         "done; "
         'done < "$tmp"'
     )
@@ -147,17 +147,17 @@ _GIT_WORKSPACE_FINGERPRINT_COMMAND = (
     "git diff --binary --no-ext-diff; "
     "git diff --cached --binary --no-ext-diff; "
     "git ls-files --others --exclude-standard | "
-    "while IFS= read -r path; do "
-    'case "$path" in '
+    "while IFS= read -r untracked_path; do "
+    'case "$untracked_path" in '
     ".harness-home|.harness-home/*|*/.harness-home|*/.harness-home/*|"
     "cache/*|*/cache/*|.cache/*|*/.cache/*|*_cache/*|*cache__/*|*-cache/*) "
     "continue ;; "
     "esac; "
-    "printf 'untracked %s\\n' \"$path\"; "
-    "if stat -f '%Lp' \"$path\" >/dev/null 2>&1; then "
-    "printf 'mode '; stat -f '%Lp %N' \"$path\"; "
-    "else printf 'mode '; stat -c '%a %n' \"$path\" 2>/dev/null || true; fi; "
-    'git hash-object -- "$path" 2>/dev/null || true; '
+    "printf 'untracked %s\\n' \"$untracked_path\"; "
+    "if stat -f '%Lp' \"$untracked_path\" >/dev/null 2>&1; then "
+    "printf 'mode '; stat -f '%Lp %N' \"$untracked_path\"; "
+    "else printf 'mode '; stat -c '%a %n' \"$untracked_path\" 2>/dev/null || true; fi; "
+    'git hash-object -- "$untracked_path" 2>/dev/null || true; '
     "done"
 )
 _ROOT_PROBE_COMMANDS = (
@@ -4964,15 +4964,24 @@ _COVERAGE_REVIEW_SYSTEM_PROMPT = (
     "counterexample. Do not require exhaustive variants. If tests already cover a "
     "representative equivalence class and the changed source clearly handles a "
     "new variant from that same class, pass instead of asking for another near-"
-    "duplicate case. Fail only for a distinct stated behavior, a test expectation "
-    "that conflicts with the stated behavior, or an obvious source bug that the "
-    "changed tests would miss. When the task explicitly lists multiple accepted "
-    "forms, modes, directions, assignment/update cases, or required error cases, "
-    "treat each listed item as a distinct stated behavior. Tests should cover "
-    "every listed item directly or cover a representative combination that would "
-    "catch an implementation that omits that listed item. If two listed behaviors "
-    "interact, such as an omitted component plus reverse traversal, try a "
-    "counterexample that combines them before approving. Treat claims about "
+    "duplicate case. For parser or classifier tasks, broad domain nouns such as "
+    "number, duration, byte size, version, address, timestamp, path, URL, token, "
+    "identifier, or enum often contain distinct accepted-form families, units, "
+    "signs, prefixes, casing, and aliases. Use the task, changed source, and "
+    "final answer to derive those subfamilies. A hard-coded accepted-form list, "
+    "regex alternation, switch, map, or enum in the implementation is not proof "
+    "that the task's whole domain is covered; if tests only exercise one narrow "
+    "unit family or alias family while the task or final answer claims the broad "
+    "domain, fail with a counterexample from the missing family. Fail only for a "
+    "distinct stated behavior, a test expectation that conflicts with the stated "
+    "behavior, or an obvious source bug that the changed tests would miss. When "
+    "the task explicitly lists multiple accepted forms, modes, directions, "
+    "assignment/update cases, or required error cases, treat each listed item as "
+    "a distinct stated behavior. Tests should cover every listed item directly "
+    "or cover a representative combination that would catch an implementation "
+    "that omits that listed item. If two listed behaviors interact, such as an "
+    "omitted component plus reverse traversal, try a counterexample that combines "
+    "them before approving. Treat claims about "
     "arbitrary precision, arbitrarily large values, overflow avoidance, lossless "
     "comparison, exact magnitude, or no loss of precision as stress-case "
     "requirements, not ordinary happy paths. If the task applies that requirement "
@@ -5139,17 +5148,17 @@ class ExternalWorkspaceCoverageVerifier:
         quoted = " ".join(shlex.quote(path) for path in selected)
         result = await self.environment.exec(
             (
-                "for path in "
+                "for changed_path in "
                 f"{quoted}; do "
-                '[ -f "$path" ] || continue; '
-                "printf '\\n--- %s ---\\n' \"$path\"; "
-                'dir=$(dirname "$path"); '
-                'base=$(basename "$path"); '
+                '[ -f "$changed_path" ] || continue; '
+                "printf '\\n--- %s ---\\n' \"$changed_path\"; "
+                'dir=$(dirname "$changed_path"); '
+                'base=$(basename "$changed_path"); '
                 'diff_output=$(git -C "$dir" diff -- "$base" 2>/dev/null || true); '
                 'if [ -n "$diff_output" ]; then '
                 "printf '%s\\n' \"$diff_output\"; "
                 "else "
-                "sed -n '1,240p' \"$path\"; "
+                "sed -n '1,240p' \"$changed_path\"; "
                 "fi; "
                 "done"
             ),

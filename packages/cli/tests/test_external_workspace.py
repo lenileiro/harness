@@ -5,6 +5,8 @@ import asyncio
 import json
 import os
 import re
+import shutil
+import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -87,6 +89,25 @@ class LocalEnvironment:
         proc = await asyncio.create_subprocess_shell(
             command,
             cwd=cwd or str(self.root),
+            stdin=asyncio.subprocess.DEVNULL,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout_sec or 30)
+        return ExecResult(
+            stdout=stdout.decode("utf-8", errors="replace"),
+            stderr=stderr.decode("utf-8", errors="replace"),
+            return_code=proc.returncode or 0,
+        )
+
+
+class ZshLocalEnvironment(LocalEnvironment):
+    async def exec(self, command: str, *, cwd: str | None = None, timeout_sec: int | None = None):
+        self.calls.append({"command": command, "cwd": cwd, "timeout_sec": timeout_sec})
+        proc = await asyncio.create_subprocess_shell(
+            command,
+            cwd=cwd or str(self.root),
+            executable=shutil.which("zsh") or "zsh",
             stdin=asyncio.subprocess.DEVNULL,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
@@ -4703,6 +4724,15 @@ async def test_external_workspace_coverage_verifier_rejects_weak_regression_test
     assert "safe" in system_prompt
     assert "equivalence class" in system_prompt
     assert "near-duplicate" in system_prompt
+    assert "parser or classifier tasks" in system_prompt
+    assert "broad domain nouns" in system_prompt
+    assert "distinct accepted-form families" in system_prompt
+    assert "units, signs, prefixes, casing, and aliases" in system_prompt
+    assert "hard-coded accepted-form list" in system_prompt
+    assert "regex alternation" in system_prompt
+    assert "not proof" in system_prompt
+    assert "unit family or alias family" in system_prompt
+    assert "counterexample from the missing family" in system_prompt
     assert "explicitly lists multiple accepted forms" in system_prompt
     assert "distinct stated behavior" in system_prompt
     assert "omitted component plus reverse traversal" in system_prompt
@@ -4962,6 +4992,79 @@ async def test_external_workspace_coverage_verifier_reads_diff_hunks_for_large_c
     assert "diff --git a/tests/test_sorting.py b/tests/test_sorting.py" in prompt
     assert "sort_label_values(['1', ' 1']) == [' 1', '1']" in prompt
     assert "def test_filler_0()" not in prompt
+
+
+@pytest.mark.skipif(shutil.which("zsh") is None, reason="zsh is required")
+@pytest.mark.asyncio
+async def test_external_workspace_coverage_verifier_reads_changed_paths_under_zsh(
+    tmp_path: Path,
+) -> None:
+    env = ZshLocalEnvironment(tmp_path)
+    (tmp_path / "src").mkdir()
+    (tmp_path / "tests").mkdir()
+    (tmp_path / "src" / "parser.txt").write_text("units=B|KB|MB\n", encoding="utf-8")
+    (tmp_path / "tests" / "test_parser.txt").write_text(
+        "assert parse('1KB')\n",
+        encoding="utf-8",
+    )
+    await env.exec("git init")
+    await env.exec("git add src/parser.txt tests/test_parser.txt")
+    await env.exec("git -c user.name=test -c user.email=test@example.com commit -m baseline")
+
+    (tmp_path / "src" / "parser.txt").write_text("units=B|KB|MB|GB\n", encoding="utf-8")
+    (tmp_path / "tests" / "test_parser.txt").write_text(
+        "assert parse('1GB')\n",
+        encoding="utf-8",
+    )
+
+    structural = ExternalWorkspaceVerifier(env, workdir=str(tmp_path))
+    structural.latest = ExternalWorkspaceVerificationSnapshot(
+        source_change_paths=["src/parser.txt"],
+        test_change_paths=["tests/test_parser.txt"],
+        verification_passed_after_source_change=True,
+        latest_verification_command="project-test tests/test_parser.txt",
+    )
+    adapter = CoverageReviewAdapter(
+        {"can_finish": True, "reason": "tests cover observable behavior", "confidence": 0.9}
+    )
+    verifier = ExternalWorkspaceCoverageVerifier(
+        environment=env,
+        workdir=str(tmp_path),
+        instruction="parse byte size labels",
+        adapter=adapter,
+        model="judge",
+        structural_verifier=structural,
+    )
+
+    result = await verifier.verify(session=SimpleNamespace(messages=[]), activity=[])
+
+    assert result.can_finish is True
+    prompt = adapter.calls[0]["messages"][1].content
+    assert "diff --git a/src/parser.txt b/src/parser.txt" in prompt
+    assert "units=B|KB|MB|GB" in prompt
+    assert "diff --git a/tests/test_parser.txt b/tests/test_parser.txt" in prompt
+    assert "assert parse('1GB')" in prompt
+
+
+@pytest.mark.skipif(shutil.which("zsh") is None, reason="zsh is required")
+def test_workspace_fingerprint_command_preserves_path_under_zsh(tmp_path: Path) -> None:
+    subprocess.run(["git", "init"], cwd=tmp_path, check=True, capture_output=True, text=True)
+    (tmp_path / "notes.txt").write_text("hello\n", encoding="utf-8")
+
+    command = (
+        _GIT_WORKSPACE_FINGERPRINT_COMMAND
+        + "; command -v git >/dev/null; command -v stat >/dev/null"
+    )
+    result = subprocess.run(
+        [shutil.which("zsh") or "zsh", "-fc", command],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "untracked notes.txt" in result.stdout
+    assert "mode " in result.stdout
 
 
 @pytest.mark.asyncio
