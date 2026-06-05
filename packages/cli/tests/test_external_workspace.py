@@ -4689,6 +4689,12 @@ async def test_external_workspace_coverage_verifier_rejects_weak_regression_test
     assert "explicitly lists multiple accepted forms" in system_prompt
     assert "distinct stated behavior" in system_prompt
     assert "omitted component plus reverse traversal" in system_prompt
+    assert "arbitrary precision" in system_prompt
+    assert "arbitrarily large values" in system_prompt
+    assert "exact magnitude" in system_prompt
+    assert "multiple parsed domains" in system_prompt
+    assert "silently falls back to floats" in system_prompt
+    assert "natural/string ordering" in system_prompt
     assert "contradict the task" in system_prompt
     assert "merely arguable" in system_prompt
     assert "Stay inside the user's stated behavior" in system_prompt

@@ -4932,7 +4932,15 @@ _COVERAGE_REVIEW_SYSTEM_PROMPT = (
     "every listed item directly or cover a representative combination that would "
     "catch an implementation that omits that listed item. If two listed behaviors "
     "interact, such as an omitted component plus reverse traversal, try a "
-    "counterexample that combines them before approving.\n\n"
+    "counterexample that combines them before approving. Treat claims about "
+    "arbitrary precision, arbitrarily large values, overflow avoidance, lossless "
+    "comparison, exact magnitude, or no loss of precision as stress-case "
+    "requirements, not ordinary happy paths. If the task applies that requirement "
+    "to multiple parsed domains, units, numeric forms, or scaled representations, "
+    "require representative changed tests in each affected domain or a combined "
+    "test that would fail an implementation that only handles the simplest domain "
+    "or silently falls back to floats, dominant-term approximations, truncation, "
+    "or natural/string ordering.\n\n"
     "Return only JSON on one line: "
     '{"can_finish": true|false, "reason": "<short actionable reason>", '
     '"confidence": 0.0..1.0}'
