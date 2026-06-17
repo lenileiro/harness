@@ -1,0 +1,10 @@
+{
+  "id": "hyp-001",
+  "opportunity_id": "opt-001",
+  "title": "Automated OpenAPI Spec Generation",
+  "description": "Verify if using a tool like FastAPI or a decorator-based approach can accurately capture existing REST endpoints.",
+  "success_criteria": [
+    "Successful generation of valid OpenAPI 3.0 spec",
+    "Coverage of >90% of existing endpoints"
+  ]
+}
