@@ -7,6 +7,7 @@ from typing import Annotated
 import typer
 from rich.table import Table
 
+from harness.adapters.claude import claude_cli_available, inspect_claude_cli_auth
 from harness.adapters.codex import codex_cli_available, inspect_codex_cli_auth
 from harness.adapters.openai import inspect_codex_openai_auth, load_codex_openai_api_key
 from harness.cli.common import (
@@ -47,8 +48,8 @@ def providers_list_cmd(
     )
     table.add_row(
         "ollama",
-        "[green]ready[/green]",
-        f"base_url: {ollama_base}",
+        "[yellow]not probed[/yellow]",
+        f"base_url: {ollama_base}; use providers capabilities to connect",
     )
 
     codex_auth = inspect_codex_cli_auth()
@@ -72,6 +73,21 @@ def providers_list_cmd(
     else:
         codex_notes_parts.append("run `codex login`")
     table.add_row("codex", codex_status, ", ".join(codex_notes_parts))
+
+    claude_auth = inspect_claude_cli_auth()
+    claude_installed = claude_cli_available()
+    claude_status = (
+        "[green]ready[/green]" if claude_installed and claude_auth else "[red]missing login[/red]"
+    )
+    claude_notes_parts = ["cli: installed" if claude_installed else "cli: not found on PATH"]
+    if claude_auth:
+        claude_notes_parts.append(f"auth_method: {claude_auth.get('auth_method', 'unknown')}")
+        claude_notes_parts.append(
+            f"subscription: {claude_auth.get('subscription_type', 'unknown')}"
+        )
+    elif claude_installed:
+        claude_notes_parts.append("run `claude auth login`")
+    table.add_row("claude", claude_status, ", ".join(claude_notes_parts))
 
     has_oa_env_key = bool(os.environ.get("OPENAI_API_KEY"))
     has_oa_codex_key = bool(load_codex_openai_api_key())
@@ -105,17 +121,37 @@ def providers_list_cmd(
         or_notes_parts.append(f"x_title: {or_settings['x_title']}")
     table.add_row("openrouter", or_status, ", ".join(or_notes_parts) or "—")
 
+    has_anthropic_key = bool(os.environ.get("ANTHROPIC_API_KEY"))
+    anthropic_status = "configured" if has_anthropic_key else "missing ANTHROPIC_API_KEY"
+    table.add_row(
+        "anthropic", anthropic_status, "env credential present" if has_anthropic_key else "—"
+    )
+
+    for name, settings in cfg.provider_settings.items():
+        if settings.get("driver") == "openai-compatible":
+            variable = settings.get("api_key_env")
+            configured = isinstance(variable, str) and (
+                not variable or bool(os.environ.get(variable))
+            )
+            table.add_row(
+                name,
+                "configured" if configured else "missing credential",
+                "OpenAI-compatible endpoint; not probed",
+            )
     console.print(table)
     console.print(
         "\n".join(
             [
-                f"ollama: ready; base_url: {ollama_base}",
+                f"ollama: not probed; base_url: {ollama_base}",
                 f"codex: {'ready' if codex_cli_available() and codex_auth is not None else 'missing login'}; "
                 + ", ".join(codex_notes_parts),
+                f"claude: {'ready' if claude_installed and claude_auth else 'missing login'}; "
+                + ", ".join(claude_notes_parts),
                 f"openai: {'ready' if has_oa_env_key or has_oa_codex_key else 'missing OPENAI_API_KEY'}; "
                 + (", ".join(oa_notes_parts) or "—"),
                 f"openrouter: {'ready' if has_or_key else 'missing OPENROUTER_API_KEY'}; "
                 + (", ".join(or_notes_parts) or "—"),
+                f"anthropic: {anthropic_status}",
             ]
         )
     )
@@ -124,13 +160,16 @@ def providers_list_cmd(
 @providers_app.command("capabilities")
 def providers_capabilities_cmd(
     name: Annotated[
-        str, typer.Argument(help="Provider name (ollama, codex, openai, or openrouter).")
+        str,
+        typer.Argument(
+            help="Provider name (ollama, codex, claude, openai, openrouter, anthropic)."
+        ),
     ],
     config_path: Annotated[Path | None, typer.Option("--config")] = None,
 ) -> None:
     """Print a provider's reported Capabilities."""
     cfg = _load_cli_config(config_path)
-    if name not in KNOWN_PROVIDERS:
+    if name not in KNOWN_PROVIDERS and cfg.provider(name).get("driver") != "openai-compatible":
         console.print(f"[red]Unknown provider:[/red] {name}")
         raise typer.Exit(2)
 
@@ -146,6 +185,7 @@ def providers_capabilities_cmd(
         table.add_column("Value")
         table.add_row("streaming", str(caps.streaming))
         table.add_row("tool_use", str(caps.tool_use))
+        table.add_row("external_tools", str(caps.external_tools))
         table.add_row("structured_output", str(caps.structured_output))
         table.add_row(
             "max_context_tokens",

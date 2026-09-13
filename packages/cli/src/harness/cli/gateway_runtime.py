@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import json
 import os
 import re
 from contextlib import suppress
@@ -23,20 +24,30 @@ from harness.cli.common import (
 from harness.cli.plugins import load_cli_hook_providers
 from harness.cli.runtime_helpers import build_storage
 from harness.core import (
+    ApprovalDecision,
+    ApprovalPolicy,
     ApprovalStore,
     GatewayMessage,
     Message,
+    Tool,
     default_gateway_root,
 )
 from harness.core.extensions import LifecycleHook
-from harness.core.gateway_evidence import successful_tool_evidence_reply
-from harness.core.gateway_router import dispatch_gateway_message, is_gateway_control_message
+from harness.core.gateway_evidence import approval_request_text, successful_tool_evidence_reply
+from harness.core.gateway_models import GatewayRuntimeBinding
+from harness.core.gateway_router import (
+    dispatch_gateway_message,
+    gateway_pending_approvals,
+    is_gateway_control_message,
+)
 from harness.core.gateway_sessions import GatewaySessionStore
 from harness.core.gateway_whatsapp import (
     default_whatsapp_config_path,
     load_whatsapp_bridge_config,
 )
+from harness.core.memory import MemoryScope, MemoryStore
 from harness.core.scheduler_store import SchedulerStore
+from harness.core.schemas import MediaAttachment
 from harness.core.verification_structural import (
     tool_event_changes_state,
     verify_work_event_changes_state,
@@ -57,10 +68,55 @@ _RUNTIME_SESSION_METADATA_RE = re.compile(
 )
 
 
+class GatewayApprovalPolicy(ApprovalPolicy):
+    """Remote trust never inherits a terminal session's blanket tool grants."""
+
+    def decide(
+        self, tool: Tool, *, session_overrides: dict[str, ApprovalDecision] | None = None
+    ) -> ApprovalDecision:
+        declared = {
+            self.per_tool.get(tool.name),
+            (session_overrides or {}).get(tool.name),
+            tool.approval,
+        }
+        if "deny" in declared:
+            return "deny"
+        if "prompt" in declared:
+            return "prompt"
+        if getattr(tool, "effect_scope", None) in {"read_only", "session_ephemeral"}:
+            return "auto"
+        return "prompt"
+
+
+async def _gateway_pending_reply(
+    *, cwd: Path, session_store: GatewaySessionStore, transport: str, user_id: str, thread_id: str
+) -> tuple[str, list[str]]:
+    storage = build_storage(db=cwd / ".harness" / "harness.db", in_memory=False, cwd=cwd)
+    try:
+        approvals = await gateway_pending_approvals(
+            approval_store=cast(ApprovalStore, storage),
+            session_store=session_store,
+            transport=transport,
+            user_id=user_id,
+            thread_id=thread_id,
+        )
+        return "\n\n".join(approval_request_text(item) for item in approvals), [
+            item.id for item in approvals
+        ]
+    finally:
+        close = getattr(storage, "close", None)
+        if callable(close):
+            result = close()
+            if isawaitable(result):
+                await result
+
+
 def _default_gateway_model(provider: str) -> str:
     normalized = provider.strip().lower()
     if normalized == "openrouter":
         return "openai/gpt-5.4-nano"
+    if normalized == "claude":
+        return "sonnet"
     return "gemma4:latest"
 
 
@@ -384,6 +440,28 @@ def _unverified_workspace_change_reply_from_activity(events: list[Any]) -> str |
     return None
 
 
+async def _latest_gateway_attachments(*, cwd: Path, session_id: str) -> list[dict[str, Any]]:
+    storage = build_storage(db=None, in_memory=False, cwd=cwd)
+    try:
+        session = await storage.get(session_id)
+        if session is None:
+            return []
+        attachments: list[dict[str, Any]] = []
+        for message in reversed(session.messages):
+            if message.role == "user":
+                break
+            if message.role in {"assistant", "tool"}:
+                attachments[0:0] = [item.model_dump(mode="json") for item in message.attachments]
+        # The transport has the same explicit attachment count bound as messages.
+        return attachments[:16]
+    finally:
+        close = getattr(storage, "close", None)
+        if callable(close):
+            result = close()
+            if isawaitable(result):
+                await result
+
+
 async def _latest_tool_failure_reply(*, cwd: Path, session_id: str) -> str | None:
     storage = build_storage(db=None, in_memory=False, cwd=cwd)
     try:
@@ -551,8 +629,13 @@ async def _run_gateway_chat_turn(
     max_steps: int,
     config: Any,
     system_prompt: str,
+    transport: str,
+    user_id: str,
+    local_only: bool = False,
+    attachments: list[MediaAttachment] | None = None,
 ) -> str:
     from harness.cli.__main__ import _build_agent
+    from harness.cli.channels.progress import observe_gateway_event
     from harness.cli.run_commands import run_once as _run_once_impl
     from harness.cli.runtime_helpers import build_critic as _build_critic
     from harness.cli.runtime_helpers import build_verifier as _build_verifier
@@ -561,9 +644,59 @@ async def _run_gateway_chat_turn(
         resolve_runtime_strategy as _resolve_runtime_strategy,
     )
 
+    if "codex" in chain and config.provider("codex").get("mode", "exec") != "app-server":
+        return "Remote approvals require a provider whose tools are dispatched by Harness. Native Codex executes tools outside this approval boundary. Configure Codex mode='app-server' or choose an API provider for gateway conversations."
+
+    if not local_only:
+        if (
+            getattr(config, "browser", None) is not None
+            or getattr(config, "execution", None) is not None
+            or getattr(getattr(config, "computer", None), "enabled", False)
+        ):
+            from harness.core.errors import ConfigurationError
+
+            raise ConfigurationError(
+                "Configured browser/execution/computer backends are unavailable for remote gateway sessions; use a profile without these host-access capabilities"
+            )
+        if hasattr(config, "browser") and hasattr(config, "execution"):
+            config = replace(config, browser=None, execution=None)
+
+    def build_gateway_agent(**kwargs: Any):
+        from harness.cli.gateway_tool_boundary import (
+            HOST_EXECUTION_TOOL_NAMES,
+            install_gateway_tool_boundary,
+        )
+
+        agent = _build_agent(**kwargs)
+        agent.pause_on_approval = True
+        agent.memory_scope = MemoryScope(
+            workspace=str(cwd),
+            user_id=None
+            if local_only
+            else json.dumps([transport, user_id], separators=(",", ":"), ensure_ascii=False),
+        )
+        agent.memory_store = cast(MemoryStore, agent.storage)
+        agent.approval_policy = GatewayApprovalPolicy(per_tool=dict(config.approval))
+        # The current spawn tool stores children only in memory. Those queued
+        # child calls cannot safely survive a gateway restart or be resumed.
+        agent.tools.unregister("spawn_agents")
+        if not local_only:
+            for name in sorted(HOST_EXECUTION_TOOL_NAMES):
+                agent.tools.unregister(name)
+        install_gateway_tool_boundary(agent, cwd, local_only=local_only)
+        if transport == "raft" and not local_only:
+            from harness.cli.channels.raft import raft_tools
+
+            raft_config = getattr(config, "channels", {}).get("raft")
+            if raft_config is not None:
+                for tool in raft_tools(raft_config, user_id=user_id, cwd=cwd):
+                    agent.tools.register(tool)
+        return agent
+
     return (
         await _run_once_impl(
             prompt=prompt,
+            attachments=attachments,
             model=model,
             chain=chain,
             base_url=None,
@@ -574,8 +707,8 @@ async def _run_gateway_chat_turn(
             task_ref=None,
             db=cwd / ".harness" / "harness.db",
             in_memory=False,
-            yes=True,
-            inbox=False,
+            yes=False,
+            inbox=True,
             verify="auto",
             verify_command=None,
             critic=None,
@@ -601,9 +734,10 @@ async def _run_gateway_chat_turn(
             build_critic=_build_critic,
             build_adapter=_build_adapter,
             build_tools=_build_tools,
-            build_agent=_build_agent,
+            build_agent=build_gateway_agent,
             print_defense_ledger=_print_defense_ledger,
             render=lambda _event: None,
+            event_observer=observe_gateway_event,
             default_system_prompt=system_prompt,
             console=console,
         )
@@ -620,6 +754,47 @@ async def _run_gateway_conversation(
     thread_id: str,
     message: str,
     max_steps: int = 20,
+    attachments: list[MediaAttachment] | None = None,
+) -> dict[str, object]:
+    with session_store.conversation_lock(
+        transport=transport, user_id=user_id, thread_id=thread_id
+    ) as acquired:
+        if not acquired:
+            session = session_store.get_or_create_session(
+                transport=transport, user_id=user_id, thread_id=thread_id
+            )
+            return {
+                "reply": {
+                    "session_id": session.id,
+                    "command": "chat",
+                    "status": "busy",
+                    "text": "This conversation is busy. Retry when its current turn finishes.",
+                    "data": {},
+                },
+                "session": session.to_dict(),
+            }
+        return await _run_gateway_conversation_unlocked(
+            cwd=cwd,
+            session_store=session_store,
+            transport=transport,
+            user_id=user_id,
+            thread_id=thread_id,
+            message=message,
+            max_steps=max_steps,
+            attachments=attachments,
+        )
+
+
+async def _run_gateway_conversation_unlocked(
+    *,
+    cwd: Path,
+    session_store: GatewaySessionStore,
+    transport: str,
+    user_id: str,
+    thread_id: str,
+    message: str,
+    max_steps: int = 20,
+    attachments: list[MediaAttachment] | None = None,
 ) -> dict[str, object]:
     from harness.cli.__main__ import _DEFAULT_SYSTEM_PROMPT
 
@@ -629,20 +804,42 @@ async def _run_gateway_conversation(
         user_id=user_id,
         thread_id=thread_id,
     )
+    from harness.cli.gateway_clarification import (
+        gateway_questions,
+        question_reply,
+        resume_gateway_question,
+    )
+
+    waiting = await gateway_questions(
+        cwd=cwd,
+        session_store=session_store,
+        transport=transport,
+        user_id=user_id,
+        thread_id=thread_id,
+    )
+    if waiting:
+        record, question_binding = waiting[0]
+        if record.status == "pending":
+            return question_reply(record, session)
+        return await resume_gateway_question(
+            cwd=cwd, session_store=session_store, record=record, binding=question_binding
+        )
     thread_context = _thread_context_from_session(session)
     cfg = _load_cli_config(None)
     has_whatsapp_config = default_whatsapp_config_path(cwd).exists()
     whatsapp_provider = wa_config.provider if has_whatsapp_config else ""
     whatsapp_model = wa_config.model if has_whatsapp_config else ""
     provider = (
-        _gateway_env_override("HARNESS_GATEWAY_PROVIDER")
+        str(session.metadata.get("provider_override") or "")
+        or _gateway_env_override("HARNESS_GATEWAY_PROVIDER")
         or whatsapp_provider
         or cfg.default_provider
         or _default_gateway_provider()
     )
     chain = _resolve_chain(failover_flag=None, provider_flag=provider, config=cfg)
     model = (
-        _gateway_env_override("HARNESS_GATEWAY_MODEL")
+        str(session.metadata.get("model_override") or "")
+        or _gateway_env_override("HARNESS_GATEWAY_MODEL")
         or whatsapp_model
         or cfg.default_model
         or _default_gateway_model(provider)
@@ -670,11 +867,51 @@ async def _run_gateway_conversation(
         str(session.metadata.get(keyed_session_metadata_name, "")).strip()
         or f"{harness_base_session_id}_{harness_session_mode}_{runtime_session_key}"
     )
+    binding = GatewayRuntimeBinding(
+        session_id=harness_session_id,
+        gateway_session_id=session.id,
+        transport=transport,
+        user_id=user_id,
+        thread_id=thread_id,
+        provider=chain[0],
+        model=model,
+        max_steps=max_steps,
+    )
+    session_store.bind_runtime_session(binding)
+    session = replace(
+        session,
+        metadata={
+            **session.metadata,
+            "harness_session_id": harness_session_id,
+            "harness_session_base_id": harness_base_session_id,
+            keyed_session_metadata_name: harness_session_id,
+        },
+    )
+    session_store.save_session(session)
+    pending_text, pending_ids = await _gateway_pending_reply(
+        cwd=cwd,
+        session_store=session_store,
+        transport=transport,
+        user_id=user_id,
+        thread_id=thread_id,
+    )
+    if pending_ids:
+        return {
+            "reply": {
+                "session_id": session.id,
+                "command": "chat",
+                "status": "approval_required",
+                "text": pending_text,
+                "data": {"approval_ids": pending_ids, "harness_session_id": harness_session_id},
+            },
+            "session": session.to_dict(),
+        }
     runtime_prompt = _with_shared_gateway_context(
         session_store=session_store,
         session=session,
         message=message,
     )
+    media_kwargs: dict[str, Any] = {"attachments": attachments} if attachments else {}
     try:
         final_text = await asyncio.wait_for(
             _run_gateway_chat_turn(
@@ -686,6 +923,9 @@ async def _run_gateway_conversation(
                 max_steps=max_steps,
                 config=cfg,
                 system_prompt=_DEFAULT_SYSTEM_PROMPT,
+                transport=transport,
+                user_id=user_id,
+                **media_kwargs,
             ),
             timeout=_gateway_turn_timeout_seconds(),
         )
@@ -744,6 +984,24 @@ async def _run_gateway_conversation(
             or final_text
         )
     reply_text = (final_text or "").strip()
+    pending_text, pending_ids = await _gateway_pending_reply(
+        cwd=cwd,
+        session_store=session_store,
+        transport=transport,
+        user_id=user_id,
+        thread_id=thread_id,
+    )
+    if pending_ids:
+        reply_text = pending_text
+    waiting = await gateway_questions(
+        cwd=cwd,
+        session_store=session_store,
+        transport=transport,
+        user_id=user_id,
+        thread_id=thread_id,
+    )
+    if waiting:
+        return question_reply(waiting[0][0], session)
     if not reply_text:
         reply_text = (
             "Harness could not generate a conversational reply. "
@@ -786,11 +1044,15 @@ async def _run_gateway_conversation(
     reply = {
         "session_id": updated.id,
         "command": "chat",
-        "status": "ok",
+        "status": "approval_required" if pending_ids else "ok",
         "text": reply_text,
         "data": {
             "harness_session_id": harness_session_id,
             "harness_session_mode": harness_session_mode,
+            "approval_ids": pending_ids,
+            "attachments": await _latest_gateway_attachments(
+                cwd=cwd, session_id=harness_session_id
+            ),
         },
     }
     return {
@@ -807,6 +1069,7 @@ async def _run_gateway_converse_payload(
     user_id: str,
     thread_id: str,
     max_steps: int = 20,
+    attachments: list[MediaAttachment] | None = None,
 ) -> dict[str, object]:
     session_store = GatewaySessionStore(root=default_gateway_root(working_dir))
     return await _run_gateway_conversation(
@@ -817,6 +1080,7 @@ async def _run_gateway_converse_payload(
         thread_id=thread_id,
         message=message,
         max_steps=max_steps,
+        attachments=attachments,
     )
 
 
@@ -835,6 +1099,44 @@ async def _run_gateway_dispatch_payload(
     scheduler_store = SchedulerStore(root=working_dir / ".harness" / "scheduler")
     storage = build_storage(db=db, in_memory=in_memory, cwd=working_dir)
     approval_store = cast(ApprovalStore, storage)
+
+    async def resume_approval(binding: GatewayRuntimeBinding) -> str:
+        from harness.cli.__main__ import _DEFAULT_SYSTEM_PROMPT
+
+        if in_memory or (db is not None and db != working_dir / ".harness" / "harness.db"):
+            return "Approval recorded. Resume the original session using its configured database to continue."
+        cfg = _load_cli_config(None)
+        try:
+            text = await asyncio.wait_for(
+                _run_gateway_chat_turn(
+                    cwd=working_dir,
+                    prompt="The requested action was approved. Continue the existing task from its recorded tool result; do not repeat a completed action.",
+                    chain=[binding.provider],
+                    model=binding.model,
+                    session_id=binding.session_id,
+                    max_steps=binding.max_steps,
+                    config=cfg,
+                    system_prompt=_DEFAULT_SYSTEM_PROMPT,
+                    transport=binding.transport,
+                    user_id=binding.user_id,
+                    local_only=binding.local_only,
+                ),
+                timeout=_gateway_turn_timeout_seconds(),
+            )
+        except typer.Exit:
+            text = (
+                await _latest_run_failure_reply(cwd=working_dir, session_id=binding.session_id)
+                or "The continuation stopped. Inspect this session before requesting another action."
+            )
+        pending_text, _ = await _gateway_pending_reply(
+            cwd=working_dir,
+            session_store=session_store,
+            transport=binding.transport,
+            user_id=binding.user_id,
+            thread_id=binding.thread_id,
+        )
+        return pending_text or text
+
     try:
         reply, session = await dispatch_gateway_message(
             cwd=working_dir,
@@ -849,6 +1151,7 @@ async def _run_gateway_dispatch_payload(
             ),
             approval_store=approval_store,
             hooks=hooks,
+            resume_approval=resume_approval,
         )
         return {
             "reply": reply.to_dict(),
@@ -870,15 +1173,44 @@ async def _run_gateway_receive_payload(
     user_id: str,
     thread_id: str,
     max_steps: int = 20,
+    attachments: list[MediaAttachment] | None = None,
 ) -> dict[str, object]:
-    if is_gateway_control_message(message):
-        return await _run_gateway_dispatch_payload(
+    from harness.cli.gateway_clarification import dispatch_gateway_question
+    from harness.cli.gateway_conversation_commands import (
+        conversation_command,
+        is_conversation_command,
+    )
+
+    question_response = await dispatch_gateway_question(
+        cwd=working_dir, message=message, transport=transport, user_id=user_id, thread_id=thread_id
+    )
+    if question_response is not None:
+        return question_response
+
+    if is_conversation_command(message):
+        return await conversation_command(
+            cwd=working_dir,
+            message=message,
+            transport=transport,
+            user_id=user_id,
+            thread_id=thread_id,
+        )
+    if is_gateway_control_message(message) and not (attachments and not message.strip()):
+        payload = await _run_gateway_dispatch_payload(
             working_dir=working_dir,
             message=message,
             transport=transport,
             user_id=user_id,
             thread_id=thread_id,
         )
+        reply = payload.get("reply")
+        if isinstance(reply, dict):
+            data = reply.get("data")
+            if isinstance(data, dict) and data.get("harness_session_id"):
+                data["attachments"] = await _latest_gateway_attachments(
+                    cwd=working_dir, session_id=str(data["harness_session_id"])
+                )
+        return payload
     return await _run_gateway_converse_payload(
         working_dir=working_dir,
         message=message,
@@ -886,6 +1218,7 @@ async def _run_gateway_receive_payload(
         user_id=user_id,
         thread_id=thread_id,
         max_steps=max_steps,
+        attachments=attachments,
     )
 
 

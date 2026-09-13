@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import replace
 from pathlib import Path
 
+import pytest
+
 from harness.core.mission_models import Mission
 from harness.core.mission_planner import (
     PlannedAssertionInput,
@@ -178,6 +180,24 @@ def test_execute_next_dispatches_ready_feature_and_persists_artifacts(tmp_path: 
     assert handoff.role_model == "gpt-planner"
     assert "Prepared the execution brief" in handoff.completed_work
     assert "Implement the feature and leave a handoff." in handoff.next_recommendation
+
+
+def test_completed_dependency_in_prior_milestone_unlocks_feature(tmp_path: Path) -> None:
+    store, mission_id = _seed_two_milestone_mission(tmp_path)
+    first, second = sorted(store.list_features(mission_id=mission_id), key=lambda item: item.title)
+    store.update_feature(replace(second, depends_on=(first.id,)))
+    result = execute_mission_burst(store=store, mission_id=mission_id, auto_complete=True)
+    assert result.status == "completed"
+    assert store.load_feature(second.id).status == "validated"
+
+
+def test_explicit_future_milestone_does_not_dispatch_current_work(tmp_path: Path) -> None:
+    store, mission_id = _seed_two_milestone_mission(tmp_path)
+    milestones = sorted(store.list_milestones(mission_id=mission_id), key=lambda item: item.order)
+    with pytest.raises(ValueError, match="first incomplete milestone"):
+        execute_mission_milestone(store=store, mission_id=mission_id, milestone_id=milestones[1].id)
+    assert all(item.status == "pending" for item in store.list_features(mission_id=mission_id))
+    assert not store.list_runs(mission_id=mission_id)
 
 
 def test_complete_feature_advances_dependency_chain_and_completes_mission(tmp_path: Path) -> None:

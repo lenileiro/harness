@@ -21,6 +21,7 @@ from harness.core import (
     save_whatsapp_bridge_config,
 )
 from harness.core.gateway_evidence import successful_tool_evidence_reply
+from harness.core.gateway_models import GatewayRuntimeBinding
 from harness.storage.sqlite import SQLiteStorage
 
 
@@ -382,6 +383,21 @@ def test_gateway_dispatch_can_grant_approval(tmp_path: Path) -> None:
             await storage.close()
 
     approval_id = asyncio.run(_seed())
+    session_store = GatewaySessionStore(root=default_gateway_root(tmp_path))
+    session = session_store.get_or_create_session(
+        transport="local", user_id="approver", thread_id="approvals"
+    )
+    session_store.bind_runtime_session(
+        GatewayRuntimeBinding(
+            session_id="sess_gateway",
+            gateway_session_id=session.id,
+            transport="local",
+            user_id="approver",
+            thread_id="approvals",
+            provider="mock",
+            model="mock",
+        )
+    )
 
     granted = runner.invoke(
         cli_main.app,
@@ -984,6 +1000,8 @@ def test_gateway_core_turn_uses_core_runner_with_tools_prediction_and_verificati
     result = asyncio.run(
         gateway_runtime._run_gateway_chat_turn(
             cwd=tmp_path,
+            transport="test",
+            user_id="owner",
             prompt="What is happening with the service?",
             chain=["openrouter"],
             model="google/gemma-4-31b-it",

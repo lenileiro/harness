@@ -88,6 +88,12 @@ def pr_body_for_candidate(
             "## Source Hypotheses",
             *[f"- `{item}`" for item in candidate.source_hypotheses],
         ]
+    if candidate.source_experiments:
+        lines += [
+            "",
+            "## Source Experiments",
+            *[f"- `{item}`" for item in candidate.source_experiments],
+        ]
     if candidate.expected_metric:
         lines += ["", "## Expected Metric", candidate.expected_metric]
     if candidate.validation_plan:
@@ -148,7 +154,7 @@ def paths_have_changes(*, cwd: Path, paths: tuple[str, ...]) -> bool:
     if not paths:
         return False
     result = subprocess.run(
-        ["git", "status", "--short", "--", *paths],
+        ["git", "--literal-pathspecs", "status", "--short", "--", *paths],
         cwd=cwd,
         capture_output=True,
         text=True,
@@ -160,10 +166,10 @@ def paths_have_changes(*, cwd: Path, paths: tuple[str, ...]) -> bool:
 def commit_paths(*, cwd: Path, message: str, paths: tuple[str, ...]) -> bool:
     if not paths:
         raise ValueError("commit requires at least one target file")
-    _git(["git", "add", "--", *paths], cwd=cwd)
+    _git(["git", "--literal-pathspecs", "add", "--", *paths], cwd=cwd)
     if not paths_have_changes(cwd=cwd, paths=paths):
         return False
-    _git(["git", "commit", "-m", message, "--", *paths], cwd=cwd)
+    _git(["git", "--literal-pathspecs", "commit", "-m", message, "--", *paths], cwd=cwd)
     return True
 
 

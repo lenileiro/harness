@@ -20,6 +20,7 @@ class PromotionCandidate:
     mission_feature_ids: tuple[str, ...] = ()
     source_publications: tuple[str, ...] = ()
     source_hypotheses: tuple[str, ...] = ()
+    source_experiments: tuple[str, ...] = ()
     target_files: tuple[str, ...] = ()
     expected_metric: str = ""
     validation_plan: str = ""
@@ -37,6 +38,7 @@ class PromotionCandidate:
             "mission_feature_ids": list(self.mission_feature_ids),
             "source_publications": list(self.source_publications),
             "source_hypotheses": list(self.source_hypotheses),
+            "source_experiments": list(self.source_experiments),
             "target_files": list(self.target_files),
             "expected_metric": self.expected_metric,
             "validation_plan": self.validation_plan,
@@ -61,6 +63,9 @@ class PromotionCandidate:
             ),
             source_hypotheses=tuple(
                 str(item).strip() for item in data.get("source_hypotheses") or []
+            ),
+            source_experiments=tuple(
+                str(item).strip() for item in data.get("source_experiments") or []
             ),
             target_files=tuple(str(item).strip() for item in data.get("target_files") or []),
             expected_metric=str(data.get("expected_metric") or "").strip(),

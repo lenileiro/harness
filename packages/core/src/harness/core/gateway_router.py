@@ -6,11 +6,12 @@ import re
 import shutil
 import subprocess
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from harness.core.approval import ApprovalStore
+from harness.core.approval import ApprovalStore, PendingApproval
 from harness.core.dynamic_workflows import (
     WorkflowStore,
     create_default_workflow,
@@ -18,9 +19,11 @@ from harness.core.dynamic_workflows import (
     render_workflow_mermaid,
 )
 from harness.core.extensions import LifecycleHook
+from harness.core.gateway_evidence import approval_expires_at, approval_request_text
 from harness.core.gateway_models import (
     GatewayMessage,
     GatewayReply,
+    GatewayRuntimeBinding,
     GatewaySessionBinding,
     GatewayWorkRef,
 )
@@ -51,7 +54,7 @@ def is_gateway_control_message(text: str) -> bool:
         return True
     lowered = [item.lower() for item in tokens]
     command = lowered[0]
-    if command in {"status", "runs"}:
+    if command in {"status", "runs", "approvals"}:
         return True
     if command == "mission" and len(tokens) >= 3 and lowered[1] == "start":
         return True
@@ -63,7 +66,7 @@ def is_gateway_control_message(text: str) -> bool:
             return True
         if lowered[1] == "graph":
             return True
-    if command in {"approve", "report"} and len(tokens) >= 2:
+    if command in {"approve", "deny", "report"} and len(tokens) >= 2:
         return True
     return _parse_reminder_intent(text) is not None
 
@@ -271,7 +274,7 @@ def _dispatch_reminder_create(
             "notify_to": message.user_id,
             "notify_chat_id": message.thread_id,
         },
-        title=f"reminder-{reminder_text[:40]}",
+        title="reminder",
     )
     scheduler_store.add_job(job)
     _launch_scheduler_watcher(cwd=cwd, wait_seconds=wait_seconds, recurring=recurring)
@@ -290,36 +293,169 @@ async def _pending_approval_count(store: ApprovalStore | None) -> int:
     return len(await store.list_approvals(status="pending"))
 
 
-async def _resolve_approval(
-    approval_store: ApprovalStore | None, approval_id: str
-) -> tuple[bool, str]:
+async def gateway_pending_approvals(
+    *,
+    approval_store: ApprovalStore,
+    session_store: GatewaySessionStore,
+    transport: str,
+    user_id: str,
+    thread_id: str,
+) -> list[PendingApproval]:
+    pending: list[PendingApproval] = []
+    for binding in session_store.list_runtime_bindings(
+        transport=transport, user_id=user_id, thread_id=thread_id
+    ):
+        for approval in await approval_store.list_approvals(
+            session_id=binding.session_id, status="pending"
+        ):
+            if approval_expires_at(approval) <= datetime.now(UTC):
+                await approval_store.resolve_approval(
+                    approval.id, status="denied", resolved_by="gateway:expired"
+                )
+            else:
+                pending.append(approval)
+    return sorted(pending, key=lambda item: item.requested_at)
+
+
+async def _resolve_gateway_approval(
+    *,
+    approval_store: ApprovalStore | None,
+    session_store: GatewaySessionStore,
+    session: GatewaySessionBinding,
+    message: GatewayMessage,
+    approval_id: str,
+    grant: bool,
+    resume_approval: Callable[[GatewayRuntimeBinding], Awaitable[str]] | None,
+) -> GatewayReply:
+    command = "approve" if grant else "deny"
+
+    def response(text: str, *, status: str = "error", **data: object) -> GatewayReply:
+        return GatewayReply(
+            session_id=session.id,
+            command=command,
+            status=status,
+            text=text,
+            data={"approval_id": approval_id, **data},
+        )
+
     if approval_store is None:
-        return False, "Approval store is not configured."
-    updated = await approval_store.resolve_approval(
-        approval_id, status="granted", resolved_by="gateway"
-    )
-    if updated is None:
-        return False, f"Approval not found: {approval_id}"
-    return True, f"Granted {updated.id} ({updated.tool_name})."
+        return response("Approval store is not configured.")
+    with session_store.conversation_lock(
+        transport=message.transport, user_id=message.user_id, thread_id=message.thread_id
+    ) as acquired:
+        if not acquired:
+            return response(
+                "This conversation is busy. Retry the decision when its current turn finishes.",
+                status="busy",
+            )
+        approval = await approval_store.get_approval(approval_id)
+        binding = (
+            session_store.load_runtime_binding(approval.session_id)
+            if approval is not None
+            else None
+        )
+        if (
+            approval is None
+            or binding is None
+            or binding.gateway_session_id != session.id
+            or not binding.belongs_to(
+                transport=message.transport, user_id=message.user_id, thread_id=message.thread_id
+            )
+        ):
+            return response("Approval not found for this conversation.")
+        if approval.status != "pending":
+            return response(
+                f"Approval {approval.id} is already {approval.status}; no action repeated.",
+                status="duplicate",
+            )
+        if approval_expires_at(approval) <= datetime.now(UTC):
+            await approval_store.resolve_approval(
+                approval.id, status="denied", resolved_by="gateway:expired"
+            )
+            return response(
+                f"Approval {approval.id} expired. Ask for a new action.", status="expired"
+            )
+        actor = json.dumps(
+            [message.transport, message.user_id, message.thread_id], separators=(",", ":")
+        )
+        updated = await approval_store.resolve_approval(
+            approval.id, status="granted" if grant else "denied", resolved_by=f"gateway:{actor}"
+        )
+        if updated is None:
+            return response(
+                "Approval was already resolved; no action repeated.", status="duplicate"
+            )
+        if not grant:
+            return response(
+                f"Denied {approval.id} ({approval.tool_name}). Nothing was executed.",
+                status="ok",
+                granted=False,
+            )
+        text = f"Granted {approval.id} ({approval.tool_name})."
+        if resume_approval is not None:
+            try:
+                continued = await resume_approval(binding)
+                if continued:
+                    text += f"\n\n{continued}"
+            except Exception:
+                text += "\nThe continuation was interrupted. Check the approval and session before retrying; an interrupted action is not automatically repeated."
+        else:
+            text += " Resume the original session to continue."
+        return response(text, status="ok", granted=True, harness_session_id=binding.session_id)
 
 
-def _latest_runs(store: SchedulerStore, *, limit: int = 5) -> list[dict[str, str]]:
+def _latest_runs(
+    store: SchedulerStore,
+    *,
+    transport: str,
+    user_id: str,
+    thread_id: str,
+    limit: int = 5,
+) -> list[dict[str, str]]:
     runs = sorted(
         store.list_run_records(),
         key=lambda item: (item.finished_at, item.id),
         reverse=True,
     )
-    return [
-        {
-            "id": item.id,
-            "job_id": item.job_id,
-            "kind": item.kind,
-            "status": item.status,
-            "result_status": item.result_status,
-            "finished_at": item.finished_at,
-        }
-        for item in runs[:limit]
-    ]
+    visible: list[dict[str, str]] = []
+    for item in runs:
+        if item.kind == "prompt.run" or item.kind.startswith("reminder."):
+            # Historical job IDs include private prompt/reminder text. Filter the
+            # whole row before formatting either text or the structured response.
+            try:
+                job = store.load_job(item.job_id)
+            except (FileNotFoundError, ValueError):
+                continue
+            payload = job.payload
+            if item.kind == "prompt.run":
+                if payload.get("local_only", False):
+                    continue
+                owner = (
+                    payload.get("transport"),
+                    payload.get("user_id"),
+                    payload.get("thread_id"),
+                )
+            else:
+                owner = (
+                    payload.get("notify_transport"),
+                    payload.get("notify_to"),
+                    payload.get("notify_chat_id"),
+                )
+            if owner != (transport, user_id, thread_id):
+                continue
+        visible.append(
+            {
+                "id": item.id,
+                "job_id": item.job_id,
+                "kind": item.kind,
+                "status": item.status,
+                "result_status": item.result_status,
+                "finished_at": item.finished_at,
+            }
+        )
+        if len(visible) >= limit:
+            break
+    return visible
 
 
 def _format_runs(runs: list[dict[str, str]]) -> str:
@@ -645,6 +781,7 @@ async def dispatch_gateway_message(
     message: GatewayMessage,
     approval_store: ApprovalStore | None = None,
     hooks: tuple[LifecycleHook, ...] = (),
+    resume_approval: Callable[[GatewayRuntimeBinding], Awaitable[str]] | None = None,
 ) -> tuple[GatewayReply, GatewaySessionBinding]:
     for hook in hooks:
         hook.on_gateway_message(cwd=cwd, message=message)
@@ -680,7 +817,19 @@ async def dispatch_gateway_message(
             research_store=research_store,
         )
         ready_queue = [item for item in shared_queue if item.ready]
-        pending_approvals = await _pending_approval_count(approval_store)
+        pending_approvals = (
+            len(
+                await gateway_pending_approvals(
+                    approval_store=approval_store,
+                    session_store=session_store,
+                    transport=message.transport,
+                    user_id=message.user_id,
+                    thread_id=message.thread_id,
+                )
+            )
+            if approval_store is not None
+            else 0
+        )
         reply = GatewayReply(
             session_id=session.id,
             command="status",
@@ -702,7 +851,12 @@ async def dispatch_gateway_message(
             },
         )
     elif command == "runs":
-        runs = _latest_runs(scheduler_store)
+        runs = _latest_runs(
+            scheduler_store,
+            transport=message.transport,
+            user_id=message.user_id,
+            thread_id=message.thread_id,
+        )
         reply = GatewayReply(
             session_id=session.id,
             command="runs",
@@ -878,19 +1032,43 @@ async def dispatch_gateway_message(
             text=text,
             data=payload,
         )
-    elif command == "approve" and len(tokens) >= 2:
-        ok, text = await _resolve_approval(approval_store, tokens[1])
-        session = replace(session, last_command="approve", updated_at=_utcnow_text())
-        session_store.save_session(session)
-        for hook in hooks:
-            hook.on_approval_resolved(cwd=cwd, approval_id=tokens[1], granted=ok)
+    elif command == "approvals":
+        pending = (
+            await gateway_pending_approvals(
+                approval_store=approval_store,
+                session_store=session_store,
+                transport=message.transport,
+                user_id=message.user_id,
+                thread_id=message.thread_id,
+            )
+            if approval_store is not None
+            else []
+        )
         reply = GatewayReply(
             session_id=session.id,
-            command="approve",
-            status="ok" if ok else "error",
-            text=text,
-            data={"approval_id": tokens[1]},
+            command=command,
+            status="ok",
+            text="\n\n".join(approval_request_text(item) for item in pending)
+            or "No pending approvals in this conversation.",
+            data={"approval_ids": [item.id for item in pending]},
         )
+    elif command in {"approve", "deny"} and len(tokens) == 2:
+        reply = await _resolve_gateway_approval(
+            approval_store=approval_store,
+            session_store=session_store,
+            session=session,
+            message=message,
+            approval_id=tokens[1],
+            grant=command == "approve",
+            resume_approval=resume_approval,
+        )
+        session = replace(session, last_command=command, updated_at=_utcnow_text())
+        session_store.save_session(session)
+        if reply.status == "ok":
+            for hook in hooks:
+                hook.on_approval_resolved(
+                    cwd=cwd, approval_id=tokens[1], granted=bool(reply.data.get("granted"))
+                )
     elif command == "report" and len(tokens) >= 2:
         mission_id = tokens[1]
         report = build_mission_summary_report(store=mission_store, mission_id=mission_id)
@@ -973,7 +1151,7 @@ async def dispatch_gateway_message(
                 "Unsupported gateway command. Use one of: status, runs, "
                 "mission start <id>, research start, workflow start <goal>, "
                 "workflow status|resume|report|cancel|events|graph <id>, workflow list, "
-                "approve <id>, report <mission_id>."
+                "approvals, approve <id>, deny <id>, report <mission_id>."
             ),
         )
     if reply.command not in {
@@ -981,6 +1159,7 @@ async def dispatch_gateway_message(
         "research.start",
         "workflow.start",
         "approve",
+        "deny",
         "report",
         "reminder.create",
     }:

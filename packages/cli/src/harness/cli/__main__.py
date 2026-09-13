@@ -8,7 +8,7 @@ Phase 4 surface:
 - `harness sessions rm <id>`     — delete a session
 - `harness version`              — print the installed CLI version
 
-Providers: ollama, codex, openai, openrouter.
+Providers: ollama, codex, claude, openai, openrouter, anthropic.
 Tools: read_file, write_file, edit_file, list_dir, glob, shell, web_search, fetch_url.
 
 Config: `$XDG_CONFIG_HOME/harness/config.toml` (or ~/.config/harness/config.toml)
@@ -37,10 +37,12 @@ from typing import Annotated, Any
 import typer
 
 from harness.adapters.anthropic import AnthropicAdapter
+from harness.adapters.claude import ClaudeAdapter
 from harness.adapters.codex import CodexAdapter
 from harness.adapters.ollama import OllamaAdapter
 from harness.adapters.openai import OpenAIAdapter
 from harness.adapters.openrouter import OpenRouterAdapter
+from harness.cli.account_commands import accounts_app
 from harness.cli.approvals_evidence_commands import (
     approvals_deny_command as _approvals_deny_command,
 )
@@ -56,7 +58,10 @@ from harness.cli.approvals_evidence_commands import (
 from harness.cli.approvals_evidence_commands import (
     evidence_list_command as _evidence_list_command,
 )
+from harness.cli.batch_commands import make_batch_app
+from harness.cli.channel_commands import channel_app
 from harness.cli.chat_commands import run_chat_command as _run_chat_command
+from harness.cli.clarify_commands import clarify_app
 from harness.cli.common import (
     _ago,
     _build_tools,
@@ -70,10 +75,14 @@ from harness.cli.common import (
     _args_preview as _common_args_preview,
 )
 from harness.cli.config import HarnessConfig, default_config_path
+from harness.cli.dataset_commands import dataset_app
+from harness.cli.delegate_commands import make_delegate_app
+from harness.cli.desktop_commands import desktop_command
 from harness.cli.docs_commands import docs_audit_command as _docs_audit_command
 from harness.cli.evals import eval_app
 from harness.cli.experience_commands import experience_app
 from harness.cli.gateway_commands import gateway_app
+from harness.cli.honcho_commands import honcho_app
 from harness.cli.introspection import plugins_app, providers_app, tools_app
 from harness.cli.lab_commands import lab_list_command as _lab_list_command
 from harness.cli.lab_commands import lab_resume_command as _lab_resume_command
@@ -92,6 +101,7 @@ from harness.cli.lifecycle_commands import tips_add_command as _tips_add_command
 from harness.cli.lifecycle_commands import tips_list_command as _tips_list_command
 from harness.cli.lifecycle_commands import tips_mine_command as _tips_mine_command
 from harness.cli.lifecycle_commands import tips_test_command as _tips_test_command
+from harness.cli.maintenance_commands import maintenance_app
 from harness.cli.markdown_render import Renderer
 from harness.cli.markdown_render import (
     _preprocess_markdown as _preprocess_markdown_impl,
@@ -99,7 +109,13 @@ from harness.cli.markdown_render import (
 from harness.cli.markdown_render import (
     _render_mermaid as _render_mermaid_impl,
 )
+from harness.cli.mcp_commands import mcp_app
+from harness.cli.migration_commands import migration_app
 from harness.cli.mission_commands import mission_app
+from harness.cli.portal_commands import portal_app
+from harness.cli.profile_commands import auth_app, profiles_app
+from harness.cli.profiles import activate_profile, active_profile
+from harness.cli.recall_commands import recall_app
 from harness.cli.render import (
     _approval_status_style,
     _render_approval,
@@ -145,6 +161,9 @@ from harness.cli.runtime_helpers import (
 )
 from harness.cli.runtime_helpers import workspace_db
 from harness.cli.scheduler_commands import scheduler_app
+from harness.cli.serve_commands import make_serve_command
+from harness.cli.server_builder import server_builder
+from harness.cli.service_commands import service_app
 from harness.cli.sessions_commands import (
     sessions_diff_command as _sessions_diff_command,
 )
@@ -163,6 +182,8 @@ from harness.cli.sessions_commands import (
 from harness.cli.sessions_commands import (
     sessions_show_command as _sessions_show_command,
 )
+from harness.cli.setup_commands import doctor_command, setup_command
+from harness.cli.skills_commands import skills_app
 from harness.cli.tasks_commands import (
     close_if_sqlite as _close_if_sqlite,
 )
@@ -251,12 +272,77 @@ app.add_typer(sessions_app, name="sessions")
 app.add_typer(providers_app, name="providers")
 app.add_typer(tools_app, name="tools")
 app.add_typer(plugins_app, name="plugins")
+app.add_typer(skills_app, name="skills")
+app.add_typer(recall_app, name="recall")
+app.add_typer(mcp_app, name="mcp")
+app.add_typer(clarify_app, name="clarify")
+app.add_typer(maintenance_app, name="maintenance")
+app.add_typer(migration_app, name="migrate")
+app.add_typer(profiles_app, name="profiles")
+app.add_typer(auth_app, name="auth")
+app.add_typer(accounts_app, name="accounts")
+app.add_typer(portal_app, name="portal")
+app.add_typer(honcho_app, name="honcho")
+app.add_typer(channel_app, name="channel")
+app.command("setup")(setup_command)
+app.command("doctor")(doctor_command)
+app.command("serve")(make_serve_command(server_builder))
+app.add_typer(make_delegate_app(server_builder), name="delegate")
+app.add_typer(make_batch_app(server_builder), name="batch")
+app.add_typer(dataset_app, name="dataset")
+app.command("desktop")(desktop_command)
+app.add_typer(service_app, name="service")
 app.add_typer(gateway_app, name="gateway")
 app.add_typer(mission_app, name="mission")
 app.add_typer(scheduler_app, name="scheduler")
 app.add_typer(vision_app, name="vision")
 app.add_typer(research_app, name="research")
 app.add_typer(workflow_app, name="workflow")
+
+
+@app.callback()
+def select_profile(
+    ctx: typer.Context,
+    profile: Annotated[
+        str | None, typer.Option("--profile", help="Use an isolated named identity.")
+    ] = None,
+    profiles_dir: Annotated[
+        Path | None, typer.Option("--profiles-root", help="Directory containing named profiles.")
+    ] = None,
+    state_home: Annotated[
+        Path | None,
+        typer.Option(
+            "--home",
+            help="State directory for the default identity; named profiles keep their own state.",
+        ),
+    ] = None,
+) -> None:
+    for variable, directory in (
+        ("HARNESS_PROFILES_ROOT", profiles_dir),
+        ("HARNESS_HOME", state_home),
+    ):
+        if directory is not None:
+            previous = os.environ.get(variable)
+            os.environ[variable] = str(directory.expanduser().resolve())
+
+            def restore_variable(key=variable, value=previous):
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
+
+            ctx.call_on_close(restore_variable)
+    if ctx.invoked_subcommand in {"profiles", "auth"} and profile is None:
+        return
+    try:
+        selected = profile or active_profile()
+        if selected:
+            manager = activate_profile(selected)
+            manager.__enter__()
+            ctx.call_on_close(lambda: manager.__exit__(None, None, None))
+    except (OSError, ValueError) as exc:
+        raise typer.BadParameter(str(exc), param_hint="--profile") from exc
+
 
 tasks_app = typer.Typer(
     name="tasks", help="Create, list, and update durable tasks.", no_args_is_help=True
@@ -369,7 +455,7 @@ _DEFAULT_SYSTEM_PROMPT = (
     "## Context-engine policy\n\n"
     "Do not confuse access with understanding. Raw MCP/tool access, naive document search, or a huge context window "
     "is not enough for broad or unfamiliar work. Before planning, implementation, or review on open-ended tasks, "
-    "build or request a compact context packet when the needed context is not already clear.\n\n"
+    "build a compact context packet yourself with available read-only tools when the needed context is not already clear.\n\n"
     "A good context packet includes current sources of truth, local patterns to reuse, conflicts between code/docs/history, "
     "visible permission or data-governance boundaries, local expert signals from repo evidence when available, "
     "and the validation or review risks the execution agent should use. Search beyond the first plausible hit, "
@@ -411,8 +497,10 @@ _DEFAULT_SYSTEM_PROMPT = (
     "Do NOT declare done after a single attempt on coding tasks. "
     "Do NOT assume your first fix is correct without running verify_work. "
     "Iteration is expected — most fixes take 2-4 attempts.\n\n"
-    "If there are multiple materially different valid implementation paths after a small amount of inspection, "
-    "ask the user a short option question instead of guessing blindly.\n\n"
+    "If several implementation paths remain plausible, inspect the relevant code, tests, documentation and "
+    "scoped history, then research authoritative sources if needed. Choose the best supported reversible "
+    "approach, proceed, and state material assumptions in the result. Do not stop to ask the user to "
+    "choose between ordinary implementation options.\n\n"
     "## Other tools\n\n"
     "- request_critique: Get a second opinion on your approach before making changes. "
     "Describe what you plan to do and why — the critic will identify flaws. "
@@ -495,6 +583,10 @@ def _float_setting(
 def _build_adapter(provider: str, *, base_url: str | None, config: HarnessConfig) -> Adapter:
     """CLI-local adapter factory kept for monkeypatch-friendly test compatibility."""
     settings = config.provider(provider)
+    if settings.get("driver") == "openai-compatible":
+        from harness.cli.configured_provider import ConfiguredProvider
+
+        return ConfiguredProvider(provider, settings=settings, base_url=base_url)
     effective_base_url = base_url or settings.get("base_url")
     if provider == "ollama":
         timeout = float(settings.get("timeout", 120.0))
@@ -525,7 +617,29 @@ def _build_adapter(provider: str, *, base_url: str | None, config: HarnessConfig
             env_var="HARNESS_MODEL_STREAM_IDLE_TIMEOUT",
         )
         cwd = settings.get("cwd")
-        return CodexAdapter(cwd=cwd, timeout=timeout, idle_timeout=idle_timeout)
+        options = {"mode": settings["mode"]} if "mode" in settings else {}
+        return CodexAdapter(cwd=cwd, timeout=timeout, idle_timeout=idle_timeout, **options)
+    if provider == "claude":
+        timeout = _float_setting(
+            settings,
+            "timeout",
+            600.0,
+            env_var="HARNESS_MODEL_TURN_TIMEOUT",
+        )
+        idle_timeout = _float_setting(
+            settings,
+            "idle_timeout",
+            120.0,
+            env_var="HARNESS_MODEL_STREAM_IDLE_TIMEOUT",
+        )
+        budget = settings.get("max_budget_usd")
+        return ClaudeAdapter(
+            cwd=settings.get("cwd"),
+            timeout=timeout,
+            idle_timeout=idle_timeout,
+            effort=str(settings.get("effort", "medium")),
+            max_budget_usd=float(budget) if budget is not None else None,
+        )
     if provider == "openai":
         timeout = float(settings.get("timeout", 120.0))
         return OpenAIAdapter(base_url=effective_base_url, timeout=timeout)
@@ -653,6 +767,12 @@ def version() -> None:
 @app.command()
 def run(
     prompt: Annotated[str, typer.Argument(help="The user prompt for the agent.")],
+    attach: Annotated[
+        list[Path] | None,
+        typer.Option(
+            "--attach", help="Attach an image, audio, or document; repeat for multiple files."
+        ),
+    ] = None,
     model: Annotated[
         str | None,
         typer.Option("--model", "-m", help="Model identifier (overrides config)."),
@@ -884,6 +1004,7 @@ def run(
 ) -> None:
     _run_command(
         prompt=prompt,
+        attach=attach,
         model=model,
         provider=provider,
         failover=failover,
@@ -1770,7 +1891,7 @@ def lab_run(
     provider: Annotated[
         str | None,
         typer.Option(
-            "--provider", "-p", help="LLM provider (ollama, codex, openai, openrouter, …)."
+            "--provider", "-p", help="LLM provider (ollama, codex, claude, openai, openrouter, …)."
         ),
     ] = None,
     model: Annotated[

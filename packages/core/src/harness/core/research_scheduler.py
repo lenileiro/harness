@@ -3,7 +3,9 @@ from __future__ import annotations
 import json
 from collections import Counter
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
+from harness.core.experiments import Experiment
 from harness.core.research_store import ResearchStore
 
 
@@ -21,11 +23,58 @@ class PatternFinding:
     count: int
 
 
-def build_research_queue(store: ResearchStore) -> list[ResearchQueueItem]:
+def promotion_completed_stages(store: ResearchStore, candidate_id: str) -> dict[str, bool]:
+    """Read durable completed actions, including the former prepared-only format."""
+    path = store.promotion_candidates_dir / candidate_id / "promotion_execution.json"
+    if not path.is_file():
+        return {}
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    stages = payload.get("stages")
+    if isinstance(stages, dict):
+        return {str(name): value is True for name, value in stages.items()}
+    completed = {
+        name: payload.get(name) is True for name in ("branch", "commit", "push", "open_pr")
+    }
+    completed["prepare"] = payload.get("status") == "prepared"
+    return completed
+
+
+def _latest_unambiguous_experiments(experiments: list[Experiment]) -> list[Experiment]:
+    latest: dict[str, tuple[datetime, Experiment]] = {}
+    tied: set[str] = set()
+    invalid: set[str] = set()
+    for experiment in experiments:
+        try:
+            timestamp = datetime.fromisoformat(experiment.created_at)
+            if timestamp.tzinfo is None:
+                timestamp = timestamp.replace(tzinfo=UTC)
+        except ValueError:
+            invalid.add(experiment.plan_id)
+            continue
+        previous = latest.get(experiment.plan_id)
+        if previous is None or timestamp > previous[0]:
+            latest[experiment.plan_id] = (timestamp, experiment)
+            tied.discard(experiment.plan_id)
+        elif timestamp == previous[0]:
+            tied.add(experiment.plan_id)
+    return [item for plan_id, (_, item) in latest.items() if plan_id not in tied | invalid]
+
+
+def build_research_queue(
+    store: ResearchStore, *, promotion_actions: tuple[str, ...] = ("prepare",)
+) -> list[ResearchQueueItem]:
     items: list[ResearchQueueItem] = []
+    hypotheses = store.list_hypotheses()
+    plans = store.list_experiment_plans()
+    continued_opportunities = {item.opportunity_id for item in hypotheses}
+    planned_hypotheses = {item.hypothesis_id for item in plans}
+    continued_unknowns = {item.source_unknown_id for item in store.list_rabbit_holes()}
     candidates = store.list_promotion_candidates()
     active_candidates = []
     for candidate in candidates:
+        completed = promotion_completed_stages(store, candidate.id)
+        if all(completed.get(action, False) for action in promotion_actions):
+            continue
         review_path = store.promotion_candidates_dir / candidate.id / "promotion_review.json"
         if review_path.is_file():
             payload = json.loads(review_path.read_text(encoding="utf-8"))
@@ -45,6 +94,8 @@ def build_research_queue(store: ResearchStore) -> list[ResearchQueueItem]:
             )
         )
     for unknown in store.list_unknowns(status="open"):
+        if unknown.id in continued_unknowns:
+            continue
         items.append(
             ResearchQueueItem(
                 kind="unknown",
@@ -54,6 +105,8 @@ def build_research_queue(store: ResearchStore) -> list[ResearchQueueItem]:
             )
         )
     for opportunity in store.list_opportunities():
+        if opportunity.id in continued_opportunities:
+            continue
         items.append(
             ResearchQueueItem(
                 kind="opportunity",
@@ -62,8 +115,8 @@ def build_research_queue(store: ResearchStore) -> list[ResearchQueueItem]:
                 summary=opportunity.title,
             )
         )
-    for hypothesis in store.list_hypotheses():
-        if hypothesis.id in promoted_hypotheses:
+    for hypothesis in hypotheses:
+        if hypothesis.id in promoted_hypotheses or hypothesis.id in planned_hypotheses:
             continue
         items.append(
             ResearchQueueItem(
@@ -75,7 +128,7 @@ def build_research_queue(store: ResearchStore) -> list[ResearchQueueItem]:
         )
     experiments = store.list_experiments()
     executed_plan_ids = {experiment.plan_id for experiment in experiments}
-    for plan in store.list_experiment_plans():
+    for plan in plans:
         if plan.id in executed_plan_ids:
             continue
         items.append(
@@ -86,12 +139,17 @@ def build_research_queue(store: ResearchStore) -> list[ResearchQueueItem]:
                 summary=plan.plan,
             )
         )
-    for experiment in experiments:
-        result = store.load_experiment_result(experiment.id)
+    plans_by_id = {plan.id: plan for plan in plans}
+    for experiment in _latest_unambiguous_experiments(experiments):
+        try:
+            result = store.load_experiment_result(experiment.id)
+        except (OSError, ValueError):
+            # A partial/missing latest record cannot authorize an older pass.
+            continue
         if result.status != "passed":
             continue
-        plan = store.load_experiment_plan(experiment.plan_id)
-        if plan.hypothesis_id in promoted_hypotheses:
+        plan = plans_by_id.get(experiment.plan_id)
+        if plan is None or plan.hypothesis_id in promoted_hypotheses:
             continue
         items.append(
             ResearchQueueItem(
@@ -184,6 +242,7 @@ __all__ = [
     "discover_repeated_patterns",
     "mine_new_failures",
     "mine_new_successes",
+    "promotion_completed_stages",
     "rank_promotion_candidates",
     "rebalance_research_queue",
     "suggest_opportunities",

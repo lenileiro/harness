@@ -85,6 +85,12 @@ def count_tokens(messages: list[Message], model: str) -> int:
         total += _PER_MESSAGE_OVERHEAD
         if msg.content:
             total += len(enc.encode(msg.content))
+        # Media tokenization varies by provider/model. Reserve a conservative
+        # estimate instead of counting a potentially huge base64 string as text
+        # or incorrectly treating images/audio as free context.
+        for media in msg.attachments:
+            if media.model_visible:
+                total += 1024 + (len(media.data) // 4 if media.data else 0)
         if msg.tool_calls:
             for tc in msg.tool_calls:
                 total += len(enc.encode(tc.name))

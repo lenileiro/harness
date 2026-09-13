@@ -6,12 +6,15 @@ supported providers (OpenRouter, Ollama) speak OpenAI-compatible APIs.
 
 from __future__ import annotations
 
+import base64
+import binascii
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, Self
+from urllib.parse import urlparse
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 Role = Literal["system", "user", "assistant", "tool"]
 ApprovalDecision = Literal["auto", "prompt", "deny"]
@@ -54,6 +57,76 @@ class ToolCall(BaseModel):
     arguments: dict[str, Any] = Field(default_factory=dict)
 
 
+class MediaAttachment(BaseModel):
+    """Versioned, portable media. Inline data is base64, capped at 20 MiB.
+
+    URLs are provider-fetchable HTTP(S) references, never local filesystem paths.
+    Loading a local file is an explicit caller action via ``from_file``.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    version: Literal[1] = 1
+    kind: Literal["image", "audio", "file"]
+    mime_type: str = Field(pattern=r"^[a-zA-Z0-9.+-]+/[a-zA-Z0-9.+-]+$")
+    data: str | None = Field(default=None, max_length=27_962_028, repr=False)
+    url: str | None = Field(default=None, max_length=8192)
+    name: str | None = Field(default=None, max_length=255)
+    duration_ms: int | None = Field(default=None, gt=0, le=86_400_000, strict=True)
+    model_visible: bool = True
+    """False for deliverable artifacts (such as generated speech) the model need not consume."""
+
+    @model_validator(mode="after")
+    def validate_source(self) -> Self:
+        if (self.data is None) == (self.url is None):
+            raise ValueError("media requires exactly one of data or url")
+        if self.data is not None:
+            try:
+                decoded = base64.b64decode(self.data, validate=True)
+            except (ValueError, binascii.Error) as exc:
+                raise ValueError("media data must be valid base64") from exc
+            if not decoded or len(decoded) > 20 * 1024 * 1024:
+                raise ValueError("media must contain between 1 byte and 20 MiB")
+        if self.url is not None:
+            parsed = urlparse(self.url)
+            if (
+                parsed.scheme not in {"http", "https"}
+                or not parsed.hostname
+                or parsed.username
+                or parsed.password
+            ):
+                raise ValueError("media URL must be HTTP(S) without credentials")
+        if self.kind != "file" and not self.mime_type.startswith(self.kind + "/"):
+            raise ValueError("media kind and MIME type do not match")
+        return self
+
+    @classmethod
+    def from_file(cls, path: Path, *, mime_type: str | None = None) -> Self:
+        import mimetypes
+
+        from harness.core.media_metadata import audio_duration_ms
+        from harness.core.paths import read_regular_file
+
+        raw = read_regular_file(path, max_bytes=20 * 1024 * 1024)
+        mime = mime_type or mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+        kind = (
+            "image"
+            if mime.startswith("image/")
+            else "audio"
+            if mime.startswith("audio/")
+            else "file"
+        )
+        return cls(
+            kind=kind,
+            mime_type=mime,
+            data=base64.b64encode(raw).decode("ascii"),
+            name=path.name,
+            duration_ms=audio_duration_ms(raw) if kind == "audio" else None,
+        )
+
+    def data_uri(self) -> str:
+        return self.url if self.url is not None else f"data:{self.mime_type};base64,{self.data}"
+
+
 class ToolResult(BaseModel):
     """The outcome of executing a tool call.
 
@@ -73,6 +146,7 @@ class ToolResult(BaseModel):
     content: str
     is_error: bool = False
     metadata: dict[str, Any] | None = None
+    attachments: list[MediaAttachment] = Field(default_factory=list, max_length=16)
 
 
 # ---------------------------------------------------------------------------
@@ -105,6 +179,7 @@ class Message(BaseModel):
     tool_call_id: str | None = None
     name: str | None = None
     cache_breakpoint: bool = False
+    attachments: list[MediaAttachment] = Field(default_factory=list, max_length=16)
 
 
 # ---------------------------------------------------------------------------
@@ -119,9 +194,16 @@ class Capabilities(BaseModel):
 
     streaming: bool = True
     tool_use: bool = False
+    external_tools: bool = True
+    """Whether caller-supplied tool schemas can be dispatched through Harness.
+
+    tool_use still gates tool availability; native agent subprocesses can
+    advertise tool_use while explicitly declining external tool integration.
+    """
     structured_output: bool = False
     max_context_tokens: int | None = None
     models: list[str] | None = None
+    input_media: list[Literal["image", "audio", "file"]] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -222,6 +304,11 @@ class RunRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
 
     prompt: str
+    execution_context: str | None = Field(default=None, max_length=64000)
+    """Trusted caller-provided context and execution guidance, separate from the
+    user's task. Persisted per session; None preserves it, an empty string clears
+    it. This context never changes tool permissions or verification requirements."""
+    attachments: list[MediaAttachment] = Field(default_factory=list, max_length=16)
     session_id: str = Field(default_factory=lambda: _new_id("sess"))
     provider: str | None = None
     model: str | None = None

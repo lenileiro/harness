@@ -19,6 +19,9 @@ class ExperimentPlan:
     eval_slices: tuple[str, ...] = ()
     created_by: str = "human"
     created_at: str = field(default_factory=_utcnow)
+    measurement_command: str = ""
+    metric_directions: dict[str, str] = field(default_factory=dict)
+    baseline_experiment_id: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -30,6 +33,9 @@ class ExperimentPlan:
             "eval_slices": list(self.eval_slices),
             "created_by": self.created_by,
             "created_at": self.created_at,
+            "measurement_command": self.measurement_command,
+            "metric_directions": self.metric_directions,
+            "baseline_experiment_id": self.baseline_experiment_id,
         }
 
     @classmethod
@@ -43,6 +49,9 @@ class ExperimentPlan:
             eval_slices=tuple(str(item).strip() for item in data.get("eval_slices") or []),
             created_by=str(data.get("created_by") or "human").strip() or "human",
             created_at=str(data.get("created_at") or _utcnow()),
+            measurement_command=str(data.get("measurement_command") or ""),
+            metric_directions=dict(data.get("metric_directions") or {}),
+            baseline_experiment_id=str(data.get("baseline_experiment_id") or ""),
         )
 
 

@@ -82,6 +82,21 @@ class InMemoryApprovalStore(ApprovalStore):
             return
         stored.replayed_at = datetime.now(UTC)
 
+    async def claim_replay(self, approval_id: str, *, session_id: str) -> bool:
+        from datetime import UTC, datetime
+
+        stored = self._items.get(approval_id)
+        if (
+            stored is None
+            or stored.session_id != session_id
+            or stored.status != "granted"
+            or stored.replayed_at is not None
+            or stored.replay_claimed_at is not None
+        ):
+            return False
+        stored.replay_claimed_at = datetime.now(UTC)
+        return True
+
     async def list_unreplayed_granted(self, *, session_id: str) -> list[PendingApproval]:
         items = [
             a
@@ -313,8 +328,14 @@ class TestReplayFlow:
         tool_msg = next(m for m in stored.messages if m.role == "tool" and m.tool_call_id == "c1")
         assert "queued for approval" in str(tool_msg.content)
 
-        # The tool may already have executed, but the replay bookkeeping must
-        # stay unreplayed so the operation can be retried safely.
+        # The side effect happened before the save failed. Its durable claim
+        # must stop later attempts from repeating the action.
+        assert tool.calls == [{"text": "ping"}]
+        assert replayed.replay_claimed_at is not None
+        from harness.core.errors import ConfigurationError
+
+        with pytest.raises(ConfigurationError, match="outcome is uncertain"):
+            await _drain(agent.resume("s1", prompt="retry"))
         assert tool.calls == [{"text": "ping"}]
         # Approval was not replayed.
         denied = await approvals.get_approval(pending.id)

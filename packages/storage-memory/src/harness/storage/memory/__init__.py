@@ -18,7 +18,14 @@ import asyncio
 from datetime import UTC, datetime
 
 from harness.core import Session, SessionStatus
-from harness.core.memory import MemoryEntry, MemoryKind, MemoryStore
+from harness.core.memory import MemoryEntry, MemoryKind, MemoryScope, MemoryStore
+from harness.core.session_search import (
+    SessionSearchResult,
+    search_limit,
+    search_terms,
+    session_scope,
+    session_text,
+)
 from harness.tasks import ActivityEvent, ApprovalStatus, PendingApproval, Task, TaskStatus
 
 __version__ = "0.0.0"
@@ -64,6 +71,38 @@ class InMemoryStorage(MemoryStore):
 
     async def delete(self, session_id: str) -> None:
         self._sessions.pop(session_id, None)
+
+    async def search_sessions(
+        self, query: str, *, scope: MemoryScope, limit: int = 10
+    ) -> list[SessionSearchResult]:
+        from harness.core.session_search import matching_messages
+
+        limit = search_limit(limit)
+        terms = search_terms(query)
+        if not terms:
+            return []
+        found: list[SessionSearchResult] = []
+        for session in sorted(
+            self._sessions.values(), key=lambda item: item.updated_at, reverse=True
+        ):
+            if session_scope(session) != scope:
+                continue
+            text = session_text(session)
+            lowered = text.casefold()
+            if not all(term in lowered for term in terms):
+                continue
+            offset = max(0, min(lowered.index(term) for term in terms) - 100)
+            found.append(
+                SessionSearchResult(
+                    session_id=session.id,
+                    excerpt=text[offset : offset + 1200],
+                    updated_at=session.updated_at,
+                    matches=matching_messages(session.id, session.messages, terms),
+                )
+            )
+            if len(found) >= limit:
+                break
+        return found
 
     # ------------------------------------------------------------------ #
     # TaskStore (harness.tasks.TaskStore)                                 #
@@ -204,13 +243,28 @@ class InMemoryStorage(MemoryStore):
         status: ApprovalStatus,
         resolved_by: str | None = None,
     ) -> PendingApproval | None:
+        if status not in ("granted", "denied"):
+            raise ValueError("approval resolution must be granted or denied")
         stored = self._approvals.get(approval_id)
-        if stored is None:
+        if stored is None or stored.status != "pending":
             return None
         stored.status = status
         stored.resolved_at = datetime.now(UTC)
         stored.resolved_by = resolved_by
         return stored.model_copy(deep=True)
+
+    async def claim_replay(self, approval_id: str, *, session_id: str) -> bool:
+        stored = self._approvals.get(approval_id)
+        if (
+            stored is None
+            or stored.session_id != session_id
+            or stored.status != "granted"
+            or stored.replayed_at is not None
+            or stored.replay_claimed_at is not None
+        ):
+            return False
+        stored.replay_claimed_at = datetime.now(UTC)
+        return True
 
     async def mark_replayed(self, approval_id: str) -> None:
         stored = self._approvals.get(approval_id)
@@ -233,6 +287,14 @@ class InMemoryStorage(MemoryStore):
     # ------------------------------------------------------------------ #
 
     async def save_memory(self, entry: MemoryEntry) -> MemoryEntry:
+        if (
+            entry.scope is None
+            and entry.session_id is not None
+            and entry.session_id in self._sessions
+        ):
+            entry = entry.model_copy(
+                update={"scope": session_scope(self._sessions[entry.session_id])}
+            )
         self._memory = [e for e in self._memory if e.id != entry.id]
         self._memory.append(entry.model_copy(deep=True))
         return entry.model_copy(deep=True)
@@ -254,6 +316,47 @@ class InMemoryStorage(MemoryStore):
 
     async def delete_memory(self, entry_id: str) -> None:
         self._memory = [e for e in self._memory if e.id != entry_id]
+
+    async def save_scoped_memory(self, entry: MemoryEntry, *, scope: MemoryScope) -> MemoryEntry:
+        stored = next((item for item in self._memory if item.id == entry.id), None)
+        if stored is not None and stored.scope != scope:
+            raise KeyError("Memory not found")
+        return await self.save_memory(entry.model_copy(update={"scope": scope}, deep=True))
+
+    async def get_scoped_memory(self, entry_id: str, *, scope: MemoryScope) -> MemoryEntry | None:
+        entry = next(
+            (item for item in self._memory if item.id == entry_id and item.scope == scope), None
+        )
+        return entry.model_copy(deep=True) if entry else None
+
+    async def list_scoped_memory(
+        self, *, scope: MemoryScope, kind: MemoryKind | None = None, limit: int = 50
+    ) -> list[MemoryEntry]:
+        items = [
+            entry
+            for entry in self._memory
+            if entry.scope == scope and (kind is None or entry.kind == kind)
+        ]
+        items.sort(key=lambda entry: entry.created_at, reverse=True)
+        return [entry.model_copy(deep=True) for entry in items[: search_limit(limit)]]
+
+    async def search_scoped_memory(
+        self, query: str, *, scope: MemoryScope, limit: int = 20
+    ) -> list[MemoryEntry]:
+        items = [
+            entry
+            for entry in self._memory
+            if entry.scope == scope and query.lower() in entry.text.lower()
+        ]
+        items.sort(key=lambda entry: entry.created_at, reverse=True)
+        return [entry.model_copy(deep=True) for entry in items[: search_limit(limit)]]
+
+    async def delete_scoped_memory(self, entry_id: str, *, scope: MemoryScope) -> bool:
+        count = len(self._memory)
+        self._memory = [
+            entry for entry in self._memory if not (entry.id == entry_id and entry.scope == scope)
+        ]
+        return len(self._memory) != count
 
 
 __all__ = ["InMemoryStorage", "__version__"]

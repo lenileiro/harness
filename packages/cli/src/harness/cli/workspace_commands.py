@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import typer
 from rich.console import Console
@@ -9,6 +9,7 @@ from rich.prompt import Confirm
 from rich.table import Table
 
 from harness.core import MemoryEntry, configure_logging
+from harness.core.memory import MemoryKind, MemoryScope, ScopedMemoryStore
 from harness.storage.sqlite import SQLiteStorage, default_db_path
 
 
@@ -120,7 +121,7 @@ def memory_save_command(
     async def _go() -> None:
         storage = build_storage(db=db, in_memory=in_memory)
         try:
-            entry = MemoryEntry(kind=kind, text=text)  # type: ignore[arg-type]
+            entry = MemoryEntry(kind=kind, text=text, scope=MemoryScope(workspace=str(Path.cwd())))  # type: ignore[arg-type]
             saved = await storage.save_memory(entry)  # type: ignore[attr-defined]
             console.print(f"[green]Saved[/green] {saved.id}  ({saved.kind})  {saved.text}")
         finally:
@@ -149,10 +150,14 @@ def memory_list_command(
     async def _go() -> None:
         storage = build_storage(db=db, in_memory=in_memory)
         try:
-            entries = await storage.list_memory(  # type: ignore[attr-defined]
-                kind=kind,
-                limit=limit,  # type: ignore[arg-type]
-            )
+            if isinstance(storage, ScopedMemoryStore):
+                entries = await storage.list_scoped_memory(
+                    scope=MemoryScope(workspace=str(Path.cwd())),
+                    kind=cast(MemoryKind | None, kind),
+                    limit=limit,
+                )
+            else:
+                entries = await storage.list_memory(kind=kind, limit=limit)
             if not entries:
                 console.print("[dim]No memories stored.[/dim]")
                 return
@@ -185,7 +190,12 @@ def memory_search_command(
     async def _go() -> None:
         storage = build_storage(db=db, in_memory=in_memory)
         try:
-            entries = await storage.search_memory(query, limit=limit)  # type: ignore[attr-defined]
+            if isinstance(storage, ScopedMemoryStore):
+                entries = await storage.search_scoped_memory(
+                    query, scope=MemoryScope(workspace=str(Path.cwd())), limit=limit
+                )
+            else:
+                entries = await storage.search_memory(query, limit=limit)
             if not entries:
                 console.print("[dim]No matches.[/dim]")
                 return
@@ -217,8 +227,12 @@ def memory_rm_command(
     async def _go() -> None:
         storage = build_storage(db=db, in_memory=in_memory)
         try:
-            existing = await storage.list_memory(limit=1000)  # type: ignore[attr-defined]
-            match = next((entry for entry in existing if entry.id == entry_id), None)
+            scope = MemoryScope(workspace=str(Path.cwd()))
+            if isinstance(storage, ScopedMemoryStore):
+                match = await storage.get_scoped_memory(entry_id, scope=scope)
+            else:
+                existing = await storage.list_memory(limit=1000)
+                match = next((entry for entry in existing if entry.id == entry_id), None)
             if match is None:
                 console.print(f"[red]Memory not found:[/red] {entry_id}")
                 raise typer.Exit(1)
@@ -226,7 +240,10 @@ def memory_rm_command(
                 confirmed = Confirm.ask(f"Delete memory {entry_id!r}?")
                 if not confirmed:
                     raise typer.Abort()
-            await storage.delete_memory(entry_id)  # type: ignore[attr-defined]
+            if isinstance(storage, ScopedMemoryStore):
+                await storage.delete_scoped_memory(entry_id, scope=scope)
+            else:
+                await storage.delete_memory(entry_id)
             console.print(f"[green]Deleted[/green] {entry_id}")
         finally:
             if isinstance(storage, SQLiteStorage):

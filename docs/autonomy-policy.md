@@ -2,6 +2,31 @@
 
 Harness supports autonomous research and bounded promotion. It does not assume autonomous merge.
 
+## Context acquisition
+
+Agents should obtain context themselves before asking a human. Managed agents,
+including specialists and children, receive the same instruction to inspect the
+relevant workspace, instructions, source, tests and documentation, then use scoped
+history, memory and available read-only research tools. Missing tools should lead
+to environment inspection or a supported alternative.
+
+Several plausible implementation paths are a reason to gather more evidence and
+choose a reasonable reversible approach. The agent states material assumptions
+in its result and completes independent work if an authoritative fact remains
+unavailable. It must not fabricate missing information or treat an inferred
+preference as authorization for an action.
+
+The `clarify` tool is disabled by default. Explicit interactive workflows can
+opt in using `[clarification] enabled = true`; the HTTP service uses its own
+explicit tool exposure setting. [Question controls](clarification.md) remain
+available for those workflows. Action approvals retain their separate policy.
+
+Chat keeps generated execution context separate from the user's task, including
+across restart. A prefetched research packet is accepted only after a successful
+tool result; unsupported assertions from a text-only attempt are not injected as
+source evidence. Context and ordinary research guidance do not create extra task
+requirements in the verifier.
+
 ## Principles
 
 1. Inspiration is broad
@@ -42,6 +67,11 @@ Autonomous promotion should include:
 - validation plan
 - PR body with rationale and evidence checklist
 
+Commit, push, and PR creation now enforce current experiment evidence covering
+the declared target paths. Numeric improvement claims require measured baseline
+comparisons when metric goals are declared. See [Execution and evidence](execution-and-evidence.md)
+for the commands and gate requirements.
+
 ## Out of scope
 
 - autonomous merge
@@ -67,6 +97,10 @@ Harness supports this through:
 - `harness mission create-candidate`
 - `[research_scheduler]` config defaults in TOML
 - `[mission_scheduler]` config defaults in TOML
+
+Use `mission run` for real feature workers and independent assertion execution,
+or `scheduler add-mission --execute` for recurring execution. Deterministic
+handoff and simulation commands remain available for orchestration tests.
 
 When mission validation finds blocking issues, preferred follow-up is:
 - convert findings into explicit research opportunities

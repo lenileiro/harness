@@ -13,14 +13,35 @@ dependencies = [
     "adapter-ollama",
     "adapter-openrouter",
     "adapter-anthropic",
+    "adapter-claude",
     "tools-fs",
     "tools-shell",
     "tools-web",
+    "tools-mcp",
+    "tools-execution",
+    "tools-browser",
+    "tools-media",
+    "tools-computer",
+    "tools-homeassistant",
+    "harness-server",
+    "httpx>=0.27",
+    "aiohttp>=3.10",
+    "websockets>=14",
+    "prompt-toolkit>=3.0.48",
+    "psutil>=6",
     "typer>=0.13",
     "rich>=13.9",
     "unicodeitplus>=0.3.1",
     "python-dotenv>=1.0",
+    "tomlkit>=0.13",
+    "json5>=0.12,<1",
+    "PyJWT[crypto]>=2.10,<3",
+    "qrcode>=8,<9",
 ]
+
+[project.optional-dependencies]
+desktop = ["pywebview>=5,<7"]
+matrix = ["matrix-nio[e2e]==0.26.0"]
 
 [project.scripts]
 harness = "harness.cli.__main__:app"
@@ -42,6 +63,14 @@ adapter-openai = { workspace = true }
 adapter-ollama = { workspace = true }
 adapter-openrouter = { workspace = true }
 adapter-anthropic = { workspace = true }
+adapter-claude = { workspace = true }
 tools-fs = { workspace = true }
 tools-shell = { workspace = true }
 tools-web = { workspace = true }
+tools-mcp = { workspace = true }
+tools-execution = { workspace = true }
+tools-browser = { workspace = true }
+tools-media = { workspace = true }
+tools-computer = { workspace = true }
+tools-homeassistant = { workspace = true }
+harness-server = { workspace = true }

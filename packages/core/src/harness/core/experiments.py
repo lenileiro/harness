@@ -6,11 +6,13 @@ from typing import Any, Literal
 
 
 def _utcnow() -> str:
-    return datetime.now(UTC).isoformat(timespec="seconds")
+    return datetime.now(UTC).isoformat(timespec="microseconds")
 
 
-ExperimentStatus = Literal["passed", "failed"]
-CommandKind = Literal["check", "eval"]
+ExperimentStatus = Literal[
+    "running", "passed", "failed", "timed_out", "interrupted", "inconclusive"
+]
+CommandKind = Literal["check", "eval", "measurement"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -84,6 +86,10 @@ class ExperimentResult:
     finished_at: str
     duration_seconds: float
     artifact_dir: str = ""
+    workspace_fingerprint: str = ""
+    metrics: dict[str, float] = field(default_factory=dict)
+    metric_directions: dict[str, str] = field(default_factory=dict)
+    baseline_experiment_id: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -94,6 +100,10 @@ class ExperimentResult:
             "finished_at": self.finished_at,
             "duration_seconds": self.duration_seconds,
             "artifact_dir": self.artifact_dir,
+            "workspace_fingerprint": self.workspace_fingerprint,
+            "metrics": self.metrics,
+            "metric_directions": self.metric_directions,
+            "baseline_experiment_id": self.baseline_experiment_id,
         }
 
     @classmethod
@@ -108,6 +118,10 @@ class ExperimentResult:
             finished_at=str(data.get("finished_at") or _utcnow()),
             duration_seconds=float(data.get("duration_seconds", 0.0) or 0.0),
             artifact_dir=str(data.get("artifact_dir") or "").strip(),
+            workspace_fingerprint=str(data.get("workspace_fingerprint") or ""),
+            metrics=dict(data.get("metrics") or {}),
+            metric_directions=dict(data.get("metric_directions") or {}),
+            baseline_experiment_id=str(data.get("baseline_experiment_id") or ""),
         )
 
 

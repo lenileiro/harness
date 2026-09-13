@@ -11,6 +11,28 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  platform-contracts:
+    name: platform contracts (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+      - run: uv python install 3.12
+      - run: uv sync --frozen --all-packages --all-groups
+      - name: Configure native Windows Bash
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $bashPath = 'C:\Program Files\Git\bin\bash.exe'
+          if (-not (Test-Path $bashPath)) { throw 'Git for Windows Bash is missing' }
+          "HARNESS_WINDOWS_BASH=$bashPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      - name: Run portable persistence and execution contracts
+        run: uv run pytest -q packages/tools-execution/tests/test_windows.py packages/core/tests/test_scheduler_timezones.py packages/storage-sqlite/tests/test_session_search.py packages/storage-sqlite/tests/test_concurrency_and_migrations.py packages/cli/tests/test_maintenance.py packages/cli/tests/test_account_auth.py
+
   quality:
     name: lint + types + tests (py${{ matrix.python }})
     runs-on: ubuntu-latest
@@ -32,7 +54,13 @@ jobs:
         run: uv python install ${{ matrix.python }}
 
       - name: Sync workspace
-        run: uv sync --all-extras --all-groups
+        run: uv sync --frozen --all-packages --all-extras --all-groups
+
+      - name: Install managed browser test runtime
+        run: uv run playwright install --with-deps chromium
+
+      - name: Install benchmark process isolation
+        run: sudo apt-get update && sudo apt-get install -y bubblewrap
 
       - name: Ruff format check
         run: uv run ruff format --check .
@@ -48,6 +76,14 @@ jobs:
 
       - name: Pytest
         run: uv run pytest -v
+
+      - name: Set up Node for web client regressions
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Web client state and upload regressions
+        run: node --test packages/server/tests/ui_state.test.cjs
 
   research-autonomy-smoke:
     name: research autonomy smoke
@@ -66,7 +102,7 @@ jobs:
         run: uv python install 3.12
 
       - name: Sync workspace
-        run: uv sync --all-extras --all-groups
+        run: uv sync --frozen --all-packages --all-extras --all-groups
 
       - name: Run deterministic autonomy burst
         shell: bash
@@ -147,7 +183,7 @@ jobs:
         run: uv python install 3.12
 
       - name: Sync workspace
-        run: uv sync --all-extras --all-groups
+        run: uv sync --frozen --all-packages --all-extras --all-groups
 
       - name: Run deterministic mission burst
         shell: bash

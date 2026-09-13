@@ -2213,8 +2213,20 @@ async def test_remote_shell_tool_guides_shallow_checkout_base_commit_failure(
 @pytest.mark.asyncio
 async def test_remote_shell_tool_guides_missing_toolchain_setup(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     env = LocalEnvironment(tmp_path)
+    original_exec = env.exec
+
+    async def missing_tool(command: str, **kwargs):
+        if "go test ./..." in command:
+            return ExecResult(
+                stdout="", stderr="bash: line 1: go: command not found\n", return_code=127
+            )
+        return await original_exec(command, **kwargs)
+
+    # Model a remote environment without Go, regardless of the local toolchain.
+    monkeypatch.setattr(env, "exec", missing_tool)
     shell = RemoteShellTool(env, workdir=str(tmp_path))
 
     result = await shell(_call("shell", command="go test ./..."))

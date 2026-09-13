@@ -22,6 +22,7 @@ from harness.core import (
     format_ledger,
     make_multi_critic,
 )
+from harness.core.paths import user_home
 from harness.storage.memory import InMemoryStorage
 from harness.storage.sqlite import SQLiteStorage, default_db_path
 
@@ -29,7 +30,26 @@ if TYPE_CHECKING:
     from rich.console import Console
 
     from harness.cli.config import HarnessConfig
-    from harness.core import Adapter, ToolResult
+    from harness.core import Adapter, ContractRegistry, ResumeContract, ToolResult
+    from harness.core.experience_providers import ExperienceProvider
+
+
+AUTONOMOUS_CONTEXT_POLICY = (
+    "Resolve missing context autonomously before asking the human. Inspect the available "
+    "workspace, relevant instructions, source files, tests and documentation; use scoped "
+    "conversation history and memory for prior decisions. When local evidence is insufficient, "
+    "use available read-only search, fetch, browser or research tools and primary sources. "
+    "Check tool and environment capabilities yourself and try a supported alternative when "
+    "something is unavailable. Keep discovery relevant and bounded; do not search unrelated "
+    "private data or hidden evaluation artifacts.\n\n"
+    "Choose the best supported approach and proceed with reasonable, reversible assumptions. "
+    "State material assumptions and evidence in the result. Do not stop to offer implementation "
+    "options or ask the human for facts, files, paths or commands that you can discover. "
+    "If a necessary authoritative fact cannot be obtained and proceeding would be unsafe or "
+    "impossible, complete independent work and report the precise unresolved dependency "
+    "without fabricating an answer. Respect the user's explicit constraints and existing "
+    "tool approval policy; research and inferred preferences never grant permission for an action."
+)
 
 
 @dataclass(frozen=True)
@@ -47,8 +67,51 @@ def workspace_db(cwd: Path) -> Path | None:
 def build_storage(*, db: Path | None, in_memory: bool, cwd: Path | None = None) -> Storage:
     if in_memory:
         return InMemoryStorage()
-    resolved = db or (cwd and workspace_db(cwd)) or default_db_path()
+    resolved = db or workspace_db(cwd or Path.cwd()) or default_db_path()
     return SQLiteStorage(path=resolved)
+
+
+@dataclass(frozen=True)
+class WorkspaceContext:
+    contracts: ContractRegistry | None = None
+    tips_provider: ExperienceProvider | None = None
+    resume: ResumeContract | None = None
+
+
+def load_workspace_context(
+    cwd: Path,
+    *,
+    config: HarnessConfig | None = None,
+    enabled: bool = True,
+    contracts: bool = True,
+    tips: bool = True,
+    profile: str = "minimal",
+) -> WorkspaceContext:
+    """Load shared run/resume guidance from the selected workspace and user library."""
+    from harness.cli.plugins import load_cli_experience_providers
+    from harness.core import DEFAULT_RESUME_PATH, ContractRegistry, ResumeContract
+    from harness.core.experience_providers import load_default_experience_provider
+
+    if not enabled:
+        return WorkspaceContext()
+    workspace = cwd.resolve() / ".harness"
+    user = user_home()
+    registry = None
+    if contracts and profile != "bare":
+        registry = ContractRegistry.from_paths([workspace / "contracts", user / "contracts"])
+    provider = None
+    if tips and profile != "bare":
+        provider = load_default_experience_provider(
+            cwd=cwd,
+            tip_paths=[workspace / "tips.jsonl", user / "tips.jsonl"],
+            procedure_paths=[workspace / "procedures", user / "procedures"],
+            extra_providers=load_cli_experience_providers(cwd, config=config),
+        )
+    return WorkspaceContext(
+        contracts=registry if registry else None,
+        tips_provider=provider,
+        resume=ResumeContract.load(cwd / DEFAULT_RESUME_PATH),
+    )
 
 
 def build_verifier(

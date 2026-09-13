@@ -714,6 +714,11 @@ def test_research_archive_reject_and_resurrect(tmp_path: Path) -> None:
 
 
 def test_research_promote_and_pr_commands(tmp_path: Path, monkeypatch) -> None:
+    from dataclasses import replace
+
+    from harness.core.experiment_plans import ExperimentPlan
+    from harness.core.experiment_runner import run_experiment_plan
+
     runner = CliRunner()
     opened = runner.invoke(
         cli_main.app,
@@ -784,6 +789,24 @@ def test_research_promote_and_pr_commands(tmp_path: Path, monkeypatch) -> None:
     )
     assert refined.exit_code == 0, refined.stdout
     candidate_id = next((tmp_path / ".harness" / "research" / "promotions").iterdir()).name
+
+    store = ResearchStore(root=default_research_root(tmp_path))
+    candidate = store.load_promotion_candidate(candidate_id)
+    for target in candidate.target_files:
+        path = tmp_path / target
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("VALUE = 1\n", encoding="utf-8")
+    plan = ExperimentPlan(
+        id="promotion-checks",
+        hypothesis_id="promotion-hypothesis",
+        plan="Check source",
+        target_files=candidate.target_files,
+        checks=(f"{shlex.quote(sys.executable)} -c 'assert 2 + 2 == 4'",),
+    )
+    store.add_experiment_plan(plan)
+    experiment, result = run_experiment_plan(store=store, plan=plan, cwd=tmp_path)
+    assert result.status == "passed"
+    store.add_promotion_candidate(replace(candidate, source_experiments=(experiment.id,)))
 
     seen: dict[str, object] = {}
 
@@ -863,8 +886,7 @@ def test_research_promote_and_pr_commands(tmp_path: Path, monkeypatch) -> None:
     assert "pr" in seen
     commit_call = seen["commit"]
     assert isinstance(commit_call, tuple)
-    assert any("promotion_draft.json" in path for path in commit_call[2])
-    assert any("PR_BODY.md" in path for path in commit_call[2])
+    assert commit_call[2] == candidate.target_files
 
 
 def test_research_ingest_scout_roles_and_portfolio(tmp_path: Path) -> None:
@@ -1001,9 +1023,10 @@ def test_research_experiment_run_show_and_compare(tmp_path: Path) -> None:
     )
     assert planned_fail.exit_code == 0, planned_fail.stdout
 
-    plan_dirs = sorted((tmp_path / ".harness" / "research" / "experiment-plans").iterdir())
-    ok_plan_id = plan_dirs[0].name
-    fail_plan_id = plan_dirs[1].name
+    store = ResearchStore(root=default_research_root(tmp_path))
+    plans_by_command = {plan.checks[0]: plan.id for plan in store.list_experiment_plans()}
+    ok_plan_id = plans_by_command[ok_cmd]
+    fail_plan_id = plans_by_command[fail_cmd]
 
     ran_ok = runner.invoke(
         cli_main.app,
@@ -1014,9 +1037,8 @@ def test_research_experiment_run_show_and_compare(tmp_path: Path) -> None:
         cli_main.app,
         ["research", "experiment", "run", "--plan", fail_plan_id, "--cwd", str(tmp_path)],
     )
-    assert ran_fail.exit_code == 0, ran_fail.stdout
+    assert ran_fail.exit_code == 1, ran_fail.stdout
 
-    store = ResearchStore(root=default_research_root(tmp_path))
     experiment_dirs = sorted((tmp_path / ".harness" / "research" / "experiments").iterdir())
     ok_exp_id = ""
     fail_exp_id = ""

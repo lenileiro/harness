@@ -14,9 +14,17 @@ dependencies = [
     "adapter-openrouter",
     "adapter-ollama",
     "adapter-anthropic",
+    "adapter-claude",
     "tools-fs",
     "tools-shell",
     "tools-web",
+    "tools-mcp",
+    "tools-execution",
+    "tools-browser",
+    "tools-media",
+    "tools-computer",
+    "tools-homeassistant",
+    "harness-server",
     "cli",
 ]
 
@@ -33,9 +41,17 @@ adapter-openai = { workspace = true }
 adapter-openrouter = { workspace = true }
 adapter-ollama = { workspace = true }
 adapter-anthropic = { workspace = true }
+adapter-claude = { workspace = true }
 tools-fs = { workspace = true }
 tools-shell = { workspace = true }
 tools-web = { workspace = true }
+tools-mcp = { workspace = true }
+tools-execution = { workspace = true }
+tools-browser = { workspace = true }
+tools-media = { workspace = true }
+tools-computer = { workspace = true }
+tools-homeassistant = { workspace = true }
+harness-server = { workspace = true }
 cli = { workspace = true }
 
 [tool.uv]
@@ -95,7 +111,7 @@ reportMissingTypeStubs = false
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-testpaths = ["packages"]
+testpaths = ["packages", "evals/tests"]
 # importlib mode lets us have same-named test files across packages
 # (e.g. tests/test_smoke.py in each member) without module-name collisions.
 addopts = ["-ra", "--strict-markers", "--import-mode=importlib"]

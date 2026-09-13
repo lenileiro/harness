@@ -1032,6 +1032,8 @@ def _utcnow_text() -> str:
 def _default_model(provider: str) -> str:
     if provider == "openrouter":
         return "openai/gpt-5.4-nano"
+    if provider == "claude":
+        return "sonnet"
     return "gemma4:latest"
 
 

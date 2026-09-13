@@ -220,7 +220,7 @@ def execute_next_mission_feature(*, store: MissionStore, mission_id: str) -> Mis
             feature_id=current.id,
         )
 
-    features_by_id = {item.id: item for item in features}
+    features_by_id = {item.id: item for item in store.list_features(mission_id=mission_id)}
     ready_feature: MissionFeature | None = None
     blocked_messages: list[str] = []
     dispatch_candidates = sorted(
@@ -392,6 +392,8 @@ def execute_mission_milestone(
         raise ValueError("mission milestone execution requires max_steps >= 1")
     mission = store.load_mission(mission_id)
     target_milestone_id = milestone_id or mission.current_milestone_id
+    if auto_complete and mission.execution_mode == "agent":
+        raise ValueError("agent missions cannot be auto-completed by simulation")
     if not target_milestone_id:
         raise ValueError(
             "mission milestone execution requires a current milestone or an explicit milestone"
@@ -401,6 +403,23 @@ def execute_mission_milestone(
         raise ValueError(
             f"milestone {target_milestone_id!r} does not belong to mission {mission_id!r}"
         )
+    if milestone.status == "completed":
+        return MissionMilestoneExecutionResult(
+            status="completed",
+            mission_id=mission_id,
+            milestone_id=milestone.id,
+            steps_run=0,
+            stop_reason="already_completed",
+            steps=(),
+        )
+    next_milestone = next(
+        (item for item in _sorted_milestones(store, mission_id) if item.status != "completed"),
+        None,
+    )
+    if next_milestone is None or next_milestone.id != target_milestone_id:
+        raise ValueError("execute-milestone requires the first incomplete milestone")
+    if auto_complete:
+        store.update_mission(replace(mission, execution_mode="simulation"))
 
     steps: list[MissionLoopStep] = []
     for _ in range(max_steps):

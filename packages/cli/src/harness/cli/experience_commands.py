@@ -7,6 +7,7 @@ from rich.console import Console
 from rich.table import Table
 
 from harness.core import Procedure, ProcedureLibrary, curate_procedures
+from harness.core.paths import user_home
 
 console = Console()
 
@@ -25,7 +26,7 @@ experience_app.add_typer(procedures_app, name="procedures")
 
 def _procedure_paths(cwd: Path, scope: str) -> list[Path]:
     repo = cwd / ".harness" / "procedures"
-    user = Path.home() / ".harness" / "procedures"
+    user = user_home() / "procedures"
     if scope == "repo":
         return [repo]
     if scope == "user":

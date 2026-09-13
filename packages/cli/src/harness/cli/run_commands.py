@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -8,12 +9,14 @@ import typer
 from rich.console import Console
 
 from harness.cli.config import HarnessConfig
+from harness.cli.runtime_helpers import load_workspace_context
 from harness.core import (
     ConsequencePredictor,
     ContextBudget,
     ContextCompactor,
     Done,
     ErrorEvent,
+    Event,
     LLMPlanner,
     Planner,
     RepairOrchestrator,
@@ -22,6 +25,7 @@ from harness.core import (
     Verification,
     configure_logging,
 )
+from harness.core.schemas import MediaAttachment
 from harness.storage.sqlite import SQLiteStorage
 
 
@@ -64,6 +68,7 @@ def run_command(
     resolve_chain: Any,
     run_async: Any,
     run_once: Any,
+    attach: list[Path] | None = None,
 ) -> None:
     """Run a single prompt through the agent and stream the result to stdout."""
     configure_logging(level="DEBUG" if verbose else "INFO")
@@ -93,10 +98,12 @@ def run_command(
         run_async(
             run_once(
                 prompt=prompt,
+                attachments=[MediaAttachment.from_file(path.expanduser()) for path in attach or []],
                 model=effective_model,
                 chain=chain,
                 base_url=base_url,
                 cwd=working_dir,
+                cwd_explicit=cwd is not None,
                 max_steps=max_steps,
                 max_output_tokens=max_output_tokens,
                 session_id=session_id,
@@ -160,6 +167,9 @@ async def run_once(
     tips: bool = True,
     include_workspace_context: bool = True,
     silent: bool = False,
+    attachments: list[MediaAttachment] | None = None,
+    event_observer: Callable[[Event], None] | None = None,
+    cwd_explicit: bool | None = None,
     config: HarnessConfig,
     build_storage: Any,
     resolve_task_attachment: Any,
@@ -175,13 +185,25 @@ async def run_once(
     console: Console,
 ) -> str | None:
     storage = build_storage(db=db, in_memory=in_memory, cwd=cwd)
+    agent = None
     try:
+        # Local CLI entrypoints distinguish an explicit override from launch
+        # cwd. Embedded callers (gateway, research jobs) retain their trusted
+        # workspace/user binding and do not opt into local-only resolution.
+        if cwd_explicit is not None:
+            from harness.cli.session_workspace import resolve_local_session_workspace
+
+            try:
+                cwd = await resolve_local_session_workspace(
+                    storage, session_id=session_id, cwd=cwd, cwd_explicit=cwd_explicit
+                )
+            except ValueError as exc:
+                if not silent:
+                    console.print(str(exc), style="red", markup=False)
+                raise typer.Exit(2) from None
         task_id, _task = await resolve_task_attachment(storage, task_ref, session_id)
         from harness.cli.plugins import (
             load_cli_domain_profile_providers as _load_cli_domain_profile_providers,
-        )
-        from harness.cli.plugins import (
-            load_cli_experience_providers as _load_cli_experience_providers,
         )
         from harness.core import get_domain_profile as _get_domain_profile
 
@@ -230,37 +252,16 @@ async def run_once(
             adapter = build_adapter(chain[0], base_url=base_url, config=config)
             compactor = ContextCompactor(adapter=adapter, model=model)
 
-        from harness.core import DEFAULT_RESUME_PATH as _DEFAULT_RESUME_PATH
-        from harness.core import ContractRegistry as _ContractRegistry
         from harness.core import LoopDetector as _LoopDetector
-        from harness.core import ResumeContract as _ResumeContract
-        from harness.core import (
-            load_default_experience_provider as _load_default_experience_provider,
-        )
 
         loop_detector_obj = _LoopDetector() if loop_detect else None
-        contracts_obj = None
-        if include_workspace_context and contracts and strategy.structural_profile != "bare":
-            registry = _ContractRegistry.from_paths(
-                [
-                    cwd / ".harness" / "contracts",
-                    Path.home() / ".harness" / "contracts",
-                ]
-            )
-            if registry:
-                contracts_obj = registry
-        tips_obj = None
-        if include_workspace_context and tips and strategy.structural_profile != "bare":
-            extra_experience = _load_cli_experience_providers(cwd, config=config)
-            tips_obj = _load_default_experience_provider(cwd=cwd)
-            if extra_experience:
-                tips_obj = _load_default_experience_provider(
-                    cwd=cwd,
-                    extra_providers=extra_experience,
-                )
-
-        resume_obj = (
-            _ResumeContract.load(cwd / _DEFAULT_RESUME_PATH) if include_workspace_context else None
+        context = load_workspace_context(
+            cwd,
+            config=config,
+            enabled=include_workspace_context,
+            contracts=contracts,
+            tips=tips,
+            profile=strategy.structural_profile,
         )
 
         allowed_tools = set(domain_profile.allowed_tools) if domain_profile.allowed_tools else None
@@ -299,9 +300,9 @@ async def run_once(
             verify_command=verify_command,
             phases_enabled=bool(phases),
             loop_detector=loop_detector_obj,
-            contracts=contracts_obj,
-            tips_provider=tips_obj,
-            resume=resume_obj,
+            contracts=context.contracts,
+            tips_provider=context.tips_provider,
+            resume=context.resume,
         )
         if profile == "adaptive" and not silent:
             console.print(f"[dim]adaptive strategy[/dim] {strategy.rationale}")
@@ -311,6 +312,7 @@ async def run_once(
             "model": model,
             "max_steps": max_steps,
             "require_tool_use": require_tools,
+            "attachments": attachments or [],
         }
         if max_output_tokens is not None:
             request_kwargs["max_tokens"] = max_output_tokens
@@ -330,6 +332,8 @@ async def run_once(
         run_error: ErrorEvent | None = None
         try:
             async for event in agent.run(request):
+                if event_observer is not None:
+                    event_observer(event)
                 if not silent:
                     render(event)
                 if isinstance(event, TextDelta):
@@ -351,13 +355,15 @@ async def run_once(
         if not silent:
             await print_defense_ledger(storage, session_id, console=console)
     finally:
+        if agent is not None and callable(getattr(agent, "aclose", None)):
+            await agent.aclose()
         if isinstance(storage, SQLiteStorage):
             await storage.close()
 
     if run_error is not None:
         if not silent:
             console.print(f"\n[red]Run failed:[/red] {run_error.error}")
-        raise typer.Exit(1)
+        raise typer.Exit(2 if run_error.kind == "verification" else 1)
     if last_verification is not None and not last_verification.result.can_finish:
         raise typer.Exit(2)
     return final_text or ("".join(streamed_parts).strip() or None)

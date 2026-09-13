@@ -535,8 +535,10 @@ def test_metadata_only_fixture_can_overlay_workspace_files(
     assert (dest / "extra" / "marker.txt").read_text(encoding="utf-8").strip() == "hello"
 
 
-def test_eval_env_exposes_project_root_and_workspace(tmp_path: Path) -> None:
+def test_eval_env_keeps_project_root_evaluator_only(tmp_path: Path) -> None:
     env = runner._eval_env(work=tmp_path)  # type: ignore[attr-defined]
 
     assert env["HARNESS_EVAL_WORKSPACE"] == str(tmp_path)
+    assert "HARNESS_EVAL_PROJECT_ROOT" not in env
+    env = runner._eval_env(work=tmp_path, evaluator=True)
     assert Path(env["HARNESS_EVAL_PROJECT_ROOT"]).resolve() == Path(__file__).resolve().parents[2]

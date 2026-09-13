@@ -15,14 +15,27 @@ from harness.cli.config import (
 
 
 class TestDefaultConfigPath:
+    """These exercise the fallback chain, so they own the whole environment.
+
+    `HARNESS_CONFIG` wins over both branches below and is set for every test by
+    the isolation fixture in `packages/conftest.py`; clear it here.
+    """
+
     def test_uses_xdg_config_home(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("HARNESS_CONFIG", raising=False)
         monkeypatch.setenv("XDG_CONFIG_HOME", "/tmp/cfg-test")
         assert default_config_path() == Path("/tmp/cfg-test/harness/config.toml")
 
     def test_falls_back_to_home_config(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delenv("HARNESS_CONFIG", raising=False)
         monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
         path = default_config_path()
         assert path.parts[-3:] == (".config", "harness", "config.toml")
+
+    def test_harness_config_wins(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setenv("HARNESS_CONFIG", "/tmp/explicit/config.toml")
+        monkeypatch.setenv("XDG_CONFIG_HOME", "/tmp/cfg-test")
+        assert default_config_path() == Path("/tmp/explicit/config.toml")
 
 
 class TestLoadConfig:
@@ -36,6 +49,15 @@ class TestLoadConfig:
         assert cfg.plugins_enabled == ()
         assert cfg.plugins_disabled == ()
         assert cfg.include_plugin_entry_points is False
+        assert cfg.clarification_enabled is False
+
+    def test_clarification_requires_explicit_boolean_opt_in(self, tmp_path: Path) -> None:
+        target = tmp_path / "config.toml"
+        target.write_text("[clarification]\nenabled=true\n", encoding="utf-8")
+        assert load_config(target).clarification_enabled is True
+        target.write_text('[clarification]\nenabled="true"\n', encoding="utf-8")
+        with pytest.raises(ConfigError, match="clarification"):
+            load_config(target)
 
     def test_full_config(self, tmp_path: Path) -> None:
         target = tmp_path / "config.toml"
@@ -205,3 +227,26 @@ class TestLoadConfig:
         )
         with pytest.raises(ConfigError, match=r"mission_scheduler\.max_steps"):
             load_config(target)
+
+
+def test_suite_never_reads_the_developers_real_config() -> None:
+    """A configured Harness install must not change what the tests do.
+
+    `default_config_path()` falls back to `~/.config/harness/config.toml`, so
+    without the autouse isolation in `packages/conftest.py` a developer who has
+    run `harness setup` runs a different suite than CI does.
+    """
+
+    from pathlib import Path
+
+    from harness.cli.config import default_config_path, load_config
+
+    resolved = default_config_path()
+    real = Path.home() / ".config" / "harness" / "config.toml"
+    assert resolved != real, "tests are resolving the developer's real config"
+    assert not resolved.exists(), "the isolated config path should not exist"
+
+    config = load_config()
+    assert config.default_provider is None
+    assert config.default_model is None
+    assert config.approval == {}

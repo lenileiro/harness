@@ -13,7 +13,16 @@ from harness.core.pr_generation import (
     push_branch,
     write_promotion_draft,
 )
+from harness.core.promotion_candidates import PromotionCandidate
+from harness.core.promotion_evidence import PromotionEvidenceError, require_promotion_evidence
 from harness.core.research_store import ResearchStore, default_research_root
+
+
+def _require_evidence(*, candidate: PromotionCandidate, store: ResearchStore, cwd: Path) -> None:
+    try:
+        require_promotion_evidence(candidate=candidate, store=store, cwd=cwd)
+    except PromotionEvidenceError as exc:
+        raise typer.BadParameter(str(exc)) from exc
 
 
 def show_candidate_command(*, candidate_id: str, cwd: Path | None, console: Console) -> None:
@@ -55,12 +64,15 @@ def promote_command(
         raise typer.BadParameter(f"unknown promotion candidate: {candidate_id!r}") from exc
     if commit and not candidate.target_files:
         raise typer.BadParameter("candidate must declare target_files before --commit can be used")
+    if commit:
+        _require_evidence(candidate=candidate, store=store, cwd=working_dir)
     draft = build_promotion_draft(candidate, base_branch=base_branch)
     candidate_dir = store.promotion_candidates_dir / candidate.id
     json_path, body_path = write_promotion_draft(draft=draft, target_dir=candidate_dir)
     if create_branch:
         ensure_branch(cwd=working_dir, branch_name=draft.branch_name, base_branch=base_branch)
     if commit:
+        _require_evidence(candidate=candidate, store=store, cwd=working_dir)
         commit_paths(cwd=working_dir, message=draft.commit_message, paths=candidate.target_files)
     console.print(f"[green]Prepared promotion draft for {candidate.id}[/green]")
     console.print(f"branch={draft.branch_name}")
@@ -90,17 +102,17 @@ def pr_command(
     draft = build_promotion_draft(candidate, base_branch=base_branch)
     candidate_dir = store.promotion_candidates_dir / candidate.id
     if push:
+        _require_evidence(candidate=candidate, store=store, cwd=working_dir)
         ensure_branch(cwd=working_dir, branch_name=draft.branch_name, base_branch=base_branch)
-    json_path, body_path = write_promotion_draft(draft=draft, target_dir=candidate_dir)
-    artifact_paths = (
-        str(json_path.relative_to(working_dir)),
-        str(body_path.relative_to(working_dir)),
-    )
+    _, body_path = write_promotion_draft(draft=draft, target_dir=candidate_dir)
     if push:
-        commit_paths(cwd=working_dir, message=draft.commit_message, paths=artifact_paths)
+        _require_evidence(candidate=candidate, store=store, cwd=working_dir)
+        commit_paths(cwd=working_dir, message=draft.commit_message, paths=candidate.target_files)
+        _require_evidence(candidate=candidate, store=store, cwd=working_dir)
         push_branch(cwd=working_dir, branch_name=draft.branch_name)
     pr_url: str | None = None
     if open_pr:
+        _require_evidence(candidate=candidate, store=store, cwd=working_dir)
         pr_url = create_pull_request(
             cwd=working_dir,
             title=draft.pr_title,

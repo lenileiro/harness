@@ -108,11 +108,11 @@ def _is_blocked_host(host: str) -> str | None:
     Handles three cases:
       1. Hostname is on the blocklist (`localhost`, cloud-metadata aliases).
       2. Host is an IP literal in a private/loopback/link-local range.
-      3. Hostname resolves (via DNS) to a blocked IP — defeats DNS rebinding
-         and the trick of pointing a public hostname at 127.0.0.1.
+      3. Hostname resolves (via DNS) to a blocked IP.
 
-    DNS lookups happen here, not in the request — so we fail closed before
-    any traffic leaves the box.
+    This is a best-effort DNS preflight, not DNS pinning: the transport may
+    resolve the hostname again. It does not guarantee protection against DNS
+    rebinding. Literal addresses and every redirect target are checked too.
     """
     if not host:
         return "missing host"
@@ -166,6 +166,7 @@ class FetchUrlTool:
         default_timeout: float = 15.0,
         max_timeout: float = 60.0,
         allowed_mime_prefixes: tuple[str, ...] = DEFAULT_ALLOWED_MIME_PREFIXES,
+        max_redirects: int = 10,
         client: httpx.AsyncClient | None = None,
     ) -> None:
         self.max_bytes = max_bytes
@@ -173,6 +174,7 @@ class FetchUrlTool:
         self.default_timeout = default_timeout
         self.max_timeout = max_timeout
         self.allowed_mime_prefixes = allowed_mime_prefixes
+        self.max_redirects = max(0, max_redirects)
         self._injected_client = client
         self.parameters_schema: dict[str, Any] = _FETCH_URL_SCHEMA
 
@@ -180,21 +182,6 @@ class FetchUrlTool:
         url = call.arguments.get("url")
         if not isinstance(url, str) or not url:
             return _error(call, self.name, "missing or empty `url` argument")
-
-        parsed = urlparse(url)
-        if parsed.scheme not in {"http", "https"}:
-            return _error(
-                call, self.name, f"unsupported scheme {parsed.scheme!r}; use http or https"
-            )
-        if not parsed.netloc:
-            return _error(call, self.name, "URL is missing a host")
-
-        # SSRF defense — block loopback, private, link-local addresses and
-        # cloud metadata hostnames. Resolves DNS once and refuses if any
-        # answer is in a blocked range.
-        block_reason = _is_blocked_host(parsed.hostname or "")
-        if block_reason is not None:
-            return _error(call, self.name, f"refused: {block_reason}")
 
         timeout_arg = call.arguments.get("timeout", self.default_timeout)
         try:
@@ -204,11 +191,76 @@ class FetchUrlTool:
         timeout = max(0.1, min(timeout, self.max_timeout))
 
         owns_client = self._injected_client is None
-        client = self._injected_client or httpx.AsyncClient(timeout=timeout, follow_redirects=True)
+        client = self._injected_client or httpx.AsyncClient(timeout=timeout)
 
         try:
             try:
-                response = await client.get(url, timeout=timeout, follow_redirects=True)
+                request: httpx.Request | None = None
+                for hop in range(self.max_redirects + 1):
+                    # Parse the same normalized URL that httpx will request.
+                    # Redirects are never followed by the transport implicitly.
+                    try:
+                        target = httpx.URL(url)
+                    except httpx.InvalidURL as exc:
+                        return _error(call, self.name, f"invalid URL: {exc}")
+                    if target.scheme not in {"http", "https"}:
+                        return _error(
+                            call,
+                            self.name,
+                            f"unsupported scheme {target.scheme!r}; use http or https",
+                        )
+                    if not target.host:
+                        return _error(call, self.name, "URL is missing a host")
+                    block_reason = _is_blocked_host(target.host)
+                    if block_reason is not None:
+                        return _error(call, self.name, f"refused: {block_reason}")
+                    if request is None:
+                        request = client.build_request("GET", target, timeout=timeout)
+                    response = await client.send(
+                        request,
+                        stream=True,
+                        follow_redirects=False,
+                        auth=client.auth if hop == 0 else None,
+                    )
+                    try:
+                        if response.status_code in {301, 302, 303, 307, 308}:
+                            location = response.headers.get("location")
+                            if not location:
+                                return _error(call, self.name, "redirect is missing Location")
+                            if hop >= self.max_redirects:
+                                return _error(call, self.name, "too many redirects")
+                            # Keep httpx's redirect request so cross-origin
+                            # Authorization stripping and cookie rules survive.
+                            request = response.next_request
+                            if request is None:
+                                return _error(call, self.name, "invalid redirect response")
+                            url = str(request.url)
+                            continue
+                        if not 200 <= response.status_code < 300:
+                            return _error(call, self.name, f"HTTP {response.status_code}")
+                        content_type = response.headers.get("content-type", "")
+                        if not _mime_allowed(content_type, self.allowed_mime_prefixes):
+                            return _error(
+                                call,
+                                self.name,
+                                f"content-type {content_type!r} is not in the allow-list",
+                            )
+                        body = bytearray()
+                        async for chunk in response.aiter_bytes():
+                            if len(body) + len(chunk) > self.max_bytes:
+                                return _error(
+                                    call,
+                                    self.name,
+                                    f"response body too large: exceeds {self.max_bytes} bytes",
+                                )
+                            body.extend(chunk)
+                        break
+                    finally:
+                        await response.aclose()
+                else:
+                    return _error(call, self.name, "too many redirects")
+            except httpx.InvalidURL as exc:
+                return _error(call, self.name, f"invalid redirect URL: {exc}")
             except httpx.ConnectError as exc:
                 return _error(call, self.name, f"connection error: {exc}")
             except httpx.TimeoutException:
@@ -218,24 +270,6 @@ class FetchUrlTool:
         finally:
             if owns_client:
                 await client.aclose()
-
-        if response.status_code >= 400:
-            preview = response.text[:200] if response.text else ""
-            return _error(call, self.name, f"HTTP {response.status_code}: {preview}")
-
-        content_type = response.headers.get("content-type", "")
-        if not _mime_allowed(content_type, self.allowed_mime_prefixes):
-            return _error(
-                call, self.name, f"content-type {content_type!r} is not in the allow-list"
-            )
-
-        body = response.content
-        if len(body) > self.max_bytes:
-            return _error(
-                call,
-                self.name,
-                f"response body too large: {len(body)} bytes exceeds {self.max_bytes}",
-            )
 
         text = body.decode(response.encoding or "utf-8", errors="replace")
         truncated = len(text) > self.max_output_chars

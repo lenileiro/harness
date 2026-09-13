@@ -11,7 +11,7 @@ from harness.core.scheduler_models import SchedulerJob, SchedulerRunRecord, Sche
 def test_builtin_hook_provider_exposes_whatsapp_hook() -> None:
     provider = BuiltinHookProvider()
     hooks = provider.hooks()
-    assert len(hooks) == 1
+    assert len(hooks) == 2
     assert isinstance(hooks[0], WhatsAppNotificationHook)
 
 

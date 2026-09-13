@@ -10,11 +10,30 @@ At a high level, Harness gives you:
 
 - a resumable agent runtime with tools, approvals, and storage
 - a CLI for running, chatting with, and inspecting agents
+- authenticated web, HTTP/MCP and messaging interfaces with durable runs
+- managed local/container/cloud execution, browser control and media tools
 - structural defenses around the base model/tool loop
 - persistent workspace memory, contracts, tips, experience, and resume state
 - a behavioral eval harness for defended-vs-bare A/B testing
 - a durable research/autonomy layer for vision, rabbit holes, publications,
   experiments, promotions, and portfolio management
+
+See [Skills, recall, MCP, and scheduled prompts](docs/skills-memory-mcp.md) for
+portable skills, persistent memory, conversation search, and external tools.
+
+See [Execution and evidence](docs/execution-and-evidence.md) for real mission
+workers, scheduled execution, notification retries, measured experiments, and
+promotion requirements.
+
+The [Hermes parity inventory](docs/feature-parity.md) tracks all five implementation
+milestones and their acceptance limits. Start with [profiles and services](docs/profiles-and-maintenance.md),
+[channels](docs/channel-parity.md), [account integrations](docs/accounts-and-services.md),
+or the [web/API server](packages/server/README.md). [A2A peers](docs/a2a-peers.md)
+provide approved calls to remote agents. Desktop control is an explicit
+opt-in [computer tool](packages/tools-computer/README.md).
+Agents [gather context and research autonomously](docs/autonomy-policy.md).
+Human clarification is disabled by default; the optional
+[question workflow](docs/clarification.md) supports explicitly interactive use.
 
 ## What Harness Is For
 
@@ -28,9 +47,14 @@ That means the project is useful in two modes:
 2. As an experimentation surface for improving the code around the model, not
    just swapping the model itself.
 
-The repo currently includes adapters for Codex CLI, OpenAI, OpenRouter,
-Ollama, and Anthropic, a shared runtime core, storage backends, built-in
-tools, and a CLI that ties the system together.
+The repo currently includes adapters for Codex CLI, Claude Code CLI, OpenAI,
+OpenRouter, Ollama, and Anthropic, a shared runtime core, storage backends,
+built-in tools, and a CLI that ties the system together.
+
+The two CLI-backed adapters exist so a subscription login can drive the runtime
+without an API key: `codex` reuses a ChatGPT/Codex login, and `claude` reuses a
+Claude Code login. Both run the external agent as a model only — Harness still
+owns every tool call, approval and verifier.
 
 ## Workspace Layout
 
@@ -39,18 +63,26 @@ workspace member so `uv sync` installs the whole stack in editable mode.
 
 ```text
 packages/
-├── adapter-anthropic/    # Anthropic adapter
+├── adapter-anthropic/    # Anthropic API adapter
+├── adapter-claude/       # Claude Code CLI adapter
 ├── adapter-codex/        # Codex CLI adapter
 ├── adapter-openai/       # OpenAI adapter
 ├── adapter-ollama/       # Ollama adapter
 ├── adapter-openrouter/   # OpenRouter adapter
 ├── cli/                  # Typer + Rich CLI, installs `harness`
 ├── core/                 # Runtime loop, verifiers, critics, contracts, tips
+├── server/               # HTTP/MCP/A2A service, web client and delegation
 ├── storage-memory/       # In-memory storage backend
 ├── storage-sqlite/       # SQLite storage backend
 ├── tasks/                # Durable task model and activity log
 ├── tools-fs/             # Filesystem tools
 ├── tools-shell/          # Shell execution tools
+├── tools-execution/      # Managed local, container and cloud backends
+├── tools-browser/        # Owned Playwright/CDP browser sessions
+├── tools-computer/       # Explicit local desktop controls
+├── tools-media/          # Vision, generation, transcription and speech
+├── tools-homeassistant/  # Allowlisted device discovery and approved controls
+├── tools-mcp/            # MCP clients, resources, prompts and OAuth
 └── tools-web/            # HTTP/web tools
 ```
 

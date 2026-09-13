@@ -15,6 +15,9 @@ message at the head of the kept history.
 from __future__ import annotations
 
 import json
+from inspect import isawaitable
+from typing import Any
+from uuid import uuid4
 
 from harness.core.adapter import Adapter
 from harness.core.budget import _atomic_blocks, count_tokens
@@ -91,12 +94,19 @@ class ContextCompactor:
 
         old_messages = [m for block in old_blocks for m in block]
         summary = await self._summarize(old_messages)
+        if not summary:
+            return messages
 
         kept = [m for block in recent_blocks for m in block]
         summary_msg = Message(role="system", content=f"[Compacted context summary]\n{summary}")
-        return [summary_msg, *kept]
+        result = [summary_msg, *kept]
+        return (
+            result
+            if count_tokens(result, self._model) < count_tokens(messages, self._model)
+            else messages
+        )
 
-    async def _summarize(self, messages: list[Message]) -> str:
+    async def _summarize(self, messages: list[Message]) -> str | None:
         """One-shot LLM call to summarize a list of messages."""
         from harness.core.events import Done
 
@@ -107,18 +117,47 @@ class ContextCompactor:
         ]
 
         text: list[str] = []
+        session_id = "compact_" + uuid4().hex
+        end_run = getattr(self._adapter, "end_run", None)
+        stream = None
+        started = False
+        cleanup_failed = False
         try:
-            async for event in self._adapter.stream(
-                model=self._model, messages=call_messages, tools=None
-            ):
+            capabilities = await self._adapter.capabilities()
+            if capabilities.tool_use and not capabilities.external_tools:
+                # Native-agent adapters cannot guarantee a tool-free summary.
+                return None
+            kwargs: dict[str, Any] = {"session_id": session_id} if callable(end_run) else {}
+            started = True
+            stream = self._adapter.stream(
+                model=self._model, messages=call_messages, tools=None, **kwargs
+            )
+            async for event in stream:
                 if isinstance(event, Done):
                     if event.final_message and event.final_message.content:
                         text.append(event.final_message.content)
                     break
         except Exception:
-            return "(summary unavailable — compaction LLM call failed)"
+            return None
+        finally:
+            try:
+                close = getattr(stream, "aclose", None)
+                if callable(close):
+                    closing = close()
+                    if isawaitable(closing):
+                        await closing
+            except Exception:
+                cleanup_failed = True
+            finally:
+                if started and callable(end_run):
+                    try:
+                        result = end_run(session_id)
+                        if isawaitable(result):
+                            await result
+                    except Exception:
+                        cleanup_failed = True
 
-        return "".join(text).strip() or "(empty summary)"
+        return None if cleanup_failed else "".join(text).strip() or None
 
 
 def _serialize(messages: list[Message]) -> str:

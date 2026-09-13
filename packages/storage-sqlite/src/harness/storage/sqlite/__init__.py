@@ -21,13 +21,18 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 
 import aiosqlite
 
 from harness.core import Message, Session, SessionStatus, Storage
-from harness.core.memory import MemoryEntry, MemoryKind, MemoryStore
+from harness.core.memory import MemoryEntry, MemoryKind, MemoryScope, MemoryStore
+from harness.core.schemas import Note, PhaseStatus
+from harness.core.session_search import SessionSearchResult, search_limit, search_terms
+from harness.storage.sqlite.search import index_session, infer_memory_scope, initialize_search
 from harness.tasks import (
     ActivityEvent,
     ActivityStore,
@@ -59,7 +64,6 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_updated_at ON sessions(updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
-CREATE INDEX IF NOT EXISTS idx_sessions_task_id ON sessions(task_id);
 
 CREATE TABLE IF NOT EXISTS tasks (
     id          TEXT PRIMARY KEY,
@@ -104,7 +108,8 @@ CREATE TABLE IF NOT EXISTS approvals (
     requested_at TEXT NOT NULL,
     resolved_at  TEXT,
     resolved_by  TEXT,
-    replayed_at  TEXT
+    replayed_at  TEXT,
+    replay_claimed_at TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_approvals_session  ON approvals(session_id, status);
 CREATE INDEX IF NOT EXISTS idx_approvals_task     ON approvals(task_id);
@@ -126,11 +131,18 @@ CREATE INDEX IF NOT EXISTS idx_memory_created_at ON memory(created_at DESC);
 _MIGRATIONS = (
     "ALTER TABLE sessions ADD COLUMN task_id TEXT",
     "ALTER TABLE sessions ADD COLUMN forked_from TEXT",
+    "ALTER TABLE approvals ADD COLUMN replay_claimed_at TEXT",
+    "ALTER TABLE sessions ADD COLUMN notes TEXT NOT NULL DEFAULT '[]'",
+    "ALTER TABLE sessions ADD COLUMN phases TEXT NOT NULL DEFAULT '[]'",
+    "ALTER TABLE memory ADD COLUMN scope TEXT",
 )
 
 
 def default_db_path() -> Path:
     """`$XDG_STATE_HOME/harness/sessions.db` or `~/.local/state/harness/sessions.db`."""
+    profile_home = os.environ.get("HARNESS_HOME")
+    if profile_home:
+        return Path(profile_home).expanduser() / "state" / "sessions.db"
     base = os.environ.get("XDG_STATE_HOME")
     state_home = Path(base) if base else Path.home() / ".local" / "state"
     return state_home / "harness" / "sessions.db"
@@ -152,24 +164,48 @@ class SQLiteStorage(Storage, TaskStore, ActivityStore, ApprovalStore, MemoryStor
         self._db: aiosqlite.Connection | None = None
         self._lock = asyncio.Lock()
 
-    async def _ensure(self) -> aiosqlite.Connection:
-        async with self._lock:
-            if self._db is None:
-                if isinstance(self.path, Path):
-                    self.path.parent.mkdir(parents=True, exist_ok=True)
-                self._db = await aiosqlite.connect(str(self.path))
-                self._db.row_factory = aiosqlite.Row
-                await self._db.executescript(_SCHEMA)
-                # ALTER TABLE ADD COLUMN raises if the column exists already;
-                # idempotent migrations swallow that one specific error.
+    async def _ensure_locked(self) -> aiosqlite.Connection:
+        """Initialize atomically while the operation lock is held."""
+        if self._db is None:
+            if isinstance(self.path, Path):
+                self.path.parent.mkdir(parents=True, exist_ok=True)
+            db = await aiosqlite.connect(str(self.path))
+            db.row_factory = aiosqlite.Row
+            try:
+                await db.executescript("BEGIN IMMEDIATE;\n" + _SCHEMA)
                 for stmt in _MIGRATIONS:
                     try:
-                        await self._db.execute(stmt)
+                        await db.execute(stmt)
                     except aiosqlite.OperationalError as exc:
                         if "duplicate column" not in str(exc).lower():
                             raise
-                await self._db.commit()
+                await db.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_sessions_task_id ON sessions(task_id)"
+                )
+                await db.execute("CREATE INDEX IF NOT EXISTS idx_memory_scope ON memory(scope)")
+                await initialize_search(db, path=self.path)
+                await db.commit()
+            except BaseException:
+                await db.rollback()
+                await db.close()
+                raise
+            self._db = db
         return self._db
+
+    @asynccontextmanager
+    async def _connection(self) -> AsyncIterator[aiosqlite.Connection]:
+        # SQLite transactions belong to connections, not coroutines. Keep every
+        # operation under this lock so unrelated writes cannot commit a task
+        # transaction, reads cannot see partial writes, and close cannot race it.
+        async with self._lock:
+            db = await self._ensure_locked()
+            try:
+                yield db
+            finally:
+                # Queue rollback even if no transaction is visible yet: a
+                # cancelled execute may still be pending on aiosqlite's worker.
+                # A no-op rollback is harmless after reads or successful commits.
+                await db.rollback()
 
     async def close(self) -> None:
         """Close the underlying connection. Idempotent."""
@@ -183,36 +219,39 @@ class SQLiteStorage(Storage, TaskStore, ActivityStore, ApprovalStore, MemoryStor
     # ------------------------------------------------------------------ #
 
     async def get(self, session_id: str) -> Session | None:
-        db = await self._ensure()
-        async with db.execute("SELECT * FROM sessions WHERE id = ?", (session_id,)) as cursor:
-            row = await cursor.fetchone()
-        return _row_to_session(row) if row else None
+        async with self._connection() as db:
+            async with db.execute("SELECT * FROM sessions WHERE id = ?", (session_id,)) as cursor:
+                row = await cursor.fetchone()
+            return _row_to_session(row) if row else None
 
     async def save(self, session: Session) -> None:
-        db = await self._ensure()
-        await db.execute(
-            """
-            INSERT OR REPLACE INTO sessions
-              (id, provider, model, cwd, status, created_at, updated_at,
-               messages, approval_overrides, metadata, task_id, forked_from)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                session.id,
-                session.provider,
-                session.model,
-                str(session.cwd),
-                session.status,
-                session.created_at.isoformat(),
-                session.updated_at.isoformat(),
-                json.dumps([m.model_dump(mode="json") for m in session.messages]),
-                json.dumps(session.approval_overrides),
-                json.dumps(session.metadata),
-                session.task_id,
-                session.forked_from,
-            ),
-        )
-        await db.commit()
+        async with self._connection() as db:
+            await db.execute(
+                """
+                INSERT OR REPLACE INTO sessions
+                  (id, provider, model, cwd, status, created_at, updated_at,
+                   messages, approval_overrides, metadata, task_id, forked_from, notes, phases)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    session.id,
+                    session.provider,
+                    session.model,
+                    str(session.cwd),
+                    session.status,
+                    session.created_at.isoformat(),
+                    session.updated_at.isoformat(),
+                    json.dumps([m.model_dump(mode="json") for m in session.messages]),
+                    json.dumps(session.approval_overrides),
+                    json.dumps(session.metadata),
+                    session.task_id,
+                    session.forked_from,
+                    json.dumps([note.model_dump(mode="json") for note in session.notes]),
+                    json.dumps([phase.model_dump(mode="json") for phase in session.phases]),
+                ),
+            )
+            await index_session(db, session)
+            await db.commit()
 
     async def list(
         self,
@@ -221,88 +260,121 @@ class SQLiteStorage(Storage, TaskStore, ActivityStore, ApprovalStore, MemoryStor
         before: datetime | None = None,
         status: SessionStatus | None = None,
     ) -> list[Session]:
-        db = await self._ensure()
-        sql = "SELECT * FROM sessions"
-        clauses: list[str] = []
-        params: list[object] = []
-        if status is not None:
-            clauses.append("status = ?")
-            params.append(status)
-        if before is not None:
-            clauses.append("updated_at < ?")
-            params.append(before.isoformat())
-        if clauses:
-            sql += " WHERE " + " AND ".join(clauses)
-        sql += " ORDER BY updated_at DESC LIMIT ?"
-        params.append(limit)
-        async with db.execute(sql, params) as cursor:
-            rows = await cursor.fetchall()
-        return [_row_to_session(r) for r in rows]
+        async with self._connection() as db:
+            sql = "SELECT * FROM sessions"
+            clauses: list[str] = []
+            params: list[object] = []
+            if status is not None:
+                clauses.append("status = ?")
+                params.append(status)
+            if before is not None:
+                clauses.append("updated_at < ?")
+                params.append(before.isoformat())
+            if clauses:
+                sql += " WHERE " + " AND ".join(clauses)
+            sql += " ORDER BY updated_at DESC LIMIT ?"
+            params.append(limit)
+            async with db.execute(sql, params) as cursor:
+                rows = await cursor.fetchall()
+            return [_row_to_session(r) for r in rows]
 
     async def delete(self, session_id: str) -> None:
-        db = await self._ensure()
-        await db.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
-        await db.commit()
+        async with self._connection() as db:
+            await db.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
+            await db.execute("DELETE FROM session_search WHERE session_id = ?", (session_id,))
+            await db.commit()
+
+    async def search_sessions(
+        self, query: str, *, scope: MemoryScope, limit: int = 10
+    ) -> list[SessionSearchResult]:
+        from harness.core.session_search import matching_messages
+
+        limit = search_limit(limit)
+        terms = search_terms(query)
+        if not terms:
+            return []
+        expression = " AND ".join('"' + term.replace('"', '""') + '"' for term in terms)
+        async with self._connection() as db:
+            async with db.execute(
+                "SELECT session_id, snippet(session_search, 2, '', '', '…', 40) AS excerpt, session_search.updated_at, s.messages "
+                "FROM session_search JOIN sessions s ON s.id=session_search.session_id WHERE session_search MATCH ? AND scope = ? "
+                "ORDER BY rank, session_search.updated_at DESC LIMIT ?",
+                (expression, scope.model_dump_json(), limit),
+            ) as cursor:
+                rows = await cursor.fetchall()
+            return [
+                SessionSearchResult(
+                    session_id=row["session_id"],
+                    excerpt=row["excerpt"][:1200],
+                    updated_at=row["updated_at"],
+                    matches=matching_messages(
+                        row["session_id"],
+                        [Message.model_validate(item) for item in json.loads(row["messages"])],
+                        terms,
+                    ),
+                )
+                for row in rows
+            ]
 
     # ------------------------------------------------------------------ #
     # TaskStore                                                           #
     # ------------------------------------------------------------------ #
 
     async def create_task(self, task: Task) -> Task:
-        db = await self._ensure()
-        # Compute the next ref under a write lock so concurrent creates can't
-        # collide on the same number.
-        async with db.execute("BEGIN IMMEDIATE"):
-            pass
-        try:
-            async with db.execute(
-                "SELECT COALESCE(MAX(CAST(SUBSTR(ref, 3) AS INTEGER)), 0) FROM tasks"
-            ) as cursor:
-                row = await cursor.fetchone()
-            next_num = int(row[0] if row else 0) + 1
-            ref = f"T-{next_num:03d}"
-            updated = task.model_copy(update={"ref": ref})
-            await db.execute(
-                """
-                INSERT INTO tasks
-                  (id, ref, title, description, status, priority, labels,
-                   parent_id, links, session_ids, cwd, created_at, updated_at, metadata)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    updated.id,
-                    updated.ref,
-                    updated.title,
-                    updated.description,
-                    updated.status,
-                    updated.priority,
-                    json.dumps(updated.labels),
-                    updated.parent_id,
-                    json.dumps([link.model_dump(mode="json") for link in updated.links]),
-                    json.dumps(updated.session_ids),
-                    str(updated.cwd),
-                    updated.created_at.isoformat(),
-                    updated.updated_at.isoformat(),
-                    json.dumps(updated.metadata),
-                ),
-            )
-            await db.commit()
-            return updated
-        except Exception:
-            await db.rollback()
-            raise
+        async with self._connection() as db:
+            # Compute the next ref under a write lock so concurrent creates can't
+            # collide on the same number.
+            async with db.execute("BEGIN IMMEDIATE"):
+                pass
+            try:
+                async with db.execute(
+                    "SELECT COALESCE(MAX(CAST(SUBSTR(ref, 3) AS INTEGER)), 0) FROM tasks"
+                ) as cursor:
+                    row = await cursor.fetchone()
+                next_num = int(row[0] if row else 0) + 1
+                ref = f"T-{next_num:03d}"
+                updated = task.model_copy(update={"ref": ref})
+                await db.execute(
+                    """
+                    INSERT INTO tasks
+                      (id, ref, title, description, status, priority, labels,
+                       parent_id, links, session_ids, cwd, created_at, updated_at, metadata)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        updated.id,
+                        updated.ref,
+                        updated.title,
+                        updated.description,
+                        updated.status,
+                        updated.priority,
+                        json.dumps(updated.labels),
+                        updated.parent_id,
+                        json.dumps([link.model_dump(mode="json") for link in updated.links]),
+                        json.dumps(updated.session_ids),
+                        str(updated.cwd),
+                        updated.created_at.isoformat(),
+                        updated.updated_at.isoformat(),
+                        json.dumps(updated.metadata),
+                    ),
+                )
+                await db.commit()
+                return updated
+            except Exception:
+                await db.rollback()
+                raise
 
     async def get_task(self, task_id: str) -> Task | None:
-        db = await self._ensure()
-        async with db.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)) as cursor:
-            row = await cursor.fetchone()
-        return _row_to_task(row) if row else None
+        async with self._connection() as db:
+            async with db.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)) as cursor:
+                row = await cursor.fetchone()
+            return _row_to_task(row) if row else None
 
     async def get_task_by_ref(self, ref: str) -> Task | None:
-        db = await self._ensure()
-        async with db.execute("SELECT * FROM tasks WHERE ref = ?", (ref,)) as cursor:
-            row = await cursor.fetchone()
-        return _row_to_task(row) if row else None
+        async with self._connection() as db:
+            async with db.execute("SELECT * FROM tasks WHERE ref = ?", (ref,)) as cursor:
+                row = await cursor.fetchone()
+            return _row_to_task(row) if row else None
 
     async def list_tasks(
         self,
@@ -311,62 +383,62 @@ class SQLiteStorage(Storage, TaskStore, ActivityStore, ApprovalStore, MemoryStor
         status: TaskStatus | None = None,
         parent_id: str | None = None,
     ) -> list[Task]:
-        db = await self._ensure()
-        sql = "SELECT * FROM tasks"
-        clauses: list[str] = []
-        params: list[object] = []
-        if status is not None:
-            clauses.append("status = ?")
-            params.append(status)
-        if parent_id is not None:
-            clauses.append("parent_id = ?")
-            params.append(parent_id)
-        if clauses:
-            sql += " WHERE " + " AND ".join(clauses)
-        sql += " ORDER BY updated_at DESC LIMIT ?"
-        params.append(limit)
-        async with db.execute(sql, params) as cursor:
-            rows = await cursor.fetchall()
-        return [_row_to_task(r) for r in rows]
+        async with self._connection() as db:
+            sql = "SELECT * FROM tasks"
+            clauses: list[str] = []
+            params: list[object] = []
+            if status is not None:
+                clauses.append("status = ?")
+                params.append(status)
+            if parent_id is not None:
+                clauses.append("parent_id = ?")
+                params.append(parent_id)
+            if clauses:
+                sql += " WHERE " + " AND ".join(clauses)
+            sql += " ORDER BY updated_at DESC LIMIT ?"
+            params.append(limit)
+            async with db.execute(sql, params) as cursor:
+                rows = await cursor.fetchall()
+            return [_row_to_task(r) for r in rows]
 
     async def update_task(self, task: Task) -> Task:
-        db = await self._ensure()
-        async with db.execute("SELECT 1 FROM tasks WHERE id = ?", (task.id,)) as cursor:
-            row = await cursor.fetchone()
-        if row is None:
-            raise KeyError(f"task {task.id!r} not found")
-        await db.execute(
-            """
-            UPDATE tasks SET
-              ref = ?, title = ?, description = ?, status = ?, priority = ?,
-              labels = ?, parent_id = ?, links = ?, session_ids = ?, cwd = ?,
-              created_at = ?, updated_at = ?, metadata = ?
-            WHERE id = ?
-            """,
-            (
-                task.ref,
-                task.title,
-                task.description,
-                task.status,
-                task.priority,
-                json.dumps(task.labels),
-                task.parent_id,
-                json.dumps([link.model_dump(mode="json") for link in task.links]),
-                json.dumps(task.session_ids),
-                str(task.cwd),
-                task.created_at.isoformat(),
-                task.updated_at.isoformat(),
-                json.dumps(task.metadata),
-                task.id,
-            ),
-        )
-        await db.commit()
-        return task
+        async with self._connection() as db:
+            async with db.execute("SELECT 1 FROM tasks WHERE id = ?", (task.id,)) as cursor:
+                row = await cursor.fetchone()
+            if row is None:
+                raise KeyError(f"task {task.id!r} not found")
+            await db.execute(
+                """
+                UPDATE tasks SET
+                  ref = ?, title = ?, description = ?, status = ?, priority = ?,
+                  labels = ?, parent_id = ?, links = ?, session_ids = ?, cwd = ?,
+                  created_at = ?, updated_at = ?, metadata = ?
+                WHERE id = ?
+                """,
+                (
+                    task.ref,
+                    task.title,
+                    task.description,
+                    task.status,
+                    task.priority,
+                    json.dumps(task.labels),
+                    task.parent_id,
+                    json.dumps([link.model_dump(mode="json") for link in task.links]),
+                    json.dumps(task.session_ids),
+                    str(task.cwd),
+                    task.created_at.isoformat(),
+                    task.updated_at.isoformat(),
+                    json.dumps(task.metadata),
+                    task.id,
+                ),
+            )
+            await db.commit()
+            return task
 
     async def delete_task(self, task_id: str) -> None:
-        db = await self._ensure()
-        await db.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
-        await db.commit()
+        async with self._connection() as db:
+            await db.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
+            await db.commit()
 
     async def claim_task(
         self,
@@ -375,66 +447,68 @@ class SQLiteStorage(Storage, TaskStore, ActivityStore, ApprovalStore, MemoryStor
         claimed_by: str,
         worker_session_id: str | None = None,
     ) -> Task | None:
-        db = await self._ensure()
-        claimed_id: str | None = None
-        async with db.execute("BEGIN IMMEDIATE"):
-            pass
-        try:
-            async with db.execute(
-                """SELECT id FROM tasks WHERE parent_id = ? AND status = 'todo'
-                   ORDER BY created_at ASC LIMIT 1""",
-                (parent_id,),
-            ) as cursor:
-                row = await cursor.fetchone()
-            if row is None:
+        async with self._connection() as db:
+            claimed_id: str | None = None
+            async with db.execute("BEGIN IMMEDIATE"):
+                pass
+            try:
+                async with db.execute(
+                    """SELECT id FROM tasks WHERE parent_id = ? AND status = 'todo'
+                       ORDER BY created_at ASC LIMIT 1""",
+                    (parent_id,),
+                ) as cursor:
+                    row = await cursor.fetchone()
+                if row is None:
+                    await db.rollback()
+                    return None
+                claimed_id = row[0]
+                now = datetime.now(UTC).isoformat()
+                # Read existing metadata to merge claim info
+                async with db.execute(
+                    "SELECT metadata FROM tasks WHERE id = ?", (claimed_id,)
+                ) as cursor:
+                    meta_row = await cursor.fetchone()
+                existing_meta = json.loads(meta_row[0]) if meta_row and meta_row[0] else {}
+                meta = {
+                    **existing_meta,
+                    "claimed_by": claimed_by,
+                    "worker_session_id": worker_session_id,
+                }
+                await db.execute(
+                    "UPDATE tasks SET status = 'in_progress', metadata = ?, updated_at = ? WHERE id = ?",
+                    (json.dumps(meta), now, claimed_id),
+                )
+                await db.commit()
+            except Exception:
                 await db.rollback()
-                return None
-            claimed_id = row[0]
-            now = datetime.now(UTC).isoformat()
-            # Read existing metadata to merge claim info
-            async with db.execute(
-                "SELECT metadata FROM tasks WHERE id = ?", (claimed_id,)
-            ) as cursor:
-                meta_row = await cursor.fetchone()
-            existing_meta = json.loads(meta_row[0]) if meta_row and meta_row[0] else {}
-            meta = {
-                **existing_meta,
-                "claimed_by": claimed_by,
-                "worker_session_id": worker_session_id,
-            }
-            await db.execute(
-                "UPDATE tasks SET status = 'in_progress', metadata = ?, updated_at = ? WHERE id = ?",
-                (json.dumps(meta), now, claimed_id),
-            )
-            await db.commit()
-        except Exception:
-            await db.rollback()
-            raise
-        assert claimed_id is not None
-        return await self.get_task(claimed_id)
+                raise
+            assert claimed_id is not None
+            async with db.execute("SELECT * FROM tasks WHERE id = ?", (claimed_id,)) as cursor:
+                claimed_row = await cursor.fetchone()
+            return _row_to_task(claimed_row) if claimed_row else None
 
     # ------------------------------------------------------------------ #
     # ActivityStore                                                       #
     # ------------------------------------------------------------------ #
 
     async def append_activity(self, event: ActivityEvent) -> None:
-        db = await self._ensure()
-        await db.execute(
-            """
-            INSERT OR IGNORE INTO task_activity
-              (id, task_id, session_id, timestamp, kind, data)
-            VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            (
-                event.id,
-                event.task_id,
-                event.session_id,
-                event.timestamp.isoformat(),
-                event.kind,
-                json.dumps(event.data),
-            ),
-        )
-        await db.commit()
+        async with self._connection() as db:
+            await db.execute(
+                """
+                INSERT OR IGNORE INTO task_activity
+                  (id, task_id, session_id, timestamp, kind, data)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    event.id,
+                    event.task_id,
+                    event.session_id,
+                    event.timestamp.isoformat(),
+                    event.kind,
+                    json.dumps(event.data),
+                ),
+            )
+            await db.commit()
 
     async def list_activity(
         self,
@@ -444,63 +518,64 @@ class SQLiteStorage(Storage, TaskStore, ActivityStore, ApprovalStore, MemoryStor
         kinds: tuple[str, ...] | None = None,
         limit: int = 200,
     ) -> list[ActivityEvent]:
-        db = await self._ensure()
-        sql = "SELECT * FROM task_activity"
-        clauses: list[str] = []
-        params: list[object] = []
-        if task_id is not None:
-            clauses.append("task_id = ?")
-            params.append(task_id)
-        if session_id is not None:
-            clauses.append("session_id = ?")
-            params.append(session_id)
-        if kinds is not None:
-            placeholders = ",".join("?" * len(kinds))
-            clauses.append(f"kind IN ({placeholders})")
-            params.extend(kinds)
-        if clauses:
-            sql += " WHERE " + " AND ".join(clauses)
-        sql = f"SELECT * FROM ({sql} ORDER BY timestamp DESC LIMIT ?) ORDER BY timestamp ASC"
-        params.append(limit)
-        async with db.execute(sql, params) as cursor:
-            rows = await cursor.fetchall()
-        return [_row_to_activity(r) for r in rows]
+        async with self._connection() as db:
+            sql = "SELECT * FROM task_activity"
+            clauses: list[str] = []
+            params: list[object] = []
+            if task_id is not None:
+                clauses.append("task_id = ?")
+                params.append(task_id)
+            if session_id is not None:
+                clauses.append("session_id = ?")
+                params.append(session_id)
+            if kinds is not None:
+                placeholders = ",".join("?" * len(kinds))
+                clauses.append(f"kind IN ({placeholders})")
+                params.extend(kinds)
+            if clauses:
+                sql += " WHERE " + " AND ".join(clauses)
+            sql = f"SELECT * FROM ({sql} ORDER BY timestamp DESC LIMIT ?) ORDER BY timestamp ASC"
+            params.append(limit)
+            async with db.execute(sql, params) as cursor:
+                rows = await cursor.fetchall()
+            return [_row_to_activity(r) for r in rows]
 
     # ------------------------------------------------------------------ #
     # ApprovalStore                                                       #
     # ------------------------------------------------------------------ #
 
     async def create_approval(self, approval: PendingApproval) -> PendingApproval:
-        db = await self._ensure()
-        await db.execute(
-            """
-            INSERT INTO approvals
-              (id, task_id, session_id, tool_call_id, tool_name, arguments,
-               status, requested_at, resolved_at, resolved_by, replayed_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                approval.id,
-                approval.task_id,
-                approval.session_id,
-                approval.tool_call_id,
-                approval.tool_name,
-                json.dumps(approval.arguments),
-                approval.status,
-                approval.requested_at.isoformat(),
-                approval.resolved_at.isoformat() if approval.resolved_at else None,
-                approval.resolved_by,
-                approval.replayed_at.isoformat() if approval.replayed_at else None,
-            ),
-        )
-        await db.commit()
-        return approval
+        async with self._connection() as db:
+            await db.execute(
+                """
+                INSERT INTO approvals
+                  (id, task_id, session_id, tool_call_id, tool_name, arguments,
+                   status, requested_at, resolved_at, resolved_by, replayed_at, replay_claimed_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    approval.id,
+                    approval.task_id,
+                    approval.session_id,
+                    approval.tool_call_id,
+                    approval.tool_name,
+                    json.dumps(approval.arguments),
+                    approval.status,
+                    approval.requested_at.isoformat(),
+                    approval.resolved_at.isoformat() if approval.resolved_at else None,
+                    approval.resolved_by,
+                    approval.replayed_at.isoformat() if approval.replayed_at else None,
+                    approval.replay_claimed_at.isoformat() if approval.replay_claimed_at else None,
+                ),
+            )
+            await db.commit()
+            return approval
 
     async def get_approval(self, approval_id: str) -> PendingApproval | None:
-        db = await self._ensure()
-        async with db.execute("SELECT * FROM approvals WHERE id = ?", (approval_id,)) as cursor:
-            row = await cursor.fetchone()
-        return _row_to_approval(row) if row else None
+        async with self._connection() as db:
+            async with db.execute("SELECT * FROM approvals WHERE id = ?", (approval_id,)) as cursor:
+                row = await cursor.fetchone()
+            return _row_to_approval(row) if row else None
 
     async def list_approvals(
         self,
@@ -510,26 +585,26 @@ class SQLiteStorage(Storage, TaskStore, ActivityStore, ApprovalStore, MemoryStor
         status: ApprovalStatus | None = None,
         limit: int = 100,
     ) -> list[PendingApproval]:
-        db = await self._ensure()
-        sql = "SELECT * FROM approvals"
-        clauses: list[str] = []
-        params: list[object] = []
-        if session_id is not None:
-            clauses.append("session_id = ?")
-            params.append(session_id)
-        if task_id is not None:
-            clauses.append("task_id = ?")
-            params.append(task_id)
-        if status is not None:
-            clauses.append("status = ?")
-            params.append(status)
-        if clauses:
-            sql += " WHERE " + " AND ".join(clauses)
-        sql += " ORDER BY requested_at DESC LIMIT ?"
-        params.append(limit)
-        async with db.execute(sql, params) as cursor:
-            rows = await cursor.fetchall()
-        return [_row_to_approval(r) for r in rows]
+        async with self._connection() as db:
+            sql = "SELECT * FROM approvals"
+            clauses: list[str] = []
+            params: list[object] = []
+            if session_id is not None:
+                clauses.append("session_id = ?")
+                params.append(session_id)
+            if task_id is not None:
+                clauses.append("task_id = ?")
+                params.append(task_id)
+            if status is not None:
+                clauses.append("status = ?")
+                params.append(status)
+            if clauses:
+                sql += " WHERE " + " AND ".join(clauses)
+            sql += " ORDER BY requested_at DESC LIMIT ?"
+            params.append(limit)
+            async with db.execute(sql, params) as cursor:
+                rows = await cursor.fetchall()
+            return [_row_to_approval(r) for r in rows]
 
     async def resolve_approval(
         self,
@@ -538,93 +613,175 @@ class SQLiteStorage(Storage, TaskStore, ActivityStore, ApprovalStore, MemoryStor
         status: ApprovalStatus,
         resolved_by: str | None = None,
     ) -> PendingApproval | None:
-        db = await self._ensure()
-        resolved_at = datetime.now(UTC).isoformat()
-        async with db.execute(
-            """
-            UPDATE approvals SET status = ?, resolved_at = ?, resolved_by = ?
-            WHERE id = ?
-            """,
-            (status, resolved_at, resolved_by, approval_id),
-        ) as cursor:
-            if cursor.rowcount == 0:
-                return None
-        await db.commit()
-        return await self.get_approval(approval_id)
+        if status not in ("granted", "denied"):
+            raise ValueError("approval resolution must be granted or denied")
+        async with self._connection() as db:
+            resolved_at = datetime.now(UTC).isoformat()
+            async with db.execute(
+                """
+                UPDATE approvals SET status = ?, resolved_at = ?, resolved_by = ?
+                WHERE id = ? AND status = 'pending'
+                """,
+                (status, resolved_at, resolved_by, approval_id),
+            ) as cursor:
+                if cursor.rowcount == 0:
+                    return None
+            await db.commit()
+            async with db.execute("SELECT * FROM approvals WHERE id = ?", (approval_id,)) as cursor:
+                row = await cursor.fetchone()
+            return _row_to_approval(row) if row else None
+
+    async def claim_replay(self, approval_id: str, *, session_id: str) -> bool:
+        async with self._connection() as db:
+            async with db.execute(
+                """UPDATE approvals SET replay_claimed_at = ?
+                   WHERE id = ? AND session_id = ? AND status = 'granted'
+                     AND replayed_at IS NULL AND replay_claimed_at IS NULL""",
+                (datetime.now(UTC).isoformat(), approval_id, session_id),
+            ) as cursor:
+                claimed = cursor.rowcount == 1
+            await db.commit()
+            return claimed
 
     async def mark_replayed(self, approval_id: str) -> None:
-        db = await self._ensure()
-        replayed_at = datetime.now(UTC).isoformat()
-        await db.execute(
-            "UPDATE approvals SET replayed_at = ? WHERE id = ? AND replayed_at IS NULL",
-            (replayed_at, approval_id),
-        )
-        await db.commit()
+        async with self._connection() as db:
+            replayed_at = datetime.now(UTC).isoformat()
+            await db.execute(
+                "UPDATE approvals SET replayed_at = ? WHERE id = ? AND replayed_at IS NULL",
+                (replayed_at, approval_id),
+            )
+            await db.commit()
 
     async def list_unreplayed_granted(self, *, session_id: str) -> list[PendingApproval]:
-        db = await self._ensure()
-        async with db.execute(
-            """
-            SELECT * FROM approvals
-            WHERE session_id = ? AND status = 'granted' AND replayed_at IS NULL
-            ORDER BY requested_at ASC
-            """,
-            (session_id,),
-        ) as cursor:
-            rows = await cursor.fetchall()
-        return [_row_to_approval(r) for r in rows]
+        async with self._connection() as db:
+            async with db.execute(
+                """
+                SELECT * FROM approvals
+                WHERE session_id = ? AND status = 'granted' AND replayed_at IS NULL
+                ORDER BY requested_at ASC
+                """,
+                (session_id,),
+            ) as cursor:
+                rows = await cursor.fetchall()
+            return [_row_to_approval(r) for r in rows]
 
     # ------------------------------------------------------------------ #
     # MemoryStore                                                         #
     # ------------------------------------------------------------------ #
 
     async def save_memory(self, entry: MemoryEntry) -> MemoryEntry:
-        db = await self._ensure()
-        await db.execute(
-            """
-            INSERT OR REPLACE INTO memory (id, kind, text, session_id, task_id, created_at)
-            VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            (
-                entry.id,
-                entry.kind,
-                entry.text,
-                entry.session_id,
-                entry.task_id,
-                entry.created_at.isoformat(),
-            ),
-        )
-        await db.commit()
-        return entry
+        async with self._connection() as db:
+            if entry.scope is None:
+                scope = await infer_memory_scope(db, session_id=entry.session_id, path=self.path)
+                entry = entry.model_copy(update={"scope": scope})
+            await db.execute(
+                """
+                INSERT OR REPLACE INTO memory (id, kind, text, session_id, task_id, created_at, scope)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    entry.id,
+                    entry.kind,
+                    entry.text,
+                    entry.session_id,
+                    entry.task_id,
+                    entry.created_at.isoformat(),
+                    entry.scope.model_dump_json() if entry.scope else None,
+                ),
+            )
+            await db.commit()
+            return entry
 
     async def list_memory(
         self, *, kind: MemoryKind | None = None, limit: int = 50
     ) -> list[MemoryEntry]:
-        db = await self._ensure()
-        sql = "SELECT * FROM memory"
-        params: list[object] = []
-        if kind is not None:
-            sql += " WHERE kind = ?"
-            params.append(kind)
-        sql += " ORDER BY created_at DESC LIMIT ?"
-        params.append(limit)
-        async with db.execute(sql, params) as cursor:
-            rows = await cursor.fetchall()
-        return [_row_to_memory(r) for r in rows]
+        async with self._connection() as db:
+            sql = "SELECT * FROM memory"
+            params: list[object] = []
+            if kind is not None:
+                sql += " WHERE kind = ?"
+                params.append(kind)
+            sql += " ORDER BY created_at DESC LIMIT ?"
+            params.append(limit)
+            async with db.execute(sql, params) as cursor:
+                rows = await cursor.fetchall()
+            return [_row_to_memory(r) for r in rows]
 
     async def search_memory(self, query: str, *, limit: int = 20) -> list[MemoryEntry]:
-        db = await self._ensure()
-        async with db.execute(
-            "SELECT * FROM memory WHERE text LIKE ? ORDER BY created_at DESC LIMIT ?",
-            (f"%{query}%", limit),
-        ) as cursor:
-            rows = await cursor.fetchall()
-        return [_row_to_memory(r) for r in rows]
+        async with self._connection() as db:
+            async with db.execute(
+                "SELECT * FROM memory WHERE text LIKE ? ORDER BY created_at DESC LIMIT ?",
+                (f"%{query}%", limit),
+            ) as cursor:
+                rows = await cursor.fetchall()
+            return [_row_to_memory(r) for r in rows]
 
     async def delete_memory(self, entry_id: str) -> None:
-        db = await self._ensure()
-        await db.execute("DELETE FROM memory WHERE id = ?", (entry_id,))
-        await db.commit()
+        async with self._connection() as db:
+            await db.execute("DELETE FROM memory WHERE id = ?", (entry_id,))
+            await db.commit()
+
+    async def save_scoped_memory(self, entry: MemoryEntry, *, scope: MemoryScope) -> MemoryEntry:
+        entry = entry.model_copy(update={"scope": scope}, deep=True)
+        async with self._connection() as db:
+            cursor = await db.execute(
+                "INSERT INTO memory (id, kind, text, session_id, task_id, created_at, scope) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET "
+                "kind=excluded.kind, text=excluded.text, session_id=excluded.session_id, task_id=excluded.task_id "
+                "WHERE memory.scope = excluded.scope",
+                (
+                    entry.id,
+                    entry.kind,
+                    entry.text,
+                    entry.session_id,
+                    entry.task_id,
+                    entry.created_at.isoformat(),
+                    scope.model_dump_json(),
+                ),
+            )
+            if cursor.rowcount == 0:
+                raise KeyError("Memory not found")
+            await db.commit()
+            return entry
+
+    async def get_scoped_memory(self, entry_id: str, *, scope: MemoryScope) -> MemoryEntry | None:
+        async with self._connection() as db:
+            async with db.execute(
+                "SELECT * FROM memory WHERE id = ? AND scope = ?",
+                (entry_id, scope.model_dump_json()),
+            ) as cursor:
+                row = await cursor.fetchone()
+            return _row_to_memory(row) if row else None
+
+    async def list_scoped_memory(
+        self, *, scope: MemoryScope, kind: MemoryKind | None = None, limit: int = 50
+    ) -> list[MemoryEntry]:
+        async with self._connection() as db:
+            async with db.execute(
+                "SELECT * FROM memory WHERE scope = ? AND (? IS NULL OR kind = ?) ORDER BY created_at DESC LIMIT ?",
+                (scope.model_dump_json(), kind, kind, search_limit(limit)),
+            ) as cursor:
+                rows = await cursor.fetchall()
+            return [_row_to_memory(row) for row in rows]
+
+    async def search_scoped_memory(
+        self, query: str, *, scope: MemoryScope, limit: int = 20
+    ) -> list[MemoryEntry]:
+        async with self._connection() as db:
+            async with db.execute(
+                "SELECT * FROM memory WHERE scope = ? AND instr(lower(text), lower(?)) > 0 ORDER BY created_at DESC LIMIT ?",
+                (scope.model_dump_json(), query, search_limit(limit)),
+            ) as cursor:
+                rows = await cursor.fetchall()
+            return [_row_to_memory(row) for row in rows]
+
+    async def delete_scoped_memory(self, entry_id: str, *, scope: MemoryScope) -> bool:
+        async with self._connection() as db:
+            cursor = await db.execute(
+                "DELETE FROM memory WHERE id = ? AND scope = ?", (entry_id, scope.model_dump_json())
+            )
+            await db.commit()
+            return cursor.rowcount > 0
 
 
 def _row_to_session(row: aiosqlite.Row) -> Session:
@@ -642,6 +799,8 @@ def _row_to_session(row: aiosqlite.Row) -> Session:
         metadata=json.loads(row["metadata"]),
         task_id=row["task_id"] if "task_id" in keys else None,
         forked_from=row["forked_from"] if "forked_from" in keys else None,
+        notes=[Note.model_validate(note) for note in json.loads(row["notes"])],
+        phases=[PhaseStatus.model_validate(phase) for phase in json.loads(row["phases"])],
     )
 
 
@@ -688,6 +847,9 @@ def _row_to_approval(row: aiosqlite.Row) -> PendingApproval:
         resolved_at=datetime.fromisoformat(row["resolved_at"]) if row["resolved_at"] else None,
         resolved_by=row["resolved_by"],
         replayed_at=datetime.fromisoformat(row["replayed_at"]) if row["replayed_at"] else None,
+        replay_claimed_at=(
+            datetime.fromisoformat(row["replay_claimed_at"]) if row["replay_claimed_at"] else None
+        ),
     )
 
 
@@ -699,6 +861,7 @@ def _row_to_memory(row: aiosqlite.Row) -> MemoryEntry:
         session_id=row["session_id"],
         task_id=row["task_id"],
         created_at=datetime.fromisoformat(row["created_at"]),
+        scope=MemoryScope.model_validate_json(row["scope"]) if row["scope"] else None,
     )
 
 

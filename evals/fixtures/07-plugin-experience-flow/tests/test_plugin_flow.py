@@ -2,11 +2,8 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 from pathlib import Path
-
-
-def _project_root() -> Path:
-    return Path(os.environ["HARNESS_EVAL_PROJECT_ROOT"]).resolve()
 
 
 def _workspace() -> Path:
@@ -15,7 +12,7 @@ def _workspace() -> Path:
 
 def _run_harness(*args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        ["uv", "run", "--project", str(_project_root()), "harness", *args],
+        [sys.executable, "-m", "harness.cli", *args],
         cwd=_workspace(),
         capture_output=True,
         text=True,
@@ -41,11 +38,7 @@ def test_workspace_experience_plugin_loads_and_queries() -> None:
 
     provider_check = subprocess.run(
         [
-            "uv",
-            "run",
-            "--project",
-            str(_project_root()),
-            "python",
+            sys.executable,
             "-c",
             (
                 "import json; "

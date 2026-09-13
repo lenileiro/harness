@@ -1,0 +1,20 @@
+[project]
+name = "tools-mcp"
+version = "0.0.0"
+description = "Managed MCP client tools for Harness agents."
+requires-python = ">=3.11"
+dependencies = [
+    "core",
+    "mcp==1.30.0",
+    "httpx>=0.27",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/harness"]
+
+[tool.uv.sources]
+core = { workspace = true }

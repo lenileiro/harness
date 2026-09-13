@@ -1573,6 +1573,16 @@ def research_plan_experiment_command(
     target_files: str | None = typer.Option(None, "--target-files"),
     checks: str | None = typer.Option(None, "--checks"),
     eval_slices: str | None = typer.Option(None, "--eval-slices"),
+    measurement_command: str = typer.Option(
+        "", "--measurement-command", help="Command returning a JSON object of numeric metrics."
+    ),
+    minimize: list[str] = typer.Option(
+        [], "--minimize", help="Metric whose value should decrease."
+    ),
+    maximize: list[str] = typer.Option(
+        [], "--maximize", help="Metric whose value should increase."
+    ),
+    baseline: str = typer.Option("", "--baseline", help="Baseline experiment id for comparison."),
     created_by: str = typer.Option("human", "--created-by"),
     cwd: Path | None = typer.Option(None, "--cwd"),
 ) -> None:
@@ -1582,6 +1592,15 @@ def research_plan_experiment_command(
         store.load_hypothesis(hypothesis_id)
     except FileNotFoundError as exc:
         raise typer.BadParameter(f"unknown hypothesis: {hypothesis_id!r}") from exc
+    if set(minimize) & set(maximize):
+        raise typer.BadParameter("a metric cannot be both minimized and maximized")
+    if (minimize or maximize) and not measurement_command:
+        raise typer.BadParameter("metric goals require --measurement-command")
+    if baseline:
+        try:
+            store.load_experiment_result(baseline)
+        except FileNotFoundError as exc:
+            raise typer.BadParameter(f"unknown baseline experiment: {baseline!r}") from exc
     experiment_plan = ExperimentPlan(
         id=store.new_id("plan", hypothesis_id),
         hypothesis_id=hypothesis_id.strip(),
@@ -1589,6 +1608,12 @@ def research_plan_experiment_command(
         target_files=_split_csv(target_files),
         checks=_split_csv(checks),
         eval_slices=_split_csv(eval_slices),
+        measurement_command=measurement_command,
+        metric_directions={
+            **dict.fromkeys(minimize, "minimize"),
+            **dict.fromkeys(maximize, "maximize"),
+        },
+        baseline_experiment_id=baseline,
         created_by=created_by.strip() or "human",
     )
     target = store.add_experiment_plan(experiment_plan)
@@ -1601,6 +1626,7 @@ def _research_create_candidate_command(
     summary: str = typer.Option(..., "--summary"),
     source_publication: list[str] = typer.Option([], "--source-publication"),
     source_hypothesis: list[str] = typer.Option([], "--source-hypothesis"),
+    source_experiment: list[str] = typer.Option([], "--source-experiment"),
     target_files: str | None = typer.Option(None, "--target-files"),
     expected_metric: str | None = typer.Option(None, "--expected-metric"),
     validation_plan: str | None = typer.Option(None, "--validation-plan"),
@@ -1619,6 +1645,11 @@ def _research_create_candidate_command(
     store = ResearchStore(root=default_research_root(working_dir))
     resolved_mission_id = (mission_id or "").strip()
     resolved_mission_features = tuple(item.strip() for item in mission_feature if item.strip())
+    for experiment_id in source_experiment:
+        try:
+            store.load_experiment_result(experiment_id)
+        except FileNotFoundError as exc:
+            raise typer.BadParameter(f"unknown experiment: {experiment_id!r}") from exc
     for publication_id in source_publication:
         try:
             store.load_publication(publication_id)
@@ -1654,6 +1685,7 @@ def _research_create_candidate_command(
         mission_feature_ids=resolved_mission_features,
         source_publications=tuple(item.strip() for item in source_publication if item.strip()),
         source_hypotheses=tuple(item.strip() for item in source_hypothesis if item.strip()),
+        source_experiments=tuple(source_experiment),
         target_files=_split_csv(target_files),
         expected_metric=(expected_metric or "").strip(),
         validation_plan=(validation_plan or "").strip(),
@@ -1672,6 +1704,7 @@ def research_refine_command(
     summary: str = typer.Option(..., "--summary"),
     source_publication: list[str] = typer.Option([], "--source-publication"),
     source_hypothesis: list[str] = typer.Option([], "--source-hypothesis"),
+    source_experiment: list[str] = typer.Option([], "--source-experiment"),
     target_files: str | None = typer.Option(None, "--target-files"),
     expected_metric: str | None = typer.Option(None, "--expected-metric"),
     validation_plan: str | None = typer.Option(None, "--validation-plan"),
@@ -1691,6 +1724,7 @@ def research_refine_command(
         summary=summary,
         source_publication=source_publication,
         source_hypothesis=source_hypothesis,
+        source_experiment=source_experiment,
         target_files=target_files,
         expected_metric=expected_metric,
         validation_plan=validation_plan,
@@ -1717,6 +1751,7 @@ def research_create_candidate_command(
     summary: str = typer.Option(..., "--summary"),
     source_publication: list[str] = typer.Option([], "--source-publication"),
     source_hypothesis: list[str] = typer.Option([], "--source-hypothesis"),
+    source_experiment: list[str] = typer.Option([], "--source-experiment"),
     target_files: str | None = typer.Option(None, "--target-files"),
     expected_metric: str | None = typer.Option(None, "--expected-metric"),
     validation_plan: str | None = typer.Option(None, "--validation-plan"),
@@ -1736,6 +1771,7 @@ def research_create_candidate_command(
         summary=summary,
         source_publication=source_publication,
         source_hypothesis=source_hypothesis,
+        source_experiment=source_experiment,
         target_files=target_files,
         expected_metric=expected_metric,
         validation_plan=validation_plan,
@@ -1762,6 +1798,7 @@ def research_candidate_create_command(
     summary: str = typer.Option(..., "--summary"),
     source_publication: list[str] = typer.Option([], "--source-publication"),
     source_hypothesis: list[str] = typer.Option([], "--source-hypothesis"),
+    source_experiment: list[str] = typer.Option([], "--source-experiment"),
     target_files: str | None = typer.Option(None, "--target-files"),
     expected_metric: str | None = typer.Option(None, "--expected-metric"),
     validation_plan: str | None = typer.Option(None, "--validation-plan"),
@@ -1781,6 +1818,7 @@ def research_candidate_create_command(
         summary=summary,
         source_publication=source_publication,
         source_hypothesis=source_hypothesis,
+        source_experiment=source_experiment,
         target_files=target_files,
         expected_metric=expected_metric,
         validation_plan=validation_plan,
@@ -1978,6 +2016,8 @@ def research_experiment_run_command(
         f"[green]Experiment {experiment.id}[/green] {result.status} "
         f"commands={len(result.command_results)} duration={result.duration_seconds:.2f}s"
     )
+    if result.status != "passed":
+        raise typer.Exit(1)
 
 
 @experiment_app.command("show")
@@ -2002,6 +2042,16 @@ def research_experiment_show_command(
     for item in result.command_results:
         table.add_row(item.kind, str(item.exit_code), f"{item.duration_seconds:.2f}", item.command)
     console.print(table)
+    if result.metrics:
+        measurements = Table("Measurement", "Value", "Goal")
+        for name, value in sorted(result.metrics.items()):
+            measurements.add_row(
+                name, str(value), result.metric_directions.get(name, "unspecified")
+            )
+        console.print(measurements)
+    if result.baseline_experiment_id:
+        console.print(f"Baseline: {result.baseline_experiment_id}")
+    console.print(f"Workspace evidence: {result.workspace_fingerprint or 'uncertified'}")
 
 
 @experiment_app.command("compare")
@@ -2031,6 +2081,29 @@ def research_experiment_compare_command(
     )
     table.add_row("commands", str(comparison["left_commands"]), str(comparison["right_commands"]))
     console.print(table)
+    if left_result.metrics or right_result.metrics:
+        measurements = Table("Measurement", "Left", "Right", "Delta", "Goal", "Improved")
+        for name in sorted(left_result.metrics.keys() | right_result.metrics.keys()):
+            before = left_result.metrics.get(name)
+            after = right_result.metrics.get(name)
+            direction = right_result.metric_directions.get(
+                name
+            ) or left_result.metric_directions.get(name)
+            delta = after - before if before is not None and after is not None else None
+            improved = (
+                (delta < 0 if direction == "minimize" else delta > 0)
+                if delta is not None and direction in {"minimize", "maximize"}
+                else None
+            )
+            measurements.add_row(
+                name,
+                str(before) if before is not None else "unknown",
+                str(after) if after is not None else "unknown",
+                f"{delta:+g}" if delta is not None else "unknown",
+                direction or "unspecified",
+                str(improved) if improved is not None else "unknown",
+            )
+        console.print(measurements)
 
 
 __all__ = [

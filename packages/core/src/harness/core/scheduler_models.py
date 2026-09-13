@@ -18,16 +18,28 @@ def _utcnow() -> str:
 class ScheduleSpec:
     kind: str
     value: str
+    timezone: str = "UTC"
 
     def to_dict(self) -> dict[str, str]:
-        return {"kind": self.kind, "value": self.value}
+        return {"kind": self.kind, "value": self.value, "timezone": self.timezone}
 
     @classmethod
     def from_dict(cls, payload: dict[str, Any]) -> ScheduleSpec:
         return cls(
             kind=str(payload.get("kind", "")).strip(),
             value=str(payload.get("value", "")).strip(),
+            timezone=str(payload.get("timezone", "UTC")).strip(),
         )
+
+
+@dataclass(frozen=True, slots=True)
+class SchedulerExecutionResult:
+    status: str
+    stop_reason: str
+    record_dir: str
+    notification_text: str
+    notify_result: bool = True
+    retry_after_seconds: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -134,8 +146,33 @@ class SchedulerRunRecord:
         )
 
 
+@dataclass(frozen=True, slots=True)
+class SchedulerDelivery:
+    """An independently retryable completion notification, with its original target."""
+
+    id: str
+    run_id: str
+    hook_key: str
+    job: dict[str, Any]
+    status: str = "pending"
+    attempts: int = 0
+    next_attempt_at: str = ""
+    last_error: str = ""
+    prepared: bool = True
+
+    def to_dict(self) -> dict[str, Any]:
+        from dataclasses import asdict
+
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> SchedulerDelivery:
+        return cls(**payload)
+
+
 __all__ = [
     "ScheduleSpec",
+    "SchedulerDelivery",
     "SchedulerJob",
     "SchedulerRunRecord",
     "default_scheduler_root",

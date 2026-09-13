@@ -17,6 +17,7 @@ from rich.table import Table
 
 from harness.cli.config import HarnessConfig
 from harness.cli.research_commands import build_context_packet_prompt
+from harness.cli.runtime_helpers import load_workspace_context
 from harness.core import (
     Agent,
     ContextBudget,
@@ -25,6 +26,7 @@ from harness.core import (
     ErrorEvent,
     HandoffEvent,
     HandoffTool,
+    MediaAttachment,
     Message,
     RunRequest,
     Session,
@@ -50,6 +52,17 @@ _HELP_TEXT = (
     "/diff              show file changes made this session\n"
     "/clear             clear the terminal\n"
     "/model [name]      show or switch the active model mid-session\n"
+    "/questions         show this session's pending clarification\n"
+    "/answer <id> <text|JSON>  answer and resume this session\n"
+    "/skip-question <id>  continue without answering\n"
+    "/skill [name]      list installed skills or activate one for this conversation\n"
+    "/cancel           cancel the active turn\n"
+    "/steer <message>  cancel and continue with new instructions\n"
+    "/retry            submit the last user prompt again\n"
+    "/undo             remove the last conversation turn (files stay as written)\n"
+    "/compress         summarize old conversation context\n"
+    "/usage            show recorded token usage\n"
+    "/attach <path>    attach a local image, audio, or document to the next turn\n"
 )
 
 SlashHandler = Callable[..., Awaitable[bool]]
@@ -130,7 +143,7 @@ When useful, cite the relevant file paths briefly. Keep the answer short and fac
 When the user asks to be caught up, understand an unfamiliar area, or align their
 mental model before work, structure the answer around comprehension: mental
 model, file/component map, flow or trace, local conventions, evidence inspected,
-and any important next questions.
+and the next evidence to inspect when something remains uncertain.
 
 When the user asks for a context packet or agent onboarding context, produce
 targeted, conflict-aware context rather than a raw search dump. Check sources of
@@ -161,6 +174,8 @@ class _ConversationState:
     policy: _ChatTurnPolicy
     render_adapter: _ChatRenderAdapter
     first_turn: bool
+    model: str
+    pending_attachments: list[MediaAttachment] = field(default_factory=list)
     runner: asyncio.Task[None] | None = None
     execution: _ExecutionState = field(default_factory=lambda: _ExecutionState())
 
@@ -285,8 +300,11 @@ def _inject_general_task_scope_directive(prompt: str) -> str:
         "Prefer editing an existing file over creating a new file when the current repo already has an obvious home for the change. "
         "Do not create new fixtures, scratch directories, or parallel test trees unless the user explicitly asked for them or the repo has no suitable existing target. "
         "Avoid drifting into eval fixtures, generated files, or broad repo searches when a narrower existing file is the likely home. "
-        "After one or two discovery steps, if there are still multiple materially different valid targets, ask the user a short options question instead of guessing.\n\n"
-        f"User request:\n{prompt}"
+        "If several targets remain plausible, inspect relevant source, tests, documentation and scoped history; "
+        "use available read-only research tools when local evidence is insufficient. Select the best supported "
+        "target, proceed with reasonable reversible assumptions, and report material assumptions in the result. "
+        "Do not ask the human to choose an ordinary implementation target or supply context you can discover."
+        + (f"\n\nUser request:\n{prompt}" if prompt else "")
     )
 
 
@@ -300,8 +318,8 @@ def _inject_context_packet_directive(prompt: str, context_packet: str) -> str:
         "Use this read-only context packet to plan and execute the user request. "
         "Do not treat it as a substitute for checking fresh evidence when needed, "
         "but prefer its sources of truth, boundaries, validation guidance, and conflict notes.\n\n"
-        f"{context_packet.strip()}\n\n"
-        f"User request and execution directives:\n{prompt}"
+        f"{context_packet.strip()}"
+        + (f"\n\nUser request and execution directives:\n{prompt}" if prompt else "")
     )
 
 
@@ -374,7 +392,7 @@ def _inject_active_work_directive(prompt: str, execution: _ExecutionState) -> st
     if execution.last_verify_command:
         directive += f"Verification is still required for `{execution.last_verify_command}`. "
 
-    return directive + f"User request:\n{prompt}"
+    return directive + (f"User request:\n{prompt}" if prompt else "")
 
 
 def _build_autonomous_followup_prompt(execution: _ExecutionState) -> str | None:
@@ -740,7 +758,9 @@ def run_chat_command(
                 chain=chain,
                 base_url=base_url,
                 model=effective_model,
+                model_override=model,
                 cwd=working_dir,
+                cwd_explicit=cwd is not None,
                 db=db,
                 in_memory=in_memory,
                 session_id=session_id,
@@ -775,6 +795,7 @@ async def chat_loop(
     chain: list[str],
     base_url: str | None,
     model: str,
+    model_override: str | None = None,
     cwd: Path,
     db: Path | None,
     in_memory: bool,
@@ -798,30 +819,46 @@ async def chat_loop(
     render: Callable[[Any], None],
     render_session_diff: Callable[[Any, Console], None],
     default_system_prompt: str,
+    cwd_explicit: bool = True,
 ) -> None:
     from uuid import uuid4
 
     storage = build_storage(db=db, in_memory=in_memory, cwd=cwd)
+    from harness.cli.terminal import interactive_terminal, make_prompt_session
+
+    terminal = make_prompt_session() if interactive_terminal() else None
+    owned_agents: list[Agent] = []
+    open_agents: set[Agent] = set()
+    conversations: dict[str, _ConversationState] = {}
     try:
+        from harness.cli.session_workspace import resolve_local_session_workspace
+
+        try:
+            cwd = await resolve_local_session_workspace(
+                storage, session_id=session_id, cwd=cwd, cwd_explicit=cwd_explicit
+            )
+        except ValueError as exc:
+            console.print(str(exc), style="red", markup=False)
+            raise typer.Exit(2) from None
         budget = (
             ContextBudget(max_tokens=max_context_tokens) if max_context_tokens is not None else None
         )
-        compactor: ContextCompactor | None = None
-        if auto_compact:
-            adapter = build_adapter(chain[0], base_url=base_url, config=config)
-            compactor = ContextCompactor(adapter=adapter, model=model)
         classifier_adapter = build_adapter(chain[0], base_url=base_url, config=config)
-        specialist_cache: dict[str, Agent] = {}
+        specialist_cache: dict[tuple[str, str], Agent] = {}
 
-        def get_specialist_agent(policy: _ChatTurnPolicy) -> Agent:
-            cache_key = f"policy:{policy.name}"
+        def get_specialist_agent(policy: _ChatTurnPolicy, active_model: str) -> Agent:
+            cache_key = (policy.name, active_model)
             specialist = specialist_cache.get(cache_key)
             if specialist is None:
-                specialist = build_chat_agent(policy, allow_handoffs=False)
+                specialist = build_chat_agent(
+                    policy, active_model=active_model, allow_handoffs=False
+                )
                 specialist_cache[cache_key] = specialist
             return specialist
 
-        def build_chat_agent(policy: _ChatTurnPolicy, *, allow_handoffs: bool = True) -> Agent:
+        def build_chat_agent(
+            policy: _ChatTurnPolicy, *, active_model: str, allow_handoffs: bool = True
+        ) -> Agent:
             effective_verify = verify
             if policy.disable_verify:
                 effective_verify = None
@@ -830,7 +867,7 @@ async def chat_loop(
             verifier = build_verifier(
                 effective_verify,
                 chain=chain,
-                model=model,
+                model=active_model,
                 config=config,
                 build_adapter=build_adapter,
                 cwd=cwd,
@@ -840,10 +877,15 @@ async def chat_loop(
             def scoped_build_tools(tool_cwd: Path) -> Any:
                 return build_tools(tool_cwd, config=config, include=allowed_tools)
 
+            context = load_workspace_context(cwd, config=config, profile=policy.profile)
+            compactor = None
+            if auto_compact:
+                adapter = build_adapter(chain[0], base_url=base_url, config=config)
+                compactor = ContextCompactor(adapter=adapter, model=active_model)
             built_agent = build_agent(
                 chain=chain,
                 base_url=base_url,
-                model=model,
+                model=active_model,
                 storage=storage,
                 cwd=cwd,
                 config=config,
@@ -858,6 +900,9 @@ async def chat_loop(
                 system_prompt=policy.system_prompt or default_system_prompt,
                 compactor=compactor,
                 profile=policy.profile,
+                contracts=context.contracts,
+                tips_provider=context.tips_provider,
+                resume=context.resume,
             )
             if policy.disable_spawn_agents:
                 built_agent.tools = _registry_without_tool(built_agent.tools, "spawn_agents")
@@ -880,7 +925,7 @@ async def chat_loop(
                     ),
                 )
                 for tool_name, specialist_policy, description in specialist_specs:
-                    specialist = get_specialist_agent(specialist_policy)
+                    specialist = get_specialist_agent(specialist_policy, active_model)
                     built_agent.tools.register(
                         cast(
                             Any,
@@ -891,6 +936,7 @@ async def chat_loop(
                             ),
                         )
                     )
+            owned_agents.append(built_agent)
             return built_agent
 
         async def make_conversation(
@@ -904,6 +950,7 @@ async def chat_loop(
             resolved_session_id = requested_session_id or f"sess_{uuid4().hex[:12]}"
             task_id, _task = await resolve_task_attachment(storage, task_ref, resolved_session_id)
             policy = _GENERAL_TURN_POLICY
+            active_model = model_override or (existing.model if existing else model)
             render_adapter = _ChatRenderAdapter(console=console, default_render=render)
             render_adapter.set_policy(policy)
             return _ConversationState(
@@ -911,10 +958,11 @@ async def chat_loop(
                 session_id=resolved_session_id,
                 label=label or resolved_session_id,
                 task_id=task_id,
-                agent=build_chat_agent(policy),
+                agent=build_chat_agent(policy, active_model=active_model),
                 policy=policy,
                 render_adapter=render_adapter,
                 first_turn=existing is None,
+                model=active_model,
             )
 
         def print_turn_banner(conversation: _ConversationState, *, background: bool) -> None:
@@ -931,20 +979,21 @@ async def chat_loop(
                 "[cyan]↻ context packet[/cyan] "
                 "[dim]building read-only repo context before execution[/dim]"
             )
-            research_agent = get_specialist_agent(_RESEARCH_TURN_POLICY)
+            research_agent = get_specialist_agent(_RESEARCH_TURN_POLICY, conversation.model)
             research_render = _ChatRenderAdapter(console=console, default_render=render)
             research_render.set_policy(_RESEARCH_TURN_POLICY)
             context_session_id = f"{conversation.session_id}_context_{uuid4().hex[:8]}"
             context_request = RunRequest(
                 prompt=build_context_packet_prompt(task=prompt),
                 session_id=context_session_id,
-                model=model,
+                model=conversation.model,
                 max_steps=min(max_steps, 18),
-                require_tool_use=False,
+                require_tool_use=True,
             )
             text_deltas: list[str] = []
             final_text: str | None = None
             saw_error = False
+            saw_source_evidence = False
             try:
                 async for event in research_agent.run(context_request):
                     if isinstance(event, TextDelta):
@@ -957,6 +1006,8 @@ async def chat_loop(
                         final_text = event.final_message.content
                     if isinstance(event, ErrorEvent):
                         saw_error = True
+                    if isinstance(event, ToolResultEvent) and not event.result.is_error:
+                        saw_source_evidence = True
                     research_render.render(event)
             except Exception as exc:
                 console.print(
@@ -964,7 +1015,7 @@ async def chat_loop(
                 )
                 return None
             packet = (final_text or "".join(text_deltas)).strip()
-            if saw_error or not packet:
+            if saw_error or not packet or not saw_source_evidence:
                 return None
             return packet
 
@@ -975,22 +1026,33 @@ async def chat_loop(
             background: bool,
         ) -> None:
             try:
-                conversation.execution.active_goal = prompt
-                inferred_policy = await _classify_chat_turn_policy(
-                    adapter=classifier_adapter,
-                    model=model,
-                    prompt=prompt,
+                stored_turn = await storage.get(conversation.session_id)
+                has_question = stored_turn is not None and bool(
+                    stored_turn.metadata.get("pending_question_id")
                 )
+                if has_question:
+                    inferred_policy = conversation.policy
+                else:
+                    conversation.execution.active_goal = prompt
+                    inferred_policy = await _classify_chat_turn_policy(
+                        adapter=classifier_adapter,
+                        model=conversation.model,
+                        prompt=prompt,
+                    )
                 if inferred_policy != conversation.policy:
                     conversation.policy = inferred_policy
-                    conversation.agent = build_chat_agent(inferred_policy)
+                    conversation.agent = build_chat_agent(
+                        inferred_policy, active_model=conversation.model
+                    )
                     conversation.render_adapter.set_policy(inferred_policy)
                 effective_agent = conversation.agent
-                effective_prompt = prompt
+                if isinstance(effective_agent, Agent) and effective_agent not in open_agents:
+                    await effective_agent.__aenter__()
+                    open_agents.add(effective_agent)
+                context_parts = []
                 if _is_general_execution_policy(inferred_policy):
-                    effective_prompt = _inject_active_work_directive(prompt, conversation.execution)
-                    if effective_prompt == prompt:
-                        effective_prompt = _inject_general_task_scope_directive(prompt)
+                    task_context = _inject_active_work_directive("", conversation.execution)
+                    context_parts.append(task_context or _inject_general_task_scope_directive(""))
                 route_label = _route_label_for_policy(inferred_policy)
                 print_turn_banner(conversation, background=background)
                 if route_label is not None:
@@ -1002,40 +1064,52 @@ async def chat_loop(
                 ):
                     context_packet = await build_context_packet_for_turn(conversation, prompt)
                     if context_packet:
-                        effective_prompt = _inject_context_packet_directive(
-                            effective_prompt,
-                            context_packet,
-                        )
+                        context_parts.append(_inject_context_packet_directive("", context_packet))
+
+                execution_context = "\n\n".join(context_parts)
+                if len(execution_context) > 64000:
+                    execution_context = (
+                        execution_context[:63920]
+                        + "\n[Context truncated; inspect its sources for details.]"
+                    )
 
                 first_attempt = conversation.first_turn
                 route_attempts = 2 if route_label is not None else 1
-                current_prompt = effective_prompt
+                current_prompt = prompt
                 auto_followups = 0
                 while True:
                     saw_text = False
                     saw_tool_result = False
                     saw_error = False
                     saw_done_content = False
+                    paused_for_input = False
                     route_visible_work = False
                     for attempt_index in range(route_attempts):
                         if first_attempt:
                             request_kwargs: dict[str, object] = {
                                 "prompt": current_prompt,
+                                "execution_context": execution_context,
                                 "session_id": conversation.session_id,
-                                "model": model,
+                                "model": conversation.model,
                                 "max_steps": max_steps,
                                 "require_tool_use": require_tools,
+                                "attachments": list(conversation.pending_attachments),
                             }
                             if conversation.task_id:
                                 request_kwargs["task_id"] = conversation.task_id
                             request = RunRequest(**request_kwargs)  # type: ignore[arg-type]
+                            conversation.pending_attachments.clear()
                             stream = effective_agent.run(request)
                         else:
                             stream = effective_agent.resume(
                                 conversation.session_id,
                                 prompt=current_prompt,
+                                execution_context=execution_context,
                                 max_steps=max_steps,
+                                model=conversation.model,
+                                attachments=list(conversation.pending_attachments),
                             )
+                            conversation.pending_attachments.clear()
                         async for event in stream:
                             if isinstance(event, TextDelta) and event.text.strip():
                                 saw_text = True
@@ -1046,6 +1120,13 @@ async def chat_loop(
                                 _track_execution_tool_result(conversation.execution, event)
                             if isinstance(event, ErrorEvent):
                                 saw_error = True
+                            if (
+                                isinstance(event, Done)
+                                and isinstance(event.structured_result, dict)
+                                and event.structured_result.get("status")
+                                in {"waiting_for_input", "waiting_for_approval"}
+                            ):
+                                paused_for_input = True
                             if (
                                 isinstance(event, Done)
                                 and event.final_message is not None
@@ -1071,7 +1152,7 @@ async def chat_loop(
                         )
                         current_prompt = _retry_prompt_for_policy(prompt, inferred_policy)
 
-                    if not _is_general_execution_policy(inferred_policy):
+                    if paused_for_input or not _is_general_execution_policy(inferred_policy):
                         break
                     if saw_error:
                         break
@@ -1095,14 +1176,14 @@ async def chat_loop(
                     console.print(
                         "[cyan]↻ adjacent review[/cyan] [dim]checking nearby code for gaps or follow-on opportunities[/dim]"
                     )
-                    review_agent = get_specialist_agent(_REVIEW_TURN_POLICY)
+                    review_agent = get_specialist_agent(_REVIEW_TURN_POLICY, conversation.model)
                     review_render = _ChatRenderAdapter(console=console, default_render=render)
                     review_render.set_policy(_REVIEW_TURN_POLICY)
                     review_session_id = f"{conversation.session_id}_adjacent_review"
                     review_request = RunRequest(
                         prompt=adjacent_review_prompt,
                         session_id=review_session_id,
-                        model=model,
+                        model=conversation.model,
                         max_steps=max_steps,
                         require_tool_use=False,
                     )
@@ -1116,7 +1197,6 @@ async def chat_loop(
             finally:
                 conversation.runner = None
 
-        conversations: dict[str, _ConversationState] = {}
         initial_conversation = await make_conversation(
             requested_session_id=session_id,
             label=session_id,
@@ -1130,7 +1210,7 @@ async def chat_loop(
         intro = (
             f"[bold]Session:[/bold] {initial_conversation.session_id}"
             + f"\n[bold]Provider:[/bold] {chain_label}"
-            f"\n[bold]Model:[/bold] {model}"
+            f"\n[bold]Model:[/bold] {initial_conversation.model}"
             f"\n[bold]CWD:[/bold] {cwd}\n\n"
             f"[dim]Type /help for commands. /quit to exit.[/dim]"
         )
@@ -1141,6 +1221,7 @@ async def chat_loop(
             current_key = value
 
         slash_handler = _make_slash_handler(
+            build_agent=build_chat_agent,
             console=console,
             render_session_diff=render_session_diff,
             storage=storage,
@@ -1154,11 +1235,17 @@ async def chat_loop(
         while True:
             try:
                 prompt_label = conversations[current_key].label
-                user_input = (
-                    await asyncio.to_thread(
-                        console.input, f"\n[bold cyan]{prompt_label}> [/bold cyan]"
-                    )
-                ).strip()
+                if terminal is not None:
+                    from prompt_toolkit.patch_stdout import patch_stdout
+
+                    with patch_stdout(raw=True):
+                        user_input = (await terminal.prompt_async(f"{prompt_label}> ")).strip()
+                else:
+                    user_input = (
+                        await asyncio.to_thread(
+                            console.input, f"\n[bold cyan]{prompt_label}> [/bold cyan]"
+                        )
+                    ).strip()
             except EOFError:
                 for conversation in conversations.values():
                     if conversation.runner is not None:
@@ -1166,6 +1253,12 @@ async def chat_loop(
                 console.print("\n[yellow]bye[/yellow]")
                 return
             except KeyboardInterrupt:
+                if terminal is not None:
+                    task = conversations[current_key].runner
+                    if task is not None:
+                        task.cancel()
+                        await asyncio.gather(task, return_exceptions=True)
+                    continue
                 for conversation in conversations.values():
                     if conversation.runner is not None:
                         conversation.runner.cancel()
@@ -1191,8 +1284,21 @@ async def chat_loop(
                     "Use /send on another conversation, /new, or wait for it to finish.[/yellow]"
                 )
                 continue
-            await run_turn(conversation, prompt=user_input, background=False)
+            if terminal is not None:
+                conversation.runner = asyncio.create_task(
+                    run_turn(conversation, prompt=user_input, background=False)
+                )
+            else:
+                await run_turn(conversation, prompt=user_input, background=False)
     finally:
+        running = [c.runner for c in conversations.values() if c.runner is not None]
+        for task in running:
+            task.cancel()
+        if running:
+            await asyncio.gather(*running, return_exceptions=True)
+        for owned in reversed(owned_agents):
+            if owned in open_agents:
+                await owned.aclose()
         if isinstance(storage, SQLiteStorage):
             await storage.close()
 
@@ -1207,6 +1313,7 @@ def _make_slash_handler(
     set_current_key: Callable[[str], None],
     create_conversation: Callable[..., Awaitable[_ConversationState]],
     launch_background_turn: Callable[..., Coroutine[Any, Any, None]],
+    build_agent: Callable[..., Agent],
 ) -> Callable[[str], Awaitable[bool]]:
     registry: dict[str, SlashHandler] = {}
 
@@ -1335,6 +1442,85 @@ def _make_slash_handler(
         console.print(f"[green]Started background turn:[/green] {conversation.label}")
         return True
 
+    async def question_command(line: str, *, action: str) -> bool:
+        from harness.core.clarification import QuestionStore, parse_question_answer, render_question
+        from harness.core.session_search import session_scope
+
+        conversation = conversations[get_current_key()]
+        if conversation.runner is not None:
+            console.print("Wait for this conversation's turn to finish before answering.")
+            return True
+        session = await storage.get(conversation.session_id)
+        scope = session_scope(session) if session is not None else None
+        if scope is None or scope.user_id is not None:
+            console.print("No local clarification session is available.")
+            return True
+        store = getattr(conversation.agent, "question_store", None)
+        owned = store is None
+        if owned:
+            store = await asyncio.to_thread(QuestionStore, getattr(storage, "path", ":memory:"))
+        try:
+            if action == "list":
+                rows = await asyncio.to_thread(
+                    store.list_pending, scope=scope, session_id=conversation.session_id
+                )
+                console.print(
+                    "\n\n".join(render_question(row) for row in rows)
+                    or "No pending clarification questions.",
+                    markup=False,
+                )
+                return True
+            parts = line.split(None, 2)
+            if len(parts) < (3 if action == "answer" else 2):
+                console.print("Usage: /answer QUESTION_ID TEXT or /skip-question QUESTION_ID")
+                return True
+            record = await asyncio.to_thread(
+                store.get, parts[1], scope=scope, session_id=conversation.session_id
+            )
+            if record is None:
+                raise ValueError("question not found in this local session")
+            if action == "answer":
+                record = await asyncio.to_thread(
+                    store.answer,
+                    record.id,
+                    scope=scope,
+                    session_id=conversation.session_id,
+                    answers=parse_question_answer(record, parts[2]),
+                )
+            else:
+                record = await asyncio.to_thread(
+                    store.cancel, record.id, scope=scope, session_id=conversation.session_id
+                )
+            if record.status == "pending":
+                console.print(render_question(record), markup=False)
+                return True
+        except ValueError as exc:
+            console.print(str(exc), markup=False)
+            return True
+        finally:
+            if owned:
+                await asyncio.to_thread(store.close)
+        conversation.runner = asyncio.create_task(
+            launch_background_turn(
+                conversation,
+                prompt="Continue the original task using the recorded clarification result. This does not grant tool approval.",
+                background=False,
+            )
+        )
+        return True
+
+    @slash("/questions")
+    async def slash_questions(line: str) -> bool:
+        return await question_command(line, action="list")
+
+    @slash("/answer")
+    async def slash_answer(line: str) -> bool:
+        return await question_command(line, action="answer")
+
+    @slash("/skip-question")
+    async def slash_skip_question(line: str) -> bool:
+        return await question_command(line, action="cancel")
+
     @slash("/diff")
     async def slash_diff(line: str) -> bool:
         conversation = conversations[get_current_key()]
@@ -1342,21 +1528,212 @@ def _make_slash_handler(
         render_session_diff(activity, console)
         return True
 
+    @slash("/cancel")
+    async def slash_cancel(line: str) -> bool:
+        conversation = conversations[get_current_key()]
+        if conversation.runner is not None:
+            task = conversation.runner
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+            conversation.runner = None
+        return True
+
+    @slash("/steer")
+    async def slash_steer(line: str) -> bool:
+        parts = line.split(None, 1)
+        if len(parts) < 2:
+            console.print("Usage: /steer <message>")
+            return True
+        await slash_cancel("/cancel")
+        conversation = conversations[get_current_key()]
+        conversation.runner = asyncio.create_task(
+            launch_background_turn(conversation, prompt=parts[1], background=False)
+        )
+        return True
+
+    @slash("/retry")
+    async def slash_retry(line: str) -> bool:
+        conversation = conversations[get_current_key()]
+        if conversation.runner is not None:
+            console.print("Cancel or wait for the current turn first.")
+            return True
+        session = await storage.get(conversation.session_id)
+        if session:
+            previous = next((m for m in reversed(session.messages) if m.role == "user"), None)
+            if previous:
+                conversation.pending_attachments = list(previous.attachments)
+                conversation.runner = asyncio.create_task(
+                    launch_background_turn(
+                        conversation, prompt=previous.content or "", background=False
+                    )
+                )
+        return True
+
+    @slash("/undo")
+    async def slash_undo(line: str) -> bool:
+        conversation = conversations[get_current_key()]
+        if conversation.runner is not None:
+            console.print("Cancel or wait for the current turn first.")
+            return True
+        session = await storage.get(conversation.session_id)
+        if session and session.status == "paused":
+            console.print("Resolve pending approvals before undoing a turn.")
+            return True
+        if session:
+            start = next(
+                (
+                    i
+                    for i in range(len(session.messages) - 1, -1, -1)
+                    if session.messages[i].role == "user"
+                ),
+                None,
+            )
+            if start is not None:
+                session.metadata["undo_archive"] = [
+                    m.model_dump(mode="json") for m in session.messages[start:]
+                ]
+                session.messages = session.messages[:start]
+                session.touch()
+                await storage.save(session)
+                console.print("Removed the last conversation turn. Workspace changes remain.")
+        return True
+
+    @slash("/compress")
+    async def slash_compress(line: str) -> bool:
+        conversation = conversations[get_current_key()]
+        if conversation.runner is not None:
+            console.print("Cancel or wait for the current turn first.")
+            return True
+        session = await storage.get(conversation.session_id)
+        if session:
+            agent = conversation.agent
+            compactor = ContextCompactor(
+                adapter=agent.adapters[agent.default_provider],
+                model=conversation.model,
+                keep_recent_tokens=2000,
+            )
+            compressed = await compactor.compact(session.messages)
+            if compressed is not session.messages:
+                session.metadata["pre_compaction_archive"] = [
+                    m.model_dump(mode="json") for m in session.messages
+                ]
+                session.messages = compressed
+                session.touch()
+                await storage.save(session)
+            console.print(f"Conversation now contains {len(session.messages)} messages.")
+        return True
+
+    @slash("/usage")
+    async def slash_usage(line: str) -> bool:
+        conversation = conversations[get_current_key()]
+        session = await storage.get(conversation.session_id)
+        if session:
+            usage = {
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "cache_creation_input_tokens": 0,
+                "cache_read_input_tokens": 0,
+            }
+            if hasattr(storage, "list_activity"):
+                events = await storage.list_activity(session_id=session.id)  # type: ignore[attr-defined]
+                for event in events:
+                    if event.kind == "usage.recorded":
+                        for key in usage:
+                            usage[key] += int(event.data.get(key, 0))
+            console.print_json(data={"session_id": session.id, "usage": usage})
+        return True
+
+    @slash("/attach")
+    async def slash_attach(line: str) -> bool:
+        from harness.core import MediaAttachment
+
+        parts = line.split(None, 1)
+        if len(parts) < 2:
+            console.print("Usage: /attach <path>")
+            return True
+        conversation = conversations[get_current_key()]
+        try:
+            if len(conversation.pending_attachments) >= 16:
+                raise ValueError("At most 16 attachments per turn")
+            media = await asyncio.to_thread(
+                lambda: MediaAttachment.from_file(Path(parts[1]).expanduser())
+            )
+            conversation.pending_attachments.append(media)
+            console.print(f"Attached {escape(media.name or media.kind)}")
+        except (OSError, ValueError) as exc:
+            console.print(f"[red]{escape(str(exc))}[/red]")
+        return True
+
     @slash("/clear")
     async def slash_clear(line: str) -> bool:
         console.clear()
         return True
 
+    @slash("/skill")
+    async def slash_skill(line: str) -> bool:
+        from harness.core.skills import SkillError
+
+        conversation = conversations[get_current_key()]
+        library = conversation.agent.skill_library
+        if library is None or not library.skills:
+            console.print("[dim]No skills loaded. Use harness skills create or install.[/dim]")
+            return True
+        parts = line.split(None, 1)
+        if len(parts) == 1:
+            for skill in library.skills.values():
+                console.print(f"{escape(skill.name)}: {escape(skill.description)}")
+            return True
+        if conversation.runner is not None:
+            console.print(
+                "[yellow]Wait for this conversation's turn to finish before activating a skill.[/yellow]"
+            )
+            return True
+        name = parts[1].strip()
+        try:
+            library.get(name).read()
+        except SkillError as exc:
+            console.print(f"[red]{escape(str(exc))}[/red]")
+            return True
+        session = await storage.get(conversation.session_id)
+        if session is None:
+            agent = conversation.agent
+            session = Session(
+                id=conversation.session_id,
+                provider=agent.default_provider,
+                model=conversation.model,
+                cwd=Path(agent.default_cwd or Path.cwd()),
+            )
+        active = session.metadata.get("active_skills", [])
+        active = (
+            [item for item in active if isinstance(item, str)] if isinstance(active, list) else []
+        )
+        session.metadata["active_skills"] = [*[item for item in active if item != name][-9:], name]
+        session.touch()
+        await storage.save(session)
+        console.print(f"[green]Activated skill:[/green] {escape(name)}")
+        return True
+
     @slash("/model")
     async def slash_model(line: str) -> bool:
         conversation = conversations[get_current_key()]
-        agent = conversation.agent
         parts = line.split(None, 1)
         if len(parts) == 1:
-            console.print(f"[dim]Active model: {agent.default_model}[/dim]")
+            console.print(f"[dim]Active model: {conversation.model}[/dim]")
         else:
+            if conversation.runner is not None:
+                console.print(
+                    "[yellow]Wait for this conversation's turn to finish before switching models.[/yellow]"
+                )
+                return True
             new_model = parts[1].strip()
-            agent.default_model = new_model
+            new_agent = build_agent(conversation.policy, active_model=new_model)
+            stored = await storage.get(conversation.session_id)
+            if stored is not None:
+                stored.model = new_model
+                stored.touch()
+                await storage.save(stored)
+            conversation.model = new_model
+            conversation.agent = new_agent
             console.print(f"[green]Switched model to:[/green] {new_model}")
         return True
 

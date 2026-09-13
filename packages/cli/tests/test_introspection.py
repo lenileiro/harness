@@ -16,6 +16,14 @@ def _run(cli_args: list[str]) -> Result:
     return CliRunner().invoke(cli_main.app, cli_args)
 
 
+@pytest.fixture(autouse=True)
+def no_claude_cli(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep `providers list` off the real `claude auth status` subprocess."""
+
+    monkeypatch.setattr("harness.cli.introspection.claude_cli_available", lambda: False)
+    monkeypatch.setattr("harness.cli.introspection.inspect_claude_cli_auth", lambda: None)
+
+
 class TestProvidersList:
     def test_lists_known_providers(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
@@ -30,6 +38,30 @@ class TestProvidersList:
         assert "openrouter" in result.stdout
         assert "missing OPENAI_API_KEY" in result.stdout
         assert "missing OPENROUTER_API_KEY" in result.stdout
+
+    def test_claude_missing_login(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr("harness.cli.introspection.claude_cli_available", lambda: True)
+        monkeypatch.setattr("harness.cli.introspection.inspect_claude_cli_auth", lambda: None)
+        result = _run(["providers", "list"])
+        assert result.exit_code == 0
+        assert "claude" in result.stdout
+        assert "run `claude auth login`" in result.stdout
+
+    def test_claude_ready_when_cli_and_login_present(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr("harness.cli.introspection.claude_cli_available", lambda: True)
+        monkeypatch.setattr(
+            "harness.cli.introspection.inspect_claude_cli_auth",
+            lambda: {
+                "logged_in": True,
+                "auth_method": "claude.ai",
+                "api_provider": "firstParty",
+                "subscription_type": "max",
+            },
+        )
+        result = _run(["providers", "list"])
+        assert result.exit_code == 0
+        assert "claude.ai" in result.stdout
+        assert "subscription: max" in result.stdout
 
     def test_codex_ready_when_cli_and_auth_present(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr("harness.cli.introspection.codex_cli_available", lambda: True)

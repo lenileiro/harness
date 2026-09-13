@@ -39,13 +39,27 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, get_args
 
+from harness.cli.a2a_tools import A2AConfig
+from harness.cli.honcho_tools import HonchoConfig
+from harness.cli.portal_tools import PortalConfig
 from harness.core import ApprovalDecision
+from harness.core.gateway_channels import ChannelConfig
+from harness.server.delegation import DelegationLimits
+from harness.tools.browser import BrowserConfig
+from harness.tools.computer import ComputerConfig
+from harness.tools.execution import ExecutionConfig
+from harness.tools.homeassistant import HomeAssistantConfig
+from harness.tools.mcp import MCPServerConfig, parse_mcp_servers
+from harness.tools.media import MediaConfig
 
 _VALID_DECISIONS: tuple[str, ...] = get_args(ApprovalDecision)
 
 
 def default_config_path() -> Path:
     """`$XDG_CONFIG_HOME/harness/config.toml` or `~/.config/harness/config.toml`."""
+    explicit = os.environ.get("HARNESS_CONFIG")
+    if explicit:
+        return Path(explicit).expanduser()
     base = os.environ.get("XDG_CONFIG_HOME")
     config_home = Path(base) if base else Path.home() / ".config"
     return config_home / "harness" / "config.toml"
@@ -98,6 +112,21 @@ class HarnessConfig:
     plugins_enabled: tuple[str, ...] = ()
     plugins_disabled: tuple[str, ...] = ()
     include_plugin_entry_points: bool = False
+    mcp_servers: tuple[MCPServerConfig, ...] = ()
+    skills_enabled: bool = True
+    clarification_enabled: bool = False
+    skill_paths: tuple[str, ...] = ()
+    channels: dict[str, ChannelConfig] = field(default_factory=dict)
+    execution: ExecutionConfig | None = None
+    browser: BrowserConfig | None = None
+    media: MediaConfig = field(default_factory=MediaConfig)
+    computer: ComputerConfig = field(default_factory=ComputerConfig)
+    homeassistant: HomeAssistantConfig = field(default_factory=HomeAssistantConfig)
+    portal: PortalConfig = field(default_factory=PortalConfig)
+    honcho: HonchoConfig = field(default_factory=HonchoConfig)
+    a2a: A2AConfig = field(default_factory=A2AConfig)
+    delegation_enabled: bool = False
+    delegation_limits: DelegationLimits = field(default_factory=DelegationLimits)
     research_scheduler: ResearchSchedulerConfig = field(default_factory=ResearchSchedulerConfig)
     mission_scheduler: MissionSchedulerConfig = field(default_factory=MissionSchedulerConfig)
     mission_roles: MissionRoleDefaults = field(default_factory=MissionRoleDefaults)
@@ -170,7 +199,72 @@ def load_config(path: Path | None = None) -> HarnessConfig:
     if not isinstance(include_plugin_entry_points, bool):
         raise ConfigError("`plugins.include_entry_points` must be a boolean")
 
+    mcp_section = raw.get("mcp", {})
+    if not isinstance(mcp_section, dict):
+        raise ConfigError("`[mcp]` must be a table")
+    try:
+        mcp_servers = parse_mcp_servers(mcp_section.get("servers", {}))
+    except ValueError as exc:
+        raise ConfigError(f"invalid MCP configuration: {exc}") from exc
+    skills_section = raw.get("skills", {})
+    if not isinstance(skills_section, dict):
+        raise ConfigError("`[skills]` must be a table")
+    skills_enabled = skills_section.get("enabled", True)
+    skill_paths = skills_section.get("paths", [])
+    if not isinstance(skills_enabled, bool):
+        raise ConfigError("`skills.enabled` must be a boolean")
+    if not isinstance(skill_paths, list) or any(
+        not isinstance(p, str) or not p.strip() for p in skill_paths
+    ):
+        raise ConfigError("`skills.paths` must be an array of nonempty paths")
+
+    clarification_section = raw.get("clarification", {})
+    if not isinstance(clarification_section, dict) or not isinstance(
+        clarification_section.get("enabled", False), bool
+    ):
+        raise ConfigError("`[clarification]` must be a table with a boolean enabled field")
+
     scheduler_section = raw.get("research_scheduler", {})
+    channel_section = raw.get("channels", {})
+    execution = None
+    delegation_section = raw.get("delegation", {})
+    if not isinstance(delegation_section, dict) or not isinstance(
+        delegation_section.get("enabled", False), bool
+    ):
+        raise ConfigError("delegation must be a table with a boolean enabled field")
+    try:
+        delegation_limits = DelegationLimits.model_validate(
+            {key: value for key, value in delegation_section.items() if key != "enabled"}
+        )
+    except ValueError as exc:
+        raise ConfigError(f"invalid delegation limits: {exc}") from exc
+    browser = None
+    try:
+        media = MediaConfig.model_validate(raw.get("media", {}))
+        computer = ComputerConfig.model_validate(raw.get("computer", {}))
+        homeassistant = HomeAssistantConfig.model_validate(raw.get("homeassistant", {}))
+        portal = PortalConfig.model_validate(raw.get("portal", {}))
+        honcho = HonchoConfig.model_validate(raw.get("honcho", {}))
+        a2a = A2AConfig.model_validate(raw.get("a2a", {}))
+        if "browser" in raw:
+            browser = BrowserConfig.model_validate(raw["browser"])
+    except ValueError as exc:
+        raise ConfigError(f"invalid tool configuration: {exc}") from exc
+    if "execution" in raw:
+        try:
+            execution = ExecutionConfig.model_validate(raw["execution"])
+        except ValueError as exc:
+            raise ConfigError(f"invalid execution configuration: {exc}") from exc
+    if not isinstance(channel_section, dict):
+        raise ConfigError("`[channels]` must be a table")
+    channels: dict[str, ChannelConfig] = {}
+    for name, settings in channel_section.items():
+        if not isinstance(settings, dict):
+            raise ConfigError(f"`channels.{name}` must be a table")
+        try:
+            channels[name] = ChannelConfig.from_dict(settings)
+        except ValueError as exc:
+            raise ConfigError(f"invalid channel {name}: {exc}") from exc
     if not isinstance(scheduler_section, dict):
         raise ConfigError("`[research_scheduler]` must be a table")
 
@@ -232,6 +326,21 @@ def load_config(path: Path | None = None) -> HarnessConfig:
         plugins_enabled=_string_list("enabled"),
         plugins_disabled=_string_list("disabled"),
         include_plugin_entry_points=include_plugin_entry_points,
+        mcp_servers=mcp_servers,
+        skills_enabled=skills_enabled,
+        clarification_enabled=clarification_section.get("enabled", False),
+        skill_paths=tuple(skill_paths),
+        channels=channels,
+        execution=execution,
+        browser=browser,
+        media=media,
+        computer=computer,
+        homeassistant=homeassistant,
+        portal=portal,
+        honcho=honcho,
+        a2a=a2a,
+        delegation_enabled=delegation_section.get("enabled", False),
+        delegation_limits=delegation_limits,
         research_scheduler=ResearchSchedulerConfig(
             max_steps=max_steps,
             max_risk=max_risk,

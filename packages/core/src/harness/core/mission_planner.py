@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass, replace
 from typing import Any
 
@@ -28,6 +29,8 @@ class PlannedAssertionInput:
     description: str
     kind: str
     verification_method: str
+    command: tuple[str, ...] = ()
+    timeout_seconds: float = 60.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,6 +75,8 @@ class MissionPlanDraft:
                     "description": item.description,
                     "kind": item.kind,
                     "verification_method": item.verification_method,
+                    "command": list(item.command),
+                    "timeout_seconds": item.timeout_seconds,
                 }
                 for item in self.assertions
             ],
@@ -149,6 +154,19 @@ def parse_mission_plan_draft(text: str) -> MissionPlanDraft | None:
             verification_method = str(item.get("verification_method") or "").strip()
             if not label or not title or not description or not kind or not verification_method:
                 continue
+            command = item.get("command", [])
+            if not isinstance(command, list) or not all(
+                isinstance(part, str) and "\x00" not in part for part in command
+            ):
+                continue
+            if command and not command[0].strip():
+                continue
+            try:
+                timeout = float(item.get("timeout_seconds", 60.0))
+            except (ValueError, TypeError):
+                continue
+            if not math.isfinite(timeout) or timeout <= 0:
+                continue
             assertions.append(
                 PlannedAssertionInput(
                     label=label,
@@ -156,6 +174,8 @@ def parse_mission_plan_draft(text: str) -> MissionPlanDraft | None:
                     description=description,
                     kind=kind,
                     verification_method=verification_method,
+                    command=tuple(command),
+                    timeout_seconds=timeout,
                 )
             )
 
@@ -240,6 +260,34 @@ def build_mission_plan(
     if len(feature_labels) != len(features):
         raise ValueError("mission plan feature labels must be unique")
 
+    # Reject dependency cycles and prerequisites in later milestones before persisting.
+    inputs_by_label = {item.label: item for item in features}
+    milestone_order = {item.label: index for index, item in enumerate(milestones)}
+    visited: set[str] = set()
+    visiting: set[str] = set()
+
+    def visit(label: str) -> None:
+        if label in visiting:
+            raise ValueError(f"mission plan contains a dependency cycle at {label!r}")
+        if label in visited:
+            return
+        visiting.add(label)
+        feature = inputs_by_label[label]
+        for dependency in feature.depends_on_labels:
+            prerequisite = inputs_by_label.get(dependency)
+            if prerequisite is None:
+                raise ValueError(f"feature {label!r} depends on unknown features: {dependency}")
+            if milestone_order.get(prerequisite.milestone_label, -1) > milestone_order.get(
+                feature.milestone_label, -1
+            ):
+                raise ValueError(f"feature {label!r} depends on a later milestone")
+            visit(dependency)
+        visiting.remove(label)
+        visited.add(label)
+
+    for label in feature_labels:
+        visit(label)
+
     contract = ValidationContract(
         id=store.new_id("contract", mission.title),
         mission_id=mission.id,
@@ -254,6 +302,8 @@ def build_mission_plan(
             description=item.description.strip(),
             kind=str(item.kind).strip(),  # type: ignore[arg-type]
             verification_method=item.verification_method.strip(),
+            command=item.command,
+            timeout_seconds=item.timeout_seconds,
         )
 
     milestone_map: dict[str, Milestone] = {}

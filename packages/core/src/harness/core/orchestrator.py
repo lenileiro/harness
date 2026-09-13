@@ -16,14 +16,15 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncGenerator, AsyncIterator, Callable
+from contextlib import aclosing
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Protocol
 
 from pydantic import BaseModel
 
-from harness.core.events import Event
+from harness.core.events import ErrorEvent, Event, GuardrailTrippedEvent
 from harness.core.schemas import RunRequest
 from harness.tasks.schemas import Task, TaskStatus
 from harness.tasks.store import TaskStore
@@ -265,7 +266,15 @@ class WorkQueue:
         return await self._store.update_task(updated)
 
     async def list(self, *, status: TaskStatus | None = None) -> list[Task]:
-        return await self._store.list_tasks(parent_id=self._parent_id, status=status)
+        # TaskStore's default limit is a UI page, not the job's full queue.
+        limit = 100
+        while True:
+            tasks = await self._store.list_tasks(
+                parent_id=self._parent_id, status=status, limit=limit
+            )
+            if len(tasks) < limit:
+                return tasks
+            limit *= 2
 
     async def is_drained(self) -> bool:
         remaining = await self._store.list_tasks(parent_id=self._parent_id, status="todo")
@@ -331,13 +340,65 @@ class MultiAgentOrchestrator:
         self._max_stalls = max_stalls
         self._max_replan_attempts = max_replan_attempts
 
+    async def _finish_job(self, job_id: str, *, outcome: str | None = None) -> None:
+        root = await self._store.get_task(job_id)
+        if root is None:
+            return
+        items = await WorkQueue(self._store, job_id).list()
+        required = [item for item in items if not item.metadata.get("_superseded_plan")]
+        complete = bool(required) and all(item.status == "done" for item in required)
+        outcome = outcome or ("completed" if complete else "incomplete")
+        await self._store.update_task(
+            root.model_copy(
+                update={
+                    "status": "done" if outcome == "completed" else "waiting",
+                    "metadata": {**root.metadata, "_orchestration_outcome": outcome},
+                    "updated_at": datetime.now(UTC),
+                }
+            )
+        )
+
+    async def _supervise(
+        self, job_id: str, stream: AsyncGenerator[OrchestratorEvent, None]
+    ) -> AsyncGenerator[OrchestratorEvent, None]:
+        failed = False
+        try:
+            async with aclosing(stream):
+                async for event in stream:
+                    if isinstance(event, AgentEventWrapper) and (
+                        isinstance(event.event, GuardrailTrippedEvent)
+                        or (isinstance(event.event, ErrorEvent) and not event.event.recoverable)
+                    ):
+                        failed = True
+                    yield event
+        except (asyncio.CancelledError, GeneratorExit):
+            await self._finish_job(job_id, outcome="interrupted")
+            raise
+        except Exception as exc:
+            await self._finish_job(job_id, outcome="failed")
+            yield AgentEventWrapper(
+                role="orchestrator",
+                event=ErrorEvent(
+                    error=str(exc),
+                    kind="orchestration",
+                    recoverable=False,
+                ),
+            )
+            return
+        await self._finish_job(job_id, outcome="failed" if failed else None)
+
     async def run(
         self,
         prompt: str,
         *,
         job_id: str | None = None,
-    ) -> AsyncIterator[OrchestratorEvent]:
+    ) -> AsyncGenerator[OrchestratorEvent, None]:
         job_id = job_id or f"job_{uuid.uuid4().hex[:12]}"
+        async with aclosing(self._supervise(job_id, self._run_job(prompt, job_id))) as stream:
+            async for event in stream:
+                yield event
+
+    async def _run_job(self, prompt: str, job_id: str) -> AsyncGenerator[OrchestratorEvent, None]:
         queue = WorkQueue(self._store, parent_id=job_id)
 
         root = Task(
@@ -352,8 +413,9 @@ class MultiAgentOrchestrator:
         )
         await self._store.create_task(root)
 
-        async for event in self._run_planner(prompt, queue):
-            yield event
+        async with aclosing(self._run_planner(prompt, queue)) as stream:
+            async for event in stream:
+                yield event
 
         # Validate planner output; retry up to max_planner_retries times.
         if self._planner_validator is not None:
@@ -368,7 +430,11 @@ class MultiAgentOrchestrator:
                 # Cancel bad items and retry the planner with feedback
                 for item in items:
                     cancelled = item.model_copy(
-                        update={"status": "cancelled", "updated_at": datetime.now(UTC)}
+                        update={
+                            "status": "cancelled",
+                            "updated_at": datetime.now(UTC),
+                            "metadata": {**item.metadata, "_superseded_plan": True},
+                        }
                     )
                     await self._store.update_task(cancelled)
                 retry_prompt = (
@@ -376,17 +442,19 @@ class MultiAgentOrchestrator:
                     f"VALIDATION FEEDBACK (attempt {attempt}): {error}\n"
                     "Fix: create one work item per subdirectory, not one item for everything."
                 )
-                async for event in self._run_planner(retry_prompt, queue):
-                    yield event
+                async with aclosing(self._run_planner(retry_prompt, queue)) as stream:
+                    async for event in stream:
+                        yield event
 
         ledger = ProgressLedger(self._max_stalls)
         replan_attempts = 0
         while True:
             stall_detected = False
-            async for event in self._run_workers(queue, ledger=ledger):
-                yield event
-                if isinstance(event, StallDetectedEvent):
-                    stall_detected = True
+            async with aclosing(self._run_workers(queue, ledger=ledger)) as stream:
+                async for event in stream:
+                    yield event
+                    if isinstance(event, StallDetectedEvent):
+                        stall_detected = True
 
             if not stall_detected or replan_attempts >= self._max_replan_attempts:
                 break
@@ -410,17 +478,22 @@ class MultiAgentOrchestrator:
                 f"[REPLAN {replan_attempts}]: {reason}. "
                 "Revise the plan for the remaining items only."
             )
-            async for event in self._run_planner(replan_prompt, queue):
+            async with aclosing(self._run_planner(replan_prompt, queue)) as stream:
+                async for event in stream:
+                    yield event
+
+        async with aclosing(self._run_reporter(queue)) as stream:
+            async for event in stream:
                 yield event
 
-        async for event in self._run_reporter(queue):
-            yield event
+    async def resume(self, job_id: str) -> AsyncGenerator[OrchestratorEvent, None]:
+        if await self._store.get_task(job_id) is None:
+            raise KeyError(f"job {job_id!r} not found in store")
+        async with aclosing(self._supervise(job_id, self._resume_job(job_id))) as stream:
+            async for event in stream:
+                yield event
 
-        # Mark the root job task done
-        done_root = root.model_copy(update={"status": "done", "updated_at": datetime.now(UTC)})
-        await self._store.update_task(done_root)
-
-    async def resume(self, job_id: str) -> AsyncIterator[OrchestratorEvent]:
+    async def _resume_job(self, job_id: str) -> AsyncGenerator[OrchestratorEvent, None]:
         """Resume an interrupted job from persistent storage.
 
         Resets any in_progress tasks (interrupted mid-run) back to todo, then
@@ -434,7 +507,13 @@ class MultiAgentOrchestrator:
         queue = WorkQueue(self._store, parent_id=job_id)
 
         # Reset any tasks that were in_progress when the job was interrupted
-        in_progress = await self._store.list_tasks(parent_id=job_id, status="in_progress")
+        items = await queue.list()
+        in_progress = [
+            task
+            for task in items
+            if task.status == "in_progress"
+            or (task.status == "waiting" and task.metadata.get("_worker_error"))
+        ]
         for task in in_progress:
             reset = task.model_copy(
                 update={
@@ -449,23 +528,21 @@ class MultiAgentOrchestrator:
             await self._store.update_task(reset)
 
         # Re-mark root as in_progress if it was marked done prematurely
-        if root.status == "done":
+        if root.status != "in_progress":
             await self._store.update_task(
                 root.model_copy(update={"status": "in_progress", "updated_at": datetime.now(UTC)})
             )
 
-        async for event in self._run_workers(queue):
-            yield event
+        async with aclosing(self._run_workers(queue)) as stream:
+            async for event in stream:
+                yield event
+        async with aclosing(self._run_reporter(queue)) as stream:
+            async for event in stream:
+                yield event
 
-        async for event in self._run_reporter(queue):
-            yield event
-
-        done_root = (await self._store.get_task(job_id)) or root
-        await self._store.update_task(
-            done_root.model_copy(update={"status": "done", "updated_at": datetime.now(UTC)})
-        )
-
-    async def _run_planner(self, prompt: str, queue: WorkQueue) -> AsyncIterator[OrchestratorEvent]:
+    async def _run_planner(
+        self, prompt: str, queue: WorkQueue
+    ) -> AsyncGenerator[OrchestratorEvent, None]:
         session_id = f"planner_{uuid.uuid4().hex[:8]}"
         role = self._planner_role.model_copy(update={"job_id": queue._parent_id})
         agent = self._factory(role)
@@ -477,14 +554,15 @@ class MultiAgentOrchestrator:
             model=self._planner_role.model or self._model,
         )
         turn_count = 0
-        async for event in agent.run(request):
-            turn_count += 1
-            yield AgentEventWrapper(role="planner", event=event)
+        async with aclosing(agent.run(request)) as stream:
+            async for event in stream:
+                turn_count += 1
+                yield AgentEventWrapper(role="planner", event=event)
         yield AgentDoneEvent(role="planner", session_id=session_id, turn_count=turn_count)
 
     async def _run_workers(
         self, queue: WorkQueue, ledger: ProgressLedger | None = None
-    ) -> AsyncIterator[OrchestratorEvent]:
+    ) -> AsyncGenerator[OrchestratorEvent, None]:
         output_queue: asyncio.Queue[OrchestratorEvent] = asyncio.Queue()
         done_event = asyncio.Event()
         stall_triggered = asyncio.Event()
@@ -503,67 +581,129 @@ class MultiAgentOrchestrator:
                         worker_session_id=session_id,
                     )
                 )
-                role = self._worker_role.model_copy(
+                try:
+                    await run_item(worker_name, session_id, task)
+                except asyncio.CancelledError:
+                    await settle_item(task, "Worker interrupted", interrupted=True)
+                    raise
+                except Exception as exc:
+                    await settle_item(task, str(exc))
+                    await output_queue.put(
+                        AgentEventWrapper(
+                            role=worker_name,
+                            event=ErrorEvent(error=str(exc), kind="worker", recoverable=False),
+                        )
+                    )
+
+        async def settle_item(task: Task, reason: str, *, interrupted: bool = False) -> None:
+            current = await self._store.get_task(task.id)
+            if current is None:
+                return
+            metadata = {**current.metadata, "_worker_error": reason}
+            metadata.pop("claimed_by", None)
+            metadata.pop("worker_session_id", None)
+            await self._store.update_task(
+                current.model_copy(
                     update={
-                        "name": worker_name,
-                        "job_id": queue._parent_id,
-                        "item_id": task.id,
+                        "status": "todo" if interrupted else "waiting",
+                        "metadata": metadata,
+                        "updated_at": datetime.now(UTC),
                     }
                 )
-                agent = self._factory(role)
-                item_prompt = (
-                    f"Complete this work item.\n\n"
-                    f"Ref: {task.ref}\n"
-                    f"Title: {task.title}\n"
-                    f"Description: {task.description or '(none)'}\n\n"
-                    f"When finished, call complete_work_item with a summary of what you did."
-                )
-                request = RunRequest(
-                    prompt=item_prompt,
-                    session_id=session_id,
-                    provider=self._provider,
-                    model=role.model or self._model,
-                    max_steps=role.max_steps or self._max_worker_steps,
-                )
-                await output_queue.put(AgentStartedEvent(role=worker_name, session_id=session_id))
-                async for event in agent.run(request):
+            )
+
+        async def run_item(worker_name: str, session_id: str, task: Task) -> None:
+            role = self._worker_role.model_copy(
+                update={
+                    "name": worker_name,
+                    "job_id": queue._parent_id,
+                    "item_id": task.id,
+                }
+            )
+            agent = self._factory(role)
+            item_prompt = (
+                f"Complete this work item.\n\n"
+                f"Ref: {task.ref}\n"
+                f"Title: {task.title}\n"
+                f"Description: {task.description or '(none)'}\n\n"
+                f"When finished, call complete_work_item with a summary of what you did."
+            )
+            request = RunRequest(
+                prompt=item_prompt,
+                session_id=session_id,
+                provider=self._provider,
+                model=role.model or self._model,
+                max_steps=role.max_steps or self._max_worker_steps,
+            )
+            await output_queue.put(AgentStartedEvent(role=worker_name, session_id=session_id))
+            failure: str | None = None
+            async with aclosing(agent.run(request)) as stream:
+                async for event in stream:
                     await output_queue.put(AgentEventWrapper(role=worker_name, event=event))
-                await output_queue.put(AgentDoneEvent(role=worker_name, session_id=session_id))
+                    if isinstance(event, ErrorEvent) and not event.recoverable:
+                        failure = event.error
+                    elif isinstance(event, GuardrailTrippedEvent):
+                        failure = event.reason
+            if failure is not None:
+                await settle_item(task, failure)
+                return
+            await output_queue.put(AgentDoneEvent(role=worker_name, session_id=session_id))
 
-                # Post-run check: inspect task status and run judge / handle orphan
-                async for post_event in self._post_run_check(task, session_id):
-                    await output_queue.put(post_event)
+            # Post-run check: inspect task status and run judge / handle orphan
+            async for post_event in self._post_run_check(task, session_id):
+                await output_queue.put(post_event)
 
-                # Stall detection: record whether the work item ended as done
-                if ledger is not None:
-                    refreshed = await self._store.get_task(task.id)
-                    completed = refreshed is not None and refreshed.status == "done"
-                    ledger.record_completion(task.id, completed=completed)
-                    if ledger.is_stalled:
-                        await output_queue.put(
-                            StallDetectedEvent(
-                                stall_count=ledger.stall_count,
-                                max_stalls=ledger.max_stalls,
-                                stalled_item_ids=ledger.stalled_item_ids,
-                            )
+            # Stall detection: record whether the work item ended as done
+            if ledger is not None:
+                refreshed = await self._store.get_task(task.id)
+                completed = refreshed is not None and refreshed.status == "done"
+                ledger.record_completion(task.id, completed=completed)
+                if ledger.is_stalled:
+                    await output_queue.put(
+                        StallDetectedEvent(
+                            stall_count=ledger.stall_count,
+                            max_stalls=ledger.max_stalls,
+                            stalled_item_ids=ledger.stalled_item_ids,
                         )
-                        stall_triggered.set()
-                        return
+                    )
+                    stall_triggered.set()
+                    return
 
         worker_tasks = [asyncio.create_task(worker(i)) for i in range(self._max_workers)]
 
         async def _set_done() -> None:
-            await asyncio.gather(*worker_tasks, return_exceptions=True)
-            done_event.set()
-
-        _drain_task = asyncio.create_task(_set_done())  # noqa: RUF006
-
-        while not done_event.is_set() or not output_queue.empty():
             try:
-                event = await asyncio.wait_for(output_queue.get(), timeout=0.05)
-                yield event
-            except TimeoutError:
-                continue
+                results = await asyncio.gather(*worker_tasks, return_exceptions=True)
+                for idx, result in enumerate(results):
+                    if isinstance(result, Exception):
+                        await output_queue.put(
+                            AgentEventWrapper(
+                                role=f"worker-{idx}",
+                                event=ErrorEvent(
+                                    error=str(result),
+                                    kind="worker",
+                                    recoverable=False,
+                                ),
+                            )
+                        )
+            finally:
+                done_event.set()
+
+        drain_task = asyncio.create_task(_set_done())
+
+        try:
+            while not done_event.is_set() or not output_queue.empty():
+                try:
+                    event = await asyncio.wait_for(output_queue.get(), timeout=0.05)
+                    yield event
+                except TimeoutError:
+                    continue
+        finally:
+            for task in worker_tasks:
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(*worker_tasks, return_exceptions=True)
+            await drain_task
 
     async def _post_run_check(
         self, task: Task, session_id: str
@@ -618,7 +758,7 @@ class MultiAgentOrchestrator:
 
         On pass: emit WorkItemVerifiedEvent.
         On fail: reset task to todo with judge feedback; emit WorkItemRejectedEvent.
-        Once retries are exhausted, leave the task as done (accept with warning).
+        Once retries are exhausted, mark the item waiting for review.
         """
         if self._work_item_judge is None:
             return
@@ -654,7 +794,19 @@ class MultiAgentOrchestrator:
         )
 
         if attempt >= self._max_judge_retries:
-            # Exhausted retries — accept the completion as-is
+            await self._store.update_task(
+                task.model_copy(
+                    update={
+                        "status": "waiting",
+                        "metadata": {
+                            **task.metadata,
+                            "_judge_retries": attempt,
+                            "_worker_error": f"Verification rejected: {result.reason}",
+                        },
+                        "updated_at": datetime.now(UTC),
+                    }
+                )
+            )
             return
 
         # Reset to todo with judge feedback injected into description
@@ -676,7 +828,7 @@ class MultiAgentOrchestrator:
         )
         await self._store.update_task(reset)
 
-    async def _run_reporter(self, queue: WorkQueue) -> AsyncIterator[OrchestratorEvent]:
+    async def _run_reporter(self, queue: WorkQueue) -> AsyncGenerator[OrchestratorEvent, None]:
         items = await queue.list()
         if not items:
             return
@@ -685,7 +837,7 @@ class MultiAgentOrchestrator:
             for t in items
         ]
         report_prompt = (
-            "Synthesize these completed work items into a final report:\n\n"
+            "Report the work item outcomes, including incomplete or failed items:\n\n"
             + "\n".join(summary_lines)
         )
         session_id = f"reporter_{uuid.uuid4().hex[:8]}"
@@ -699,9 +851,10 @@ class MultiAgentOrchestrator:
             model=self._reporter_role.model or self._model,
         )
         turn_count = 0
-        async for event in agent.run(request):
-            turn_count += 1
-            yield AgentEventWrapper(role="reporter", event=event)
+        async with aclosing(agent.run(request)) as stream:
+            async for event in stream:
+                turn_count += 1
+                yield AgentEventWrapper(role="reporter", event=event)
         yield AgentDoneEvent(role="reporter", session_id=session_id, turn_count=turn_count)
 
 

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import math
 import os
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -70,6 +72,7 @@ from harness.core import (
     write_mission_scheduled_run_record,
     write_mission_summary_report,
 )
+from harness.core.mission_execution import execute_mission_agents
 from harness.core.mission_planner import (
     PlannedAssertionInput,
     PlannedFeatureInput,
@@ -206,6 +209,7 @@ def build_mission_plan_prompt(*, mission: Mission) -> str:
         "Rules:\n"
         "- At least one milestone, assertion, and feature.\n"
         "- Every feature must cover one or more assertions.\n"
+        "- Assertions may include command as an argv array and timeout_seconds for independent verification.\n"
         "- Keep the plan bounded and implementation-oriented.\n"
         "- Use labels like m1, a1, f1 for stable references.\n"
         "- Prefer assigned_role='worker' unless a different role is necessary.\n"
@@ -300,6 +304,10 @@ def mission_create_command(
     ),
     cwd: Path | None = typer.Option(None, "--cwd"),
 ) -> None:
+    if budget_tokens is not None and budget_tokens < 1:
+        raise typer.BadParameter("--budget-tokens must be positive")
+    if budget_runtime_minutes is not None and budget_runtime_minutes < 1:
+        raise typer.BadParameter("--budget-runtime-minutes must be positive")
     working_dir = (cwd or Path.cwd()).resolve()
     cfg = load_config(config_path)
     mission_roles = cfg.mission_roles
@@ -322,6 +330,144 @@ def mission_create_command(
     )
     target = store.add_mission(mission)
     console.print(f"[green]Created mission {mission.id}[/green] at {target}")
+
+
+@mission_app.command("set-assertion-command")
+def mission_set_assertion_command(
+    *,
+    mission_id: str = typer.Option(..., "--mission"),
+    assertion_id: str = typer.Option(..., "--assertion"),
+    command: str = typer.Option(
+        ..., "--command", help='JSON argv array, e.g. ["python", "-m", "pytest"].'
+    ),
+    timeout_seconds: float = typer.Option(60.0, "--timeout"),
+    cwd: Path | None = typer.Option(None, "--cwd"),
+) -> None:
+    try:
+        argv = json.loads(command)
+    except json.JSONDecodeError as exc:
+        raise typer.BadParameter("--command must be a JSON argv array") from exc
+    if (
+        not isinstance(argv, list)
+        or not argv
+        or not all(isinstance(item, str) and "\x00" not in item for item in argv)
+        or not argv[0].strip()
+    ):
+        raise typer.BadParameter("--command must be a nonempty JSON string array")
+    if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
+        raise typer.BadParameter("--timeout must be positive")
+    store = MissionStore(root=default_mission_root(cwd))
+    try:
+        contract = store.load_contract_for_mission(mission_id)
+    except FileNotFoundError as exc:
+        raise typer.BadParameter("unknown mission contract") from exc
+    if not any(item.id == assertion_id for item in contract.assertions):
+        raise typer.BadParameter("unknown assertion for this mission")
+    store.add_contract(
+        replace(
+            contract,
+            assertions=tuple(
+                replace(item, command=tuple(argv), timeout_seconds=timeout_seconds)
+                if item.id == assertion_id
+                else item
+                for item in contract.assertions
+            ),
+        )
+    )
+    console.print(f"[green]Configured assertion command[/green] {assertion_id}")
+
+
+@mission_app.command("run")
+def mission_run_command(
+    *,
+    mission_id: str = typer.Option(..., "--mission"),
+    cwd: Path | None = typer.Option(None, "--cwd"),
+    provider: str | None = typer.Option(None, "--provider"),
+    model: str | None = typer.Option(None, "--model"),
+    base_url: str | None = typer.Option(None, "--base-url"),
+    max_features: int = typer.Option(5, "--max-features"),
+    max_worker_steps: int = typer.Option(20, "--max-worker-steps"),
+    timeout_seconds: float = typer.Option(300.0, "--timeout"),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Approve worker tool calls automatically."),
+    config_path: Path | None = typer.Option(None, "--config"),
+    json_output: bool = typer.Option(False, "--json"),
+) -> None:
+    """Run real Agent workers, resume saved sessions, and independently verify assertions."""
+    working_dir = (cwd or Path.cwd()).resolve()
+    cfg = _load_cli_config(config_path)
+    try:
+        result = _run_async(
+            run_agent_mission(
+                mission_id=mission_id,
+                cwd=working_dir,
+                provider=provider,
+                model=model,
+                base_url=base_url,
+                max_features=max_features,
+                max_worker_steps=max_worker_steps,
+                timeout_seconds=timeout_seconds,
+                yes=yes,
+                config=cfg,
+            )
+        )
+    except (ValueError, FileNotFoundError) as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    if json_output:
+        _emit_json(result.to_dict())
+    else:
+        console.print(f"{result.status}: {result.stop_reason}")
+        _print_mission_steps(result.steps)
+    if result.status == "blocked":
+        raise typer.Exit(1)
+
+
+async def run_agent_mission(
+    *,
+    mission_id: str,
+    cwd: Path,
+    provider: str | None,
+    model: str | None,
+    base_url: str | None,
+    max_features: int,
+    max_worker_steps: int,
+    timeout_seconds: float,
+    yes: bool,
+    config: Any,
+    inbox: bool = False,
+):
+    """Shared CLI dependency wiring for interactive and scheduled mission workers."""
+    chain = _resolve_chain(failover_flag=None, provider_flag=provider, config=config)
+    store = MissionStore(root=default_mission_root(cwd))
+    storage = SQLiteStorage(path=_ensure_workspace_db(cwd))
+    try:
+
+        def factory(mission: Mission, feature: MissionFeature):
+            return _build_agent(
+                chain=chain,
+                base_url=base_url,
+                model=model or mission.worker_model or config.default_model or "llama3.2",
+                storage=storage,
+                cwd=cwd,
+                config=config,
+                yes=yes,
+                inbox=inbox,
+                activity_store=storage,
+                approval_store=storage,
+                system_prompt="Implement the bounded mission feature and report evidence of the work performed.",
+                max_repair_attempts=0,
+            )
+
+        return await execute_mission_agents(
+            store=store,
+            mission_id=mission_id,
+            cwd=cwd,
+            agent_factory=factory,
+            max_features=max_features,
+            max_worker_steps=max_worker_steps,
+            timeout_seconds=timeout_seconds,
+        )
+    finally:
+        await storage.close()
 
 
 @mission_app.command("launch")
@@ -655,6 +801,10 @@ def mission_show_command(
         console.print(f"budget_tokens={mission.budget_tokens}")
     if mission.budget_runtime_minutes is not None:
         console.print(f"budget_runtime_minutes={mission.budget_runtime_minutes}")
+    console.print(f"execution_mode={mission.execution_mode}")
+    console.print(
+        f"tokens_used={mission.tokens_used} runtime_seconds_used={mission.runtime_seconds_used:.2f}"
+    )
     role_models = {
         "planner": mission.planner_model,
         "worker": mission.worker_model,
@@ -1022,6 +1172,7 @@ def mission_show_contract_command(
     *,
     mission_id: str = typer.Option(..., "--mission"),
     cwd: Path | None = typer.Option(None, "--cwd"),
+    json_output: bool = typer.Option(False, "--json"),
 ) -> None:
     working_dir = (cwd or Path.cwd()).resolve()
     store = MissionStore(root=default_mission_root(working_dir))
@@ -1031,6 +1182,9 @@ def mission_show_contract_command(
         raise typer.BadParameter(
             f"no validation contract found for mission: {mission_id!r}"
         ) from exc
+    if json_output:
+        _emit_json(contract.to_dict())
+        return
     console.print(f"[bold]{contract.id}[/bold]")
     console.print(f"mission_id={contract.mission_id}")
     console.print("\n[bold]Summary[/bold]")
@@ -1042,6 +1196,10 @@ def mission_show_contract_command(
                 f"- {assertion.id}: {assertion.title} [{assertion.kind}] -> "
                 f"{assertion.verification_method}"
             )
+            if assertion.command:
+                console.print(
+                    f"  command={json.dumps(assertion.command)} timeout={assertion.timeout_seconds:g}s"
+                )
 
 
 @mission_app.command("execute-next")
@@ -1299,7 +1457,12 @@ def mission_execute_milestone_command(
     mission_id: str = typer.Option(..., "--mission"),
     milestone_id: str | None = typer.Option(None, "--milestone"),
     max_steps: int = typer.Option(20, "--max-steps"),
-    auto_complete: bool = typer.Option(False, "--auto-complete"),
+    auto_complete: bool = typer.Option(
+        False,
+        "--simulate",
+        "--auto-complete",
+        help="Simulate bookkeeping without running workers or assertion commands.",
+    ),
     cwd: Path | None = typer.Option(None, "--cwd"),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
@@ -1339,7 +1502,12 @@ def mission_execute_burst_command(
     *,
     mission_id: str = typer.Option(..., "--mission"),
     max_steps: int = typer.Option(50, "--max-steps"),
-    auto_complete: bool = typer.Option(False, "--auto-complete"),
+    auto_complete: bool = typer.Option(
+        False,
+        "--simulate",
+        "--auto-complete",
+        help="Simulate bookkeeping without running workers or assertion commands.",
+    ),
     cwd: Path | None = typer.Option(None, "--cwd"),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:

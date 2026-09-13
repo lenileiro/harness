@@ -50,7 +50,9 @@ Example::
 
 from __future__ import annotations
 
+import hashlib
 import inspect
+import json
 import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -213,6 +215,8 @@ class FlowRunner(Generic[StateT]):
         self._checkpoint_store = checkpoint_store
         self._flow_id = flow_id
         self._resume_from = _resume_from
+        self._resume_executed: set[str] | None = None
+        self._resume_pending: list[str] | None = None
         self._steps: dict[str, Callable] = {}
         self._starts: list[str] = []
         self._routers: set[str] = set()
@@ -265,9 +269,12 @@ class FlowRunner(Generic[StateT]):
         """
         executed: set[str] = set()
 
-        if self._resume_from:
+        if self._resume_executed is not None:
+            executed = set(self._resume_executed)
+            queue: list[str] = list(self._resume_pending or [])
+        elif self._resume_from:
             executed.add(self._resume_from)
-            queue: list[str] = list(self._listens.get(self._resume_from, []))
+            queue = list(self._listens.get(self._resume_from, []))
         else:
             queue = list(self._starts)
 
@@ -286,9 +293,6 @@ class FlowRunner(Generic[StateT]):
             else:
                 result = step_fn()
 
-            if step_name in self._persists and self._checkpoint_store is not None:
-                await self._save_checkpoint(step_name)
-
             if step_name in self._routers and isinstance(result, str):
                 # Router: resolve label → listeners
                 for listener_name in self._listens.get(result, []):
@@ -305,17 +309,36 @@ class FlowRunner(Generic[StateT]):
                 if join_step not in executed and join_step not in queue and deps.issubset(executed):
                     queue.append(join_step)
 
+            if step_name in self._persists and self._checkpoint_store is not None:
+                await self._save_checkpoint(step_name, executed, queue)
+
         return self._flow.state
 
-    async def _save_checkpoint(self, step_name: str) -> None:
+    def _graph_fingerprint(self) -> str:
+        topology = {
+            "steps": sorted(self._steps),
+            "starts": self._starts,
+            "routers": sorted(self._routers),
+            "listeners": self._listens,
+            "joins": {name: sorted(deps) for name, deps in self._join_conditions.items()},
+        }
+        return hashlib.sha256(json.dumps(topology, sort_keys=True).encode()).hexdigest()
+
+    async def _save_checkpoint(
+        self, step_name: str, executed: set[str], pending: list[str]
+    ) -> None:
         from harness.core.flow_checkpoint import FlowCheckpoint
 
         flow_id = self._flow_id or f"flow_{uuid.uuid4().hex[:12]}"
         self._flow_id = flow_id
         checkpoint = FlowCheckpoint(
+            version=2,
             flow_id=flow_id,
             step_name=step_name,
             state_json=self._flow.state.model_dump_json(),
+            executed_steps=sorted(executed),
+            pending_steps=list(dict.fromkeys(pending)),
+            graph_fingerprint=self._graph_fingerprint(),
             created_at=datetime.now(UTC),
         )
         assert self._checkpoint_store is not None
@@ -331,9 +354,9 @@ class FlowRunner(Generic[StateT]):
     ) -> FlowRunner[StateT]:
         """Return a :class:`FlowRunner` with state restored from *checkpoint*.
 
-        Execution resumes from the listeners of the persisted step — i.e. the
-        step itself is NOT re-run, only what comes after it. This is the
-        "fork" semantics: take the world as it was at that point and continue.
+        Version 2 restores all completed and pending steps, including router
+        decisions and join barriers. Legacy checkpoints are accepted only for
+        linear flows where the execution frontier can be reconstructed safely.
 
         Example::
 
@@ -341,14 +364,48 @@ class FlowRunner(Generic[StateT]):
             forked = FlowRunner.from_checkpoint(cp, ResearchFlow())
             state = await forked.run()
         """
-        state_type = type(flow.state)
-        flow.state = state_type.model_validate_json(checkpoint.state_json)
-        return cls(
+        runner = cls(
             flow,
             checkpoint_store=checkpoint_store,
             flow_id=checkpoint.flow_id,
             _resume_from=checkpoint.step_name,
         )
+        if checkpoint.step_name not in runner._steps:
+            raise ValueError(f"checkpoint step {checkpoint.step_name!r} is absent from flow")
+        if checkpoint.version == 2:
+            if checkpoint.graph_fingerprint != runner._graph_fingerprint():
+                raise ValueError("checkpoint flow graph differs from current flow")
+            executed = set(checkpoint.executed_steps or [])
+            pending = list(checkpoint.pending_steps or [])
+            if (
+                checkpoint.step_name not in executed
+                or not (executed | set(pending)).issubset(runner._steps)
+                or executed.intersection(pending)
+            ):
+                raise ValueError("checkpoint contains an invalid step frontier")
+        else:
+            if (
+                runner._routers
+                or runner._join_conditions
+                or len(runner._starts) != 1
+                or any(len(listeners) > 1 for listeners in runner._listens.values())
+            ):
+                raise ValueError("legacy checkpoint cannot safely resume a branching flow")
+            executed = set()
+            pending = list(runner._starts)
+            while pending and checkpoint.step_name not in executed:
+                name = pending.pop(0)
+                if name in executed:
+                    break
+                executed.add(name)
+                pending.extend(runner._listens.get(name, []))
+            if checkpoint.step_name not in executed:
+                raise ValueError("legacy checkpoint step is not reachable")
+        runner._resume_executed = executed
+        runner._resume_pending = pending
+        state_type = type(flow.state)
+        flow.state = state_type.model_validate_json(checkpoint.state_json)
+        return runner
 
 
 __all__ = ["Flow", "FlowRunner", "listen", "persist", "router", "start"]

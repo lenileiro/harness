@@ -1,16 +1,28 @@
 from __future__ import annotations
 
+import hashlib
+import logging
+import math
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
+from functools import lru_cache
 from pathlib import Path
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from harness.core.autonomy import run_scheduled_research_burst
 from harness.core.extensions import LifecycleHook
 from harness.core.mission_runtime import run_scheduled_mission_burst
 from harness.core.mission_store import MissionStore, default_mission_root
 from harness.core.research_store import ResearchStore, default_research_root
-from harness.core.scheduler_models import SchedulerJob, SchedulerRunRecord, ScheduleSpec
+from harness.core.scheduler_models import (
+    SchedulerDelivery,
+    SchedulerExecutionResult,
+    SchedulerJob,
+    SchedulerRunRecord,
+    ScheduleSpec,
+)
 from harness.core.scheduler_store import SchedulerStore
 
 _JOB_KINDS = {
@@ -18,7 +30,11 @@ _JOB_KINDS = {
     "research.schedule_once",
     "reminder.once",
     "reminder.recurring",
+    "prompt.run",
 }
+
+MissionJobExecutor = Callable[[SchedulerJob], tuple[str, str, str]]
+PromptJobExecutor = Callable[[SchedulerJob], SchedulerExecutionResult]
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,8 +94,16 @@ def _parse_duration_seconds(value: str) -> int:
 
 
 def parse_schedule_spec(
-    *, at: str | None = None, every: str | None = None, cron: str | None = None
+    *,
+    at: str | None = None,
+    every: str | None = None,
+    cron: str | None = None,
+    timezone: str = "UTC",
 ) -> ScheduleSpec:
+    try:
+        zone = ZoneInfo(timezone)
+    except (ValueError, ZoneInfoNotFoundError) as exc:
+        raise ValueError(f"unknown schedule timezone: {timezone}") from exc
     provided = [
         (kind, value) for kind, value in (("at", at), ("every", every), ("cron", cron)) if value
     ]
@@ -87,57 +111,79 @@ def parse_schedule_spec(
         raise ValueError("exactly one of --at, --every, or --cron is required")
     kind, value = provided[0]
     if kind == "at":
-        moment = parse_datetime_text(value)
-        return ScheduleSpec(kind="at", value=moment.isoformat(timespec="seconds"))
+        moment = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+        if moment.tzinfo is None:
+            wall = moment
+            moment = wall.replace(tzinfo=zone)
+            if (
+                moment.astimezone(UTC).astimezone(zone).replace(tzinfo=None) != wall
+                or moment.utcoffset() != wall.replace(tzinfo=zone, fold=1).utcoffset()
+            ):
+                raise ValueError(
+                    "Ambiguous or nonexistent local time; provide an explicit UTC offset"
+                )
+        return ScheduleSpec(
+            kind="at", value=moment.astimezone(UTC).isoformat(timespec="seconds"), timezone=timezone
+        )
     if kind == "every":
-        return ScheduleSpec(kind="every", value=str(_parse_duration_seconds(value)))
+        return ScheduleSpec(
+            kind="every", value=str(_parse_duration_seconds(value)), timezone=timezone
+        )
     expression = str(value).strip()
     if len(expression.split()) != 5:
         raise ValueError("cron expressions must have 5 fields: minute hour day month weekday")
-    return ScheduleSpec(kind="cron", value=expression)
+    for field_text, maximum, minimum in zip(
+        expression.split(), (59, 23, 31, 12, 7), (0, 0, 1, 1, 0), strict=True
+    ):
+        _cron_values(field_text, minimum=minimum, maximum=maximum)
+    return ScheduleSpec(kind="cron", value=expression, timezone=timezone)
 
 
 def _cron_weekday(value: datetime) -> int:
     return (value.weekday() + 1) % 7
 
 
-def _match_cron_field(field: str, value: int, *, minimum: int, maximum: int) -> bool:
+@lru_cache(maxsize=512)
+def _cron_values(field: str, *, minimum: int, maximum: int) -> frozenset[int]:
+    values: set[int] = set()
     for token in field.split(","):
-        part = token.strip()
+        part, separator, step_text = token.strip().partition("/")
+        step = int(step_text) if separator else 1
+        if step < 1:
+            raise ValueError("cron step must be positive")
         if part == "*":
-            return True
-        if part.startswith("*/"):
-            step = int(part[2:])
-            if step < 1:
-                raise ValueError("cron step must be positive")
-            if (value - minimum) % step == 0:
-                return True
-            continue
-        if "-" in part:
+            start, end = minimum, maximum
+        elif "-" in part:
             start_text, end_text = part.split("-", 1)
-            start = int(start_text)
-            end = int(end_text)
-            if start < minimum or end > maximum or start > end:
-                raise ValueError("invalid cron range")
-            if start <= value <= end:
-                return True
-            continue
-        number = int(part)
-        if number < minimum or number > maximum:
+            start, end = int(start_text), int(end_text)
+        else:
+            start = int(part)
+            end = maximum if separator else start
+        if not minimum <= start <= end <= maximum:
             raise ValueError("cron field value out of range")
-        if value == number:
-            return True
-    return False
+        values.update(range(start, end + 1, step))
+    return frozenset(values)
+
+
+def _match_cron_field(field: str, value: int, *, minimum: int, maximum: int) -> bool:
+    return value in _cron_values(field, minimum=minimum, maximum=maximum)
 
 
 def _matches_cron(expression: str, moment: datetime) -> bool:
     minute_s, hour_s, day_s, month_s, weekday_s = expression.split()
+    day_matches = _match_cron_field(day_s, moment.day, minimum=1, maximum=31)
+    weekdays = _cron_values(weekday_s, minimum=0, maximum=7)
+    weekday_matches = _cron_weekday(moment) in {day % 7 for day in weekdays}
+    calendar_matches = (
+        (day_matches or weekday_matches)
+        if day_s != "*" and weekday_s != "*"
+        else (day_matches and weekday_matches)
+    )
     return (
         _match_cron_field(minute_s, moment.minute, minimum=0, maximum=59)
         and _match_cron_field(hour_s, moment.hour, minimum=0, maximum=23)
-        and _match_cron_field(day_s, moment.day, minimum=1, maximum=31)
+        and calendar_matches
         and _match_cron_field(month_s, moment.month, minimum=1, maximum=12)
-        and _match_cron_field(weekday_s, _cron_weekday(moment), minimum=0, maximum=6)
     )
 
 
@@ -150,13 +196,14 @@ def compute_next_run_at(*, schedule: ScheduleSpec, now: datetime | None = None) 
     if schedule.kind != "cron":
         raise ValueError(f"unsupported schedule kind: {schedule.kind}")
     candidate = current.astimezone(UTC).replace(second=0, microsecond=0)
+    zone = ZoneInfo(schedule.timezone)
     if candidate < current.astimezone(UTC):
         candidate += timedelta(minutes=1)
-    for _ in range(366 * 24 * 60):
-        if _matches_cron(schedule.value, candidate):
+    for _ in range(5 * 366 * 24 * 60):
+        if _matches_cron(schedule.value, candidate.astimezone(zone)):
             return candidate.isoformat(timespec="seconds")
         candidate += timedelta(minutes=1)
-    raise ValueError("could not compute next cron run within one year")
+    raise ValueError("could not compute next cron run within five years")
 
 
 def create_scheduler_job(
@@ -225,6 +272,87 @@ def _dispatch_job(job: SchedulerJob) -> tuple[str, str, str]:
     raise ValueError(f"unsupported scheduler job kind: {job.kind}")
 
 
+def _hook_key(hook: LifecycleHook) -> str:
+    return f"{type(hook).__module__}.{type(hook).__qualname__}"
+
+
+def _notification_job(hook: LifecycleHook, job: SchedulerJob) -> SchedulerJob:
+    prepare = getattr(hook, "prepare_job_notification", None)
+    if not callable(prepare):
+        return job
+    prepared = prepare(cwd=Path(job.cwd), job=job)
+    if not isinstance(prepared, SchedulerJob):
+        raise TypeError("notification preparation must return a SchedulerJob")
+    return prepared
+
+
+def retry_scheduler_deliveries(
+    *,
+    store: SchedulerStore,
+    hooks: tuple[LifecycleHook, ...],
+    now: datetime | None = None,
+    force: bool = False,
+) -> int:
+    """Retry durable completion hooks without re-executing their jobs.
+
+    Delivery is at least once: a receiver should use record.id to deduplicate if
+    the sender crashes after an external send but before persisting its receipt.
+    """
+    current = now or _utcnow()
+    hook_map = {_hook_key(hook): hook for hook in hooks}
+    sent = 0
+    for pending in store.list_deliveries(status="pending"):
+        hook = hook_map.get(pending.hook_key)
+        if hook is None or not store.acquire_delivery_lock(pending.id):
+            continue
+        try:
+            delivery = next(item for item in store.list_deliveries() if item.id == pending.id)
+            if delivery.status != "pending":
+                continue
+            if (
+                not force
+                and delivery.next_attempt_at
+                and parse_datetime_text(delivery.next_attempt_at) > current
+            ):
+                continue
+            attempts = delivery.attempts + 1
+            try:
+                record = store.load_run_record(delivery.run_id)
+                job = SchedulerJob.from_dict(delivery.job)
+                if not delivery.prepared:
+                    job = _notification_job(hook, job)
+                    delivery = replace(delivery, job=job.to_dict(), prepared=True)
+                    store.save_delivery(delivery)
+                hook.on_job_completed(
+                    cwd=Path(job.cwd), job=job, trigger=record.trigger, record=record
+                )
+            except Exception as exc:
+                store.save_delivery(
+                    replace(
+                        delivery,
+                        attempts=attempts,
+                        last_error=str(exc),
+                        next_attempt_at=(
+                            current + timedelta(seconds=min(3600, 30 * 2 ** min(attempts - 1, 7)))
+                        ).isoformat(timespec="seconds"),
+                    )
+                )
+            else:
+                store.save_delivery(
+                    replace(
+                        delivery,
+                        status="sent",
+                        attempts=attempts,
+                        next_attempt_at="",
+                        last_error="",
+                    )
+                )
+                sent += 1
+        finally:
+            store.release_delivery_lock(pending.id)
+    return sent
+
+
 def run_scheduler_job(
     *,
     store: SchedulerStore,
@@ -232,13 +360,14 @@ def run_scheduler_job(
     trigger: str = "manual",
     now: datetime | None = None,
     hooks: tuple[LifecycleHook, ...] = (),
+    mission_executor: MissionJobExecutor | None = None,
+    prompt_executor: PromptJobExecutor | None = None,
 ) -> SchedulerRunRecord:
     job = store.load_job(job_id)
     started = now or _utcnow()
     started_text = started.isoformat(timespec="seconds")
-    job_cwd = Path(job.cwd)
-    if not store.acquire_job_lock(job_id):
-        finished_text = _utcnow().isoformat(timespec="seconds")
+
+    def skipped(reason: str) -> SchedulerRunRecord:
         record = SchedulerRunRecord(
             id=store.new_id("schedrun", job.kind),
             job_id=job.id,
@@ -247,58 +376,72 @@ def run_scheduler_job(
             trigger=trigger,
             status="skipped",
             result_status="skipped",
-            result_stop_reason="already_running",
+            result_stop_reason=reason,
             started_at=started_text,
-            finished_at=finished_text,
+            finished_at=_utcnow_text(),
             record_dir="",
-            summary=f"{job.kind} skipped because another scheduler process is already running it",
+            summary=f"{job.kind} skipped: {reason}",
         )
         store.add_run_record(record)
         return record
-    for hook in hooks:
-        hook.on_job_started(cwd=job_cwd, job=job, trigger=trigger, started_at=started)
+
+    if not store.acquire_job_lock(job_id):
+        return skipped("already_running")
     try:
+        # Another scheduler may have finished this occurrence since our due snapshot.
+        with store.job_state_lock(job_id):
+            job = store.load_job(job_id)
+            if trigger == "scheduled" and (
+                job.status != "active"
+                or not job.next_run_at
+                or parse_datetime_text(job.next_run_at) > started.astimezone(UTC)
+            ):
+                return skipped("not_due")
+            # Persist the claim before side effects. A crash leaves an explicit
+            # running job that can be inspected and retried with run-now.
+            if job.status != "paused":
+                store.update_job(replace(job, status="running", updated_at=started_text))
+        retry_after_seconds: float | None = None
         try:
-            result_status, stop_reason, record_dir = _dispatch_job(job)
+            for hook in hooks:
+                hook.on_job_started(cwd=Path(job.cwd), job=job, trigger=trigger, started_at=started)
+            if job.kind == "prompt.run":
+                if prompt_executor is None:
+                    raise ValueError("Prompt job requires a configured prompt executor")
+                result = prompt_executor(job)
+                retry_after_seconds = result.retry_after_seconds
+                if retry_after_seconds is not None and (
+                    not math.isfinite(retry_after_seconds) or retry_after_seconds <= 0
+                ):
+                    raise ValueError("Prompt retry delay must be finite and positive")
+                result_status, stop_reason, record_dir = (
+                    result.status,
+                    result.stop_reason,
+                    result.record_dir,
+                )
+                job = replace(
+                    job,
+                    payload={
+                        **job.payload,
+                        "notification_text": result.notification_text,
+                        "notify_result": result.notify_result,
+                    },
+                )
+            elif (
+                job.kind == "mission.schedule_once" and job.payload.get("execution_mode") == "agent"
+            ):
+                if mission_executor is None:
+                    raise ValueError("Agent mission job requires a configured mission executor")
+                result_status, stop_reason, record_dir = mission_executor(job)
+            else:
+                result_status, stop_reason, record_dir = _dispatch_job(job)
             status = "completed"
             summary = f"{job.kind} -> {result_status} ({stop_reason})"
         except Exception as exc:
-            finished_text = _utcnow().isoformat(timespec="seconds")
-            record = SchedulerRunRecord(
-                id=store.new_id("schedrun", job.kind),
-                job_id=job.id,
-                kind=job.kind,
-                cwd=job.cwd,
-                trigger=trigger,
-                status="failed",
-                result_status="failed",
-                result_stop_reason="error",
-                started_at=started_text,
-                finished_at=finished_text,
-                record_dir="",
-                summary=str(exc),
-            )
-            store.add_run_record(record)
-            next_run_at = ""
-            status = "failed" if job.schedule.kind == "at" else "active"
-            if job.schedule.kind != "at":
-                next_run_at = compute_next_run_at(schedule=job.schedule, now=_utcnow())
-            store.update_job(
-                replace(
-                    job,
-                    status=status,
-                    next_run_at=next_run_at,
-                    updated_at=finished_text,
-                    last_run_at=finished_text,
-                    last_status="failed",
-                    last_error=str(exc),
-                    last_record_dir="",
-                )
-            )
-            for hook in hooks:
-                hook.on_job_completed(cwd=job_cwd, job=job, trigger=trigger, record=record)
-            return record
-        finished_text = _utcnow().isoformat(timespec="seconds")
+            result_status, stop_reason, record_dir = "failed", "error", ""
+            status, summary = "failed", str(exc)
+        finished = _utcnow()
+        finished_text = finished.isoformat(timespec="seconds")
         record = SchedulerRunRecord(
             id=store.new_id("schedrun", job.kind),
             job_id=job.id,
@@ -314,27 +457,59 @@ def run_scheduler_job(
             summary=summary,
         )
         store.add_run_record(record)
-        next_run_at = ""
-        job_status = "completed" if job.schedule.kind == "at" else job.status
-        if job.schedule.kind != "at":
-            next_run_at = compute_next_run_at(schedule=job.schedule, now=_utcnow())
-        store.update_job(
-            replace(
-                job,
-                status=job_status,
-                next_run_at=next_run_at,
-                updated_at=finished_text,
-                last_run_at=finished_text,
-                last_status=result_status,
-                last_error="",
-                last_record_dir=record_dir,
-            )
-        )
+        # Persist the outbox before marking execution complete. A delivery failure
+        # changes the outbox only, never the result of the completed work.
         for hook in hooks:
-            hook.on_job_completed(cwd=job_cwd, job=job, trigger=trigger, record=record)
-        return record
+            key = _hook_key(hook)
+            delivery_id = f"{record.id}-{hashlib.sha256(key.encode()).hexdigest()[:16]}"
+            error = ""
+            try:
+                snapshot = _notification_job(hook, job)
+            except Exception as exc:
+                snapshot, error = job, str(exc)
+            store.save_delivery(
+                SchedulerDelivery(
+                    id=delivery_id,
+                    run_id=record.id,
+                    hook_key=key,
+                    job=snapshot.to_dict(),
+                    prepared=not bool(error),
+                    last_error=error,
+                )
+            )
+        with store.job_state_lock(job_id):
+            latest = store.load_job(job_id)
+            next_run_at = (
+                ""
+                if job.schedule.kind == "at"
+                else compute_next_run_at(
+                    schedule=job.schedule, now=finished + timedelta(microseconds=1)
+                )
+            )
+            final_status = status if job.schedule.kind == "at" else "active"
+            if status == "completed" and retry_after_seconds is not None:
+                next_run_at = (finished + timedelta(seconds=retry_after_seconds)).isoformat(
+                    timespec="seconds"
+                )
+                final_status = "active"
+            if latest.status == "paused":
+                final_status = "paused"
+            store.update_job(
+                replace(
+                    latest,
+                    status=final_status,
+                    next_run_at=next_run_at,
+                    updated_at=finished_text,
+                    last_run_at=finished_text,
+                    last_status=result_status,
+                    last_error=summary if status == "failed" else "",
+                    last_record_dir=record_dir,
+                )
+            )
     finally:
         store.release_job_lock(job_id)
+    retry_scheduler_deliveries(store=store, hooks=hooks)
+    return record
 
 
 def run_due_scheduler_jobs(
@@ -342,9 +517,12 @@ def run_due_scheduler_jobs(
     store: SchedulerStore,
     now: datetime | None = None,
     hooks: tuple[LifecycleHook, ...] = (),
+    mission_executor: MissionJobExecutor | None = None,
+    prompt_executor: PromptJobExecutor | None = None,
 ) -> SchedulerTickResult:
     started = now or _utcnow()
     started_text = started.isoformat(timespec="seconds")
+    retry_scheduler_deliveries(store=store, hooks=hooks, now=started)
     jobs = store.list_jobs(status="active")
     due = [
         job
@@ -352,6 +530,7 @@ def run_due_scheduler_jobs(
         if job.next_run_at and parse_datetime_text(job.next_run_at) <= started.astimezone(UTC)
     ]
     run_ids: list[str] = []
+    executed = 0
     for job in due:
         record = run_scheduler_job(
             store=store,
@@ -359,27 +538,33 @@ def run_due_scheduler_jobs(
             trigger="scheduled",
             now=started,
             hooks=hooks,
+            mission_executor=mission_executor,
+            prompt_executor=prompt_executor,
         )
         run_ids.append(record.id)
+        executed += record.status != "skipped"
     finished = _utcnow()
     finished_text = finished.isoformat(timespec="seconds")
     result = SchedulerTickResult(
         started_at=started_text,
         finished_at=finished_text,
         jobs_seen=len(jobs),
-        jobs_executed=len(due),
+        jobs_executed=executed,
         run_ids=tuple(run_ids),
     )
     scheduler_cwd = store.root.parent.resolve()
     for hook in hooks:
-        hook.on_scheduler_tick(
-            cwd=scheduler_cwd,
-            started_at=started,
-            finished_at=finished,
-            jobs_seen=result.jobs_seen,
-            jobs_executed=result.jobs_executed,
-            run_ids=result.run_ids,
-        )
+        try:
+            hook.on_scheduler_tick(
+                cwd=scheduler_cwd,
+                started_at=started,
+                finished_at=finished,
+                jobs_seen=result.jobs_seen,
+                jobs_executed=result.jobs_executed,
+                run_ids=result.run_ids,
+            )
+        except Exception:
+            logging.getLogger(__name__).exception("Scheduler tick hook failed")
     return result
 
 
@@ -390,6 +575,8 @@ def run_scheduler_loop(
     once: bool = False,
     max_ticks: int | None = None,
     hooks: tuple[LifecycleHook, ...] = (),
+    mission_executor: MissionJobExecutor | None = None,
+    prompt_executor: PromptJobExecutor | None = None,
 ) -> SchedulerTickResult:
     ticks = 0
     result = SchedulerTickResult(
@@ -400,7 +587,12 @@ def run_scheduler_loop(
         run_ids=(),
     )
     while True:
-        result = run_due_scheduler_jobs(store=store, hooks=hooks)
+        result = run_due_scheduler_jobs(
+            store=store,
+            hooks=hooks,
+            mission_executor=mission_executor,
+            prompt_executor=prompt_executor,
+        )
         ticks += 1
         if once:
             return result
@@ -415,6 +607,7 @@ __all__ = [
     "create_scheduler_job",
     "parse_datetime_text",
     "parse_schedule_spec",
+    "retry_scheduler_deliveries",
     "run_due_scheduler_jobs",
     "run_scheduler_job",
     "run_scheduler_loop",

@@ -8,6 +8,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from harness.core.paths import user_home
 from harness.storage.sqlite import SQLiteStorage, default_db_path
 from harness.tasks import ActivityEvent
 
@@ -140,7 +141,7 @@ def contracts_list_command(*, cwd: Path | None, console: Console) -> None:
 
     working = (cwd or Path.cwd()).resolve()
     registry = ContractRegistry.from_paths(
-        [working / ".harness" / "contracts", Path.home() / ".harness" / "contracts"]
+        [working / ".harness" / "contracts", user_home() / "contracts"]
     )
     if not registry:
         console.print("[dim]No contracts loaded.[/dim]")
@@ -167,7 +168,7 @@ def contracts_test_command(*, task: str, cwd: Path | None, console: Console) -> 
 
     working = (cwd or Path.cwd()).resolve()
     registry = ContractRegistry.from_paths(
-        [working / ".harness" / "contracts", Path.home() / ".harness" / "contracts"]
+        [working / ".harness" / "contracts", user_home() / "contracts"]
     )
     rendered = registry.render(task)
     if rendered is None:
@@ -180,9 +181,7 @@ def tips_list_command(*, cwd: Path | None, console: Console) -> None:
     from harness.core import TipLibrary
 
     working = (cwd or Path.cwd()).resolve()
-    library = TipLibrary.load(
-        [working / ".harness" / "tips.jsonl", Path.home() / ".harness" / "tips.jsonl"]
-    )
+    library = TipLibrary.load([working / ".harness" / "tips.jsonl", user_home() / "tips.jsonl"])
     if not library:
         console.print("[dim]No tips loaded.[/dim]")
         return
@@ -217,9 +216,7 @@ def tips_add_command(
         console.print("[red]--scope must be 'repo' or 'user'.[/red]")
         raise typer.Exit(2)
     target = (
-        Path.cwd() / ".harness" / "tips.jsonl"
-        if scope == "repo"
-        else Path.home() / ".harness" / "tips.jsonl"
+        Path.cwd() / ".harness" / "tips.jsonl" if scope == "repo" else user_home() / "tips.jsonl"
     )
     library = TipLibrary.load([target])
     library.path = target
@@ -233,9 +230,7 @@ def tips_test_command(*, task: str, top_k: int, cwd: Path | None, console: Conso
     from harness.core import TipLibrary
 
     working = (cwd or Path.cwd()).resolve()
-    library = TipLibrary.load(
-        [working / ".harness" / "tips.jsonl", Path.home() / ".harness" / "tips.jsonl"]
-    )
+    library = TipLibrary.load([working / ".harness" / "tips.jsonl", user_home() / "tips.jsonl"])
     rendered = library.render(task, top_k=top_k)
     if rendered is None:
         console.print("[dim]No tips match.[/dim]")
@@ -266,9 +261,7 @@ def tips_mine_command(
     adapter = build_adapter(chain[0], base_url=None, config=cfg)
 
     target = (
-        Path.cwd() / ".harness" / "tips.jsonl"
-        if scope == "repo"
-        else Path.home() / ".harness" / "tips.jsonl"
+        Path.cwd() / ".harness" / "tips.jsonl" if scope == "repo" else user_home() / "tips.jsonl"
     )
 
     async def go() -> list[Tip]:

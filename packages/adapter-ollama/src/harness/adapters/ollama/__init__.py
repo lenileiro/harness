@@ -26,7 +26,7 @@ from harness.core import (
     RateLimitError,
     TimeoutError,
 )
-from harness.core._openai import message_to_wire, parse_sse_stream
+from harness.core._openai import messages_to_wire, parse_sse_stream
 
 __version__ = "0.0.0"
 
@@ -87,7 +87,7 @@ class OllamaAdapter:
         )
 
     async def capabilities(self) -> Capabilities:
-        return Capabilities(streaming=True, tool_use=True)
+        return Capabilities(streaming=True, tool_use=True, input_media=["image"])
 
     async def cancel(self, session_id: str) -> None:
         # The httpx context manager handles teardown on cancellation; nothing
@@ -112,8 +112,9 @@ class OllamaAdapter:
     ) -> AsyncIterator[Event]:
         payload: dict[str, Any] = {
             "model": model,
-            "messages": [message_to_wire(m) for m in messages],
+            "messages": messages_to_wire(messages),
             "stream": True,
+            "stream_options": {"include_usage": True},
         }
         if tools:
             payload["tools"] = tools

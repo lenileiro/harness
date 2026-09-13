@@ -105,6 +105,10 @@ class NotesTool:
         self._activity_store = activity_store
         self.parameters_schema = _NOTES_SCHEMA
 
+    def bind_session(self, session: Session) -> None:
+        """Rebind a runtime-owned tool after loading a fresh session snapshot."""
+        self._session = session
+
     async def __call__(self, call: ToolCall) -> ToolResult:
         args = call.arguments if isinstance(call.arguments, dict) else {}
         action = str(args.get("action", "")).strip().lower()
@@ -241,6 +245,10 @@ class PruneLedgerTool:
         self._session = session
         self._activity_store = activity_store
         self.parameters_schema = _PRUNE_SCHEMA
+
+    def bind_session(self, session: Session) -> None:
+        """Rebind a runtime-owned tool after loading a fresh session snapshot."""
+        self._session = session
 
     async def __call__(self, call: ToolCall) -> ToolResult:
         args = call.arguments if isinstance(call.arguments, dict) else {}

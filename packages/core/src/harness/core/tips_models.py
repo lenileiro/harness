@@ -9,6 +9,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
+from harness.core.paths import user_home
 from harness.core.telemetry import get_logger
 
 logger = get_logger("harness.procedural_skill")
@@ -119,7 +120,7 @@ class TipLibrary:
 def default_tip_paths() -> list[Path]:
     return [
         Path.cwd() / ".harness" / "tips.jsonl",
-        Path.home() / ".harness" / "tips.jsonl",
+        user_home() / "tips.jsonl",
     ]
 
 

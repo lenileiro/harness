@@ -120,7 +120,7 @@ def approvals_grant_command(
 
     updated = run_async(_go())
     if updated is None:
-        console.print(f"[red]Approval not found:[/red] {approval_id}")
+        console.print(f"[red]Approval not found or already resolved:[/red] {approval_id}")
         raise typer.Exit(1)
     console.print(
         f"[green]Granted[/green] {updated.id}  "
@@ -151,7 +151,7 @@ def approvals_deny_command(
 
     updated = run_async(_go())
     if updated is None:
-        console.print(f"[red]Approval not found:[/red] {approval_id}")
+        console.print(f"[red]Approval not found or already resolved:[/red] {approval_id}")
         raise typer.Exit(1)
     console.print(f"[yellow]Denied[/yellow] {updated.id}  [dim]({updated.tool_name})[/dim]")
 

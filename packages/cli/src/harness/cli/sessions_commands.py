@@ -8,6 +8,7 @@ from rich.console import Console
 from rich.prompt import Confirm
 from rich.table import Table
 
+from harness.cli.runtime_helpers import load_workspace_context
 from harness.core import ContextBudget, configure_logging
 from harness.storage.sqlite import SQLiteStorage
 
@@ -115,6 +116,7 @@ def sessions_resume_command(
 
     async def _go() -> None:
         storage = build_storage(db=db, in_memory=in_memory, cwd=working_dir_hint)
+        agent = None
         try:
             session = await storage.get(session_id)
             if session is None:
@@ -137,6 +139,7 @@ def sessions_resume_command(
                 if max_context_tokens is not None
                 else None
             )
+            context = load_workspace_context(working_dir, config=cfg)
             agent = build_agent(
                 chain=chain,
                 base_url=base_url,
@@ -151,6 +154,9 @@ def sessions_resume_command(
                 verifier=verifier,
                 budget=budget,
                 memory_store=storage,  # type: ignore[arg-type]
+                contracts=context.contracts,
+                tips_provider=context.tips_provider,
+                resume=context.resume,
             )
             try:
                 async for event in agent.resume(session_id, prompt=prompt, max_steps=max_steps):
@@ -159,6 +165,8 @@ def sessions_resume_command(
                 console.print(f"\n[red]Unhandled error:[/red] {exc!s}")
                 raise typer.Exit(1) from None
         finally:
+            if agent is not None and callable(getattr(agent, "aclose", None)):
+                await agent.aclose()
             if isinstance(storage, SQLiteStorage):
                 await storage.close()
 
@@ -229,6 +237,7 @@ def sessions_fork_command(
                 )
                 return
             chain = [forked.provider]
+            context = load_workspace_context(forked.cwd, config=cfg)
             agent = build_agent(
                 chain=chain,
                 base_url=None,
@@ -240,6 +249,9 @@ def sessions_fork_command(
                 activity_store=storage,  # type: ignore[arg-type]
                 approval_store=storage,  # type: ignore[arg-type]
                 memory_store=storage,  # type: ignore[arg-type]
+                contracts=context.contracts,
+                tips_provider=context.tips_provider,
+                resume=context.resume,
             )
             async for event in agent.resume(forked.id, prompt=prompt):
                 render(event)

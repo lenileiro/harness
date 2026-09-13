@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
+import tempfile
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from uuid import uuid4
@@ -43,7 +47,17 @@ def _split_csv(value: str | None) -> tuple[str, ...]:
 
 
 def _write_json(path: Path, payload: dict) -> None:
-    path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    with tempfile.NamedTemporaryFile(
+        mode="w", encoding="utf-8", dir=path.parent, delete=False
+    ) as handle:
+        temporary = Path(handle.name)
+        try:
+            json.dump(payload, handle, indent=2)
+            handle.flush()
+            os.fsync(handle.fileno())
+            os.replace(temporary, path)
+        finally:
+            temporary.unlink(missing_ok=True)
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,6 +72,15 @@ class ResearchSearchHit:
 class ResearchStore:
     def __init__(self, *, root: Path):
         self.root = root
+
+    @contextmanager
+    def execution_lock(self) -> Iterator[None]:
+        """Serialize research transitions across independent scheduler processes."""
+        from filelock import FileLock
+
+        self.root.mkdir(parents=True, exist_ok=True)
+        with FileLock(self.root / "execution.lock", mode=0o600):
+            yield
 
     @property
     def rabbit_holes_dir(self) -> Path:

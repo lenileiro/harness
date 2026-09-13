@@ -11,9 +11,10 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any, Literal, Protocol, runtime_checkable
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 MemoryKind = Literal["user_preference", "user_fact", "project_fact", "project_context"]
 
@@ -24,6 +25,20 @@ def _utcnow() -> datetime:
 
 def _new_id() -> str:
     return f"mem_{uuid.uuid4().hex[:12]}"
+
+
+class MemoryScope(BaseModel):
+    """Trusted workspace/user identity; never accepted from model tool arguments."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    workspace: str = Field(min_length=1)
+    user_id: str | None = Field(default=None, min_length=1, max_length=512)
+
+    @field_validator("workspace")
+    @classmethod
+    def canonical_workspace(cls, value: str) -> str:
+        return str(Path(value).expanduser().resolve())
 
 
 class MemoryEntry(BaseModel):
@@ -37,6 +52,7 @@ class MemoryEntry(BaseModel):
     session_id: str | None = None
     task_id: str | None = None
     created_at: datetime = Field(default_factory=_utcnow)
+    scope: MemoryScope | None = None
 
     def model_dump_row(self) -> dict[str, Any]:
         return {
@@ -46,6 +62,7 @@ class MemoryEntry(BaseModel):
             "session_id": self.session_id,
             "task_id": self.task_id,
             "created_at": self.created_at.isoformat(),
+            "scope": self.scope.model_dump(mode="json") if self.scope else None,
         }
 
 
@@ -64,4 +81,27 @@ class MemoryStore(Protocol):
     async def delete_memory(self, entry_id: str) -> None: ...
 
 
-__all__ = ["MemoryEntry", "MemoryKind", "MemoryStore"]
+@runtime_checkable
+class ScopedMemoryStore(Protocol):
+    """Optional scope-enforcing CRUD interface, separate from legacy MemoryStore."""
+
+    async def save_scoped_memory(
+        self, entry: MemoryEntry, *, scope: MemoryScope
+    ) -> MemoryEntry: ...
+
+    async def get_scoped_memory(
+        self, entry_id: str, *, scope: MemoryScope
+    ) -> MemoryEntry | None: ...
+
+    async def list_scoped_memory(
+        self, *, scope: MemoryScope, kind: MemoryKind | None = None, limit: int = 50
+    ) -> list[MemoryEntry]: ...
+
+    async def search_scoped_memory(
+        self, query: str, *, scope: MemoryScope, limit: int = 20
+    ) -> list[MemoryEntry]: ...
+
+    async def delete_scoped_memory(self, entry_id: str, *, scope: MemoryScope) -> bool: ...
+
+
+__all__ = ["MemoryEntry", "MemoryKind", "MemoryScope", "MemoryStore", "ScopedMemoryStore"]

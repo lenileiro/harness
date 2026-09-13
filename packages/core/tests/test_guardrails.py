@@ -198,57 +198,9 @@ class TestNoGuardrails:
         assert any(isinstance(e, Done) for e in events)
 
 
+
 @pytest.mark.asyncio
 class TestGuardrailLeak:
-    async def test_parallel_guardrail_cancellation_leak(self, tmp_path: Path) -> None:
-        """
-        Verify that when a parallel guardrail trips, it doesn't leave un-cancelled
-        tasks running in the background.
-        """
-
-        class LeakyGuardrail:
-            name = "leaky_guardrail"
-            mode: GuardrailMode = "parallel"
-
-            def __init__(self):
-                self.was_cancelled = False
-
-            async def __call__(self, messages: list[Message]) -> GuardrailResult:
-                try:
-                    await asyncio.sleep(1.0)
-                    return GuardrailResult(tripped=False)
-                except asyncio.CancelledError:
-                    self.was_cancelled = True
-                    raise
-
-        adapter = MockAdapter("mock", scripts=[text_turn("hello")])
-        agent = make_agent(
-            {"mock": adapter},
-            guardrails=[LeakyGuardrail(), ParallelDenyGuardrail()],
-            default_cwd=str(tmp_path),
-        )
-
-        # We expect this to return quickly because ParallelDenyGuardrail
-        # should trip (it doesn't sleep) and trigger cancellation.
-        events = await collect(agent.run(RunRequest(prompt="blocked")))
-
-        tripped = [e for e in events if isinstance(e, GuardrailTrippedEvent)]
-        assert len(tripped) > 0
-        assert tripped[0].guardrail_name == "parallel_deny"
-
-        # Wait a bit to see if the leaky guardrail actually gets cancelled
-        await asyncio.sleep(0.1)
-
-        # Check if the leaky task was cancelled.
-        # Note: In a real system, we'd inspect the event loop or task registry,
-        # but here we rely on the side effect we injected.
-        # However, we need to access the specific instance of the guardrail.
-        # Let's refactor the test to capture the guardrail.
-        pass
-
-
-@pytest.mark.asyncio
-class TestGuardrailLeakCorrected:
     async def test_parallel_guardrail_cancellation_leak(self, tmp_path: Path) -> None:
         class LeakyGuardrail:
             name = "leaky_guardrail"

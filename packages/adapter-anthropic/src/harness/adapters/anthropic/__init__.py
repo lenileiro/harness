@@ -34,6 +34,37 @@ DEFAULT_BASE_URL = "https://api.anthropic.com"
 DEFAULT_MAX_TOKENS = 8096
 
 
+def _media_content(message: Message) -> str | list[dict[str, Any]]:
+    if not message.attachments:
+        return message.content or ""
+    blocks: list[dict[str, Any]] = []
+    for item in message.attachments:
+        if not item.model_visible:
+            continue
+        if item.kind == "image" and item.mime_type in {
+            "image/png",
+            "image/jpeg",
+            "image/gif",
+            "image/webp",
+        }:
+            block_type = "image"
+        elif item.kind == "file" and item.mime_type == "application/pdf":
+            block_type = "document"
+        else:
+            raise ConfigurationError(
+                f"Anthropic does not support attachment format {item.mime_type}"
+            )
+        source = (
+            {"type": "url", "url": item.url}
+            if item.url is not None
+            else {"type": "base64", "media_type": item.mime_type, "data": item.data}
+        )
+        blocks.append({"type": block_type, "source": source})
+    if message.content:
+        blocks.append({"type": "text", "text": message.content})
+    return blocks
+
+
 class AnthropicAdapter:
     """Streaming adapter for Anthropic's Messages API.
 
@@ -96,7 +127,7 @@ class AnthropicAdapter:
         )
 
     async def capabilities(self) -> Capabilities:
-        return Capabilities(streaming=True, tool_use=True)
+        return Capabilities(streaming=True, tool_use=True, input_media=["image", "file"])
 
     async def cancel(self, session_id: str) -> None:
         return None
@@ -131,6 +162,8 @@ class AnthropicAdapter:
         i = 0
         while i < len(messages):
             msg = messages[i]
+            if msg.attachments and msg.role not in {"user", "tool"}:
+                raise ConfigurationError("Anthropic media is supported in user and tool messages")
 
             if msg.role == "system":
                 if msg.content:
@@ -150,7 +183,7 @@ class AnthropicAdapter:
                         {
                             "type": "tool_result",
                             "tool_use_id": t.tool_call_id or "",
-                            "content": t.content or "",
+                            "content": _media_content(t),
                         }
                     )
                     i += 1
@@ -180,7 +213,7 @@ class AnthropicAdapter:
                 i += 1
                 continue
 
-            wire.append({"role": "user", "content": msg.content or ""})
+            wire.append({"role": "user", "content": _media_content(msg)})
             i += 1
 
         if not system_blocks:

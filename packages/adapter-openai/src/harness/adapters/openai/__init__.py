@@ -26,7 +26,7 @@ from harness.core import (
     RateLimitError,
     TimeoutError,
 )
-from harness.core._openai import message_to_wire, parse_sse_stream
+from harness.core._openai import messages_to_wire, parse_sse_stream
 
 __version__ = "0.0.0"
 
@@ -37,7 +37,9 @@ DEFAULT_BASE_URL = "https://api.openai.com/v1"
 def inspect_codex_openai_auth() -> dict[str, str | bool] | None:
     """Return minimal Codex auth metadata without exposing secrets."""
 
-    auth_path = Path.home() / ".codex" / "auth.json"
+    auth_path = (
+        Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex"))).expanduser() / "auth.json"
+    )
     if not auth_path.exists():
         return None
     try:
@@ -68,7 +70,12 @@ def load_codex_openai_api_key() -> str | None:
     if meta is None:
         return None
     try:
-        raw = json.loads((Path.home() / ".codex" / "auth.json").read_text(encoding="utf-8"))
+        raw = json.loads(
+            (
+                Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex"))).expanduser()
+                / "auth.json"
+            ).read_text(encoding="utf-8")
+        )
     except (OSError, json.JSONDecodeError):
         return None
     if not isinstance(raw, dict):
@@ -130,7 +137,7 @@ class OpenAIAdapter:
         )
 
     async def capabilities(self) -> Capabilities:
-        return Capabilities(streaming=True, tool_use=True)
+        return Capabilities(streaming=True, tool_use=True, input_media=["image", "audio", "file"])
 
     async def cancel(self, session_id: str) -> None:
         return None
@@ -149,7 +156,7 @@ class OpenAIAdapter:
     ) -> AsyncIterator[Event]:
         payload: dict[str, Any] = {
             "model": model,
-            "messages": [message_to_wire(m) for m in messages],
+            "messages": messages_to_wire(messages),
             "stream": True,
         }
         if tools:

@@ -11,10 +11,11 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import os
 import shutil
 from collections.abc import AsyncIterator
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from harness.core import (
     Capabilities,
@@ -40,7 +41,9 @@ _PARTIAL_TOOL_PROGRESS_INTERVAL = 10.0
 
 
 def _auth_path() -> Path:
-    return Path.home() / ".codex" / "auth.json"
+    return (
+        Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex"))).expanduser() / "auth.json"
+    )
 
 
 def inspect_codex_cli_auth() -> dict[str, str | bool] | None:
@@ -191,6 +194,7 @@ class CodexAdapter:
         timeout: float = 600.0,
         idle_timeout: float = 120.0,
         ignore_user_config: bool = True,
+        mode: Literal["exec", "app-server"] = "exec",
     ) -> None:
         self.codex_bin = codex_bin or shutil.which("codex")
         if not self.codex_bin:
@@ -202,6 +206,14 @@ class CodexAdapter:
         self.timeout = timeout
         self.idle_timeout = idle_timeout
         self.ignore_user_config = ignore_user_config
+        self.mode = mode
+        from harness.adapters.codex.app_server import AppServerBridge
+
+        self._bridge = (
+            AppServerBridge(codex_bin=self.codex_bin, timeout=timeout, idle_timeout=idle_timeout)
+            if mode == "app-server"
+            else None
+        )
 
     def stream(
         self,
@@ -213,16 +225,41 @@ class CodexAdapter:
         max_tokens: int | None = None,
         **kwargs: Any,
     ) -> AsyncIterator[Event]:
-        del tools, temperature, max_tokens, kwargs
+        if self._bridge is not None:
+            return self._bridge.stream(
+                session_id=kwargs.pop("session_id", ""),
+                model=model,
+                messages=messages,
+                tools=tools,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                **kwargs,
+            )
+        if temperature is not None or max_tokens is not None:
+            raise ConfigurationError(
+                "Codex exec does not expose temperature or max_tokens; leave them unset "
+                "or choose an API adapter"
+            )
+        if any(a.model_visible for message in messages for a in message.attachments):
+            raise ConfigurationError("Codex exec does not support media; select app-server mode")
         prompt = _messages_to_codex_prompt(messages)
         return self._stream(model=model, prompt=prompt)
 
     async def capabilities(self) -> Capabilities:
-        return Capabilities(streaming=True, tool_use=True)
+        if self._bridge is not None:
+            return await self._bridge.capabilities()
+        return Capabilities(streaming=True, tool_use=True, external_tools=False)
 
     async def cancel(self, session_id: str) -> None:
-        del session_id
-        return None
+        await self.end_run(session_id)
+
+    async def submit_tool_result(self, session_id: str, result: ToolResult) -> None:
+        if self._bridge is not None:
+            await self._bridge.submit_tool_result(session_id, result)
+
+    async def end_run(self, session_id: str) -> None:
+        if self._bridge is not None:
+            await self._bridge.end_run(session_id)
 
     async def _stream(self, *, model: str, prompt: str) -> AsyncIterator[Event]:
         cmd = [

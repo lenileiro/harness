@@ -178,6 +178,7 @@ class RabbitHole:
     created_at: str = field(default_factory=_utcnow)
     updated_at: str = field(default_factory=_utcnow)
     change_intent: ChangeIntent | None = None
+    source_unknown_id: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -193,6 +194,7 @@ class RabbitHole:
             "created_at": self.created_at,
             "updated_at": self.updated_at,
             "change_intent": self.change_intent.to_dict() if self.change_intent else None,
+            "source_unknown_id": self.source_unknown_id,
         }
 
     @classmethod
@@ -212,6 +214,7 @@ class RabbitHole:
             created_at=str(data.get("created_at") or _utcnow()),
             updated_at=str(data.get("updated_at") or _utcnow()),
             change_intent=ChangeIntent.from_dict(data.get("change_intent")),
+            source_unknown_id=str(data.get("source_unknown_id") or ""),
         )
 
 

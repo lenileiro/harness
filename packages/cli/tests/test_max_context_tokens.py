@@ -78,7 +78,7 @@ async def _preload_chunky_session(db: Path, *, session_id: str, n_messages: int)
 
     storage = SQLiteStorage(path=db)
     try:
-        big = "word " * 200
+        big = "word " * 1000
         msgs: list[Message] = [Message(role="system", content="sys")]
         for i in range(n_messages):
             msgs.append(Message(role="user" if i % 2 == 0 else "assistant", content=big))
@@ -86,7 +86,7 @@ async def _preload_chunky_session(db: Path, *, session_id: str, n_messages: int)
             id=session_id,
             provider="ollama",
             model="m",
-            cwd=Path.cwd(),
+            cwd=db.parent,
             messages=msgs,
         )
         await storage.save(session)
@@ -115,12 +115,13 @@ class TestMaxContextTokensFlag:
                 str(db_path),
                 "--yes",
                 "--max-context-tokens",
-                "200",
+                "10000",
             ]
         )
         assert result.exit_code == 0, result.stdout
         # The pre-loaded session had 13 messages + the new user "more" = 14.
-        # With a 200-token budget the pruner must drop several middle messages.
+        # The budget includes injected instructions/tool schemas, leaving less
+        # than 10,000 tokens for this 12,000-token transcript.
         assert RecordingAdapter.call_count == 1
         assert len(RecordingAdapter.last_messages) < 14
 
@@ -170,7 +171,18 @@ class TestMaxContextTokensFlag:
             ]
         )
         assert result.exit_code == 0, result.stdout
-        # Without --max-context-tokens, the full history (13 + new user "more")
-        # is forwarded to the adapter untouched.
+        # Without a budget, every stored message reaches the adapter unchanged,
+        # alongside the shared runtime instructions.
         assert RecordingAdapter.call_count == 1
-        assert len(RecordingAdapter.last_messages) == 14
+        expected = [
+            Message(role="system", content="sys"),
+            *[
+                Message(role="user" if i % 2 == 0 else "assistant", content="word " * 1000)
+                for i in range(12)
+            ],
+            Message(role="user", content="more"),
+        ]
+        assert RecordingAdapter.last_messages[-len(expected) :] == expected
+        assert all(
+            message.role == "system" for message in RecordingAdapter.last_messages[: -len(expected)]
+        )

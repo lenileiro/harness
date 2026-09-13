@@ -41,6 +41,7 @@ from evals.artifacts import (
     persist_artifacts as _persist_artifacts,
 )
 from evals.failure_analyzer import persist_harness_adjustments
+from evals.isolation import prepare_agent_process, run_agent_process
 from evals.types import FixtureMeta, RunOutcome
 
 discover_fixtures = _discovery.discover_fixtures
@@ -76,9 +77,12 @@ def _timeout_transcript(exc: subprocess.TimeoutExpired, *, command_label: str) -
     return "".join(piece for piece in pieces if piece)
 
 
-def _eval_env(*, work: Path) -> dict[str, str]:
+def _eval_env(*, work: Path, evaluator: bool = False) -> dict[str, str]:
     env = os.environ.copy()
-    env["HARNESS_EVAL_PROJECT_ROOT"] = str(_project_root())
+    env.pop("HARNESS_EVAL_PROJECT_ROOT", None)
+    env.pop("HARNESS_EXPERIENCE_ROOTS", None)
+    if evaluator:
+        env["HARNESS_EVAL_PROJECT_ROOT"] = str(_project_root())
     env["HARNESS_EVAL_WORKSPACE"] = str(work)
     return env
 
@@ -149,9 +153,9 @@ def _agent_cmd(
             "--allowedTools",
             "Read,Write,Edit,Bash",
         ]
-    harness_cmd = harness_bin or shutil.which("harness") or "harness"
+    harness_cmd = [harness_bin] if harness_bin else [sys.executable, "-m", "harness.cli"]
     cmd = [
-        harness_cmd,
+        *harness_cmd,
         "run",
         task_text.strip(),
         "--cwd",
@@ -221,11 +225,11 @@ def _copy_fixture_for_run(src: Path, dest: Path) -> None:
     """
 
     def _ignore(_: str, names: list[str]) -> set[str]:
-        ignored = {"EVAL.md", "fixture.yaml"}
+        ignored = {"EVAL.md", "fixture.yaml", ".git"}
         ignored.update(name for name in names if _is_generated_cache_path(name))
         return ignored
 
-    shutil.copytree(src, dest, ignore=_ignore)
+    shutil.copytree(src, dest, ignore=_ignore, symlinks=True)
 
 
 def _fixture_has_workspace_payload(src: Path) -> bool:
@@ -241,11 +245,27 @@ def _fixture_has_workspace_payload(src: Path) -> bool:
 
 def _copy_repo_for_run(dest: Path) -> None:
     project_root = _project_root()
+    public_entries = {
+        "packages",
+        "docs",
+        "demos",
+        "README.md",
+        "AGENT.md",
+        "AGENTS.md",
+        "CLAUDE.md",
+        "pyproject.toml",
+        "uv.lock",
+        ".gitignore",
+        ".env.example",
+    }
 
     def _ignore(current_dir: str, names: list[str]) -> set[str]:
         current = Path(current_dir)
         ignored: set[str] = set()
         for name in names:
+            if current == project_root and name not in public_entries:
+                ignored.add(name)
+                continue
             candidate = current / name
             rel = candidate.relative_to(project_root)
             rel_text = rel.as_posix()
@@ -269,6 +289,7 @@ def _copy_repo_for_run(dest: Path) -> None:
         project_root,
         dest,
         ignore=_ignore,
+        symlinks=True,
     )
 
 
@@ -279,7 +300,13 @@ def _prepare_workspace_for_run(fixture: FixtureMeta, work: Path) -> None:
     _copy_repo_for_run(work)
     workspace_overlay = fixture.path / "workspace"
     if workspace_overlay.is_dir():
-        shutil.copytree(workspace_overlay, work, dirs_exist_ok=True)
+        shutil.copytree(
+            workspace_overlay,
+            work,
+            dirs_exist_ok=True,
+            symlinks=True,
+            ignore=shutil.ignore_patterns(".git"),
+        )
 
 
 def run_fixture(
@@ -304,7 +331,10 @@ def run_fixture(
 
         # Create a clean git baseline so git diff HEAD captures only agent changes.
         # Write a .gitignore first so generated cache directories do not pollute the diff.
-        (work / ".gitignore").write_text(_CACHE_GITIGNORE, encoding="utf-8")
+        gitignore = work / ".gitignore"
+        if gitignore.is_symlink():
+            gitignore.unlink()
+        gitignore.write_text(_CACHE_GITIGNORE, encoding="utf-8")
         subprocess.run(
             ["git", "-c", "init.defaultBranch=main", "init"],
             cwd=work,
@@ -334,7 +364,9 @@ def run_fixture(
             fixture.task_text,
             work,
             harness_bin,
-            verify_command=fixture.verify_command,
+            # Fixture grading is evaluator-only. The agent can discover and run
+            # ordinary public checks without receiving the grading entry point.
+            verify_command=None,
             variant=variant,
             phases=fixture.phases,
             behavior_category=fixture.rules.behavior_category or fixture.family,
@@ -342,23 +374,17 @@ def run_fixture(
             config_path=config_path,
         )
         agent_started = time.perf_counter()
-        agent_env = _eval_env(work=work)
-        experience_root = (_find_evals_root() / "runs").resolve()
-        existing_roots = [
-            raw.strip()
-            for raw in agent_env.get("HARNESS_EXPERIENCE_ROOTS", "").split(os.pathsep)
-            if raw.strip()
-        ]
-        if str(experience_root) not in existing_roots:
-            existing_roots.append(str(experience_root))
-        agent_env["HARNESS_EXPERIENCE_ROOTS"] = os.pathsep.join(existing_roots)
         agent_exit_code = 0
         try:
-            agent_result = subprocess.run(
+            isolated_cmd, agent_env = prepare_agent_process(
                 cmd,
+                work=work,
+                project_root=_project_root(),
+                config_path=config_path,
+            )
+            agent_result = run_agent_process(
+                isolated_cmd,
                 cwd=work,
-                capture_output=True,
-                text=True,
                 timeout=agent_timeout,
                 env=agent_env,
             )
@@ -367,6 +393,9 @@ def run_fixture(
         except subprocess.TimeoutExpired as exc:
             agent_exit_code = _TIMEOUT_EXIT_CODE
             transcript = _timeout_transcript(exc, command_label="agent")
+        except (OSError, RuntimeError) as exc:
+            agent_exit_code = 1
+            transcript = f"Agent isolation failed: {exc}\n"
         agent_duration = time.perf_counter() - agent_started
 
         # Capture what the agent changed.
@@ -383,7 +412,7 @@ def run_fixture(
         # test, cargo, jest, ...) rather than hardcoding pytest here — the
         # harness eval framework is language-agnostic.
         verify_started = time.perf_counter()
-        verify_env = _eval_env(work=work)
+        verify_env = _eval_env(work=work, evaluator=True)
         if not fixture.verify_command.strip():
             test_output = (
                 "fixture verification command missing: declare verify_command or "

@@ -10,10 +10,12 @@ from harness.core.adapter import Adapter
 from harness.core.agent_iter import (
     AgentRun,
     AgentRunStep,
+    FailureStep,
     FinalResponseStep,
     ModelRequestStep,
     ToolCallStep,
     ToolResultStep,
+    VerificationStep,
 )
 from harness.core.approval import (
     ApprovalOutcome,
@@ -130,7 +132,8 @@ from harness.core.guardrails import Guardrail, GuardrailMode, GuardrailResult
 from harness.core.handoff import HandoffTool
 from harness.core.inspiration import ExternalSource, InspirationNote
 from harness.core.loop_detector import LoopDetector, LoopFinding, LoopPattern
-from harness.core.memory import MemoryEntry, MemoryKind, MemoryStore
+from harness.core.memory import MemoryEntry, MemoryKind, MemoryScope, MemoryStore, ScopedMemoryStore
+from harness.core.mission_execution import execute_mission_agents
 from harness.core.mission_models import (
     Milestone,
     Mission,
@@ -281,6 +284,7 @@ from harness.core.schemas import (
     ApprovalDecision,
     Capabilities,
     EffectScope,
+    MediaAttachment,
     Message,
     Note,
     PhaseStatus,
@@ -294,6 +298,7 @@ from harness.core.schemas import (
     VerificationResult,
 )
 from harness.core.secret_redaction import has_secrets, redact_secrets
+from harness.core.session_search import ConversationSearchStore, SessionSearchResult
 from harness.core.shared_queue import (
     SharedWorkItem,
     build_mission_work_queue,
@@ -301,6 +306,14 @@ from harness.core.shared_queue import (
     build_shared_work_queue,
 )
 from harness.core.shell_safety import check_dangerous_command
+from harness.core.skills import (
+    Skill,
+    SkillError,
+    SkillLibrary,
+    SkillReadTool,
+    default_skill_paths,
+    install_skill,
+)
 from harness.core.storage import Storage
 from harness.core.telemetry import configure_logging, get_logger, span
 from harness.core.tool_entry import ToolBuildContext, ToolSpec
@@ -313,6 +326,12 @@ from harness.core.tools import (
     Tool,
     ToolRegistry,
     tool_matches_phase,
+)
+from harness.core.tools_durable_memory import (
+    ConversationSearchTool,
+    DurableMemoryTool,
+    RecallMemoryArguments,
+    RecallMemoryTool,
 )
 from harness.core.tools_memory import NotesTool, PruneLedgerTool
 from harness.core.tools_messaging import CheckMessagesTool, NotifyTool
@@ -402,6 +421,8 @@ __all__ = [
     "ContextCompactor",
     "ContractRegistry",
     "ContractValidation",
+    "ConversationSearchStore",
+    "ConversationSearchTool",
     "CreateWorkItemTool",
     "Critic",
     "Critique",
@@ -414,6 +435,7 @@ __all__ = [
     "DocsAuditReport",
     "DomainProfile",
     "Done",
+    "DurableMemoryTool",
     "EffectScope",
     "EnvironmentContract",
     "ErrorEvent",
@@ -426,6 +448,7 @@ __all__ = [
     "ExperienceProvider",
     "ExternalSource",
     "FailoverPolicy",
+    "FailureStep",
     "FeatureItem",
     "FileCheckpointStore",
     "FileScopeVerifier",
@@ -459,8 +482,10 @@ __all__ = [
     "LoopDetector",
     "LoopFinding",
     "LoopPattern",
+    "MediaAttachment",
     "MemoryEntry",
     "MemoryKind",
+    "MemoryScope",
     "MemoryStore",
     "Message",
     "Milestone",
@@ -520,6 +545,8 @@ __all__ = [
     "Publication",
     "RabbitHole",
     "RateLimitError",
+    "RecallMemoryArguments",
+    "RecallMemoryTool",
     "RepairDirective",
     "RepairMode",
     "RepairOrchestrator",
@@ -545,10 +572,16 @@ __all__ = [
     "SchedulerRunRecord",
     "SchedulerStore",
     "SchedulerTickResult",
+    "ScopedMemoryStore",
     "Session",
+    "SessionSearchResult",
     "SessionStatus",
     "SharedWorkItem",
     "ShellVerifier",
+    "Skill",
+    "SkillError",
+    "SkillLibrary",
+    "SkillReadTool",
     "StallDetectedEvent",
     "StallError",
     "StateVerifier",
@@ -585,6 +618,7 @@ __all__ = [
     "Verification",
     "VerificationGateway",
     "VerificationResult",
+    "VerificationStep",
     "Verifier",
     "VerifierRouter",
     "VerifyBeforeDoneVerifier",
@@ -638,12 +672,14 @@ __all__ = [
     "default_procedure_paths",
     "default_research_root",
     "default_scheduler_root",
+    "default_skill_paths",
     "default_workflow_root",
     "dispatch_gateway_message",
     "domain_profile_names",
     "ensure_branch",
     "evaluate_evidence",
     "evaluate_node_evidence",
+    "execute_mission_agents",
     "execute_mission_burst",
     "execute_mission_milestone",
     "execute_next_mission_feature",
@@ -654,6 +690,7 @@ __all__ = [
     "get_domain_profile",
     "get_logger",
     "has_secrets",
+    "install_skill",
     "list_mission_reports",
     "listen",
     "load_default_experience_provider",

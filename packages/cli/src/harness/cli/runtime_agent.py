@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import AsyncIterator, Callable, Sequence
+from contextlib import AsyncExitStack, aclosing, asynccontextmanager
 from pathlib import Path
 from typing import Any, cast
 
@@ -51,7 +53,12 @@ from harness.core import (
     VerifyBeforeDoneVerifier,
     VerifyWorkTool,
 )
+from harness.core.clarification import QuestionStore
+from harness.core.memory import MemoryScope
+from harness.core.skills import SkillLibrary, default_skill_paths
+from harness.core.tools import Tool
 from harness.storage.memory import InMemoryStorage
+from harness.tools.mcp import MCPToolset
 
 _SPAWN_SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -94,6 +101,7 @@ class SpawnAgentsTool:
         max_workers: int = 3,
         approval_policy: ApprovalPolicy | None = None,
         approval_handler: ApprovalHandler | None = None,
+        inherit_from: Callable[[], Agent] | None = None,
     ) -> None:
         self._provider = provider
         self._model = model
@@ -105,6 +113,7 @@ class SpawnAgentsTool:
         self._max_workers = max_workers
         self._approval_policy = approval_policy or ApprovalPolicy(default="auto")
         self._approval_handler = approval_handler or AutoApprove()
+        self._inherit_from = inherit_from
         self.parameters_schema = _SPAWN_SCHEMA
 
     async def __call__(self, call: ToolCall) -> ToolResult:
@@ -118,9 +127,33 @@ class SpawnAgentsTool:
                 is_error=True,
             )
 
+        inherited_tools: ToolRegistry | None = None
+        approval_policy = self._approval_policy
+        approval_handler = self._approval_handler
+        if self._inherit_from is not None:
+            try:
+                parent = self._inherit_from()
+            except RuntimeError as exc:
+                return ToolResult(
+                    tool_call_id=call.id, name=self.name, content=str(exc), is_error=True
+                )
+            inherited_tools = parent.tools
+            approval_policy = parent.approval_policy
+            approval_handler = parent.approval_handler
+        elif self._config.execution is not None:
+            return ToolResult(
+                tool_call_id=call.id,
+                name=self.name,
+                content="Delegation with managed execution requires an active parent tool context.",
+                is_error=True,
+            )
+
         store = InMemoryStorage()
+        cleanup = AsyncExitStack()
 
         def agent_factory(role: AgentRole) -> Agent:
+            from harness.cli.runtime_helpers import AUTONOMOUS_CONTEXT_POLICY
+
             job_id = role.job_id or "_job_"
             item_id = role.item_id or "_item_"
             sub_tools = ToolRegistry()
@@ -129,44 +162,69 @@ class SpawnAgentsTool:
                 CheckMessagesTool(role=role.name, task_id=job_id, activity_store=store)
             )
 
+            # Borrow the effective parent tools, including backend replacements,
+            # wrappers, and exposure removals. Children never own these contexts.
+            # A standalone local tool retains its supplied builder for compatibility.
+            built = inherited_tools if inherited_tools is not None else self._build_tools(self._cwd)
+            discovery_names = ("read_file", "list_dir", "glob", "web_search", "fetch_url")
+            for name in discovery_names:
+                if (
+                    built.has(name)
+                    and getattr(built.get(name), "effect_scope", None) == "read_only"
+                ):
+                    sub_tools.register(built.get(name))
+
             if role.name == "planner":
                 sub_tools.register(ListWorkItemsTool(store, job_id))
                 sub_tools.register(CreateWorkItemTool(store, parent_id=job_id, cwd=self._cwd))
-                sub_tools.register(self._build_tools(self._cwd).get("list_dir"))  # type: ignore[arg-type]
             elif role.name.startswith("worker"):
-                built = self._build_tools(self._cwd)
-                for name in ("read_file", "list_dir", "glob", "shell"):
-                    sub_tools.register(built.get(name))  # type: ignore[arg-type]
+                if built.has("shell"):
+                    sub_tools.register(built.get("shell"))
                 sub_tools.register(ListWorkItemsTool(store, job_id))
                 sub_tools.register(CompleteWorkItemTool(store, item_id))
             else:
-                built = self._build_tools(self._cwd)
-                for name in ("read_file", "list_dir", "glob"):
-                    sub_tools.register(built.get(name))  # type: ignore[arg-type]
                 sub_tools.register(ListWorkItemsTool(store, job_id))
 
+            unavailable = [name for name in discovery_names if not sub_tools.has(name)]
+            discovery_context = (
+                "Use only the tools supplied for this role and the assigned workspace. "
+                "Inspect relevant repository instructions and local evidence before researching "
+                "remaining gaps. Tool errors are not evidence; use a supported alternative "
+                "or report the exact unresolved dependency."
+            )
+            if unavailable:
+                discovery_context += (
+                    " These discovery tools are unavailable in the inherited tool configuration: "
+                    + ", ".join(unavailable)
+                    + ". Only tools declared read-only qualify for discovery. "
+                    "Do not bypass their absence with an unapproved capability."
+                )
             adapter = self._build_adapter(self._provider, base_url=None, config=self._config)
             adapter = _align_adapter_cwd(self._provider, adapter, self._cwd)
-            return Agent(
+            agent = Agent(
                 adapters={self._provider: adapter},
                 tools=sub_tools,
                 storage=store,
                 failover=FailoverPolicy(chain=[self._provider]),
-                approval_policy=self._approval_policy,
-                approval_handler=self._approval_handler,
+                approval_policy=approval_policy,
+                approval_handler=approval_handler,
                 default_model=role.model or self._model,
                 default_cwd=str(self._cwd),
-                system_prompt=role.system_prompt,
+                system_prompt="\n\n".join(
+                    (AUTONOMOUS_CONTEXT_POLICY, role.system_prompt, discovery_context)
+                ),
             )
+            cleanup.push_async_callback(agent.aclose)
+            return agent
 
         planner_role = AgentRole(
             name="planner",
             system_prompt=(
                 "You are a Planner. Read the goal carefully and decompose it into "
                 "independent work items — one per distinct area the goal explicitly "
-                "asks about. Do NOT explore the whole project. Use list_dir or glob "
-                "only when you need to confirm which specific paths exist for a part "
-                "of the goal. Create as few items as needed. Stop immediately after "
+                "asks about. Inspect enough local context and authoritative sources to "
+                "make the assignments concrete; keep discovery scoped to the goal. "
+                "Create as few items as needed. Stop immediately after "
                 "calling create_work_item for each part."
             ),
         )
@@ -201,15 +259,16 @@ class SpawnAgentsTool:
         )
 
         reporter_text: list[str] = []
-        async for event in orchestrator.run(goal):
-            from harness.core import AgentEventWrapper, TextDelta
+        async with cleanup, aclosing(orchestrator.run(goal)) as events:
+            async for event in events:
+                from harness.core import AgentEventWrapper, TextDelta
 
-            if (
-                isinstance(event, AgentEventWrapper)
-                and event.role == "reporter"
-                and isinstance(event.event, TextDelta)
-            ):
-                reporter_text.append(event.event.text)
+                if (
+                    isinstance(event, AgentEventWrapper)
+                    and event.role == "reporter"
+                    and isinstance(event.event, TextDelta)
+                ):
+                    reporter_text.append(event.event.text)
 
         return ToolResult(
             tool_call_id=call.id,
@@ -248,7 +307,7 @@ def load_project_context(cwd: Path) -> str:
 
 
 def _align_adapter_cwd(provider: str, adapter: Adapter, cwd: Path) -> Adapter:
-    if provider == "codex" and hasattr(adapter, "cwd"):
+    if provider in {"codex", "claude"} and hasattr(adapter, "cwd"):
         adapter_with_cwd = cast(Any, adapter)
         adapter_with_cwd.cwd = cwd.resolve()
     return adapter
@@ -268,6 +327,7 @@ def build_agent(
     build_search_fn: Any,
     console: Any,
     inbox: bool = False,
+    pause_on_approval: bool = False,
     activity_store: Any = None,
     approval_store: ApprovalStore | None = None,
     verifier: Verifier | None = None,
@@ -293,10 +353,21 @@ def build_agent(
     project_context_enabled: bool = True,
     skip_builtin_verify_before_done: bool = False,
 ) -> Agent:
+    from harness.cli.runtime_helpers import AUTONOMOUS_CONTEXT_POLICY
+
+    system_prompt = "\n\n".join(part for part in (AUTONOMOUS_CONTEXT_POLICY, system_prompt) if part)
     if not chain:
         raise typer.BadParameter("provider chain is empty")
     if inbox and approval_store is None:
         raise typer.BadParameter("--inbox requires an approval_store (passed by _build_agent)")
+    if config.delegation_enabled and not auxiliary_tools_enabled:
+        raise typer.BadParameter(
+            "Standalone delegation requires a local agent; API children use the server's scoped delegation service"
+        )
+    if config.computer.enabled and not auxiliary_tools_enabled:
+        raise typer.BadParameter(
+            "Computer control is available only to an explicitly configured local agent"
+        )
 
     adapters: dict[str, Adapter] = {}
     for index, provider in enumerate(chain):
@@ -304,6 +375,12 @@ def build_agent(
         adapter = build_adapter(provider, base_url=provider_base_url, config=config)
         adapters[provider] = _align_adapter_cwd(provider, adapter, cwd)
 
+    from harness.core.paths import read_regular_file, user_home
+
+    persona_path = user_home() / "SOUL.md"
+    if project_context_enabled and persona_path.is_file():
+        persona = read_regular_file(persona_path, max_bytes=64_000).decode("utf-8")
+        system_prompt = "\n\n".join(part for part in (system_prompt, persona) if part)
     project_ctx = load_project_context(cwd) if project_context_enabled else ""
     if project_ctx and system_prompt:
         system_prompt = f"{system_prompt}\n\n{project_ctx}"
@@ -311,7 +388,239 @@ def build_agent(
         system_prompt = project_ctx
 
     tools = build_tools(cwd)
-    if auxiliary_tools_enabled:
+    execution_allowed = {tool.name for tool in tools.all()}
+    portal_names = config.portal.tool_names() if auxiliary_tools_enabled else set()
+    for name in portal_names:
+        if tools.has(name):
+            tools.unregister(name)
+    if "shell" in execution_allowed:
+        execution_allowed.update({"process", "verify_work"})
+    if config.execution is not None:
+        if not auxiliary_tools_enabled:
+            raise typer.BadParameter(
+                "Managed execution requires a local trusted agent; remote tool exposure must be configured separately"
+            )
+        for name in ("read_file", "write_file", "edit_file", "list_dir", "glob", "shell"):
+            if tools.has(name):
+                tools.unregister(name)
+    skill_library = None
+    if config.skills_enabled and project_context_enabled:
+        skill_roots = [(cwd / Path(p).expanduser()).resolve() for p in config.skill_paths]
+        skill_library = SkillLibrary.load(skill_roots + default_skill_paths(cwd.resolve()))
+    mcp_servers = tuple(server for server in config.mcp_servers if server.enabled)
+    if (
+        mcp_servers
+        and "codex" in chain
+        and config.provider("codex").get("mode", "exec") != "app-server"
+    ):
+        raise typer.BadParameter(
+            "Codex uses native tools and cannot dispatch configured Harness MCP tools. Choose an API provider."
+        )
+
+    managed_active = False
+
+    @asynccontextmanager
+    async def managed_tools() -> AsyncIterator[Sequence[Tool]]:
+        nonlocal managed_active
+
+        from harness.tools.browser import BrowserToolset
+        from harness.tools.execution import ExecutionToolset
+        from harness.tools.media import MediaConfig, MediaToolset
+
+        async with AsyncExitStack() as stack:
+            agent.session_tool_factory = None
+            managed: list[Tool] = []
+            if config.execution is not None:
+                execution = await stack.enter_async_context(
+                    ExecutionToolset(config.execution, cwd=cwd, verify_command=verify_command)
+                )
+                managed.extend(tool for tool in execution.tools if tool.name in execution_allowed)
+            if mcp_servers:
+                mcp = await stack.enter_async_context(MCPToolset(mcp_servers, cwd=cwd))
+                managed.extend(mcp.tools)
+            if config.browser is not None and "browser" not in portal_names:
+                browser = await stack.enter_async_context(BrowserToolset(config.browser, cwd=cwd))
+                managed.extend(browser.tools)
+            if config.computer.enabled:
+                from harness.tools.computer import ComputerToolset
+
+                computer = await stack.enter_async_context(
+                    ComputerToolset(config.computer, cwd=cwd)
+                )
+                managed.extend(computer.tools)
+            if config.media.enabled:
+                effective_media = config.media.model_copy(
+                    update={
+                        key: None
+                        for name, key in [
+                            ("image_generate", "image_model"),
+                            ("speech_generate", "speech_model"),
+                            ("audio_transcribe", "transcription_model"),
+                        ]
+                        if name in portal_names
+                    }
+                )
+                media = await stack.enter_async_context(MediaToolset(effective_media, cwd=cwd))
+                managed.extend(tool for tool in media.tools if tool.name not in portal_names)
+            if portal_names:
+                from harness.cli.account_auth import AccountAuth, OAuthAccountConfig
+                from harness.cli.portal_tools import PortalToolset
+
+                settings = config.provider(config.portal.provider)
+                account = AccountAuth(
+                    config.portal.provider,
+                    OAuthAccountConfig.model_validate(settings.get("oauth")),
+                    resource=settings.get("base_url", ""),
+                )
+                portal = await stack.enter_async_context(
+                    PortalToolset(config.portal, account, cwd=cwd)
+                )
+                managed.extend(portal.tools)
+            if config.delegation_enabled:
+                import hashlib
+                from dataclasses import replace
+
+                from harness.cli.gateway_tool_boundary import install_gateway_tool_boundary
+                from harness.server.delegation import LocalDelegationToolset
+                from harness.tools.computer import ComputerConfig
+
+                child_config = replace(
+                    config,
+                    execution=None,
+                    browser=None,
+                    computer=ComputerConfig(),
+                    media=MediaConfig(),
+                    mcp_servers=(),
+                    delegation_enabled=False,
+                    skills_enabled=False,
+                )
+                exposed = {
+                    "read_file",
+                    "write_file",
+                    "edit_file",
+                    "list_dir",
+                    "glob",
+                    "web_search",
+                    "fetch_url",
+                    "recall_memory",
+                    "search_sessions",
+                    "conversation_window",
+                }
+                if config.clarification_enabled:
+                    exposed.add("clarify")
+
+                def child_builder(context):
+                    child = build_agent(
+                        chain=chain,
+                        base_url=base_url,
+                        model=context.model or model,
+                        storage=context.storage,
+                        cwd=context.workspace,
+                        config=child_config,
+                        yes=False,
+                        build_adapter=build_adapter,
+                        build_tools=lambda path: _child_tools(path),
+                        build_search_fn=build_search_fn,
+                        console=console,
+                        inbox=True,
+                        pause_on_approval=True,
+                        approval_store=context.storage,
+                        activity_store=context.storage,
+                        memory_store=context.storage,
+                        auxiliary_tools_enabled=False,
+                        project_context_enabled=False,
+                        skip_builtin_verify_before_done=True,
+                    )
+                    install_gateway_tool_boundary(child, context.workspace)
+                    return child
+
+                def _child_tools(path):
+                    child_tools = build_tools(path)
+                    for tool in child_tools.all():
+                        if tool.name not in exposed:
+                            child_tools.unregister(tool.name)
+                    return child_tools
+
+                children = {}
+
+                async def bind_children(session):
+                    if session.id not in children:
+                        key = hashlib.sha256(session.id.encode()).hexdigest()[:24]
+                        children[session.id] = await stack.enter_async_context(
+                            LocalDelegationToolset(
+                                cwd / ".harness/delegation" / f"{key}.db",
+                                cwd,
+                                child_builder,
+                                limits=config.delegation_limits,
+                                exposed_tools=sorted(exposed),
+                            )
+                        )
+                    bound = await children[session.id].bind(session)
+                    return [
+                        tool
+                        for tool in bound
+                        if "write_file" in execution_allowed
+                        or "shell" in execution_allowed
+                        or getattr(tool, "effect_scope", None) in {"read_only", "session_ephemeral"}
+                    ]
+
+                agent.session_tool_factory = bind_children
+            if config.honcho.enabled and auxiliary_tools_enabled:
+                from harness.cli.honcho_tools import HonchoToolset
+
+                honcho = await stack.enter_async_context(HonchoToolset(config.honcho))
+                previous_factory = agent.session_tool_factory
+
+                async def bind_honcho(session):
+                    previous = await previous_factory(session) if previous_factory else []
+                    selected = [
+                        tool
+                        for tool in honcho.bind(session)
+                        if "write_file" in execution_allowed
+                        or "shell" in execution_allowed
+                        or getattr(tool, "effect_scope", None) in {"read_only", "session_ephemeral"}
+                    ]
+                    return [*previous, *selected]
+
+                agent.session_tool_factory = bind_honcho
+            if config.a2a.enabled and auxiliary_tools_enabled:
+                from harness.cli.a2a_tools import A2AToolset
+
+                peers = await stack.enter_async_context(A2AToolset(config.a2a))
+                previous_a2a_factory = agent.session_tool_factory
+
+                async def bind_peers(session):
+                    previous = await previous_a2a_factory(session) if previous_a2a_factory else []
+                    selected = [
+                        tool
+                        for tool in peers.bind(session)
+                        if "write_file" in execution_allowed
+                        or "shell" in execution_allowed
+                        or getattr(tool, "effect_scope", None) in {"read_only", "session_ephemeral"}
+                    ]
+                    return [*previous, *selected]
+
+                agent.session_tool_factory = bind_peers
+            if config.homeassistant.enabled and auxiliary_tools_enabled:
+                from harness.tools.homeassistant import HomeAssistantToolset
+
+                homeassistant = await stack.enter_async_context(
+                    HomeAssistantToolset(config.homeassistant)
+                )
+                managed.extend(homeassistant.tools)
+            if "write_file" not in execution_allowed and "shell" not in execution_allowed:
+                managed = [
+                    tool
+                    for tool in managed
+                    if getattr(tool, "effect_scope", None) in {"read_only", "session_ephemeral"}
+                ]
+            managed_active = True
+            try:
+                yield managed
+            finally:
+                managed_active = False
+
+    if auxiliary_tools_enabled and config.execution is None:
         tools.register(VerifyWorkTool(cwd=cwd, default_command=verify_command))
         if phases_enabled:
             tools.register(PhaseTool(activity_store=activity_store))
@@ -398,7 +707,15 @@ def build_agent(
     else:
         approval_handler = RichApprovalHandler(console=console, session_overrides=session_overrides)
 
-    if auxiliary_tools_enabled:
+    if auxiliary_tools_enabled and not config.delegation_enabled:
+
+        def spawn_parent() -> Agent:
+            if config.execution is not None and not managed_active:
+                raise RuntimeError(
+                    "Delegation with managed execution requires an active parent tool context."
+                )
+            return agent
+
         tools.register(
             SpawnAgentsTool(
                 provider=chain[0],
@@ -410,11 +727,12 @@ def build_agent(
                 build_search_fn=build_search_fn,
                 approval_policy=approval_policy,
                 approval_handler=approval_handler,
+                inherit_from=spawn_parent,
             )
         )
 
     multi = len(chain) > 1
-    return Agent(
+    agent = Agent(
         adapters=adapters,
         tools=tools,
         storage=storage,
@@ -429,12 +747,17 @@ def build_agent(
         approval_handler=approval_handler,
         activity_store=activity_store,
         approval_store=approval_store,
+        pause_on_approval=pause_on_approval,
+        question_store_factory=(lambda: QuestionStore(getattr(storage, "path", ":memory:")))
+        if config.clarification_enabled
+        else None,
         verifier=verifier,
         critic=critic,
         budget=budget,
         default_model=model,
         default_cwd=str(cwd),
         memory_store=memory_store,
+        memory_scope=MemoryScope(workspace=str(cwd)),
         planner=planner,
         predictor=predictor,
         repair=repair,
@@ -446,7 +769,27 @@ def build_agent(
         tips_provider=tips_provider,
         resume=resume,
         memory_tools_enabled=memory_tools_enabled,
+        skill_library=skill_library,
+        toolset_factory=managed_tools
+        if mcp_servers
+        or config.execution is not None
+        or config.browser is not None
+        or config.media.enabled
+        or config.computer.enabled
+        or config.delegation_enabled
+        or portal_names
+        or (
+            (config.honcho.enabled or config.homeassistant.enabled or config.a2a.enabled)
+            and auxiliary_tools_enabled
+        )
+        else None,
+        provider_models={
+            name: config.provider(name)["model"]
+            for name in chain
+            if isinstance(config.provider(name).get("model"), str)
+        },
     )
+    return agent
 
 
 __all__ = [

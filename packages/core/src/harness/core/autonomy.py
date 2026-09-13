@@ -19,8 +19,12 @@ from harness.core.pr_generation import (
 )
 from harness.core.promotion_candidates import PromotionCandidate
 from harness.core.research_models import Publication, RabbitHole
-from harness.core.research_scheduler import build_research_queue
-from harness.core.research_store import ResearchStore
+from harness.core.research_scheduler import (
+    ResearchQueueItem,
+    build_research_queue,
+    promotion_completed_stages,
+)
+from harness.core.research_store import ResearchStore, _write_json
 
 _RISK_ORDER = {"low": 0, "medium": 1, "high": 2}
 _DEFAULT_AUTONOMY_CHECKS = ("uv run harness eval validate",)
@@ -180,7 +184,42 @@ def execute_next_research_item(
     open_pr: bool = False,
     draft_pr: bool = True,
 ) -> AutonomyExecutionResult:
-    queue = build_research_queue(store)
+    with store.execution_lock():
+        return _execute_next_research_item(
+            store=store,
+            cwd=cwd,
+            max_risk=max_risk,
+            base_branch=base_branch,
+            create_branch=create_branch,
+            commit=commit,
+            push=push,
+            open_pr=open_pr,
+            draft_pr=draft_pr,
+        )
+
+
+def _execute_next_research_item(
+    *,
+    store: ResearchStore,
+    cwd: Path,
+    max_risk: str,
+    base_branch: str,
+    create_branch: bool,
+    commit: bool,
+    push: bool,
+    open_pr: bool,
+    draft_pr: bool,
+) -> AutonomyExecutionResult:
+    requested = {
+        "prepare": True,
+        "branch": create_branch,
+        "commit": commit,
+        "push": push,
+        "open_pr": open_pr,
+    }
+    queue = build_research_queue(
+        store, promotion_actions=tuple(name for name, enabled in requested.items() if enabled)
+    )
     if not queue:
         return AutonomyExecutionResult(
             status="no_work",
@@ -189,7 +228,57 @@ def execute_next_research_item(
             message="Research queue is empty.",
         )
 
-    item = queue[0]
+    def allowed_risk(queued) -> bool:
+        try:
+            if queued.kind == "promotion_candidate":
+                risk = store.load_promotion_candidate(queued.id).risk_level
+            elif queued.kind == "hypothesis":
+                risk = store.load_hypothesis(queued.id).risk_level
+            elif queued.kind in {"experiment_plan", "experiment_result"}:
+                plan_id = (
+                    store.load_experiment(queued.id).plan_id
+                    if queued.kind == "experiment_result"
+                    else queued.id
+                )
+                plan = store.load_experiment_plan(plan_id)
+                risk = store.load_hypothesis(plan.hypothesis_id).risk_level
+            else:
+                return True
+        except FileNotFoundError:
+            return False
+        return _risk_value(risk) <= _risk_value(max_risk)
+
+    eligible = [queued for queued in queue if allowed_risk(queued)]
+    if not eligible:
+        return AutonomyExecutionResult(
+            status="deferred",
+            queue_item_kind=queue[0].kind,
+            queue_item_id=queue[0].id,
+            message=f"No queued work has complete dependencies and risk within {max_risk!r}.",
+        )
+    deferred: list[AutonomyExecutionResult] = []
+    for item in eligible:
+        if item.kind != "promotion_candidate":
+            break
+        result = _execute_promotion_candidate(
+            item=item,
+            store=store,
+            cwd=cwd,
+            max_risk=max_risk,
+            base_branch=base_branch,
+            create_branch=create_branch,
+            commit=commit,
+            push=push,
+            open_pr=open_pr,
+            draft_pr=draft_pr,
+        )
+        if result.status != "deferred":
+            return result
+        deferred.append(result)
+    else:
+        # Every eligible candidate is blocked. Preserve its concrete evidence
+        # or review feedback instead of misreporting an empty queue.
+        return deferred[0]
     if item.kind == "unknown":
         unknown = store.load_unknown(item.id)
         theme = store.load_theme(unknown.theme_id)
@@ -202,6 +291,7 @@ def execute_next_research_item(
             related_sections=unknown.related_sections,
             tags=("autonomy", "continuation"),
             opened_by="autonomy",
+            source_unknown_id=unknown.id,
         )
         store.add_rabbit_hole(rabbit_hole)
         publication = Publication(
@@ -241,6 +331,8 @@ def execute_next_research_item(
             or f"Narrow {opportunity.title} into a testable next step.",
             risk_level="low" if opportunity.priority != "high" else "medium",
             change_mode=change_mode,
+            mission_id=opportunity.mission_id,
+            mission_feature_id=opportunity.mission_feature_id,
             created_by="autonomy",
         )
         store.add_hypothesis(hypothesis)
@@ -304,6 +396,7 @@ def execute_next_research_item(
                 f"Evidence: {hypothesis.expected_win or hypothesis.claim}"
             ),
             source_hypotheses=(hypothesis.id,),
+            source_experiments=(experiment.id,),
             target_files=plan.target_files,
             expected_metric=hypothesis.expected_win or "Promotable experiment result recorded.",
             validation_plan=(
@@ -340,6 +433,22 @@ def execute_next_research_item(
             ),
         )
 
+    raise AssertionError(f"unhandled research queue item {item.kind!r}")
+
+
+def _execute_promotion_candidate(
+    *,
+    item: ResearchQueueItem,
+    store: ResearchStore,
+    cwd: Path,
+    max_risk: str,
+    base_branch: str,
+    create_branch: bool,
+    commit: bool,
+    push: bool,
+    open_pr: bool,
+    draft_pr: bool,
+) -> AutonomyExecutionResult:
     candidate = store.load_promotion_candidate(item.id)
     if _risk_value(candidate.risk_level) > _risk_value(max_risk):
         return AutonomyExecutionResult(
@@ -353,9 +462,39 @@ def execute_next_research_item(
 
     draft = build_promotion_draft(candidate, base_branch=base_branch)
     candidate_dir = store.promotion_candidates_dir / candidate.id
-    json_path, body_path = write_promotion_draft(draft=draft, target_dir=candidate_dir)
+    execution_path = candidate_dir / "promotion_execution.json"
+    completed = promotion_completed_stages(store, candidate.id)
+    execution = (
+        json.loads(execution_path.read_text(encoding="utf-8")) if execution_path.is_file() else {}
+    )
+
+    def save_progress(stage: str | None = None, *, reason: str | None = None) -> None:
+        if stage is not None:
+            completed[stage] = True
+        if reason is not None and execution.get("deferred_reason") == reason and stage is None:
+            return
+        execution.update(
+            {
+                "status": "deferred" if reason else "prepared",
+                "created_at": execution.get("created_at") or _utcnow(),
+                "updated_at": _utcnow(),
+                "stages": dict(completed),
+                "branch_name": draft.branch_name,
+                "base_branch": base_branch,
+            }
+        )
+        if reason is None:
+            execution.pop("deferred_reason", None)
+        else:
+            execution["deferred_reason"] = reason
+        _write_json(execution_path, execution)
+
+    json_path, body_path = candidate_dir / "promotion_draft.json", candidate_dir / "PR_BODY.md"
+    if not completed.get("prepare") or not json_path.is_file() or not body_path.is_file():
+        json_path, body_path = write_promotion_draft(draft=draft, target_dir=candidate_dir)
     issues = _review_promotion_artifacts(candidate=candidate, draft=draft)
-    _write_promotion_review(target_dir=candidate_dir, candidate=candidate, issues=issues)
+    if not completed.get("prepare") or issues:
+        _write_promotion_review(target_dir=candidate_dir, candidate=candidate, issues=issues)
     if issues:
         opportunity = _create_revision_opportunity(store=store, candidate=candidate, issues=issues)
         store.add_opportunity(opportunity)
@@ -373,21 +512,52 @@ def execute_next_research_item(
             pr_body=body_path,
         )
 
+    if not completed.get("prepare"):
+        save_progress("prepare")
     if create_branch:
+        # A recorded branch creation does not mean this workspace is still on
+        # that branch. Restore its checkout before any requested later action.
         ensure_branch(cwd=cwd, branch_name=draft.branch_name, base_branch=base_branch)
-    if commit:
-        commit_paths(cwd=cwd, message=draft.commit_message, paths=candidate.target_files)
-    if push:
-        push_branch(cwd=cwd, branch_name=draft.branch_name)
-    if open_pr:
-        create_pull_request(
-            cwd=cwd,
-            title=draft.pr_title,
-            body_path=body_path,
-            base_branch=base_branch,
-            head_branch=draft.branch_name,
-            draft=draft_pr,
-        )
+        if not completed.get("branch"):
+            save_progress("branch")
+
+    from harness.core.promotion_evidence import (
+        PromotionEvidenceError,
+        require_promotion_evidence,
+    )
+
+    for stage, requested in (("commit", commit), ("push", push), ("open_pr", open_pr)):
+        if not requested or completed.get(stage):
+            continue
+        try:
+            require_promotion_evidence(candidate=candidate, store=store, cwd=cwd)
+        except PromotionEvidenceError as exc:
+            save_progress(reason=str(exc))
+            return AutonomyExecutionResult(
+                status="deferred",
+                queue_item_kind=item.kind,
+                queue_item_id=item.id,
+                message=str(exc),
+                branch_name=draft.branch_name,
+                draft_json=json_path,
+                pr_body=body_path,
+            )
+        if stage == "commit":
+            commit_paths(cwd=cwd, message=draft.commit_message, paths=candidate.target_files)
+        elif stage == "push":
+            push_branch(cwd=cwd, branch_name=draft.branch_name)
+        else:
+            create_pull_request(
+                cwd=cwd,
+                title=draft.pr_title,
+                body_path=body_path,
+                base_branch=base_branch,
+                head_branch=draft.branch_name,
+                draft=draft_pr,
+            )
+        # Persist each completed action before starting the next one. A failed
+        # later hook or push must not erase a commit already performed.
+        save_progress(stage)
 
     return AutonomyExecutionResult(
         status="executed",

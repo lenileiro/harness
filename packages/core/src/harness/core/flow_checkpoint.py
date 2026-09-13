@@ -19,23 +19,41 @@ Example::
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
+import os
+import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Protocol, runtime_checkable
+from typing import Literal, Protocol, runtime_checkable
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class FlowCheckpoint(BaseModel):
     """Serialised snapshot of a flow's state after a ``@persist`` step."""
 
+    version: Literal[1, 2] = 1
+    """Missing version denotes the legacy state-only checkpoint format."""
     flow_id: str
     step_name: str
     state_json: str
+    executed_steps: list[str] | None = None
+    pending_steps: list[str] | None = None
+    graph_fingerprint: str | None = None
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC),
     )
+
+    @model_validator(mode="after")
+    def validate_frontier(self) -> FlowCheckpoint:
+        if self.version == 2 and (
+            self.executed_steps is None
+            or self.pending_steps is None
+            or self.graph_fingerprint is None
+        ):
+            raise ValueError("version 2 checkpoint requires a complete execution frontier")
+        return self
 
 
 @runtime_checkable
@@ -79,9 +97,22 @@ class FileCheckpointStore:
         return self._base / flow_id / f"{step_name}.json"
 
     async def save(self, checkpoint: FlowCheckpoint) -> None:
+        await asyncio.to_thread(self._save, checkpoint)
+
+    def _save(self, checkpoint: FlowCheckpoint) -> None:
         path = self._path(checkpoint.flow_id, checkpoint.step_name)
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(checkpoint.model_dump_json())
+        temporary: str | None = None
+        try:
+            with tempfile.NamedTemporaryFile(mode="w", dir=path.parent, delete=False) as file:
+                temporary = file.name
+                file.write(checkpoint.model_dump_json())
+                file.flush()
+                os.fsync(file.fileno())
+            os.replace(temporary, path)
+        finally:
+            if temporary is not None:
+                Path(temporary).unlink(missing_ok=True)
 
     async def load(self, flow_id: str, step_name: str) -> FlowCheckpoint | None:
         path = self._path(flow_id, step_name)

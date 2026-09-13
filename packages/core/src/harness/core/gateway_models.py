@@ -55,6 +55,51 @@ class GatewayReply:
 
 
 @dataclass(frozen=True, slots=True)
+class GatewayRuntimeBinding:
+    """Immutable owner and execution settings for one remote runtime session."""
+
+    session_id: str
+    gateway_session_id: str
+    transport: str
+    user_id: str
+    thread_id: str
+    provider: str
+    model: str
+    max_steps: int = 20
+    local_only: bool = False
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "session_id": self.session_id,
+            "gateway_session_id": self.gateway_session_id,
+            "transport": self.transport,
+            "user_id": self.user_id,
+            "thread_id": self.thread_id,
+            "provider": self.provider,
+            "model": self.model,
+            "max_steps": self.max_steps,
+            "local_only": self.local_only,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> GatewayRuntimeBinding:
+        return cls(
+            session_id=str(payload["session_id"]),
+            gateway_session_id=str(payload["gateway_session_id"]),
+            transport=str(payload["transport"]),
+            user_id=str(payload["user_id"]),
+            thread_id=str(payload["thread_id"]),
+            provider=str(payload["provider"]),
+            model=str(payload["model"]),
+            max_steps=int(payload.get("max_steps", 20)),
+            local_only=bool(payload.get("local_only", False)),
+        )
+
+    def belongs_to(self, *, transport: str, user_id: str, thread_id: str) -> bool:
+        return (self.transport, self.user_id, self.thread_id) == (transport, user_id, thread_id)
+
+
+@dataclass(frozen=True, slots=True)
 class GatewaySessionBinding:
     id: str
     transport: str
@@ -162,8 +207,8 @@ class GatewayUserProfile:
         raw_metadata = payload.get("metadata", {})
         return cls(
             id=str(payload.get("id", "")).strip(),
-            transport=str(payload.get("transport", "")).strip(),
-            user_id=str(payload.get("user_id", "")).strip(),
+            transport=str(payload.get("transport", "")),
+            user_id=str(payload.get("user_id", "")),
             active_work=[
                 GatewayWorkRef.from_dict(item) for item in raw_active_work if isinstance(item, dict)
             ],
@@ -178,6 +223,7 @@ class GatewayUserProfile:
 __all__ = [
     "GatewayMessage",
     "GatewayReply",
+    "GatewayRuntimeBinding",
     "GatewaySessionBinding",
     "GatewayUserProfile",
     "GatewayWorkRef",

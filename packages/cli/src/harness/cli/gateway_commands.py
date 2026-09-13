@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sys
 from pathlib import Path
 
 import typer
@@ -30,6 +31,7 @@ from harness.core.gateway_whatsapp import (
     send_whatsapp_text_message,
     start_whatsapp_bridge,
 )
+from harness.core.schemas import MediaAttachment
 
 console = Console()
 
@@ -96,8 +98,23 @@ def gateway_receive_command(
     cwd: Path | None = typer.Option(None, "--cwd"),
     max_steps: int = typer.Option(20, "--max-steps"),
     json_output: bool = typer.Option(False, "--json"),
+    attachments_stdin: bool = typer.Option(
+        False,
+        "--attachments-stdin",
+        help="Read a bounded JSON attachment list from standard input.",
+    ),
 ) -> None:
+    """Handle chat or approvals/approve <id>/deny <id> in the requesting conversation."""
     working_dir = (cwd or Path.cwd()).resolve()
+    attachments: list[MediaAttachment] = []
+    if attachments_stdin:
+        raw = sys.stdin.buffer.read(30 * 1024 * 1024 + 1)
+        if len(raw) > 30 * 1024 * 1024:
+            raise typer.BadParameter("Attachment input exceeds 30 MiB")
+        payload = json.loads(raw)
+        if not isinstance(payload, list) or len(payload) > 16:
+            raise typer.BadParameter("Expected at most 16 attachments")
+        attachments = [MediaAttachment.model_validate(item) for item in payload]
     payload = asyncio.run(
         _run_gateway_receive_payload(
             working_dir=working_dir,
@@ -106,6 +123,7 @@ def gateway_receive_command(
             user_id=user_id,
             thread_id=thread_id,
             max_steps=max_steps,
+            attachments=attachments,
         )
     )
     if json_output:

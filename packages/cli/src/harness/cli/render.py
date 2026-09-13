@@ -153,6 +153,11 @@ def _render_approval(approval: PendingApproval) -> None:
         )
     if approval.replayed_at:
         lines.append(f"[dim]replayed {_ago(approval.replayed_at)}[/dim]")
+    elif approval.replay_claimed_at:
+        lines.append(
+            "[yellow]Execution was claimed but no completed outcome is recorded. "
+            "Inspect the external action before manual recovery; automatic replay is disabled.[/yellow]"
+        )
     console.print(Panel("\n".join(lines), title="approval", expand=False))
 
     if approval.arguments:

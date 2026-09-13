@@ -16,17 +16,28 @@ Steps map to internal events as follows:
 - :class:`ToolCallStep`      ← :class:`~harness.core.events.ToolCallEvent`
 - :class:`ToolResultStep`    ← :class:`~harness.core.events.ToolResultEvent`
 - :class:`FinalResponseStep` ← :class:`~harness.core.events.Done`
+- :class:`FailureStep`       ← runtime errors and guardrail stops
+- :class:`VerificationStep`  ← post-response verification verdicts
 """
 
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator, AsyncIterator
+from contextlib import aclosing
 from typing import TYPE_CHECKING
 
 from pydantic import BaseModel
 
-from harness.core.events import Done, ModelRequestEvent, ToolCallEvent, ToolResultEvent
-from harness.core.schemas import Message, ToolCall, ToolResult
+from harness.core.events import (
+    Done,
+    ErrorEvent,
+    GuardrailTrippedEvent,
+    ModelRequestEvent,
+    ToolCallEvent,
+    ToolResultEvent,
+    Verification,
+)
+from harness.core.schemas import Message, ToolCall, ToolResult, VerificationResult
 
 if TYPE_CHECKING:
     from harness.core.runtime import Agent
@@ -57,12 +68,33 @@ class ToolResultStep(BaseModel):
 
 
 class FinalResponseStep(BaseModel):
-    """The LLM produced a final text response (no tool calls)."""
+    """A model response; continue iterating for verification and run failures."""
 
     text: str
 
 
-AgentRunStep = ModelRequestStep | ToolCallStep | ToolResultStep | FinalResponseStep
+class FailureStep(BaseModel):
+    """A runtime failure or guardrail stop, retaining error classification."""
+
+    error: str
+    kind: str
+    recoverable: bool = False
+
+
+class VerificationStep(BaseModel):
+    """A verifier's verdict, including unsuccessful repair attempts."""
+
+    result: VerificationResult
+
+
+AgentRunStep = (
+    ModelRequestStep
+    | ToolCallStep
+    | ToolResultStep
+    | FinalResponseStep
+    | FailureStep
+    | VerificationStep
+)
 
 
 # ---------------------------------------------------------------------------
@@ -98,22 +130,33 @@ class AgentRun:
         return self._gen
 
     async def _iterate(self) -> AsyncGenerator[AgentRunStep, None]:
-        async for event in self._agent._run(self._request):
-            if isinstance(event, ModelRequestEvent):
-                yield ModelRequestStep(messages=event.messages)
-            elif isinstance(event, ToolCallEvent):
-                yield ToolCallStep(tool_call=event.call)
-            elif isinstance(event, ToolResultEvent):
-                yield ToolResultStep(tool_result=event.result)
-            elif isinstance(event, Done) and event.final_message is not None:
-                yield FinalResponseStep(text=event.final_message.content or "")
+        async with aclosing(self._agent._run(self._request)) as stream:
+            async for event in stream:
+                if isinstance(event, ModelRequestEvent):
+                    yield ModelRequestStep(messages=event.messages)
+                elif isinstance(event, ToolCallEvent):
+                    yield ToolCallStep(tool_call=event.call)
+                elif isinstance(event, ToolResultEvent):
+                    yield ToolResultStep(tool_result=event.result)
+                elif isinstance(event, Done) and event.final_message is not None:
+                    yield FinalResponseStep(text=event.final_message.content or "")
+                elif isinstance(event, ErrorEvent):
+                    yield FailureStep(
+                        error=event.error, kind=event.kind, recoverable=event.recoverable
+                    )
+                elif isinstance(event, GuardrailTrippedEvent):
+                    yield FailureStep(error=event.reason, kind="guardrail")
+                elif isinstance(event, Verification):
+                    yield VerificationStep(result=event.result)
 
 
 __all__ = [
     "AgentRun",
     "AgentRunStep",
+    "FailureStep",
     "FinalResponseStep",
     "ModelRequestStep",
     "ToolCallStep",
     "ToolResultStep",
+    "VerificationStep",
 ]

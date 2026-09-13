@@ -9,6 +9,25 @@ import pytest
 
 
 @pytest.fixture(autouse=True)
+def _isolated_harness_config(
+    tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Keep the developer's real config out of the suite.
+
+    `default_config_path()` resolves `$HARNESS_CONFIG`, then
+    `$XDG_CONFIG_HOME/harness/config.toml`, then `~/.config/harness/config.toml`.
+    Without this, anyone who has actually configured Harness runs a different
+    suite than CI does: a `[default] provider` alone is enough to send tests down
+    a real provider path and fail dozens of them.
+
+    The path deliberately does not exist, so `load_config()` returns defaults.
+    """
+
+    isolated = tmp_path_factory.mktemp("harness-config") / "config.toml"
+    monkeypatch.setenv("HARNESS_CONFIG", str(isolated))
+
+
+@pytest.fixture(autouse=True)
 def _close_stray_event_loop() -> Generator[None, None, None]:
     yield
 

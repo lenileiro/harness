@@ -61,6 +61,7 @@ class PendingApproval(BaseModel):
     resolved_at: datetime | None = None
     resolved_by: str | None = None
     replayed_at: datetime | None = None
+    replay_claimed_at: datetime | None = None
 
 
 @runtime_checkable
@@ -93,8 +94,18 @@ class ApprovalStore(Protocol):
         status: ApprovalStatus,
         resolved_by: str | None = None,
     ) -> PendingApproval | None:
-        """Mark `pending → granted | denied`. Returns the updated row, or None
-        if the id doesn't exist."""
+        """Atomically mark pending → granted | denied; None if no longer pending.
+
+        Resolved approvals are immutable. Passing pending raises ValueError.
+        """
+        ...
+
+    async def claim_replay(self, approval_id: str, *, session_id: str) -> bool:
+        """Atomically claim one granted action before executing any side effect.
+
+        A claim survives restart. An unfinished claim is uncertain and must
+        never be executed automatically again.
+        """
         ...
 
     async def mark_replayed(self, approval_id: str) -> None:

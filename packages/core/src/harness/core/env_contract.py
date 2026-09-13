@@ -31,6 +31,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from harness.core.paths import user_home
 from harness.core.telemetry import get_logger
 
 logger = get_logger("harness.env_contract")
@@ -138,7 +139,7 @@ class ContractRegistry:
 
 
 def _default_paths() -> list[Path]:
-    return [Path.cwd() / ".harness" / "contracts", Path.home() / ".harness" / "contracts"]
+    return [Path.cwd() / ".harness" / "contracts", user_home() / "contracts"]
 
 
 def _load_file(path: Path) -> list[EnvironmentContract]:

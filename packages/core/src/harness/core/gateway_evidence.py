@@ -6,11 +6,36 @@ into a safe fallback reply is shared behavior, so it lives in core.
 
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Iterable
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from harness.core.activity import ActivityEvent
+from harness.core.approval import PendingApproval
+from harness.core.secret_redaction import redact_secrets
+
+GATEWAY_APPROVAL_TTL_SECONDS = 15 * 60
+
+
+def approval_expires_at(approval: PendingApproval) -> datetime:
+    requested = approval.requested_at
+    if requested.tzinfo is None:
+        requested = requested.replace(tzinfo=UTC)
+    return requested + timedelta(seconds=GATEWAY_APPROVAL_TTL_SECONDS)
+
+
+def approval_request_text(approval: PendingApproval) -> str:
+    """Render the actual queued action, retaining full arguments apart from secrets."""
+    arguments, _ = redact_secrets(json.dumps(approval.arguments, ensure_ascii=False, indent=2))
+    return (
+        f"Approval required: {approval.id}\n"
+        f"Tool: {approval.tool_name}\nArguments:\n{arguments}\n"
+        f"Expires: {approval_expires_at(approval).isoformat(timespec='seconds')}\n"
+        f"Reply `approve {approval.id}` or `deny {approval.id}` in this conversation."
+    )
+
 
 _SENSITIVE_TEXT_PATTERNS = (
     re.compile(r"\bOPENROUTER_API_KEY=([^\s]+)"),
@@ -117,4 +142,4 @@ def successful_tool_evidence_reply(events: Iterable[ActivityEvent]) -> str | Non
     return None
 
 
-__all__ = ["successful_tool_evidence_reply"]
+__all__ = ["approval_expires_at", "approval_request_text", "successful_tool_evidence_reply"]

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Literal
@@ -33,6 +34,19 @@ class ValidationAssertion:
     covered_by_features: tuple[str, ...] = ()
     created_at: str = field(default_factory=_utcnow)
     updated_at: str = field(default_factory=_utcnow)
+    command: tuple[str, ...] = ()
+    timeout_seconds: float = 60.0
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.command, (tuple, list)) or not all(
+            isinstance(part, str) and "\x00" not in part for part in self.command
+        ):
+            raise ValueError("assertion command must be an argv sequence of strings")
+        if self.command and not self.command[0].strip():
+            raise ValueError("assertion command executable cannot be empty")
+        object.__setattr__(self, "command", tuple(self.command))
+        if not math.isfinite(self.timeout_seconds) or self.timeout_seconds <= 0:
+            raise ValueError("assertion timeout must be finite and positive")
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -42,6 +56,8 @@ class ValidationAssertion:
             "description": self.description,
             "kind": self.kind,
             "verification_method": self.verification_method,
+            "command": list(self.command),
+            "timeout_seconds": self.timeout_seconds,
             "covered_by_features": list(self.covered_by_features),
             "created_at": self.created_at,
             "updated_at": self.updated_at,
@@ -56,6 +72,8 @@ class ValidationAssertion:
             description=str(data.get("description") or "").strip(),
             kind=str(data.get("kind") or "contract"),  # type: ignore[arg-type]
             verification_method=str(data.get("verification_method") or "").strip(),
+            command=data.get("command", ()),
+            timeout_seconds=float(data.get("timeout_seconds", 60.0)),
             covered_by_features=_clean_tuple(data.get("covered_by_features")),
             created_at=str(data.get("created_at") or _utcnow()),
             updated_at=str(data.get("updated_at") or _utcnow()),
@@ -117,6 +135,9 @@ class Mission:
     current_milestone_id: str = ""
     created_at: str = field(default_factory=_utcnow)
     updated_at: str = field(default_factory=_utcnow)
+    execution_mode: str = "handoff"
+    tokens_used: int = 0
+    runtime_seconds_used: float = 0.0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -135,6 +156,9 @@ class Mission:
             "reporter_brief": self.reporter_brief,
             "budget_tokens": self.budget_tokens,
             "budget_runtime_minutes": self.budget_runtime_minutes,
+            "execution_mode": self.execution_mode,
+            "tokens_used": self.tokens_used,
+            "runtime_seconds_used": self.runtime_seconds_used,
             "current_milestone_id": self.current_milestone_id,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
@@ -165,6 +189,9 @@ class Mission:
                 else None
             ),
             current_milestone_id=str(data.get("current_milestone_id") or "").strip(),
+            execution_mode=str(data.get("execution_mode") or "handoff"),
+            tokens_used=int(data.get("tokens_used", 0)),
+            runtime_seconds_used=float(data.get("runtime_seconds_used", 0.0)),
             created_at=str(data.get("created_at") or _utcnow()),
             updated_at=str(data.get("updated_at") or _utcnow()),
         )
@@ -221,6 +248,7 @@ class MissionFeature:
     research_refs: tuple[str, ...] = ()
     created_at: str = field(default_factory=_utcnow)
     updated_at: str = field(default_factory=_utcnow)
+    worker_session_id: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -234,6 +262,7 @@ class MissionFeature:
             "assigned_role": self.assigned_role,
             "target_files": list(self.target_files),
             "research_refs": list(self.research_refs),
+            "worker_session_id": self.worker_session_id,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
         }
@@ -248,6 +277,7 @@ class MissionFeature:
             summary=str(data.get("summary") or "").strip(),
             status=str(data.get("status") or "pending"),  # type: ignore[arg-type]
             depends_on=_clean_tuple(data.get("depends_on")),
+            worker_session_id=str(data.get("worker_session_id") or ""),
             assigned_role=str(data.get("assigned_role") or "worker").strip() or "worker",
             target_files=_clean_tuple(data.get("target_files")),
             research_refs=_clean_tuple(data.get("research_refs")),

@@ -7,6 +7,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
+from harness.core.paths import user_home
 from harness.core.slug import slugify
 from harness.core.telemetry import get_logger
 from harness.core.tips_models import Tip
@@ -159,7 +160,7 @@ class ProcedureLibrary:
 def default_procedure_paths() -> list[Path]:
     return [
         Path.cwd() / ".harness" / "procedures",
-        Path.home() / ".harness" / "procedures",
+        user_home() / "procedures",
     ]
 
 

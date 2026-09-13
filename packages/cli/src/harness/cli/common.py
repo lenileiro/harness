@@ -12,6 +12,7 @@ import typer
 from rich.console import Console
 
 from harness.adapters.anthropic import AnthropicAdapter
+from harness.adapters.claude import ClaudeAdapter
 from harness.adapters.codex import CodexAdapter
 from harness.adapters.ollama import OllamaAdapter
 from harness.adapters.openai import OpenAIAdapter
@@ -22,7 +23,14 @@ from harness.core import Adapter, ToolRegistry
 
 console = Console()
 
-KNOWN_PROVIDERS: tuple[str, ...] = ("ollama", "codex", "openai", "openrouter")
+KNOWN_PROVIDERS: tuple[str, ...] = (
+    "ollama",
+    "codex",
+    "claude",
+    "openai",
+    "openrouter",
+    "anthropic",
+)
 
 _T = TypeVar("_T")
 
@@ -97,6 +105,10 @@ def _run_async(awaitable: Awaitable[_T]) -> _T:
 
 def _build_adapter(provider: str, *, base_url: str | None, config: HarnessConfig) -> Adapter:
     settings = config.provider(provider)
+    if settings.get("driver") == "openai-compatible":
+        from harness.cli.configured_provider import ConfiguredProvider
+
+        return ConfiguredProvider(provider, settings=settings, base_url=base_url)
     effective_base_url = base_url or settings.get("base_url")
     if provider == "ollama":
         timeout = float(settings.get("timeout", 120.0))
@@ -127,7 +139,29 @@ def _build_adapter(provider: str, *, base_url: str | None, config: HarnessConfig
             env_var="HARNESS_MODEL_STREAM_IDLE_TIMEOUT",
         )
         cwd = settings.get("cwd")
-        return CodexAdapter(cwd=cwd, timeout=timeout, idle_timeout=idle_timeout)
+        options = {"mode": settings["mode"]} if "mode" in settings else {}
+        return CodexAdapter(cwd=cwd, timeout=timeout, idle_timeout=idle_timeout, **options)
+    if provider == "claude":
+        timeout = _float_setting(
+            settings,
+            "timeout",
+            600.0,
+            env_var="HARNESS_MODEL_TURN_TIMEOUT",
+        )
+        idle_timeout = _float_setting(
+            settings,
+            "idle_timeout",
+            120.0,
+            env_var="HARNESS_MODEL_STREAM_IDLE_TIMEOUT",
+        )
+        budget = settings.get("max_budget_usd")
+        return ClaudeAdapter(
+            cwd=settings.get("cwd"),
+            timeout=timeout,
+            idle_timeout=idle_timeout,
+            effort=str(settings.get("effort", "medium")),
+            max_budget_usd=float(budget) if budget is not None else None,
+        )
     if provider == "openai":
         timeout = float(settings.get("timeout", 120.0))
         return OpenAIAdapter(base_url=effective_base_url, timeout=timeout)

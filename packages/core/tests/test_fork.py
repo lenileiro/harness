@@ -6,7 +6,7 @@ import pytest
 
 from harness.core.errors import ConfigurationError
 from harness.core.runtime import fork_session
-from harness.core.schemas import Message, Session
+from harness.core.schemas import Message, Note, PhaseStatus, Session
 from harness.storage.memory import InMemoryStorage
 
 
@@ -116,3 +116,26 @@ async def test_fork_persists(store: InMemoryStorage) -> None:
 async def test_fork_not_found(store: InMemoryStorage) -> None:
     with pytest.raises(ConfigurationError, match="not found"):
         await fork_session(store, "sess_doesnotexist")
+
+
+@pytest.mark.asyncio
+async def test_fork_preserves_continuity_without_sharing_mutable_state(
+    store: InMemoryStorage,
+) -> None:
+    parent = await _save_session(
+        store,
+        notes=[Note(text="keep this finding", tags=["research"])],
+        phases=[PhaseStatus(name="implement", notes=["planned"])],
+        metadata={"custom": {"history": ["first"]}, "verification": {"passed": True}},
+    )
+    forked = await fork_session(store, parent.id)
+    assert forked.notes == parent.notes
+    assert forked.phases == parent.phases
+    assert forked.metadata["custom"] == parent.metadata["custom"]
+    assert "verification" not in forked.metadata
+    forked.notes[0].tags.append("fork")
+    forked.phases[0].notes.append("fork")
+    forked.metadata["custom"]["history"].append("fork")
+    assert parent.notes[0].tags == ["research"]
+    assert parent.phases[0].notes == ["planned"]
+    assert parent.metadata["custom"]["history"] == ["first"]

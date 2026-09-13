@@ -115,3 +115,122 @@ class TestFetchUrl:
         tool = FetchUrlTool()
         assert tool.approval == "auto"
         assert tool.effect_scope == "read_only"
+
+
+@pytest.fixture(autouse=True)
+def offline_dns(monkeypatch: pytest.MonkeyPatch) -> None:
+    """All HTTP tests use mock transport; never issue real DNS lookups."""
+    monkeypatch.setattr(
+        "harness.tools.web.socket.getaddrinfo",
+        lambda *args, **kwargs: [(2, 1, 6, "", ("93.184.216.34", 443))],
+    )
+
+
+@pytest.mark.parametrize(
+    "destination",
+    [
+        "http://127.0.0.1/private",
+        "http://[::1]/private",
+        "http://10.0.0.1/private",
+        "http://169.254.169.254/metadata",
+        "http://localhost/private",
+        "file:///tmp/private",
+    ],
+)
+async def test_redirect_targets_are_validated_before_request(destination: str) -> None:
+    seen: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(str(request.url))
+        return httpx.Response(302, headers={"location": destination})
+
+    result = await _run(handler)
+    assert result.is_error
+    assert len(seen) == 1
+
+
+async def test_redirect_to_private_dns_answer_is_blocked(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "harness.tools.web.socket.getaddrinfo",
+        lambda host, *args: [
+            (2, 1, 6, "", ("10.0.0.1" if host == "private.test" else "93.184.216.34", 443))
+        ],
+    )
+    seen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(str(request.url))
+        return httpx.Response(302, headers={"location": "https://private.test/path"})
+
+    result = await _run(handler)
+    assert result.is_error
+    assert len(seen) == 1
+
+
+async def test_public_relative_redirects_succeed() -> None:
+    seen: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(str(request.url))
+        if request.url.path == "/page":
+            return httpx.Response(302, headers={"location": "/final"})
+        return httpx.Response(200, headers={"content-type": "text/plain"}, text="final body")
+
+    result = await _run(handler)
+    assert not result.is_error
+    assert "final body" in result.content
+    assert seen == ["https://example.test/page", "https://example.test/final"]
+
+
+async def test_redirect_loop_is_bounded() -> None:
+    seen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(str(request.url))
+        return httpx.Response(302, headers={"location": "/page"})
+
+    result = await _run(handler, max_redirects=2)
+    assert result.is_error
+    assert "too many redirects" in result.content
+    assert len(seen) == 3
+
+
+async def test_oversized_stream_stops_reading_and_closes_response() -> None:
+    class Body(httpx.AsyncByteStream):
+        consumed = 0
+        closed = False
+
+        async def __aiter__(self):
+            for _ in range(10):
+                self.consumed += 1
+                yield b"x" * 600
+
+        async def aclose(self):
+            self.closed = True
+
+    body = Body()
+    result = await _run(
+        lambda request: httpx.Response(200, headers={"content-type": "text/plain"}, stream=body),
+        max_bytes=1024,
+    )
+    assert result.is_error
+    assert body.consumed == 2
+    assert body.closed
+
+
+async def test_cross_origin_redirect_does_not_forward_authorization() -> None:
+    seen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.headers.get("authorization"))
+        if len(seen) == 1:
+            return httpx.Response(302, headers={"location": "https://another.test/page"})
+        return httpx.Response(200, headers={"content-type": "text/plain"}, text="done")
+
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(handler), auth=("user", "secret")
+    ) as client:
+        result = await FetchUrlTool(client=client)(_call("https://example.test/page"))
+    assert not result.is_error
+    assert seen[0] is not None
+    assert seen[1] is None

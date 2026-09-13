@@ -33,7 +33,7 @@ from harness.core import (
     RateLimitError,
     TimeoutError,
 )
-from harness.core._openai import message_to_wire, parse_sse_stream
+from harness.core._openai import messages_to_wire, parse_sse_stream
 
 __version__ = "0.0.0"
 
@@ -147,7 +147,7 @@ class OpenRouterAdapter:
         # OpenRouter routes to many models; tool-use availability depends on
         # the chosen model. `model_supports_tools()` performs the model-specific
         # preflight when a runtime is about to send tool schemas.
-        return Capabilities(streaming=True, tool_use=True)
+        return Capabilities(streaming=True, tool_use=True, input_media=["image", "audio", "file"])
 
     async def model_supports_tools(self, model: str) -> bool | None:
         """Return model-specific tool support when OpenRouter can prove it.
@@ -257,8 +257,9 @@ class OpenRouterAdapter:
     ) -> AsyncIterator[Event]:
         payload: dict[str, Any] = {
             "model": model,
-            "messages": [message_to_wire(m) for m in _system_messages_first(messages)],
+            "messages": messages_to_wire(_system_messages_first(messages)),
             "stream": True,
+            "stream_options": {"include_usage": True},
         }
         if tools:
             payload["tools"] = tools

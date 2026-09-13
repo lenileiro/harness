@@ -579,8 +579,14 @@ class TestRegularTurns:
     def test_general_turn_prefetches_context_packet_for_broad_work(
         self, patch_adapter, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
+        (tmp_path / "README.md").write_text("Existing command wiring is documented here.")
         patch_adapter(
             [
+                tool_call_turn(
+                    call_id="context-read",
+                    name="read_file",
+                    arguments={"path": "README.md"},
+                ),
                 text_turn("## Context packet\n- Reuse the existing command wiring."),
                 text_turn("implementation done"),
             ]
@@ -600,6 +606,34 @@ class TestRegularTurns:
         streamed = "\n".join(str(call.get("messages")) for call in FakeAdapter.stream_calls)
         assert "SYSTEM CONTEXT PACKET" in streamed
         assert "Reuse the existing command wiring" in streamed
+
+    def test_ungrounded_prefetch_does_not_become_execution_context(
+        self, patch_adapter, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        patch_adapter(
+            [
+                text_turn("Unverified private guess about nonexistent files."),
+                text_turn("Execution will inspect the available sources."),
+            ]
+        )
+        monkeypatch.setattr(
+            chat_commands,
+            "_classify_chat_turn_policy",
+            lambda **_: asyncio.sleep(0, result=chat_commands._GENERAL_CONTEXT_TURN_POLICY),
+        )
+        result = _run(
+            ["chat", "--cwd", str(tmp_path), "--in-memory", "--yes", "--verify", "none"],
+            stdin="Explain how this workspace is organized.\n/quit\n",
+        )
+        assert result.exit_code == 0, result.stdout
+        execution_messages = FakeAdapter.stream_calls[-1]["messages"]
+        assert all(
+            "Unverified private guess" not in (message.content or "")
+            for message in execution_messages
+        )
+        assert [message.content for message in execution_messages if message.role == "user"] == [
+            "Explain how this workspace is organized."
+        ]
 
     def test_single_turn_streams_response(self, patch_adapter, tmp_path: Path) -> None:
         patch_adapter([text_turn("hello there")])
@@ -814,13 +848,17 @@ class TestRegularTurns:
         assert "top 0-3 high-signal nearby findings" in prompt
         assert "packages/core/src/harness/core/runtime.py" in prompt
 
-    def test_general_task_scope_directive_prefers_existing_targets_and_options(self) -> None:
+    def test_general_task_scope_directive_prefers_existing_targets_and_autonomous_research(
+        self,
+    ) -> None:
         directive = chat_commands._inject_general_task_scope_directive(
             "Improve the chat steering tests."
         )
         assert "smallest relevant existing tracked files" in directive
         assert "Do not create new fixtures" in directive
-        assert "ask the user a short options question" in directive
+        assert "available read-only research tools" in directive
+        assert "proceed with reasonable reversible assumptions" in directive
+        assert "ask the user a short options question" not in directive
 
 
 class TestSession:

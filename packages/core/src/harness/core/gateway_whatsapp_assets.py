@@ -26,6 +26,7 @@ import pino from 'pino';
 import { Boom } from '@hapi/boom';
 import {
   DisconnectReason,
+  downloadMediaMessage,
   fetchLatestBaileysVersion,
   makeWASocket,
   useMultiFileAuthState,
@@ -49,7 +50,7 @@ const ENV_FILE = process.env.HARNESS_WHATSAPP_ENV_FILE || '';
 const MAX_GATEWAY_CONCURRENCY = Math.max(1, Number.parseInt(process.env.HARNESS_WHATSAPP_MAX_CONCURRENCY || '1', 10) || 1);
 const MAX_GATEWAY_QUEUE = Math.max(0, Number.parseInt(process.env.HARNESS_WHATSAPP_MAX_QUEUE || '3', 10) || 0);
 const GATEWAY_CHILD_TIMEOUT_MS = Math.max(5000, Number.parseInt(process.env.HARNESS_WHATSAPP_CHILD_TIMEOUT_MS || '600000', 10) || 600000);
-const GATEWAY_OUTPUT_LIMIT_BYTES = Math.max(65536, Number.parseInt(process.env.HARNESS_WHATSAPP_OUTPUT_LIMIT_BYTES || '262144', 10) || 262144);
+const GATEWAY_OUTPUT_LIMIT_BYTES = Math.max(65536, Number.parseInt(process.env.HARNESS_WHATSAPP_OUTPUT_LIMIT_BYTES || '33554432', 10) || 33554432);
 const BRIDGE_STARTED_AT_MS = Date.now();
 const STARTUP_REPLAY_GRACE_MS_RAW = Number.parseInt(process.env.HARNESS_WHATSAPP_STARTUP_REPLAY_GRACE_MS || '10000', 10);
 const STARTUP_REPLAY_GRACE_MS = Number.isFinite(STARTUP_REPLAY_GRACE_MS_RAW) ? Math.max(0, STARTUP_REPLAY_GRACE_MS_RAW) : 10000;
@@ -67,7 +68,7 @@ markActiveBridgeInstance();
 
 const logger = pino({ level: 'warn' });
 const app = express();
-app.use(express.json({ limit: '2mb' }));
+app.use(express.json({ limit: '30mb' }));
 
 let sock = null;
 let connectionState = 'disconnected';
@@ -228,6 +229,60 @@ function extractMessageText(node) {
     return extractMessageText({ message: msg.editedMessage.message });
   }
   return '';
+}
+
+function mediaNode(node) {
+  let message = node?.message || {};
+  while (message.ephemeralMessage || message.deviceSentMessage) {
+    message = (message.ephemeralMessage || message.deviceSentMessage).message || {};
+  }
+  // View-once messages must not become durable session artifacts.
+  if (message.viewOnceMessage || message.viewOnceMessageV2) return null;
+  return message.imageMessage || message.audioMessage || message.documentMessage || message.videoMessage || null;
+}
+
+async function inboundMedia(node) {
+  const media = mediaNode(node);
+  if (!media) return [];
+  if (Number(media.fileLength || 0) > 20 * 1024 * 1024) throw new Error('Attachment exceeds 20 MiB');
+  const stream = await downloadMediaMessage(node, 'stream', {}, { logger: pino({ level: 'silent' }), reuploadRequest: sock.updateMediaMessage });
+  const chunks = [];
+  let total = 0;
+  try {
+    for await (const chunk of stream) {
+      total += chunk.length;
+      if (total > 20 * 1024 * 1024) throw new Error('Attachment exceeds 20 MiB');
+      chunks.push(chunk);
+    }
+  } finally {
+    stream.destroy?.();
+  }
+  const mime = String(media.mimetype || 'application/octet-stream');
+  return [{ version: 1, kind: mime.startsWith('image/') ? 'image' : mime.startsWith('audio/') ? 'audio' : 'file', mime_type: mime, data: Buffer.concat(chunks).toString('base64'), name: path.basename(String(media.fileName || 'attachment')).slice(0, 255) }];
+}
+
+function mediaSendPayload(attachment) {
+  if (!attachment || attachment.url || typeof attachment.data !== 'string' || attachment.data.length > 27962028) throw new Error('Expected bounded inline media');
+  const raw = Buffer.from(attachment.data, 'base64');
+  if (!raw.length || raw.length > 20 * 1024 * 1024) throw new Error('Invalid media size');
+  const mimetype = String(attachment.mime_type || 'application/octet-stream');
+  if (attachment.kind === 'image' && mimetype.startsWith('image/')) return { image: raw, mimetype };
+  if (attachment.kind === 'audio' && mimetype.startsWith('audio/')) return { audio: raw, mimetype };
+  if (attachment.kind === 'file') return { document: raw, mimetype, fileName: path.basename(String(attachment.name || 'attachment')) };
+  throw new Error('Unsupported attachment kind or MIME type');
+}
+
+async function sendGatewayReply(chatId, text, attachments = []) {
+  let chunk = '';
+  for (const character of String(text || '')) {
+    if (chunk.length + character.length > 4000) {
+      await sock.sendMessage(chatId, { text: formatMessage(chunk) });
+      chunk = '';
+    }
+    chunk += character;
+  }
+  if (chunk) await sock.sendMessage(chatId, { text: formatMessage(chunk) });
+  for (const attachment of attachments.slice(0, 16)) await sock.sendMessage(chatId, mediaSendPayload(attachment));
 }
 
 function ownIdentityCandidates() {
@@ -533,7 +588,7 @@ function enqueueGatewayTask(run) {
   });
 }
 
-async function dispatchInboundCommand({ chatId, userId, text, messageId, messageToken }) {
+async function dispatchInboundCommand({ chatId, userId, text, messageId, messageToken, attachments = [] }) {
   const receiveArgs = [
     'run',
     'harness',
@@ -550,6 +605,7 @@ async function dispatchInboundCommand({ chatId, userId, text, messageId, message
     '--thread',
     chatId,
     '--json',
+    '--attachments-stdin',
   ];
   async function runGateway(args) {
     console.log('🚀 gateway child', JSON.stringify({ cmd: UV_BIN, args }));
@@ -562,8 +618,9 @@ async function dispatchInboundCommand({ chatId, userId, text, messageId, message
       const child = spawn(UV_BIN, args, {
         cwd: WORKSPACE_CWD,
         env: childEnv,
-        stdio: ['ignore', 'pipe', 'pipe'],
+        stdio: ['pipe', 'pipe', 'pipe'],
       });
+      child.stdin.end(JSON.stringify(attachments));
       let stdout = '';
       let stderr = '';
       let settled = false;
@@ -639,6 +696,7 @@ async function dispatchInboundCommand({ chatId, userId, text, messageId, message
     sessionId: result.payload?.session?.id || '',
     messageId,
     messageToken,
+    attachments: result.payload?.reply?.data?.attachments || [],
   };
 }
 
@@ -698,7 +756,7 @@ async function startSocket() {
     }
     for (const node of messages || []) {
       const chatId = String(node?.key?.remoteJid || '');
-      const text = extractMessageText(node);
+      const text = extractMessageText(node) || (mediaNode(node) ? 'Please inspect the attached media.' : '');
       console.log(
         '📨 inbound',
         JSON.stringify({
@@ -743,6 +801,7 @@ async function startSocket() {
               text: String(text || '').trim(),
               messageId: node?.key?.id || '',
               messageToken,
+              attachments: await inboundMedia(node),
             });
           } finally {
             stopTyping();
@@ -752,7 +811,7 @@ async function startSocket() {
           console.log('SKIP gateway task', JSON.stringify({ chatId, messageId, error: String(result?.error || '') }));
           continue;
         }
-        if (!result.replyText) {
+        if (!result.replyText && !result.attachments?.length) {
           continue;
         }
         if (result.messageToken && latestInboundTokenByChat.get(chatId) !== result.messageToken) {
@@ -763,7 +822,7 @@ async function startSocket() {
           console.log('SKIP inactive bridge reply', JSON.stringify({ chatId, messageId: result.messageId }));
           continue;
         }
-        await sock.sendMessage(chatId, { text: formatMessage(result.replyText) });
+        await sendGatewayReply(chatId, result.replyText, result.attachments);
       } catch (error) {
         console.error('❌ Failed to send gateway reply:', error);
       }
@@ -796,7 +855,8 @@ app.post('/send', async (req, res) => {
 
   const chatId = normalizeChatId(req.body?.chatId);
   const message = String(req.body?.message || '').trim();
-  if (!chatId || !message) {
+  const attachments = Array.isArray(req.body?.attachments) ? req.body.attachments : [];
+  if (!chatId || (!message && !attachments.length)) {
     res.status(400).json({ error: 'chatId and message are required' });
     return;
   }
@@ -806,12 +866,11 @@ app.post('/send', async (req, res) => {
   }
 
   try {
-    const payload = { text: formatMessage(message) };
-    const sent = await sock.sendMessage(chatId, payload);
+    await sendGatewayReply(chatId, message, attachments);
     res.json({
       ok: true,
       chatId,
-      messageId: sent?.key?.id || null,
+      messageId: null,
     });
   } catch (error) {
     res.status(500).json({

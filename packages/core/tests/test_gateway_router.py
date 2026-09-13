@@ -4,12 +4,13 @@ import asyncio
 from pathlib import Path
 from typing import cast
 
-from harness.core.approval import ApprovalStore
+from harness.core.approval import PendingApproval
 from harness.core.dynamic_workflows import WorkflowStore, default_workflow_root
-from harness.core.gateway_models import GatewayMessage, GatewayUserProfile
+from harness.core.gateway_models import GatewayMessage, GatewayRuntimeBinding, GatewayUserProfile
 from harness.core.gateway_router import dispatch_gateway_message, is_gateway_control_message
 from harness.core.gateway_sessions import GatewaySessionStore
 from harness.core.scheduler_store import SchedulerStore
+from harness.storage.memory import InMemoryStorage
 
 
 def test_gateway_router_emits_hooks_for_message_reply_and_approval(tmp_path: Path) -> None:
@@ -38,19 +39,35 @@ def test_gateway_router_emits_hooks_for_message_reply_and_approval(tmp_path: Pat
         def on_approval_resolved(self, **kwargs) -> None:
             self.events.append(("approval_resolved", kwargs["approval_id"], kwargs["granted"]))
 
-    class ApprovalStoreStub:
-        async def resolve_approval(self, approval_id: str, *, status: str, resolved_by: str):
-            class Approval:
-                id = approval_id
-                tool_name = "shell"
-
-            return Approval()
-
     session_store = GatewaySessionStore(root=tmp_path / ".harness" / "gateway")
     scheduler_store = SchedulerStore(root=tmp_path / ".harness" / "scheduler")
     hook = RecordingHook()
 
     async def _run() -> None:
+        approvals = InMemoryStorage()
+        await approvals.create_approval(
+            PendingApproval(
+                id="appr_123",
+                session_id="runtime-1",
+                tool_call_id="call-1",
+                tool_name="shell",
+                arguments={"command": "true"},
+            )
+        )
+        session = session_store.get_or_create_session(
+            transport="local", user_id="u1", thread_id="t1"
+        )
+        session_store.bind_runtime_session(
+            GatewayRuntimeBinding(
+                session_id="runtime-1",
+                gateway_session_id=session.id,
+                transport="local",
+                user_id="u1",
+                thread_id="t1",
+                provider="mock",
+                model="mock",
+            )
+        )
         reply, _ = await dispatch_gateway_message(
             cwd=tmp_path,
             session_store=session_store,
@@ -62,7 +79,7 @@ def test_gateway_router_emits_hooks_for_message_reply_and_approval(tmp_path: Pat
                 thread_id="t1",
                 text="approve appr_123",
             ),
-            approval_store=cast(ApprovalStore, ApprovalStoreStub()),
+            approval_store=approvals,
             hooks=(hook,),
         )
         assert reply.command == "approve"
@@ -120,9 +137,7 @@ def test_gateway_router_can_schedule_reminder_intent(tmp_path: Path, monkeypatch
     assert len(profile.active_work) == 1
     assert profile.active_work[0].ref == f"job:{job.id}"
     assert profile.active_work[0].summary.startswith("Okay. I'll remind you")
-    assert (
-        tmp_path / ".harness" / "gateway" / "profiles" / "gwp-whatsapp-15551234567" / "profile.json"
-    ).is_file()
+    assert (tmp_path / ".harness" / "gateway" / "profiles" / profile.id / "profile.json").is_file()
 
 
 def test_gateway_session_store_reads_legacy_flat_profile(tmp_path: Path) -> None:
@@ -144,7 +159,7 @@ def test_gateway_session_store_reads_legacy_flat_profile(tmp_path: Path) -> None
 
     profile = session_store.load_profile("whatsapp", "15551234567")
 
-    assert profile.id == "gp-whatsapp-15551234567-old"
+    assert profile.id != "gp-whatsapp-15551234567-old"
     assert profile.recent_threads == ["thread-a"]
     session_store.save_profile(
         GatewayUserProfile(
@@ -154,9 +169,7 @@ def test_gateway_session_store_reads_legacy_flat_profile(tmp_path: Path) -> None
             recent_threads=profile.recent_threads,
         )
     )
-    assert (
-        tmp_path / ".harness" / "gateway" / "profiles" / "gwp-whatsapp-15551234567" / "profile.json"
-    ).is_file()
+    assert (tmp_path / ".harness" / "gateway" / "profiles" / profile.id / "profile.json").is_file()
 
 
 def test_gateway_router_can_create_workflow(tmp_path: Path) -> None:

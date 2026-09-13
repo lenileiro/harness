@@ -395,6 +395,7 @@ def send_whatsapp_text_message(
     text: str,
     reply_to: str | None = None,
     timeout: float = 30.0,
+    attachments: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     working_dir = (cwd or Path.cwd()).resolve()
     config = load_whatsapp_bridge_config(working_dir)
@@ -405,6 +406,13 @@ def send_whatsapp_text_message(
         "chatId": to,
         "message": text,
     }
+    if attachments:
+        from harness.core.schemas import MediaAttachment
+
+        body["attachments"] = [
+            MediaAttachment.model_validate(item).model_dump(mode="json")
+            for item in attachments[:16]
+        ]
     if reply_to:
         body["replyTo"] = reply_to
     req = request.Request(

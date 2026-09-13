@@ -20,6 +20,13 @@ class _CodexAdapterProbe:
         type(self).captured = kwargs
 
 
+class _ClaudeAdapterProbe:
+    captured: ClassVar[dict[str, object]] = {}
+
+    def __init__(self, **kwargs: object) -> None:
+        type(self).captured = kwargs
+
+
 class _FakeLoop:
     def __init__(self) -> None:
         self.calls = 0
@@ -89,3 +96,45 @@ def test_common_codex_adapter_uses_model_timeout_env_overrides(monkeypatch) -> N
 
     assert _CodexAdapterProbe.captured["timeout"] == 1200.0
     assert _CodexAdapterProbe.captured["idle_timeout"] == 240.0
+
+
+def test_common_claude_adapter_reads_configured_settings(monkeypatch) -> None:
+    monkeypatch.setattr(common, "ClaudeAdapter", _ClaudeAdapterProbe)
+    monkeypatch.delenv("HARNESS_MODEL_TURN_TIMEOUT", raising=False)
+    monkeypatch.delenv("HARNESS_MODEL_STREAM_IDLE_TIMEOUT", raising=False)
+    cfg = HarnessConfig(
+        provider_settings={
+            "claude": {
+                "timeout": 900.0,
+                "idle_timeout": 90.0,
+                "effort": "high",
+                "max_budget_usd": 0.5,
+                "cwd": "/tmp/workspace",
+            }
+        }
+    )
+
+    common._build_adapter("claude", base_url=None, config=cfg)
+
+    captured = _ClaudeAdapterProbe.captured
+    assert captured["timeout"] == 900.0
+    assert captured["idle_timeout"] == 90.0
+    assert captured["effort"] == "high"
+    assert captured["max_budget_usd"] == 0.5
+    assert captured["cwd"] == "/tmp/workspace"
+
+
+def test_common_claude_adapter_defaults(monkeypatch) -> None:
+    monkeypatch.setattr(common, "ClaudeAdapter", _ClaudeAdapterProbe)
+    monkeypatch.delenv("HARNESS_MODEL_TURN_TIMEOUT", raising=False)
+    monkeypatch.delenv("HARNESS_MODEL_STREAM_IDLE_TIMEOUT", raising=False)
+
+    common._build_adapter("claude", base_url=None, config=HarnessConfig())
+
+    captured = _ClaudeAdapterProbe.captured
+    assert captured["effort"] == "medium"
+    assert captured["max_budget_usd"] is None
+
+
+def test_claude_is_a_known_provider() -> None:
+    assert "claude" in common.KNOWN_PROVIDERS

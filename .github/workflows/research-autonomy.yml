@@ -20,7 +20,7 @@ on:
         required: false
         default: "09-handover-vision-flow"
       live_provider:
-        description: "Provider for live eval mode"
+        description: "Provider for live eval mode (openrouter, anthropic, or claude on a self-hosted runner)"
         required: false
         default: "openrouter"
       live_model:
@@ -90,7 +90,7 @@ jobs:
         run: uv python install 3.12
 
       - name: Sync workspace
-        run: uv sync --all-extras --all-groups
+        run: uv sync --frozen --all-packages --all-extras --all-groups
 
       - name: Run scheduled autonomy burst
         shell: bash
@@ -182,7 +182,10 @@ jobs:
         run: uv python install 3.12
 
       - name: Sync workspace
-        run: uv sync --all-extras --all-groups
+        run: uv sync --frozen --all-packages --all-extras --all-groups
+
+      - name: Install benchmark process isolation
+        run: sudo apt-get update && sudo apt-get install -y bubblewrap
 
       - name: Run secret-backed live canonical eval
         shell: bash
@@ -198,6 +201,16 @@ jobs:
           if [[ "$provider" == "anthropic" && -z "${ANTHROPIC_API_KEY:-}" ]]; then
             echo "ANTHROPIC_API_KEY is required for anthropic live eval mode" >&2
             exit 1
+          fi
+          if [[ "$provider" == "claude" ]]; then
+            if ! command -v claude >/dev/null 2>&1; then
+              echo "provider 'claude' needs the Claude Code CLI on PATH; GitHub-hosted runners have no subscription login, so use a self-hosted runner" >&2
+              exit 1
+            fi
+            if ! claude auth status --json 2>/dev/null | grep -q '"loggedIn": *true'; then
+              echo "provider 'claude' needs an authenticated Claude Code CLI; run \`claude auth login\` on the runner" >&2
+              exit 1
+            fi
           fi
           mkdir -p .artifacts/research-autonomy-live
           uv run harness eval run "$fixture" \
@@ -285,7 +298,7 @@ jobs:
         run: uv python install 3.12
 
       - name: Sync workspace
-        run: uv sync --all-extras --all-groups
+        run: uv sync --frozen --all-packages --all-extras --all-groups
 
       - name: Run bounded mutation-capable burst
         shell: bash
