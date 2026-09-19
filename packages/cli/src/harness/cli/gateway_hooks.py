@@ -12,7 +12,7 @@ from harness.core.gateway_evidence import approval_expires_at, approval_request_
 from harness.core.gateway_models import GatewayMessage, GatewayReply, default_gateway_root
 from harness.core.gateway_sessions import GatewaySessionStore
 from harness.core.gateway_whatsapp import send_whatsapp_text_message
-from harness.core.scheduler_models import SchedulerJob, SchedulerRunRecord
+from harness.core.scheduler.models import SchedulerJob, SchedulerRunRecord
 
 
 def _latest_whatsapp_user_id(cwd: Path) -> str:

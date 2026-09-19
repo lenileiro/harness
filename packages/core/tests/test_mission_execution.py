@@ -19,8 +19,8 @@ from harness.core import (
     Usage,
 )
 from harness.core.adapter import Adapter
-from harness.core.mission_execution import execute_mission_agents
-from harness.core.mission_runtime import execute_mission_burst
+from harness.core.mission.execution import execute_mission_agents
+from harness.core.mission.runtime import execute_mission_burst
 
 from .conftest import MockAdapter, MockStorage, MockTool, text_turn, tool_call_turn
 from .test_mission_runtime import _seed_two_milestone_mission
@@ -264,7 +264,7 @@ def test_assertion_success_stops_background_descendants(tmp_path: Path) -> None:
     import time
     from contextlib import suppress
 
-    from harness.core.mission_validator import run_assertion_command
+    from harness.core.mission.validator import run_assertion_command
 
     store, mission_id = _fixture(tmp_path)
     assertion = store.load_contract_for_mission(mission_id).assertions[0]
@@ -302,7 +302,7 @@ def test_assertion_interrupt_kills_reaps_and_persists_evidence(
 ) -> None:
     import subprocess
 
-    from harness.core.mission_validator import run_assertion_command
+    from harness.core.mission.validator import run_assertion_command
 
     store, mission_id = _fixture(tmp_path)
     assertion = replace(

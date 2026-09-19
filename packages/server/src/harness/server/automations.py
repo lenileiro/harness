@@ -11,8 +11,8 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from harness.core.scheduler_models import ScheduleSpec
-from harness.core.scheduler_runtime import (
+from harness.core.scheduler.models import ScheduleSpec
+from harness.core.scheduler.runtime import (
     compute_next_run_at,
     parse_datetime_text,
     parse_schedule_spec,

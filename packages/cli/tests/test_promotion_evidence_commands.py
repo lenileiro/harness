@@ -13,7 +13,7 @@ from harness.cli import __main__ as cli_main
 from harness.core.experiment_plans import ExperimentPlan
 from harness.core.experiment_runner import run_experiment_plan
 from harness.core.promotion_candidates import PromotionCandidate
-from harness.core.research_store import ResearchStore, default_research_root
+from harness.core.research.store import ResearchStore, default_research_root
 
 
 def _candidate(cwd: Path, *, evidence: bool) -> tuple[ResearchStore, PromotionCandidate]:

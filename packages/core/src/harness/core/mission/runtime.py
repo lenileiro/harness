@@ -5,16 +5,16 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 
-from harness.core.mission_models import (
+from harness.core.mission.models import (
     Milestone,
     Mission,
     MissionFeature,
     MissionHandoff,
     MissionRun,
 )
-from harness.core.mission_roles import resolve_mission_role_profile
-from harness.core.mission_store import MissionStore
-from harness.core.mission_validator import validate_mission_milestone
+from harness.core.mission.roles import resolve_mission_role_profile
+from harness.core.mission.store import MissionStore
+from harness.core.mission.validator import validate_mission_milestone
 
 _DONE_FEATURE_STATUSES = {"completed", "validated"}
 _ACTIVE_FEATURE_STATUSES = {"active", "handoff", "blocked"}

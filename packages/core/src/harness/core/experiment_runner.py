@@ -11,7 +11,7 @@ from pathlib import Path
 
 from harness.core.experiment_plans import ExperimentPlan
 from harness.core.experiments import CommandResult, Experiment, ExperimentResult, ExperimentStatus
-from harness.core.research_store import ResearchStore
+from harness.core.research.store import ResearchStore
 from harness.core.workspace_snapshot import workspace_fingerprint
 
 _EVAL_SLICE_COMMANDS = {

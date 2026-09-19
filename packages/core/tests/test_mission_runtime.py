@@ -5,22 +5,22 @@ from pathlib import Path
 
 import pytest
 
-from harness.core.mission_models import Mission
-from harness.core.mission_planner import (
+from harness.core.mission.models import Mission
+from harness.core.mission.planner import (
     PlannedAssertionInput,
     PlannedFeatureInput,
     PlannedMilestoneInput,
     build_mission_plan,
 )
-from harness.core.mission_runtime import (
+from harness.core.mission.runtime import (
     complete_mission_feature,
     execute_mission_burst,
     execute_mission_milestone,
     execute_next_mission_feature,
     write_mission_scheduled_run_record,
 )
-from harness.core.mission_store import MissionStore, default_mission_root
-from harness.core.mission_validator import validate_mission_milestone
+from harness.core.mission.store import MissionStore, default_mission_root
+from harness.core.mission.validator import validate_mission_milestone
 
 
 def _seed_approved_mission(tmp_path: Path) -> tuple[MissionStore, str]:

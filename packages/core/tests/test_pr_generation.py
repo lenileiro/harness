@@ -10,7 +10,7 @@ from harness.core.pr_generation import (
     write_promotion_draft,
 )
 from harness.core.promotion_candidates import PromotionCandidate
-from harness.core.research_models import ChangeIntent
+from harness.core.research.models import ChangeIntent
 
 
 def _candidate() -> PromotionCandidate:

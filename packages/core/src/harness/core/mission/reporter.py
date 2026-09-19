@@ -4,9 +4,9 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from harness.core.mission_models import Milestone, Mission, MissionFeature, MissionFinding
-from harness.core.mission_roles import mission_role_profiles
-from harness.core.mission_store import MissionStore
+from harness.core.mission.models import Milestone, Mission, MissionFeature, MissionFinding
+from harness.core.mission.roles import mission_role_profiles
+from harness.core.mission.store import MissionStore
 
 
 @dataclass(frozen=True, slots=True)

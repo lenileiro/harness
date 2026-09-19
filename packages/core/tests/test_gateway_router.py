@@ -9,7 +9,7 @@ from harness.core.dynamic_workflows import WorkflowStore, default_workflow_root
 from harness.core.gateway_models import GatewayMessage, GatewayRuntimeBinding, GatewayUserProfile
 from harness.core.gateway_router import dispatch_gateway_message, is_gateway_control_message
 from harness.core.gateway_sessions import GatewaySessionStore
-from harness.core.scheduler_store import SchedulerStore
+from harness.core.scheduler.store import SchedulerStore
 from harness.storage.memory import InMemoryStorage
 
 

@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
-from harness.core.research_models import ChangeIntent
+from harness.core.research.models import ChangeIntent
 
 
 def _utcnow() -> str:

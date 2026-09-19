@@ -9,7 +9,7 @@ from contextlib import suppress
 from dataclasses import dataclass, replace
 from pathlib import Path
 
-from harness.core.mission_models import (
+from harness.core.mission.models import (
     Mission,
     MissionFeature,
     MissionFinding,
@@ -17,8 +17,8 @@ from harness.core.mission_models import (
     ValidationAssertion,
     ValidationContract,
 )
-from harness.core.mission_roles import resolve_mission_role_profile
-from harness.core.mission_store import MissionStore
+from harness.core.mission.roles import resolve_mission_role_profile
+from harness.core.mission.store import MissionStore
 
 _DONE_FEATURE_STATUSES = {"completed", "validated"}
 

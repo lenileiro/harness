@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from harness.core.critic import Critic
     from harness.core.domain_profiles import DomainProfile
     from harness.core.gateway_models import GatewayMessage, GatewayReply
-    from harness.core.scheduler_models import SchedulerJob, SchedulerRunRecord
+    from harness.core.scheduler.models import SchedulerJob, SchedulerRunRecord
     from harness.core.tips_models import Tip
     from harness.core.verification import Verifier
 

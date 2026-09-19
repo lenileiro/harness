@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from harness.core.mission_models import (
+from harness.core.mission.models import (
     Milestone,
     Mission,
     MissionFeature,

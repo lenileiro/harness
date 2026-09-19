@@ -10,9 +10,9 @@ import pytest
 from harness.core.gateway_models import GatewayMessage, GatewayUserProfile
 from harness.core.gateway_router import dispatch_gateway_message
 from harness.core.gateway_sessions import GatewaySessionStore
-from harness.core.scheduler_models import SchedulerRunRecord
-from harness.core.scheduler_runtime import create_scheduler_job, parse_schedule_spec
-from harness.core.scheduler_store import SchedulerStore
+from harness.core.scheduler.models import SchedulerRunRecord
+from harness.core.scheduler.runtime import create_scheduler_job, parse_schedule_spec
+from harness.core.scheduler.store import SchedulerStore
 
 
 @pytest.mark.parametrize(

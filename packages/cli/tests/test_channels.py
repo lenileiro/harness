@@ -26,7 +26,7 @@ from harness.core.gateway_channels import (
     ChannelStore,
     split_channel_text,
 )
-from harness.core.scheduler_models import SchedulerJob, SchedulerRunRecord, ScheduleSpec
+from harness.core.scheduler.models import SchedulerJob, SchedulerRunRecord, ScheduleSpec
 
 
 def telegram_update(update_id=1, *, user=123, chat=123, group=False, text="hello", topic=None):

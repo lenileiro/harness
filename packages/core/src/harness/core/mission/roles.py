@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from harness.core.mission_models import Mission
+from harness.core.mission.models import Mission
 
 _DEFAULT_ROLE_BRIEFS: dict[str, str] = {
     "planner": (

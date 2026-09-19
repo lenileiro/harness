@@ -9,8 +9,8 @@ from harness.core.experiment_plans import ExperimentPlan
 from harness.core.experiment_runner import run_experiment_plan
 from harness.core.opportunities import Opportunity
 from harness.core.promotion_candidates import PromotionCandidate
-from harness.core.research_models import Theme, Unknown
-from harness.core.research_store import ResearchStore, default_research_root
+from harness.core.research.models import Theme, Unknown
+from harness.core.research.store import ResearchStore, default_research_root
 
 
 def promotion_store(tmp_path):
@@ -179,7 +179,7 @@ def test_evidence_is_rechecked_after_commit_before_push_and_progress_persists(
 def test_candidate_creation_requires_unique_latest_passed_experiment(tmp_path, latest_status, tied):
     from harness.core.experiments import Experiment, ExperimentResult
     from harness.core.hypotheses import Hypothesis
-    from harness.core.research_scheduler import build_research_queue
+    from harness.core.research.scheduler import build_research_queue
 
     store = ResearchStore(root=default_research_root(tmp_path))
     store.add_opportunity(Opportunity(id="o", title="Opportunity", summary="Improve"))

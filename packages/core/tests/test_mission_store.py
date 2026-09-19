@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from harness.core.mission_models import (
+from harness.core.mission.models import (
     Milestone,
     Mission,
     MissionFeature,
     ValidationAssertion,
     ValidationContract,
 )
-from harness.core.mission_store import MissionStore, default_mission_root
+from harness.core.mission.store import MissionStore, default_mission_root
 
 
 def test_mission_store_writes_mission_files_and_lists_missions(tmp_path: Path) -> None:

@@ -9,8 +9,8 @@ from typer.testing import CliRunner
 from harness.cli import __main__ as cli_main
 from harness.cli import mission_commands
 from harness.core import ResumeContract, default_scheduler_root
-from harness.core.research_store import ResearchStore, default_research_root
-from harness.core.scheduler_store import SchedulerStore
+from harness.core.research.store import ResearchStore, default_research_root
+from harness.core.scheduler.store import SchedulerStore
 from harness.storage.sqlite import SQLiteStorage
 
 

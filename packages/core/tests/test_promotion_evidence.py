@@ -12,7 +12,7 @@ from harness.core.experiment_runner import run_experiment_plan
 from harness.core.experiments import CommandResult, Experiment, ExperimentResult
 from harness.core.promotion_candidates import PromotionCandidate
 from harness.core.promotion_evidence import PromotionEvidenceError, require_promotion_evidence
-from harness.core.research_store import ResearchStore, default_research_root
+from harness.core.research.store import ResearchStore, default_research_root
 from harness.core.workspace_snapshot import workspace_fingerprint
 
 

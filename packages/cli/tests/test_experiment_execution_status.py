@@ -2,7 +2,7 @@ from typer.testing import CliRunner
 
 from harness.cli.__main__ import app
 from harness.core.experiment_plans import ExperimentPlan
-from harness.core.research_store import ResearchStore, default_research_root
+from harness.core.research.store import ResearchStore, default_research_root
 
 
 def test_failed_experiment_returns_failure_to_automation(tmp_path):

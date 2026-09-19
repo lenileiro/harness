@@ -10,7 +10,7 @@ from uuid import uuid4
 
 from filelock import FileLock, Timeout
 
-from harness.core.scheduler_models import SchedulerDelivery, SchedulerJob, SchedulerRunRecord
+from harness.core.scheduler.models import SchedulerDelivery, SchedulerJob, SchedulerRunRecord
 from harness.core.slug import slugify
 
 

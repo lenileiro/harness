@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from harness.core.research_models import Publication
+from harness.core.research.models import Publication
 
 
 @dataclass(frozen=True, slots=True)

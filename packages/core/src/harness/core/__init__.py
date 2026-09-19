@@ -133,8 +133,8 @@ from harness.core.handoff import HandoffTool
 from harness.core.inspiration import ExternalSource, InspirationNote
 from harness.core.loop_detector import LoopDetector, LoopFinding, LoopPattern
 from harness.core.memory import MemoryEntry, MemoryKind, MemoryScope, MemoryStore, ScopedMemoryStore
-from harness.core.mission_execution import execute_mission_agents
-from harness.core.mission_models import (
+from harness.core.mission.execution import execute_mission_agents
+from harness.core.mission.models import (
     Milestone,
     Mission,
     MissionFeature,
@@ -144,14 +144,14 @@ from harness.core.mission_models import (
     ValidationAssertion,
     ValidationContract,
 )
-from harness.core.mission_reporter import (
+from harness.core.mission.reporter import (
     MissionSummaryReport,
     build_mission_summary_report,
     list_mission_reports,
     load_mission_report,
     write_mission_summary_report,
 )
-from harness.core.mission_runtime import (
+from harness.core.mission.runtime import (
     MissionBurstResult,
     MissionExecutionResult,
     MissionLoopStep,
@@ -164,8 +164,8 @@ from harness.core.mission_runtime import (
     run_scheduled_mission_burst,
     write_mission_scheduled_run_record,
 )
-from harness.core.mission_store import MissionSearchHit, MissionStore, default_mission_root
-from harness.core.mission_validator import MissionValidationResult, validate_mission_milestone
+from harness.core.mission.store import MissionSearchHit, MissionStore, default_mission_root
+from harness.core.mission.validator import MissionValidationResult, validate_mission_milestone
 from harness.core.orchestrator import (
     AgentDoneEvent,
     AgentEventWrapper,
@@ -225,9 +225,9 @@ from harness.core.prompt_injection_probe import (
 )
 from harness.core.publications import summarize_publication
 from harness.core.repair import RepairDirective, RepairMode, RepairOrchestrator
-from harness.core.research_archive import ArchivedResearchItem
-from harness.core.research_index import ResearchIndex
-from harness.core.research_models import (
+from harness.core.research.archive import ArchivedResearchItem
+from harness.core.research.index import ResearchIndex
+from harness.core.research.models import (
     ChangeIntent,
     Publication,
     RabbitHole,
@@ -235,13 +235,13 @@ from harness.core.research_models import (
     Unknown,
     Vision,
 )
-from harness.core.research_roles import BUILTIN_RESEARCH_ROLES, ResearchRole
-from harness.core.research_scheduler import (
+from harness.core.research.roles import BUILTIN_RESEARCH_ROLES, ResearchRole
+from harness.core.research.scheduler import (
     ResearchQueueItem,
     build_research_queue,
     rebalance_research_queue,
 )
-from harness.core.research_store import ResearchSearchHit, ResearchStore, default_research_root
+from harness.core.research.store import ResearchSearchHit, ResearchStore, default_research_root
 from harness.core.result_schemas import (
     DocsAuditFinding,
     DocsAuditReport,
@@ -263,13 +263,13 @@ from harness.core.role_contract import (
     validate_outputs,
 )
 from harness.core.runtime import Agent, fork_session
-from harness.core.scheduler_models import (
+from harness.core.scheduler.models import (
     SchedulerJob,
     SchedulerRunRecord,
     ScheduleSpec,
     default_scheduler_root,
 )
-from harness.core.scheduler_runtime import (
+from harness.core.scheduler.runtime import (
     SchedulerTickResult,
     compute_next_run_at,
     create_scheduler_job,
@@ -279,7 +279,7 @@ from harness.core.scheduler_runtime import (
     run_scheduler_job,
     run_scheduler_loop,
 )
-from harness.core.scheduler_store import SchedulerStore
+from harness.core.scheduler.store import SchedulerStore
 from harness.core.schemas import (
     ApprovalDecision,
     Capabilities,

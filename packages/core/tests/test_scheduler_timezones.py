@@ -2,8 +2,8 @@ from datetime import UTC, datetime
 
 import pytest
 
-from harness.core.scheduler_models import ScheduleSpec
-from harness.core.scheduler_runtime import compute_next_run_at, parse_schedule_spec
+from harness.core.scheduler.models import ScheduleSpec
+from harness.core.scheduler.runtime import compute_next_run_at, parse_schedule_spec
 
 
 def test_old_schedule_defaults_to_utc_and_timezone_roundtrips():

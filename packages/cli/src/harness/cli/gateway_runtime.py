@@ -46,7 +46,7 @@ from harness.core.gateway_whatsapp import (
     load_whatsapp_bridge_config,
 )
 from harness.core.memory import MemoryScope, MemoryStore
-from harness.core.scheduler_store import SchedulerStore
+from harness.core.scheduler.store import SchedulerStore
 from harness.core.schemas import MediaAttachment
 from harness.core.verification_structural import (
     tool_event_changes_state,

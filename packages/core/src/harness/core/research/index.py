@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from harness.core.research_store import ResearchSearchHit, ResearchStore
+from harness.core.research.store import ResearchSearchHit, ResearchStore
 
 
 @dataclass(frozen=True, slots=True)

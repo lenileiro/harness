@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from harness.core.mission_models import MissionFeature
-from harness.core.mission_store import MissionStore
-from harness.core.research_scheduler import build_research_queue
-from harness.core.research_store import ResearchStore
+from harness.core.mission.models import MissionFeature
+from harness.core.mission.store import MissionStore
+from harness.core.research.scheduler import build_research_queue
+from harness.core.research.store import ResearchStore
 
 _DONE_FEATURE_STATUSES = {"completed", "validated"}
 _ACTIVE_FEATURE_STATUSES = {"active", "handoff", "blocked"}

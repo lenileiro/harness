@@ -3,22 +3,22 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from harness.core.mission_models import Mission
-from harness.core.mission_planner import (
+from harness.core.mission.models import Mission
+from harness.core.mission.planner import (
     PlannedAssertionInput,
     PlannedFeatureInput,
     PlannedMilestoneInput,
     build_mission_plan,
 )
-from harness.core.mission_reporter import (
+from harness.core.mission.reporter import (
     build_mission_summary_report,
     list_mission_reports,
     load_mission_report,
     write_mission_summary_report,
 )
-from harness.core.mission_runtime import execute_next_mission_feature
-from harness.core.mission_store import MissionStore, default_mission_root
-from harness.core.mission_validator import validate_mission_milestone
+from harness.core.mission.runtime import execute_next_mission_feature
+from harness.core.mission.store import MissionStore, default_mission_root
+from harness.core.mission.validator import validate_mission_milestone
 
 
 def _seed_blocked_mission(tmp_path: Path) -> tuple[MissionStore, str]:

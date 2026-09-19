@@ -35,10 +35,10 @@ from harness.core.opportunities import Opportunity
 from harness.core.portfolio import build_portfolio_snapshot
 from harness.core.promotion_candidates import PromotionCandidate
 from harness.core.publications import summarize_publication
-from harness.core.research_models import Publication, RabbitHole, Theme, Unknown, Vision
-from harness.core.research_roles import BUILTIN_RESEARCH_ROLES
-from harness.core.research_scheduler import build_research_queue, rebalance_research_queue
-from harness.core.research_store import ResearchStore, _split_csv, default_research_root
+from harness.core.research.models import Publication, RabbitHole, Theme, Unknown, Vision
+from harness.core.research.roles import BUILTIN_RESEARCH_ROLES
+from harness.core.research.scheduler import build_research_queue, rebalance_research_queue
+from harness.core.research.store import ResearchStore, _split_csv, default_research_root
 from harness.core.section_maps import SectionMap
 
 console = Console()

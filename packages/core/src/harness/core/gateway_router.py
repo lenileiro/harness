@@ -28,15 +28,15 @@ from harness.core.gateway_models import (
     GatewayWorkRef,
 )
 from harness.core.gateway_sessions import GatewaySessionStore
-from harness.core.mission_reporter import build_mission_summary_report
-from harness.core.mission_store import MissionStore, default_mission_root
-from harness.core.research_store import ResearchStore, default_research_root
-from harness.core.scheduler_runtime import (
+from harness.core.mission.reporter import build_mission_summary_report
+from harness.core.mission.store import MissionStore, default_mission_root
+from harness.core.research.store import ResearchStore, default_research_root
+from harness.core.scheduler.runtime import (
     create_scheduler_job,
     parse_schedule_spec,
     run_scheduler_job,
 )
-from harness.core.scheduler_store import SchedulerStore
+from harness.core.scheduler.store import SchedulerStore
 from harness.core.shared_queue import build_shared_work_queue
 
 

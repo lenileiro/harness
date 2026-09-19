@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from harness.cli.gateway_hooks import BuiltinHookProvider, WhatsAppNotificationHook
 from harness.core.gateway_models import GatewaySessionBinding, default_gateway_root
 from harness.core.gateway_sessions import GatewaySessionStore
-from harness.core.scheduler_models import SchedulerJob, SchedulerRunRecord, ScheduleSpec
+from harness.core.scheduler.models import SchedulerJob, SchedulerRunRecord, ScheduleSpec
 
 
 def test_builtin_hook_provider_exposes_whatsapp_hook() -> None:

@@ -20,16 +20,16 @@ from harness.core import (
     ToolRegistry,
     ToolResult,
 )
-from harness.core.mission_models import (
+from harness.core.mission.models import (
     Milestone,
     Mission,
     MissionFeature,
     ValidationAssertion,
     ValidationContract,
 )
-from harness.core.mission_store import MissionStore, default_mission_root
-from harness.core.scheduler_models import default_scheduler_root
-from harness.core.scheduler_store import SchedulerStore
+from harness.core.mission.store import MissionStore, default_mission_root
+from harness.core.scheduler.models import default_scheduler_root
+from harness.core.scheduler.store import SchedulerStore
 
 
 def _seed(tmp_path):

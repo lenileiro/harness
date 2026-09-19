@@ -11,7 +11,7 @@ from harness.core.observations import Observation
 from harness.core.opportunities import Opportunity
 from harness.core.promotion_candidates import PromotionCandidate
 from harness.core.publications import ResearchAsset
-from harness.core.research_models import (
+from harness.core.research.models import (
     ChangeIntent,
     Publication,
     RabbitHole,
@@ -19,7 +19,7 @@ from harness.core.research_models import (
     Unknown,
     Vision,
 )
-from harness.core.research_store import ResearchStore, default_research_root
+from harness.core.research.store import ResearchStore, default_research_root
 from harness.core.section_maps import SectionMap
 
 

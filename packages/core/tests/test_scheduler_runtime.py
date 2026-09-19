@@ -5,8 +5,8 @@ from pathlib import Path
 from typing import cast
 
 from harness.core.extensions import LifecycleHook
-from harness.core.scheduler_models import SchedulerJob, ScheduleSpec
-from harness.core.scheduler_runtime import (
+from harness.core.scheduler.models import SchedulerJob, ScheduleSpec
+from harness.core.scheduler.runtime import (
     compute_next_run_at,
     parse_datetime_text,
     parse_schedule_spec,
@@ -14,7 +14,7 @@ from harness.core.scheduler_runtime import (
     run_due_scheduler_jobs,
     run_scheduler_job,
 )
-from harness.core.scheduler_store import SchedulerStore
+from harness.core.scheduler.store import SchedulerStore
 
 
 def test_parse_schedule_spec_normalizes_variants() -> None:
@@ -93,7 +93,7 @@ def test_run_scheduler_job_emits_hooks(tmp_path: Path, monkeypatch) -> None:
     store.add_job(job)
 
     monkeypatch.setattr(
-        "harness.core.scheduler_runtime._dispatch_job",
+        "harness.core.scheduler.runtime._dispatch_job",
         lambda job: ("completed", "ok", str(tmp_path / ".harness" / "runs" / "demo")),
     )
 
@@ -176,7 +176,7 @@ def test_two_due_snapshots_dispatch_one_occurrence(tmp_path: Path, monkeypatch) 
                 first_finished.set()
 
     monkeypatch.setattr(store, "list_jobs", staged_list)
-    monkeypatch.setattr("harness.core.scheduler_runtime._dispatch_job", dispatch)
+    monkeypatch.setattr("harness.core.scheduler.runtime._dispatch_job", dispatch)
     threads = [Thread(target=tick, name=name) for name in ("first", "second")]
     for thread in threads:
         thread.start()
@@ -198,7 +198,7 @@ def test_pause_during_dispatch_survives_completion_and_failure(tmp_path: Path, m
                 raise RuntimeError("worker failed")
             return "completed", "ok", ""
 
-        monkeypatch.setattr("harness.core.scheduler_runtime._dispatch_job", dispatch)
+        monkeypatch.setattr("harness.core.scheduler.runtime._dispatch_job", dispatch)
         result = run_scheduler_job(store=store, job_id=job.id)
         assert result.status == ("failed" if fail else "completed")
         assert store.load_job(job.id).status == "paused"
@@ -244,7 +244,7 @@ def test_delivery_retries_after_restart_without_reexecuting_job(
             if len(sends) == 1:
                 raise ConnectionError("bridge offline")
 
-    monkeypatch.setattr("harness.core.scheduler_runtime._dispatch_job", dispatch)
+    monkeypatch.setattr("harness.core.scheduler.runtime._dispatch_job", dispatch)
     result = run_scheduler_job(
         store=store, job_id=job.id, hooks=(cast(LifecycleHook, DeliveryHook()),)
     )

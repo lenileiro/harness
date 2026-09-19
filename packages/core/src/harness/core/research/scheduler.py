@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from harness.core.experiments import Experiment
-from harness.core.research_store import ResearchStore
+from harness.core.research.store import ResearchStore
 
 
 @dataclass(frozen=True, slots=True)

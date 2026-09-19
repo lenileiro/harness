@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from harness.core.mission_models import Mission
-from harness.core.mission_planner import (
+from harness.core.mission.models import Mission
+from harness.core.mission.planner import (
     MissionPlanDraft,
     PlannedAssertionInput,
     PlannedFeatureInput,
@@ -11,7 +11,7 @@ from harness.core.mission_planner import (
     build_mission_plan,
     parse_mission_plan_draft,
 )
-from harness.core.mission_store import MissionStore, default_mission_root
+from harness.core.mission.store import MissionStore, default_mission_root
 
 
 def test_build_mission_plan_links_features_and_assertions(tmp_path) -> None:

@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-from harness.core.mission_models import (
+from harness.core.mission.models import (
     Milestone,
     Mission,
     MissionFeature,
     ValidationAssertion,
     ValidationContract,
 )
-from harness.core.mission_store import MissionStore
+from harness.core.mission.store import MissionStore
 from harness.core.opportunities import Opportunity
-from harness.core.research_store import ResearchStore
+from harness.core.research.store import ResearchStore
 from harness.core.shared_queue import (
     build_mission_work_queue,
     build_research_work_queue,

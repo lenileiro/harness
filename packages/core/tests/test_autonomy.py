@@ -4,7 +4,7 @@ from pathlib import Path
 
 from harness.core.autonomy import execute_next_research_item
 from harness.core.hypotheses import Hypothesis
-from harness.core.research_store import ResearchStore, default_research_root
+from harness.core.research.store import ResearchStore, default_research_root
 
 
 def test_autonomy_hypothesis_plan_uses_language_agnostic_harness_checks(

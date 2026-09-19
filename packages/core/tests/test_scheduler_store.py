@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from harness.core.scheduler_models import SchedulerJob, SchedulerRunRecord, ScheduleSpec
-from harness.core.scheduler_store import SchedulerStore
+from harness.core.scheduler.models import SchedulerJob, SchedulerRunRecord, ScheduleSpec
+from harness.core.scheduler.store import SchedulerStore
 
 
 def test_scheduler_store_round_trip_jobs_and_runs(tmp_path) -> None:

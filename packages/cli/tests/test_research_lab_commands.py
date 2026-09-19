@@ -9,7 +9,7 @@ from typer.testing import CliRunner
 
 from harness.cli import __main__ as cli_main
 from harness.cli.config import HarnessConfig
-from harness.core.research_store import ResearchStore, default_research_root
+from harness.core.research.store import ResearchStore, default_research_root
 
 
 def test_vision_update_show_theme_and_unknown_commands(tmp_path: Path) -> None:

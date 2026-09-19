@@ -5,14 +5,14 @@ import math
 from dataclasses import dataclass, replace
 from typing import Any
 
-from harness.core.mission_models import (
+from harness.core.mission.models import (
     Milestone,
     Mission,
     MissionFeature,
     ValidationAssertion,
     ValidationContract,
 )
-from harness.core.mission_store import MissionStore
+from harness.core.mission.store import MissionStore
 
 
 @dataclass(frozen=True, slots=True)

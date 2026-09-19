@@ -31,7 +31,7 @@ from harness.core.gateway_models import GatewayMessage, GatewayRuntimeBinding, d
 from harness.core.gateway_router import dispatch_gateway_message, is_gateway_control_message
 from harness.core.gateway_sessions import GatewaySessionStore
 from harness.core.memory import MemoryEntry, MemoryScope
-from harness.core.scheduler_store import SchedulerStore
+from harness.core.scheduler.store import SchedulerStore
 from harness.storage.sqlite import SQLiteStorage
 
 

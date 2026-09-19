@@ -9,7 +9,7 @@ import pytest
 
 from harness.core.experiment_plans import ExperimentPlan
 from harness.core.experiment_runner import compare_experiment_results, run_experiment_plan
-from harness.core.research_store import ResearchStore, default_research_root
+from harness.core.research.store import ResearchStore, default_research_root
 from harness.core.workspace_snapshot import workspace_fingerprint
 
 

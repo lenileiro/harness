@@ -16,7 +16,7 @@ from harness.core.gateway_evidence import approval_request_text
 from harness.core.gateway_models import GatewayRuntimeBinding, default_gateway_root
 from harness.core.gateway_router import gateway_pending_approvals
 from harness.core.gateway_sessions import GatewaySessionStore
-from harness.core.scheduler_models import SchedulerExecutionResult, SchedulerJob
+from harness.core.scheduler.models import SchedulerExecutionResult, SchedulerJob
 from harness.storage.sqlite import SQLiteStorage
 
 

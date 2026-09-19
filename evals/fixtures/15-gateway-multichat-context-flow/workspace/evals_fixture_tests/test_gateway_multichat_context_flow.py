@@ -9,7 +9,7 @@ import pytest
 from harness.core.gateway_models import GatewayMessage
 from harness.core.gateway_router import dispatch_gateway_message
 from harness.core.gateway_sessions import GatewaySessionStore
-from harness.core.scheduler_store import SchedulerStore
+from harness.core.scheduler.store import SchedulerStore
 
 
 class _PopenStub:

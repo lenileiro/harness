@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from harness.core.inspiration import ExternalSource, InspirationNote
 from harness.core.promotion_candidates import PromotionCandidate
-from harness.core.research_models import Publication, Theme, Unknown
-from harness.core.research_scheduler import (
+from harness.core.research.models import Publication, Theme, Unknown
+from harness.core.research.scheduler import (
     build_research_queue,
     discover_repeated_patterns,
     mine_new_failures,
@@ -13,7 +13,7 @@ from harness.core.research_scheduler import (
     suggest_unknowns,
     surface_stale_publications,
 )
-from harness.core.research_store import ResearchStore, default_research_root
+from harness.core.research.store import ResearchStore, default_research_root
 
 
 def test_scheduler_helpers_mine_and_rank(tmp_path) -> None:

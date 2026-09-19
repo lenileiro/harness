@@ -26,7 +26,7 @@ from harness.core.gateway_channels import ChannelConfig, ChannelMessage, Channel
 from harness.core.gateway_models import GatewayMessage, GatewayRuntimeBinding, default_gateway_root
 from harness.core.gateway_router import dispatch_gateway_message
 from harness.core.gateway_sessions import GatewaySessionStore
-from harness.core.scheduler_store import SchedulerStore
+from harness.core.scheduler.store import SchedulerStore
 from harness.storage.sqlite import SQLiteStorage
 
 CASES = [

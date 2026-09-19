@@ -72,8 +72,8 @@ from harness.core import (
     write_mission_scheduled_run_record,
     write_mission_summary_report,
 )
-from harness.core.mission_execution import execute_mission_agents
-from harness.core.mission_planner import (
+from harness.core.mission.execution import execute_mission_agents
+from harness.core.mission.planner import (
     PlannedAssertionInput,
     PlannedFeatureInput,
     PlannedMilestoneInput,
@@ -82,7 +82,7 @@ from harness.core.mission_planner import (
 )
 from harness.core.opportunities import Opportunity
 from harness.core.promotion_candidates import PromotionCandidate
-from harness.core.research_store import ResearchStore, default_research_root
+from harness.core.research.store import ResearchStore, default_research_root
 from harness.core.slug import slugify
 from harness.core.tips_models import keywords_from_text
 from harness.storage.sqlite import SQLiteStorage

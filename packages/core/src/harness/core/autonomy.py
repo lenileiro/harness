@@ -18,13 +18,13 @@ from harness.core.pr_generation import (
     write_promotion_draft,
 )
 from harness.core.promotion_candidates import PromotionCandidate
-from harness.core.research_models import Publication, RabbitHole
-from harness.core.research_scheduler import (
+from harness.core.research.models import Publication, RabbitHole
+from harness.core.research.scheduler import (
     ResearchQueueItem,
     build_research_queue,
     promotion_completed_stages,
 )
-from harness.core.research_store import ResearchStore, _write_json
+from harness.core.research.store import ResearchStore, _write_json
 
 _RISK_ORDER = {"low": 0, "medium": 1, "high": 2}
 _DEFAULT_AUTONOMY_CHECKS = ("uv run harness eval validate",)
