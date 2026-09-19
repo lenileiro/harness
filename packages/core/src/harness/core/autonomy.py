@@ -24,7 +24,8 @@ from harness.core.research.scheduler import (
     build_research_queue,
     promotion_completed_stages,
 )
-from harness.core.research.store import ResearchStore, _write_json
+from harness.core.research.store import ResearchStore
+from harness.core.store_base import write_json as _write_json
 
 _RISK_ORDER = {"low": 0, "medium": 1, "high": 2}
 _DEFAULT_AUTONOMY_CHECKS = ("uv run harness eval validate",)

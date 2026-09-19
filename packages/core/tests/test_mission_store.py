@@ -93,10 +93,10 @@ def test_write_json_is_atomic_under_failure(tmp_path, monkeypatch):
     """
     import json as _json
 
-    from harness.core.mission import store as mission_store
+    from harness.core import store_base
 
     target = tmp_path / "mission.json"
-    mission_store._write_json(target, {"id": "m-1", "status": "approved"})
+    store_base.write_json(target, {"id": "m-1", "status": "approved"})
     intact = target.read_text()
 
     def explode(*args, **kwargs):
@@ -104,7 +104,7 @@ def test_write_json_is_atomic_under_failure(tmp_path, monkeypatch):
 
     monkeypatch.setattr(_json, "dump", explode)
     with pytest.raises(OSError):
-        mission_store._write_json(target, {"id": "m-1", "status": "completed"})
+        store_base.write_json(target, {"id": "m-1", "status": "completed"})
 
     # the original record survives byte for byte, and no temp file is left behind
     assert target.read_text() == intact

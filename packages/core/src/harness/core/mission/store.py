@@ -1,11 +1,8 @@
 from __future__ import annotations
 
 import json
-import os
-import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from uuid import uuid4
 
 from harness.core.mission.models import (
     Milestone,
@@ -16,36 +13,15 @@ from harness.core.mission.models import (
     MissionRun,
     ValidationContract,
 )
-from harness.core.slug import slugify
+from harness.core.store_base import JsonStore, default_root
+from harness.core.store_base import write_json as _write_json
 
 
 def default_mission_root(cwd: Path | None = None) -> Path:
-    return (cwd or Path.cwd()).resolve() / ".harness" / "missions"
+    return default_root("missions", cwd)
 
 
-def _slugify(value: str) -> str:
-    return slugify(value)
 
-
-def _write_json(path: Path, payload: dict) -> None:
-    """Write JSON atomically.
-
-    A plain ``write_text`` truncates the target before the new bytes land, so a
-    process killed mid-write leaves a corrupt record behind. Mission records are
-    written by long unattended runs that can be OOM-killed, so the temp-file plus
-    ``os.replace`` dance is load bearing, not decoration. Matches ResearchStore.
-    """
-    with tempfile.NamedTemporaryFile(
-        mode="w", encoding="utf-8", dir=path.parent, delete=False
-    ) as handle:
-        temporary = Path(handle.name)
-        try:
-            json.dump(payload, handle, indent=2)
-            handle.flush()
-            os.fsync(handle.fileno())
-            os.replace(temporary, path)
-        finally:
-            temporary.unlink(missing_ok=True)
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,10 +33,7 @@ class MissionSearchHit:
     path: Path
 
 
-class MissionStore:
-    def __init__(self, *, root: Path):
-        self.root = root
-
+class MissionStore(JsonStore):
     @property
     def missions_dir(self) -> Path:
         return self.root / "missions"
@@ -105,9 +78,6 @@ class MissionStore:
             self.reports_dir,
         ):
             path.mkdir(parents=True, exist_ok=True)
-
-    def new_id(self, prefix: str, title: str) -> str:
-        return f"{prefix}-{_slugify(title)[:32]}-{uuid4().hex[:8]}"
 
     def add_mission(self, mission: Mission) -> Path:
         self.ensure_layout()
