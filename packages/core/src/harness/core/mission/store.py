@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from uuid import uuid4
@@ -26,7 +28,24 @@ def _slugify(value: str) -> str:
 
 
 def _write_json(path: Path, payload: dict) -> None:
-    path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    """Write JSON atomically.
+
+    A plain ``write_text`` truncates the target before the new bytes land, so a
+    process killed mid-write leaves a corrupt record behind. Mission records are
+    written by long unattended runs that can be OOM-killed, so the temp-file plus
+    ``os.replace`` dance is load bearing, not decoration. Matches ResearchStore.
+    """
+    with tempfile.NamedTemporaryFile(
+        mode="w", encoding="utf-8", dir=path.parent, delete=False
+    ) as handle:
+        temporary = Path(handle.name)
+        try:
+            json.dump(payload, handle, indent=2)
+            handle.flush()
+            os.fsync(handle.fileno())
+            os.replace(temporary, path)
+        finally:
+            temporary.unlink(missing_ok=True)
 
 
 @dataclass(frozen=True, slots=True)

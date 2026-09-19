@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from harness.core.mission.models import (
     Milestone,
     Mission,
@@ -80,3 +82,31 @@ def test_mission_store_persists_milestones_features_and_contracts(tmp_path: Path
     assert [item.id for item in store.list_features(mission_id="mission-demo")] == ["feature-1"]
     loaded_contract = store.load_contract("contract-1")
     assert loaded_contract.assertions[0].covered_by_features == ("feature-1",)
+
+
+def test_write_json_is_atomic_under_failure(tmp_path, monkeypatch):
+    """A write that dies mid-flight must not corrupt the existing record.
+
+    Mission records are written by long unattended runs that can be OOM-killed
+    (observed on this repo), so a truncating write is a real corruption risk and
+    not a theoretical one.
+    """
+    import json as _json
+
+    from harness.core.mission import store as mission_store
+
+    target = tmp_path / "mission.json"
+    mission_store._write_json(target, {"id": "m-1", "status": "approved"})
+    intact = target.read_text()
+
+    def explode(*args, **kwargs):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(_json, "dump", explode)
+    with pytest.raises(OSError):
+        mission_store._write_json(target, {"id": "m-1", "status": "completed"})
+
+    # the original record survives byte for byte, and no temp file is left behind
+    assert target.read_text() == intact
+    assert _json.loads(target.read_text())["status"] == "approved"
+    assert list(tmp_path.iterdir()) == [target]
