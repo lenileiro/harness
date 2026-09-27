@@ -200,6 +200,13 @@ class Capabilities(BaseModel):
     tool_use still gates tool availability; native agent subprocesses can
     advertise tool_use while explicitly declining external tool integration.
     """
+    sampling: bool = True
+    """Whether caller-supplied sampling controls such as `temperature` are honored.
+
+    Adapters that drive a native agent CLI have no way to set them and reject
+    the request rather than silently ignoring a correctness-relevant knob.
+    Callers that merely prefer a temperature should omit it when this is False.
+    """
     structured_output: bool = False
     max_context_tokens: int | None = None
     models: list[str] | None = None

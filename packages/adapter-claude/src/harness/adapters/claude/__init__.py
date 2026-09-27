@@ -301,6 +301,7 @@ class ClaudeAdapter:
             streaming=True,
             tool_use=True,
             external_tools=True,
+            sampling=False,
             structured_output=True,
             max_context_tokens=1_000_000,
         )

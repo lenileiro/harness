@@ -1218,6 +1218,11 @@ async def _stream_workflow_text_node(
     prompt: str,
 ) -> str:
     adapter = _build_adapter(provider, base_url=None, config=config)
+    # A low temperature is a preference here, not a requirement. Adapters that
+    # drive a native agent CLI cannot set one and reject the request outright,
+    # so ask before sending it rather than failing the whole workflow node.
+    sampling = (await adapter.capabilities()).sampling
+    extra: dict[str, Any] = {"temperature": 0.2} if sampling else {}
     text_parts: list[str] = []
     async for event in adapter.stream(
         model=model,
@@ -1226,7 +1231,7 @@ async def _stream_workflow_text_node(
             Message(role="user", content=prompt),
         ],
         max_tokens=900,
-        temperature=0.2,
+        **extra,
     ):
         if isinstance(event, TextDelta):
             text_parts.append(event.text)

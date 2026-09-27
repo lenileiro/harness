@@ -14,7 +14,7 @@ from typer.testing import CliRunner
 
 from harness.cli import __main__ as cli_main
 from harness.cli import workflow_commands
-from harness.core import Done, Message
+from harness.core import Capabilities, Done, Message
 from harness.core.activity import ActivityEvent
 from harness.core.dynamic_workflows import (
     EvidenceRequirement,
@@ -1519,6 +1519,9 @@ def test_workflow_no_tool_node_uses_direct_text_stream(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     class _TextAdapter:
+        async def capabilities(self):
+            return Capabilities()
+
         async def stream(self, **_kwargs):
             yield Done(final_message=Message(role="assistant", content="direct plan"))
 
@@ -1563,6 +1566,9 @@ def test_workflow_verified_missing_status_retry_uses_direct_text_stream(
     captured: dict[str, object] = {}
 
     class _TextAdapter:
+        async def capabilities(self):
+            return Capabilities()
+
         async def stream(self, **kwargs):
             captured.update(kwargs)
             yield Done(final_message=Message(role="assistant", content='{"status":"pass"}'))
@@ -3392,3 +3398,66 @@ def test_workflow_events_and_graph_commands(tmp_path: Path, monkeypatch) -> None
     assert graph.exit_code == 0, graph.stdout
     assert "flowchart TD" in graph.stdout
     assert "refute --> merge" in graph.stdout
+
+
+def test_text_node_omits_temperature_when_the_adapter_cannot_sample(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A low temperature is a preference, not a requirement.
+
+    Adapters driving a native agent CLI reject `temperature` outright, so
+    sending it unconditionally failed the whole workflow node.
+    """
+
+    captured: dict[str, object] = {}
+
+    class _NoSamplingAdapter:
+        async def capabilities(self):
+            return Capabilities(sampling=False)
+
+        async def stream(self, **kwargs):
+            captured.update(kwargs)
+            yield Done(final_message=Message(role="assistant", content="ok"))
+
+    monkeypatch.setattr(workflow_commands, "_build_adapter", lambda *a, **k: _NoSamplingAdapter())
+    result = asyncio.run(
+        workflow_commands._stream_workflow_text_node(
+            provider="claude",
+            model="sonnet",
+            config=None,
+            system_prompt="sys",
+            prompt="go",
+        )
+    )
+
+    assert result == "ok"
+    assert "temperature" not in captured
+    # The output cap is unrelated to sampling and still applies.
+    assert captured["max_tokens"] == 900
+
+
+def test_text_node_still_sends_temperature_when_the_adapter_supports_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    class _SamplingAdapter:
+        async def capabilities(self):
+            return Capabilities()
+
+        async def stream(self, **kwargs):
+            captured.update(kwargs)
+            yield Done(final_message=Message(role="assistant", content="ok"))
+
+    monkeypatch.setattr(workflow_commands, "_build_adapter", lambda *a, **k: _SamplingAdapter())
+    asyncio.run(
+        workflow_commands._stream_workflow_text_node(
+            provider="ollama",
+            model="test-model",
+            config=None,
+            system_prompt="sys",
+            prompt="go",
+        )
+    )
+
+    assert captured["temperature"] == 0.2

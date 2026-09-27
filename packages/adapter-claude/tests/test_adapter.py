@@ -625,3 +625,14 @@ async def test_terminate_kills_grandchildren(
     else:  # pragma: no cover - only reached when teardown regresses
         os.kill(grandchild, 9)
         pytest.fail("grandchild survived adapter teardown")
+
+
+async def test_capabilities_declare_no_sampling(installed: None):
+    """Callers must be able to ask before sending a temperature.
+
+    The CLI has no way to set one, so `stream` rejects it outright rather than
+    silently ignoring a correctness-relevant knob. Anything that merely prefers
+    a temperature should consult this and omit it.
+    """
+
+    assert (await ClaudeAdapter().capabilities()).sampling is False

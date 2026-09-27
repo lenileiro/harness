@@ -248,7 +248,7 @@ class CodexAdapter:
     async def capabilities(self) -> Capabilities:
         if self._bridge is not None:
             return await self._bridge.capabilities()
-        return Capabilities(streaming=True, tool_use=True, external_tools=False)
+        return Capabilities(streaming=True, tool_use=True, external_tools=False, sampling=False)
 
     async def cancel(self, session_id: str) -> None:
         await self.end_run(session_id)

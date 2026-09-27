@@ -93,3 +93,12 @@ class TestEventRoundTrip:
         wire = EventAdapter.dump_python(original, mode="json")
         decoded = EventAdapter.validate_python(wire)
         assert decoded == original
+
+
+def test_capabilities_default_to_supporting_sampling() -> None:
+    """Only adapters that genuinely cannot honor a temperature opt out."""
+
+    from harness.core.schemas import Capabilities
+
+    assert Capabilities().sampling is True
+    assert Capabilities(sampling=False).sampling is False
