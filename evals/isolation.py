@@ -91,7 +91,7 @@ def prepare_agent_process(
     readable.update(
         {Path(sys.prefix), Path(sys.base_prefix), root, executable, executable.resolve()}
     )
-    readable.update(_symlink_chain(executable))
+    readable.update(_interpreter_roots(executable))
     readable.update(path.resolve() for path in tuple(readable))
     writable = {work.resolve(), home.resolve(), temporary.resolve()}
     if sys.platform == "darwin" and shutil.which("sandbox-exec"):
@@ -161,6 +161,27 @@ def _symlink_chain(path: Path) -> set[Path]:
         target = current.readlink()
         current = target if target.is_absolute() else (current.parent / target)
     return hops
+
+
+def _interpreter_roots(path: Path) -> set[Path]:
+    """Each symlink hop, plus the interpreter prefix that hop implies.
+
+    CPython locates its stdlib relative to the directory holding the running
+    executable: `<prefix>/bin/python` implies `<prefix>/lib/pythonX.Y`. Binding
+    only the executable leaves the stdlib outside the sandbox, and the
+    interpreter aborts before it can run anything:
+
+        ModuleNotFoundError: No module named 'encodings'
+
+    so bind the whole prefix whenever a hop sits in a `bin` directory.
+    """
+
+    roots: set[Path] = set()
+    for hop in _symlink_chain(path):
+        roots.add(hop)
+        if hop.parent.name == "bin":
+            roots.add(hop.parent.parent)
+    return roots
 
 
 def _outermost(paths: set[Path]) -> list[Path]:

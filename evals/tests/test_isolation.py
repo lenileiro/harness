@@ -339,3 +339,42 @@ class TestSymlinkChain:
         a.symlink_to(b)
         b.symlink_to(a)
         assert isolation._symlink_chain(a) == {a, b}
+
+
+class TestInterpreterRoots:
+    """Binding the interpreter file is not enough; it needs its prefix.
+
+    CPython finds its stdlib relative to the directory holding the executable,
+    so a sandbox that binds only `<prefix>/bin/python` gives the interpreter no
+    `lib/pythonX.Y` and it dies with "No module named 'encodings'".
+    """
+
+    def test_includes_the_prefix_above_bin(self, tmp_path: Path):
+        exe = tmp_path / "cpython-3.12" / "bin" / "python3.12"
+        exe.parent.mkdir(parents=True)
+        exe.write_text("#!/bin/sh\n", encoding="utf-8")
+        roots = isolation._interpreter_roots(exe)
+        assert tmp_path / "cpython-3.12" in roots
+
+    def test_includes_the_prefix_of_every_hop(self, tmp_path: Path):
+        """The uv shape: a venv symlink into an unversioned alias prefix."""
+
+        versioned = tmp_path / "cpython-3.12.13" / "bin" / "python3.12"
+        versioned.parent.mkdir(parents=True)
+        versioned.write_text("#!/bin/sh\n", encoding="utf-8")
+        alias = tmp_path / "cpython-3.12" / "bin" / "python3.12"
+        alias.parent.mkdir(parents=True)
+        alias.symlink_to(versioned)
+        venv = tmp_path / "venv" / "bin" / "python"
+        venv.parent.mkdir(parents=True)
+        venv.symlink_to(alias)
+
+        roots = isolation._interpreter_roots(venv)
+        assert tmp_path / "cpython-3.12" in roots
+        assert tmp_path / "cpython-3.12.13" in roots
+        assert tmp_path / "venv" in roots
+
+    def test_a_binary_outside_bin_contributes_only_itself(self, tmp_path: Path):
+        exe = tmp_path / "python"
+        exe.write_text("#!/bin/sh\n", encoding="utf-8")
+        assert isolation._interpreter_roots(exe) == {exe}
