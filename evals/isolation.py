@@ -127,14 +127,35 @@ def prepare_agent_process(
             "--dev",
             "/dev",
         ]
-        for path in sorted(readable):
+        for path in _outermost(readable):
             if path != Path("/dev"):
                 args += ["--ro-bind", str(path), str(path)]
-        for path in sorted(writable):
+        for path in _outermost(writable):
             args += ["--bind", str(path), str(path)]
         args += ["--chdir", str(work), "--", *command]
         return args, env
     raise RuntimeError("Benchmark agents require sandbox-exec on macOS or bubblewrap on Linux.")
+
+
+def _outermost(paths: set[Path]) -> list[Path]:
+    """Drop paths already covered by an ancestor that is also being bound.
+
+    bwrap has to create a mount point for every bind. A nested bind is
+    redundant -- binding the ancestor already exposes the child -- and it
+    actively breaks when the child resolves through a symlink into another
+    read-only mount, which is how a virtualenv's `bin/python` is laid out:
+
+        bwrap: Can't create file at /.../.venv/bin/python: No such file or directory
+
+    Sorting puts every ancestor before its descendants, so one pass suffices.
+    """
+
+    kept: list[Path] = []
+    for path in sorted(paths):
+        if any(path.is_relative_to(parent) for parent in kept):
+            continue
+        kept.append(path)
+    return kept
 
 
 def run_agent_process(

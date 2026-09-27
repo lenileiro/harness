@@ -261,3 +261,40 @@ def test_process_cleanup_terminates_background_descendants(tmp_path, timeout):
         ["ps", "-p", str(child_pid), "-o", "stat="], capture_output=True, text=True
     )
     assert not result.stdout.strip() or result.stdout.strip().startswith("Z"), result.stdout
+
+
+class TestOutermostBinds:
+    """bwrap creates a mount point per bind, so nested binds must be dropped.
+
+    A virtualenv's `bin/python` is a symlink into the interpreter directory,
+    which is itself bound read-only. Binding the symlink separately makes bwrap
+    try to create a mount point inside that read-only mount, and it dies with
+    "Can't create file at ...: No such file or directory". Binding the ancestor
+    already exposes the child, so the nested entry is pure downside.
+    """
+
+    def test_drops_a_child_of_a_bound_directory(self):
+        paths = {Path("/usr"), Path("/usr/bin/python3")}
+        assert isolation._outermost(paths) == [Path("/usr")]
+
+    def test_drops_the_venv_interpreter_symlink(self):
+        """The exact shape that broke CI on ubuntu-24.04."""
+
+        venv = Path("/home/runner/work/harness/harness/.venv")
+        interpreter = Path("/home/runner/.local/share/uv/python/cpython-3.11")
+        paths = {venv, venv / "bin/python", interpreter, interpreter / "bin/python3.11"}
+        assert isolation._outermost(paths) == [interpreter, venv]
+
+    def test_keeps_siblings(self):
+        paths = {Path("/usr"), Path("/etc"), Path("/opt/homebrew")}
+        assert isolation._outermost(paths) == [Path("/etc"), Path("/opt/homebrew"), Path("/usr")]
+
+    def test_keeps_a_symlink_alias_that_is_not_a_subpath(self):
+        """On macOS /etc and /private/etc alias each other but neither nests."""
+
+        paths = {Path("/etc"), Path("/private/etc")}
+        assert isolation._outermost(paths) == [Path("/etc"), Path("/private/etc")]
+
+    def test_is_stable_regardless_of_set_ordering(self):
+        deep = Path("/a/b/c/d")
+        assert isolation._outermost({deep, Path("/a"), Path("/a/b")}) == [Path("/a")]
