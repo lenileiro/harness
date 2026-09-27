@@ -12,6 +12,40 @@ from harness.cli.runtime_helpers import load_workspace_context
 from harness.core import ContextBudget, configure_logging
 from harness.storage.sqlite import SQLiteStorage
 
+_ELLIPSIS = "\u2026"
+_RESOLVE_SCAN_LIMIT = 500
+
+
+async def _resolve_session_id(storage: Any, session_id: str, console: Console) -> str:
+    """Resolve a full session id, or an unambiguous prefix, to a full id.
+
+    `sessions list` renders ids in a Rich table, which elides them to fit the
+    terminal width, so an id copied off the screen usually arrives shortened and
+    carrying a trailing ellipsis. Accept that, and any unambiguous prefix, the
+    way git resolves a short SHA. Exits with a clear message when the prefix
+    matches nothing or more than one session.
+    """
+
+    if await storage.get(session_id) is not None:
+        return session_id
+    prefix = session_id.rstrip(_ELLIPSIS + ".")
+    matches: list[str] = []
+    if prefix:
+        matches = [
+            session.id
+            for session in await storage.list(limit=_RESOLVE_SCAN_LIMIT)
+            if session.id.startswith(prefix)
+        ]
+    if len(matches) == 1:
+        return matches[0]
+    if not matches:
+        console.print(f"[red]Session not found:[/red] {session_id}")
+        raise typer.Exit(1)
+    console.print(f"[red]Ambiguous session id:[/red] {prefix} matches {len(matches)} sessions")
+    for candidate in matches[:10]:
+        console.print(f"  {candidate}")
+    raise typer.Exit(1)
+
 
 def sessions_list_command(
     *,
@@ -38,7 +72,7 @@ def sessions_list_command(
             return
 
         table = Table(show_header=True, header_style="bold")
-        table.add_column("ID")
+        table.add_column("ID", overflow="fold")
         table.add_column("Status")
         table.add_column("Provider")
         table.add_column("Model")
@@ -71,7 +105,7 @@ def sessions_show_command(
     async def _go() -> None:
         storage = build_storage(db=db, in_memory=in_memory)
         try:
-            session = await storage.get(session_id)
+            session = await storage.get(await _resolve_session_id(storage, session_id, console))
         finally:
             if isinstance(storage, SQLiteStorage):
                 await storage.close()
@@ -118,7 +152,8 @@ def sessions_resume_command(
         storage = build_storage(db=db, in_memory=in_memory, cwd=working_dir_hint)
         agent = None
         try:
-            session = await storage.get(session_id)
+            resolved_id = await _resolve_session_id(storage, session_id, console)
+            session = await storage.get(resolved_id)
             if session is None:
                 console.print(f"[red]Session not found:[/red] {session_id}")
                 raise typer.Exit(1)
@@ -159,7 +194,7 @@ def sessions_resume_command(
                 resume=context.resume,
             )
             try:
-                async for event in agent.resume(session_id, prompt=prompt, max_steps=max_steps):
+                async for event in agent.resume(resolved_id, prompt=prompt, max_steps=max_steps):
                     render(event)
             except Exception as exc:
                 console.print(f"\n[red]Unhandled error:[/red] {exc!s}")
@@ -187,16 +222,20 @@ def sessions_rm_command(
         console.print("[yellow]Aborted.[/yellow]")
         raise typer.Exit(1)
 
+    resolved_id = session_id
+
     async def _go() -> None:
+        nonlocal resolved_id
         storage = build_storage(db=db, in_memory=in_memory)
         try:
-            await storage.delete(session_id)
+            resolved_id = await _resolve_session_id(storage, session_id, console)
+            await storage.delete(resolved_id)
         finally:
             if isinstance(storage, SQLiteStorage):
                 await storage.close()
 
     run_async(_go())
-    console.print(f"[green]Deleted[/green] {session_id}")
+    console.print(f"[green]Deleted[/green] {resolved_id}")
 
 
 def sessions_fork_command(
@@ -226,11 +265,12 @@ def sessions_fork_command(
         storage = build_storage(db=db, in_memory=in_memory)
         try:
             try:
-                forked = await fork_session_fn(storage, session_id, new_session_id=new_id)
+                resolved_id = await _resolve_session_id(storage, session_id, console)
+                forked = await fork_session_fn(storage, resolved_id, new_session_id=new_id)
             except _CE as exc:
                 console.print(f"[red]Error:[/red] {exc}")
                 raise typer.Exit(1) from None
-            console.print(f"[green]Forked[/green] {session_id} → {forked.id}")
+            console.print(f"[green]Forked[/green] {resolved_id} → {forked.id}")
             if not prompt:
                 console.print(
                     f'[dim]Resume with:[/dim] harness sessions resume {forked.id} "<prompt>"'
@@ -279,7 +319,8 @@ def sessions_diff_command(
     async def _go() -> None:
         storage = build_storage(db=db, in_memory=in_memory)
         try:
-            activity = await storage.list_activity(session_id=session_id)  # type: ignore[attr-defined]
+            resolved_id = await _resolve_session_id(storage, session_id, console)
+            activity = await storage.list_activity(session_id=resolved_id)  # type: ignore[attr-defined]
             render_session_diff(activity, console)
         finally:
             if isinstance(storage, SQLiteStorage):

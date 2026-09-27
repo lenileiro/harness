@@ -238,3 +238,81 @@ class TestSessionsResume:
         assert "follow up" in show.stdout
         assert "first turn" in show.stdout
         assert "second turn" in show.stdout
+
+
+class TestSessionIdResolution:
+    """`sessions list` elides ids to fit the terminal, so a copied id is short.
+
+    Every id-taking subcommand accepts an unambiguous prefix, and tolerates the
+    trailing ellipsis the table renders.
+    """
+
+    def _seed(self, patch_adapter, db_path: Path, tmp_path: Path, session_id: str) -> None:
+        patch_adapter([text_turn("hi")])
+        result = _run(
+            [
+                "run",
+                "hello",
+                "--cwd",
+                str(tmp_path),
+                "--db",
+                str(db_path),
+                "--session",
+                session_id,
+            ]
+        )
+        assert result.exit_code == 0, result.stdout
+
+    def test_show_accepts_a_prefix(self, patch_adapter, db_path: Path, tmp_path: Path) -> None:
+        self._seed(patch_adapter, db_path, tmp_path, "sess_abcdef123456")
+        result = _run(["sessions", "show", "sess_abcdef", "--db", str(db_path)])
+        assert result.exit_code == 0, result.stdout
+
+    def test_show_accepts_the_rendered_ellipsis(
+        self, patch_adapter, db_path: Path, tmp_path: Path
+    ) -> None:
+        """The table prints `sess_abcdef123…`; pasting that back must work."""
+
+        self._seed(patch_adapter, db_path, tmp_path, "sess_abcdef123456")
+        result = _run(["sessions", "show", "sess_abcdef123…", "--db", str(db_path)])
+        assert result.exit_code == 0, result.stdout
+
+    def test_exact_id_still_wins(self, patch_adapter, db_path: Path, tmp_path: Path) -> None:
+        self._seed(patch_adapter, db_path, tmp_path, "sess_abcdef123456")
+        result = _run(["sessions", "show", "sess_abcdef123456", "--db", str(db_path)])
+        assert result.exit_code == 0, result.stdout
+
+    def test_ambiguous_prefix_is_rejected_with_candidates(
+        self, patch_adapter, db_path: Path, tmp_path: Path
+    ) -> None:
+        self._seed(patch_adapter, db_path, tmp_path, "sess_dupe_aaa")
+        self._seed(patch_adapter, db_path, tmp_path, "sess_dupe_bbb")
+        result = _run(["sessions", "show", "sess_dupe", "--db", str(db_path)])
+        assert result.exit_code == 1
+        assert "Ambiguous session id" in result.stdout
+        # The user is told which sessions collided, so they can disambiguate.
+        assert "sess_dupe_aaa" in result.stdout and "sess_dupe_bbb" in result.stdout
+
+    def test_unknown_prefix_still_reports_not_found(
+        self, patch_adapter, db_path: Path, tmp_path: Path
+    ) -> None:
+        self._seed(patch_adapter, db_path, tmp_path, "sess_abcdef123456")
+        result = _run(["sessions", "show", "sess_nothing", "--db", str(db_path)])
+        assert result.exit_code == 1
+        assert "Session not found" in result.stdout
+
+    def test_rm_resolves_and_reports_the_full_id(
+        self, patch_adapter, db_path: Path, tmp_path: Path
+    ) -> None:
+        self._seed(patch_adapter, db_path, tmp_path, "sess_removeme999")
+        result = _run(["sessions", "rm", "sess_removeme", "--yes", "--db", str(db_path)])
+        assert result.exit_code == 0, result.stdout
+        # Reports what it actually deleted, not the abbreviation it was given.
+        assert "sess_removeme999" in result.stdout
+        gone = _run(["sessions", "show", "sess_removeme999", "--db", str(db_path)])
+        assert gone.exit_code == 1
+
+    def test_diff_accepts_a_prefix(self, patch_adapter, db_path: Path, tmp_path: Path) -> None:
+        self._seed(patch_adapter, db_path, tmp_path, "sess_diffable42")
+        result = _run(["sessions", "diff", "sess_diffable", "--db", str(db_path)])
+        assert result.exit_code == 0, result.stdout
