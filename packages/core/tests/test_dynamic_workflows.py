@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from harness.core import dynamic_workflows
 from harness.core.activity import ActivityEvent
 from harness.core.dynamic_workflows import (
     EvidenceRequirement,
@@ -5916,3 +5917,78 @@ def test_verify_work_evidence_rejects_empty_for_loop_success_claim() -> None:
 
     assert ok is False
     assert results[0].message == "verify_work did not pass"
+
+
+class TestAbsolutePathClaims:
+    """Tools take relative paths; results narrate absolute ones.
+
+    A literal comparison read the same file written two ways as a fabricated
+    claim, which failed every workflow node that mentioned a file by full path.
+    """
+
+    def test_absolute_claim_is_grounded_by_the_relative_tool_argument(self) -> None:
+        evidence = 'read_file {"path": "mod.py"} VALUE = 1'.lower()
+        assert dynamic_workflows._path_claim_grounded("/Users/me/proj/mod.py", evidence)
+
+    def test_nested_relative_argument_also_grounds_it(self) -> None:
+        evidence = 'read_file {"path": "src/mod.py"}'.lower()
+        assert dynamic_workflows._path_claim_grounded("/Users/me/proj/src/mod.py", evidence)
+
+    def test_exact_absolute_evidence_still_grounds_it(self) -> None:
+        evidence = "shell cat /users/me/proj/mod.py".lower()
+        assert dynamic_workflows._path_claim_grounded("/Users/me/proj/mod.py", evidence)
+
+    def test_a_wholly_invented_path_is_still_rejected(self) -> None:
+        """The guard must keep catching what it was written for."""
+
+        evidence = 'read_file {"path": "mod.py"} VALUE = 1'.lower()
+        assert not dynamic_workflows._path_claim_grounded("/etc/shadow", evidence)
+        assert not dynamic_workflows._path_claim_grounded(
+            "/Users/me/proj/never_touched.py", evidence
+        )
+
+
+def test_absolute_path_claim_is_accepted_when_the_tool_used_a_relative_path() -> None:
+    """End to end through evaluate_node_evidence, not just the helper.
+
+    The agent reads `mod.py` and narrates `/Users/me/proj/mod.py`. A literal
+    comparison called that a fabricated claim and failed the node, which took
+    every dependent node down with it.
+    """
+
+    node = WorkflowNode(
+        id="research",
+        title="Research",
+        kind="research",
+        prompt="Inspect the module.",
+        expected_evidence=(EvidenceRequirement(kind="claim_grounded"),),
+    )
+    run = WorkflowRun(id="wf", title="WF", goal="inspect", nodes=(node,))
+    read = ActivityEvent(
+        session_id="s",
+        kind="tool_call.completed",
+        data={
+            "name": "read_file",
+            "is_error": False,
+            "arguments": {"path": "mod.py"},
+            "content_preview": "VALUE = 1",
+        },
+    )
+
+    ok, results = evaluate_node_evidence(
+        node=node,
+        result="I read /Users/me/proj/mod.py with read_file and it contains VALUE = 1.",
+        activity=[read],
+        run=run,
+    )
+    assert ok is True, [item.message for item in results]
+
+    # A path nothing touched is still rejected.
+    ok, results = evaluate_node_evidence(
+        node=node,
+        result="I read /Users/me/proj/mod.py and also inspected /etc/shadow for context.",
+        activity=[read],
+        run=run,
+    )
+    assert ok is False
+    assert any("unsupported path claim: /etc/shadow" in item.message for item in results)

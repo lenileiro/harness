@@ -1233,6 +1233,25 @@ def _path_claims(text: str) -> list[str]:
     return claims
 
 
+def _path_claim_grounded(path: str, evidence_lower: str) -> bool:
+    """Whether an absolute path claim is backed by evidence.
+
+    Tools are invoked with workspace-relative paths (`mod.py`) while results
+    narrate absolute ones (`/home/me/proj/mod.py`), so a literal comparison
+    reads the same file written two ways as a fabricated claim. Accept the
+    claim when a trailing run of its segments appears in evidence: that means
+    the agent really did reference the file, just spelled differently.
+
+    A wholly invented path still fails, because none of its tails appear.
+    """
+
+    lowered = path.lower()
+    if lowered in evidence_lower:
+        return True
+    segments = [segment for segment in lowered.split("/") if segment]
+    return any("/".join(segments[start:]) in evidence_lower for start in range(1, len(segments)))
+
+
 def _looks_like_filesystem_absolute_path(value: str) -> bool:
     if value.startswith(_COMMON_ABSOLUTE_PATH_PREFIXES):
         return True
@@ -2638,7 +2657,7 @@ def _claim_grounding_failure(
             return f"requested exact output for {path} is not grounded in evidence: {content}"
 
     for path in _path_claims(result):
-        if path.lower() not in evidence_lower:
+        if not _path_claim_grounded(path, evidence_lower):
             return f"unsupported path claim: {path}"
 
     if _first_line_quote_required(node=node, run=run):
