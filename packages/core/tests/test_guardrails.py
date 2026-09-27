@@ -198,7 +198,6 @@ class TestNoGuardrails:
         assert any(isinstance(e, Done) for e in events)
 
 
-
 @pytest.mark.asyncio
 class TestGuardrailLeak:
     async def test_parallel_guardrail_cancellation_leak(self, tmp_path: Path) -> None:

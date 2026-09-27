@@ -21,9 +21,6 @@ def default_mission_root(cwd: Path | None = None) -> Path:
     return default_root("missions", cwd)
 
 
-
-
-
 @dataclass(frozen=True, slots=True)
 class MissionSearchHit:
     kind: str
