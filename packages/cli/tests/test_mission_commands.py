@@ -1342,7 +1342,9 @@ def test_mission_list_keeps_the_title_readable_on_a_narrow_terminal(tmp_path) ->
     listed = runner.invoke(
         cli_main.app,
         ["mission", "list", "--cwd", str(tmp_path)],
-        terminal_width=80,
+        # Rich reads COLUMNS; click's terminal_width does not reach the
+        # module-level Console these commands print through.
+        env={"COLUMNS": "80"},
     )
     assert listed.exit_code == 0, listed.stdout
     # A whole phrase fits on one line. Under the bug the column was ~2 columns

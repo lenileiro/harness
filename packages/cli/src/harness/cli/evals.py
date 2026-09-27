@@ -480,10 +480,12 @@ def eval_list(
         return
 
     table = Table(show_header=True, header_style="bold")
-    table.add_column("Fixture", no_wrap=True)
-    table.add_column("Family", no_wrap=True)
-    table.add_column("Primary Dimension")
-    table.add_column("Trap (summary)")
+    # Pinning both identifier columns left nothing for the prose ones, which
+    # collapsed to a couple of characters at 80 columns.
+    table.add_column("Fixture", overflow="fold")
+    table.add_column("Family", overflow="fold")
+    table.add_column("Primary Dimension", min_width=12, overflow="fold")
+    table.add_column("Trap (summary)", min_width=20, overflow="fold")
     for fx in fixtures:
         primary = fx.rules.primary_dimension
         trap = fx.rules.trap or ""

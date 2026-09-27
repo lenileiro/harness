@@ -747,8 +747,8 @@ def research_search_command(
         return
     table = Table(show_header=True, header_style="bold")
     table.add_column("Kind", no_wrap=True)
-    table.add_column("ID", style="dim", no_wrap=True)
-    table.add_column("Title")
+    table.add_column("ID", style="dim", overflow="fold")
+    table.add_column("Title", min_width=20, overflow="fold")
     table.add_column("Summary", overflow="fold")
     table.add_column("Path", overflow="fold")
     for hit in hits:
@@ -923,9 +923,9 @@ def research_scout_command(
         console.print("[dim]No inspiration notes found.[/dim]")
         return
     table = Table(show_header=True, header_style="bold")
-    table.add_column("ID", style="dim", no_wrap=True)
+    table.add_column("ID", style="dim", overflow="fold")
     table.add_column("Kind", no_wrap=True)
-    table.add_column("Title")
+    table.add_column("Title", min_width=20, overflow="fold")
     table.add_column("Summary", overflow="fold")
     for note in notes:
         table.add_row(note.id, note.source.kind, note.title, note.summary)
@@ -1300,8 +1300,8 @@ def research_list_themes_command(
         console.print("[dim]No themes found.[/dim]")
         return
     table = Table(show_header=True, header_style="bold")
-    table.add_column("ID", style="dim", no_wrap=True)
-    table.add_column("Title")
+    table.add_column("ID", style="dim", overflow="fold")
+    table.add_column("Title", min_width=20, overflow="fold")
     table.add_column("Priority", no_wrap=True)
     table.add_column("Status", no_wrap=True)
     table.add_column("Vision", style="dim", no_wrap=True)
@@ -1496,8 +1496,8 @@ def research_list_opportunities_command(
         console.print("[dim]No opportunities found.[/dim]")
         return
     table = Table(show_header=True, header_style="bold")
-    table.add_column("ID", style="dim", no_wrap=True)
-    table.add_column("Title")
+    table.add_column("ID", style="dim", overflow="fold")
+    table.add_column("Title", min_width=20, overflow="fold")
     table.add_column("Theme", no_wrap=True)
     table.add_column("Priority", no_wrap=True)
     table.add_column("Sections", overflow="fold")

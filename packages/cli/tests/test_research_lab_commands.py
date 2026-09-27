@@ -64,8 +64,14 @@ def test_vision_update_show_theme_and_unknown_commands(tmp_path: Path) -> None:
     listed_themes = runner.invoke(
         cli_main.app,
         ["research", "list-themes", "--cwd", str(tmp_path)],
+        # Rich reads COLUMNS; click's terminal_width does not reach the
+        # module-level Console these commands print through.
+        env={"COLUMNS": "200"},
     )
     assert listed_themes.exit_code == 0, listed_themes.stdout
+    # Asserted at a width that can hold a full theme id beside the other
+    # columns. At 80 columns the id wraps, because a ~48 character id and a
+    # readable Title cannot both fit, and a visible Title wins that trade.
     assert theme_id in listed_themes.stdout
     assert "high" in listed_themes.stdout
 

@@ -342,3 +342,23 @@ def test_eval_export_adjustments_writes_jsonl(tmp_path: Path, monkeypatch) -> No
     lines = output.read_text(encoding="utf-8").splitlines()
     assert len(lines) == 1
     assert json.loads(lines[0])["kind"] == "family_pattern"
+
+
+def test_eval_list_keeps_prose_columns_readable_on_a_narrow_terminal() -> None:
+    """`Fixture` and `Family` were both pinned, starving the prose columns.
+
+    At 80 columns `Primary Dimension` and `Trap (summary)` collapsed to about
+    two characters each, rendering as `P…` / `T…` with the text shredded one
+    fragment per row.
+    """
+
+    from typer.testing import CliRunner
+
+    from harness.cli import __main__ as cli_main
+
+    runner = CliRunner()
+    listed = runner.invoke(cli_main.app, ["eval", "list"], env={"COLUMNS": "80"})
+    assert listed.exit_code == 0, listed.stdout
+    # A real dimension value fits, rather than being elided to a stub.
+    assert "verification" in listed.stdout
+    assert "P…" not in listed.stdout and "T…" not in listed.stdout

@@ -286,3 +286,36 @@ def test_research_context_packet_command_uses_injected_run_once(
     assert result.exit_code == 0, result.stdout
     assert captured["domain"] == "comprehension"
     assert "implement a Zendesk integration" in str(captured["prompt"])
+
+
+def test_list_themes_keeps_the_title_readable_on_a_narrow_terminal(tmp_path: Path) -> None:
+    """Theme ids are long; the Title column must not pay for them.
+
+    Every column but Title carried `no_wrap`, so Rich satisfied the ids first
+    and Title was squeezed to zero width -- the title rendered as nothing at
+    all between two adjacent borders.
+    """
+
+    runner = CliRunner()
+    created = runner.invoke(
+        cli_main.app,
+        [
+            "research",
+            "add-theme",
+            "--title",
+            "Improve retrieval grounding for long documents",
+            "--description",
+            "probe",
+            "--cwd",
+            str(tmp_path),
+        ],
+    )
+    assert created.exit_code == 0, created.stdout
+
+    listed = runner.invoke(
+        cli_main.app,
+        ["research", "list-themes", "--cwd", str(tmp_path)],
+        env={"COLUMNS": "80"},
+    )
+    assert listed.exit_code == 0, listed.stdout
+    assert "Improve retrieval" in listed.stdout
