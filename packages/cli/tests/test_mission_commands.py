@@ -1313,3 +1313,38 @@ def test_scheduler_start_once_executes_research_job_with_pause_resume(tmp_path) 
     assert runs.exit_code == 0, runs.stdout
     runs_payload = json.loads(runs.stdout)
     assert runs_payload[0]["job_id"] == job_id
+
+
+def test_mission_list_keeps_the_title_readable_on_a_narrow_terminal(tmp_path) -> None:
+    """Long ids must not starve the Title column.
+
+    Every column except Title used to be `no_wrap`, so Rich satisfied the ids
+    first and Title absorbed the whole shortfall, collapsing to about two
+    characters and wrapping the words of a title down separate rows.
+    """
+
+    runner = CliRunner()
+    created = runner.invoke(
+        cli_main.app,
+        [
+            "mission",
+            "create",
+            "--title",
+            "Rebuild the ingestion pipeline",
+            "--goal",
+            "probe",
+            "--cwd",
+            str(tmp_path),
+        ],
+    )
+    assert created.exit_code == 0, created.stdout
+
+    listed = runner.invoke(
+        cli_main.app,
+        ["mission", "list", "--cwd", str(tmp_path)],
+        terminal_width=80,
+    )
+    assert listed.exit_code == 0, listed.stdout
+    # A whole phrase fits on one line. Under the bug the column was ~2 columns
+    # wide, so the title came out one fragment per row and this was impossible.
+    assert "ingestion pipeline" in listed.stdout

@@ -841,11 +841,14 @@ def mission_list_command(
         console.print("[dim]No missions found.[/dim]")
         return
     table = Table(show_header=True, header_style="bold")
-    table.add_column("ID", style="dim", no_wrap=True)
-    table.add_column("Title")
+    # Only non-no_wrap columns can absorb a narrow terminal. Pinning the two
+    # long id columns starved Title down to a couple of characters at 80
+    # columns, so let the ids fold and keep the human-readable title legible.
+    table.add_column("ID", style="dim", overflow="fold")
+    table.add_column("Title", min_width=20, overflow="fold")
     table.add_column("Status", no_wrap=True)
     table.add_column("Created By", no_wrap=True)
-    table.add_column("Current Milestone", no_wrap=True)
+    table.add_column("Current Milestone", overflow="fold")
     for mission in missions:
         table.add_row(
             mission.id,
