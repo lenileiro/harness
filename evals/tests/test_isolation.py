@@ -298,3 +298,44 @@ class TestOutermostBinds:
     def test_is_stable_regardless_of_set_ordering(self):
         deep = Path("/a/b/c/d")
         assert isolation._outermost({deep, Path("/a"), Path("/a/b")}) == [Path("/a")]
+
+
+class TestSymlinkChain:
+    """The sandbox must bind every hop, not just the final target.
+
+    uv points a venv's `bin/python` at an unversioned alias directory while
+    `sys.base_prefix` reports the versioned one, so binding the resolved target
+    alone leaves the symlink dangling and the interpreter cannot exec.
+    """
+
+    def test_returns_every_hop(self, tmp_path: Path):
+        real = tmp_path / "versioned" / "bin" / "python3.12"
+        real.parent.mkdir(parents=True)
+        real.write_text("#!/bin/sh\n", encoding="utf-8")
+        alias = tmp_path / "alias" / "bin" / "python3.12"
+        alias.parent.mkdir(parents=True)
+        alias.symlink_to(real)
+        venv = tmp_path / "venv" / "bin" / "python"
+        venv.parent.mkdir(parents=True)
+        venv.symlink_to(alias)
+
+        assert isolation._symlink_chain(venv) == {venv, alias, real}
+
+    def test_plain_file_is_its_own_chain(self, tmp_path: Path):
+        target = tmp_path / "python"
+        target.write_text("#!/bin/sh\n", encoding="utf-8")
+        assert isolation._symlink_chain(target) == {target}
+
+    def test_relative_link_resolves_against_its_own_directory(self, tmp_path: Path):
+        real = tmp_path / "bin" / "python3.12"
+        real.parent.mkdir(parents=True)
+        real.write_text("#!/bin/sh\n", encoding="utf-8")
+        link = tmp_path / "bin" / "python"
+        link.symlink_to("python3.12")
+        assert isolation._symlink_chain(link) == {link, real}
+
+    def test_a_symlink_loop_terminates(self, tmp_path: Path):
+        a, b = tmp_path / "a", tmp_path / "b"
+        a.symlink_to(b)
+        b.symlink_to(a)
+        assert isolation._symlink_chain(a) == {a, b}

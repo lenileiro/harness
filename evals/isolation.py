@@ -91,6 +91,7 @@ def prepare_agent_process(
     readable.update(
         {Path(sys.prefix), Path(sys.base_prefix), root, executable, executable.resolve()}
     )
+    readable.update(_symlink_chain(executable))
     readable.update(path.resolve() for path in tuple(readable))
     writable = {work.resolve(), home.resolve(), temporary.resolve()}
     if sys.platform == "darwin" and shutil.which("sandbox-exec"):
@@ -135,6 +136,31 @@ def prepare_agent_process(
         args += ["--chdir", str(work), "--", *command]
         return args, env
     raise RuntimeError("Benchmark agents require sandbox-exec on macOS or bubblewrap on Linux.")
+
+
+_MAX_SYMLINK_HOPS = 8
+
+
+def _symlink_chain(path: Path) -> set[Path]:
+    """Every path a symlink chain passes through, including the final target.
+
+    uv points a virtualenv's `bin/python` at an *unversioned* alias directory
+    (`cpython-3.12-linux-x86_64-gnu`) while `sys.base_prefix` reports the
+    *versioned* one (`cpython-3.12.13-linux-x86_64-gnu`). Binding only the
+    latter leaves the symlink dangling inside the sandbox, and the interpreter
+    dies with `execvp ...: No such file or directory`. Bind every hop so the
+    chain stays intact whichever spelling it uses.
+    """
+
+    hops: set[Path] = set()
+    current = path
+    for _ in range(_MAX_SYMLINK_HOPS):
+        hops.add(current)
+        if not current.is_symlink():
+            break
+        target = current.readlink()
+        current = target if target.is_absolute() else (current.parent / target)
+    return hops
 
 
 def _outermost(paths: set[Path]) -> list[Path]:
