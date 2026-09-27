@@ -185,7 +185,18 @@ jobs:
         run: uv sync --frozen --all-packages --all-extras --all-groups
 
       - name: Install benchmark process isolation
-        run: sudo apt-get update && sudo apt-get install -y bubblewrap
+        run: |
+          sudo apt-get update && sudo apt-get install -y bubblewrap
+          # `ubuntu-latest` is Ubuntu 24.04, which confines unprivileged user
+          # namespaces with AppArmor. Without this, every bwrap sandbox dies on
+          # "setting up uid map: Permission denied" and the eval isolation tests
+          # fail in a way that looks like a code bug. The runner is ephemeral.
+          if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
+          # Fail here, loudly, rather than 13 tests later.
+          bwrap --unshare-user --unshare-pid --dev-bind / / true
+          echo "bubblewrap user namespaces OK"
 
       - name: Run secret-backed live canonical eval
         shell: bash
