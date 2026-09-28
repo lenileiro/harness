@@ -1638,7 +1638,9 @@ async def create_planned_workflow(
     max_nodes: int,
 ) -> WorkflowRun:
     if planner == "static":
-        return create_default_workflow(workflow_id=workflow_id, title=title, goal=goal)
+        return create_default_workflow(
+            workflow_id=workflow_id, title=title, goal=goal, cwd=str(cwd)
+        )
     if planner != "dynamic":
         raise typer.BadParameter("--planner must be static or dynamic")
     try:
@@ -1658,6 +1660,7 @@ async def create_planned_workflow(
             goal=goal,
             plan=plan,
             max_nodes=max_nodes,
+            cwd=str(cwd),
         )
         return replace(
             run,
@@ -1668,7 +1671,9 @@ async def create_planned_workflow(
             },
         )
     except Exception as exc:
-        fallback = create_default_workflow(workflow_id=workflow_id, title=title, goal=goal)
+        fallback = create_default_workflow(
+            workflow_id=workflow_id, title=title, goal=goal, cwd=str(cwd)
+        )
         return replace(
             fallback,
             metadata={

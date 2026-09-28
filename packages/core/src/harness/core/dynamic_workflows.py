@@ -509,7 +509,9 @@ def _harden_node_evidence(
     return hardened
 
 
-def create_default_workflow(*, workflow_id: str, title: str, goal: str) -> WorkflowRun:
+def create_default_workflow(
+    *, workflow_id: str, title: str, goal: str, cwd: str = ""
+) -> WorkflowRun:
     nodes = (
         WorkflowNode(
             id="plan",
@@ -656,7 +658,11 @@ def create_default_workflow(*, workflow_id: str, title: str, goal: str) -> Workf
         nodes=nodes,
         created_at=now,
         updated_at=now,
-        metadata={"planner": "static-defended-workflow-v2", "review_rounds": 0},
+        metadata={
+            "planner": "static-defended-workflow-v2",
+            "review_rounds": 0,
+            "cwd": cwd,
+        },
     )
 
 
@@ -701,6 +707,7 @@ def create_workflow_from_plan_spec(
     goal: str,
     plan: dict[str, Any],
     max_nodes: int = 12,
+    cwd: str = "",
 ) -> WorkflowRun:
     """Validate a model-authored workflow plan and convert it to a durable run."""
 
@@ -808,6 +815,7 @@ def create_workflow_from_plan_spec(
             "planner": "dynamic",
             "planner_schema": "defended-workflow-plan-v1",
             "review_rounds": 0,
+            "cwd": cwd,
         },
     )
 
@@ -1233,6 +1241,21 @@ def _path_claims(text: str) -> list[str]:
     return claims
 
 
+def _is_workspace_path(path: str, run: WorkflowRun) -> bool:
+    """Whether a claimed path is the run's own workspace directory."""
+
+    workspace = str(run.metadata.get("cwd") or "").rstrip("/")
+    if not workspace:
+        return False
+    candidate = path.rstrip("/")
+    if candidate == workspace:
+        return True
+    try:
+        return Path(candidate).resolve() == Path(workspace).resolve()
+    except OSError:
+        return False
+
+
 def _path_claim_grounded(path: str, evidence_lower: str) -> bool:
     """Whether an absolute path claim is backed by evidence.
 
@@ -1379,6 +1402,25 @@ def _unsupported_numeric_claim_failure(
         if value not in evidence_values:
             return f"unsupported numeric claim: {value}"
     return ""
+
+
+def _listed_entry_names(tool_events: list[ActivityEvent]) -> set[str]:
+    """Names that `list_dir` actually returned, taken from its own output.
+
+    Used to check a result against evidence rather than against a vocabulary of
+    words that might signal emptiness. Phrasing varies endlessly; what the
+    listing returned does not.
+    """
+
+    names: set[str] = set()
+    for event in tool_events:
+        if _tool_name(event) != "list_dir" or event.data.get("is_error"):
+            continue
+        for line in _tool_content(event).splitlines():
+            entry = line.strip().rstrip("/")
+            if entry and not entry.startswith("("):
+                names.add(entry.lower())
+    return names
 
 
 def _list_dir_has_entries(event: ActivityEvent) -> bool:
@@ -2656,9 +2698,24 @@ def _claim_grounding_failure(
         ):
             return f"requested exact output for {path} is not grounded in evidence: {content}"
 
-    for path in _path_claims(result):
-        if not _path_claim_grounded(path, evidence_lower):
-            return f"unsupported path claim: {path}"
+    claims = _path_claims(result)
+    grounded = {claim for claim in claims if _path_claim_grounded(claim, evidence_lower)}
+    for path in claims:
+        if path in grounded:
+            continue
+        # Results name the workspace directory itself, which never appears in
+        # evidence because tools are called with paths relative to it. An
+        # ancestor of a path the agent demonstrably touched is not a
+        # fabrication; an unrelated directory still has no grounded descendant.
+        prefix = path.rstrip("/") + "/"
+        if any(other.startswith(prefix) for other in grounded):
+            continue
+        # Results state their working directory, which tools never echo back
+        # because they are called with paths relative to it. The run knows
+        # where it is; naming that is reporting, not fabricating.
+        if _is_workspace_path(path, run):
+            continue
+        return f"unsupported path claim: {path}"
 
     if _first_line_quote_required(node=node, run=run):
         candidates = _first_line_candidates(node=node, run=run, tool_events=tool_events)
@@ -2701,10 +2758,15 @@ def _claim_grounding_failure(
         if len(checksum_values) < 2:
             return "result claims checksum match without comparable checksum evidence"
 
-    if re.search(r"\b(?:empty|no files|nothing in (?:this|the) directory)\b", result_lower) and any(
-        _list_dir_has_entries(event) for event in tool_events
-    ):
-        return "result claims the directory is empty but list_dir returned entries"
+    # A result that never names anything the listing returned is not describing
+    # the directory it was given. Checking against the entries themselves avoids
+    # guessing which words mean "empty" -- an earlier vocabulary here rejected
+    # "`recent` is empty" and "no files were edited", both true and unrelated.
+    listed = _listed_entry_names(tool_events)
+    successful = [event for event in tool_events if not event.data.get("is_error")]
+    only_listed = successful and all(_tool_name(event) == "list_dir" for event in successful)
+    if listed and only_listed and not any(entry in result_lower for entry in listed):
+        return "result names no entry that list_dir returned"
 
     for command in ("pwd", "ls"):
         if re.search(rf"\b{re.escape(command)}\b", result_lower) and command not in evidence_lower:

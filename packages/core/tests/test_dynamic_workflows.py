@@ -4761,7 +4761,7 @@ def test_claim_grounded_rejects_empty_directory_claim_when_list_dir_has_entries(
     )
 
     assert ok is False
-    assert "directory is empty" in results[0].message
+    assert "names no entry that list_dir returned" in results[0].message
 
 
 def test_claim_grounded_accepts_empty_directory_claim_from_empty_list_dir_metadata() -> None:
@@ -5992,3 +5992,107 @@ def test_absolute_path_claim_is_accepted_when_the_tool_used_a_relative_path() ->
     )
     assert ok is False
     assert any("unsupported path claim: /etc/shadow" in item.message for item in results)
+
+
+def test_workspace_directory_claim_is_grounded_by_a_file_inside_it() -> None:
+    """Results name the workspace directory, which is never in evidence.
+
+    Tools are called with paths relative to that directory, so it cannot match
+    literally or by tail. An ancestor of a path the agent demonstrably touched
+    is not a fabrication.
+    """
+
+    node = WorkflowNode(
+        id="research",
+        title="Research",
+        kind="research",
+        prompt="Inspect the module.",
+        expected_evidence=(EvidenceRequirement(kind="claim_grounded"),),
+    )
+    run = WorkflowRun(id="wf", title="WF", goal="inspect", nodes=(node,))
+    read = ActivityEvent(
+        session_id="s",
+        kind="tool_call.completed",
+        data={
+            "name": "read_file",
+            "is_error": False,
+            "arguments": {"path": "rate_limit.py"},
+            "content_preview": "MAX_REQUESTS = 5",
+        },
+    )
+
+    ok, results = evaluate_node_evidence(
+        node=node,
+        result=(
+            "I inspected /Users/me/demo and read /Users/me/demo/rate_limit.py, "
+            "which sets MAX_REQUESTS = 5."
+        ),
+        activity=[read],
+        run=run,
+    )
+    assert ok is True, [item.message for item in results]
+
+    # A directory with nothing grounded beneath it is still a fabrication.
+    ok, results = evaluate_node_evidence(
+        node=node,
+        result="I read /Users/me/demo/rate_limit.py and also scanned /var/secrets for keys.",
+        activity=[read],
+        run=run,
+    )
+    assert ok is False
+    assert any("unsupported path claim: /var/secrets" in item.message for item in results)
+
+
+class TestListingGrounding:
+    """A result must name something the listing returned.
+
+    The previous check scanned for words that might mean "empty", which
+    rejected "`recent` is empty regardless of the comparator" and "no files
+    were edited" -- both true, neither about the directory. Comparing against
+    the entries themselves needs no vocabulary at all.
+    """
+
+    def _evaluate(self, result: str):
+        node = WorkflowNode(
+            id="research",
+            title="Research",
+            kind="research",
+            prompt="Inspect.",
+            expected_evidence=(EvidenceRequirement(kind="claim_grounded"),),
+        )
+        run = WorkflowRun(id="wf", title="WF", goal="inspect", nodes=(node,))
+        listing = ActivityEvent(
+            session_id="s",
+            kind="tool_call.completed",
+            data={
+                "name": "list_dir",
+                "is_error": False,
+                "arguments": {"path": "."},
+                "content_preview": "rate_limit.py\ntest_rate_limit.py",
+            },
+        )
+        return evaluate_node_evidence(node=node, result=result, activity=[listing], run=run)
+
+    def test_an_empty_python_value_is_not_an_empty_directory(self) -> None:
+        ok, results = self._evaluate(
+            "list_dir shows rate_limit.py and test_rate_limit.py. All timestamps fall "
+            "outside the window, so `recent` is empty regardless of the comparator."
+        )
+        assert ok is True, [item.message for item in results]
+
+    def test_no_files_edited_is_not_a_directory_claim(self) -> None:
+        ok, results = self._evaluate(
+            "This node is read-only, so no files were edited. rate_limit.py is unchanged."
+        )
+        assert ok is True, [item.message for item in results]
+
+    def test_a_result_that_names_nothing_returned_is_rejected(self) -> None:
+        ok, results = self._evaluate("The current directory is empty.")
+        assert ok is False
+        assert any("names no entry" in item.message for item in results)
+
+    def test_any_phrasing_that_ignores_the_listing_is_rejected(self) -> None:
+        """No vocabulary involved, so novel phrasings are covered too."""
+
+        ok, _ = self._evaluate("There is nothing here worth looking at.")
+        assert ok is False
